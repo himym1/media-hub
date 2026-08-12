@@ -8,7 +8,7 @@ plugins {
 val releaseProperties = Properties().apply {
     val encoded = providers.environmentVariable("MEDIA_HUB_ANDROID_KEYSTORE_BASE64").orNull
     if (!encoded.isNullOrBlank()) {
-        val output = layout.buildDirectory.file("release/media-hub-release.jks").get().asFile
+        val output = rootProject.layout.projectDirectory.file(".gradle/signing/media-hub-release.jks").asFile
         output.parentFile.mkdirs()
         output.writeBytes(Base64.getDecoder().decode(encoded))
         setProperty("storeFile", output.absolutePath)
@@ -39,7 +39,6 @@ android {
         versionName = releaseVersionName
         buildConfigField("String", "API_BASE_URL", "\"$mediaHubApiBaseUrl\"")
     }
-
 
     signingConfigs {
         if (releaseProperties.isNotEmpty()) {
