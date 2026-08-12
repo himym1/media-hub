@@ -88,7 +88,10 @@ export function SettingsView({ integrations, onRefresh }: SettingsViewProps) {
     <section className="workspace-view">
       <div className="workspace-heading">
         <div><p className="eyebrow">INTEGRATIONS</p><h1>服务连接</h1></div>
-        <IconButton label="刷新所有服务" onClick={refreshAll} subtle><RefreshCw size={17} /></IconButton>
+        <div className="workspace-heading-actions">
+          <IconButton label="修改管理员密码" onClick={() => { document.querySelector<HTMLInputElement>('#current-admin-password')?.focus(); document.querySelector('#admin-password-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }} subtle><KeyRound size={17} /></IconButton>
+          <IconButton label="刷新所有服务" onClick={refreshAll} subtle><RefreshCw size={17} /></IconButton>
+        </div>
       </div>
 
       <div className="service-grid">
@@ -97,6 +100,16 @@ export function SettingsView({ integrations, onRefresh }: SettingsViewProps) {
           return <article className="service-card" key={integration.id}><Icon size={20} /><div><strong>{integration.label}</strong><span>{integration.detail}</span></div><span className={`state-chip ${integration.status}`}>{statusLabel[integration.status]}</span></article>
         })}
       </div>
+
+      <form className="password-form password-form-prominent" id="admin-password-form" onSubmit={(event) => { event.preventDefault(); password.mutate() }}>
+        <div className="diagnostic-title"><KeyRound size={18} /><strong>管理员密码</strong><span>修改当前账户密码，并撤销其他设备会话</span></div>
+        <label><span>当前密码</span><input autoComplete="current-password" id="current-admin-password" maxLength={1024} onChange={(event) => setCurrentPassword(event.target.value)} required type="password" value={currentPassword} /></label>
+        <label><span>新密码</span><input autoComplete="new-password" minLength={12} maxLength={1024} onChange={(event) => setNewPassword(event.target.value)} required type="password" value={newPassword} /></label>
+        <label><span>确认新密码</span><input autoComplete="new-password" minLength={12} maxLength={1024} onChange={(event) => setConfirmation(event.target.value)} required type="password" value={confirmation} /></label>
+        {password.isError ? <span className="form-error" role="alert">{password.error.message}</span> : null}
+        {password.isSuccess ? <span className="form-success" role="status">密码已修改，其他设备的会话已撤销</span> : null}
+        <button className="primary-action" disabled={password.isPending || newPassword.length < 12 || newPassword !== confirmation || currentPassword === newPassword} type="submit"><KeyRound size={16} />{password.isPending ? '正在修改' : '修改密码'}</button>
+      </form>
 
       {providerSettings.data ? <ProviderSettingsForm error={saveProviderSettings.error?.message} isSaving={saveProviderSettings.isPending} onDirty={() => saveProviderSettings.reset()} onSave={(input) => saveProviderSettings.mutate(input)} saved={saveProviderSettings.isSuccess} settings={providerSettings.data} /> : providerSettings.isLoading ? <p className="empty-inline">正在读取服务设置</p> : <p className="form-error" role="alert">{providerSettings.error?.message ?? '无法读取服务设置'}</p>}
 
@@ -108,15 +121,6 @@ export function SettingsView({ integrations, onRefresh }: SettingsViewProps) {
 
       {statistics.data ? <section className="statistics-strip" aria-label="运营摘要"><div><Activity size={18} /><span>运营摘要</span></div><dl><div><dt>进行中任务</dt><dd>{statistics.data.transfersActive}</dd></div><div><dt>需要处理</dt><dd>{statistics.data.transfersNeedsAttention + statistics.data.commandsNeedsAttention + statistics.data.notificationsNeedsAttention}</dd></div><div><dt>启用订阅</dt><dd>{statistics.data.subscriptionsEnabled}</dd></div><div><dt>失败运行</dt><dd>{statistics.data.runsFailed}</dd></div></dl></section> : null}
 
-      <form className="password-form" onSubmit={(event) => { event.preventDefault(); password.mutate() }}>
-        <div className="diagnostic-title"><KeyRound size={18} /><strong>管理员密码</strong></div>
-        <label><span>当前密码</span><input autoComplete="current-password" maxLength={1024} onChange={(event) => setCurrentPassword(event.target.value)} required type="password" value={currentPassword} /></label>
-        <label><span>新密码</span><input autoComplete="new-password" minLength={12} maxLength={1024} onChange={(event) => setNewPassword(event.target.value)} required type="password" value={newPassword} /></label>
-        <label><span>确认新密码</span><input autoComplete="new-password" minLength={12} maxLength={1024} onChange={(event) => setConfirmation(event.target.value)} required type="password" value={confirmation} /></label>
-        {password.isError ? <span className="form-error" role="alert">{password.error.message}</span> : null}
-        {password.isSuccess ? <span className="form-success" role="status">密码已修改，其他设备的会话已撤销</span> : null}
-        <button className="primary-action" disabled={password.isPending || newPassword.length < 12 || newPassword !== confirmation || currentPassword === newPassword} type="submit"><KeyRound size={16} />{password.isPending ? '正在修改' : '修改密码'}</button>
-      </form>
     </section>
   )
 }

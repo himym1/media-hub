@@ -175,6 +175,50 @@ private fun ServicesScreen(
                 )
             }
             items(uiState.integrations, key = { it.id }) { integration -> ServiceRow(integration) }
+            item(key = "password") {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MediaHubIcon(imageVector = Lucide.KeyRound, contentDescription = null, tint = MediaHubColors.Accent, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(9.dp))
+                        MediaHubText(text = "管理员密码", fontWeight = FontWeight.SemiBold)
+                    }
+                    MediaHubText(text = "修改当前账户密码，并撤销其他设备会话", color = MediaHubColors.TextMuted, fontSize = 11.sp)
+                    MediaHubTextField(
+                        value = uiState.currentPassword,
+                        onValueChange = onCurrentPasswordChange,
+                        placeholder = "当前密码",
+                        keyboardType = KeyboardType.Password,
+                        password = true,
+                    )
+                    MediaHubTextField(
+                        value = uiState.newPassword,
+                        onValueChange = onNewPasswordChange,
+                        placeholder = "新密码（至少 12 位）",
+                        keyboardType = KeyboardType.Password,
+                        password = true,
+                    )
+                    MediaHubTextField(
+                        value = uiState.confirmation,
+                        onValueChange = onConfirmationChange,
+                        placeholder = "确认新密码",
+                        keyboardType = KeyboardType.Password,
+                        password = true,
+                    )
+                    if (uiState.passwordChanged) {
+                        MediaHubText(text = "密码已修改，其他设备的会话已撤销", color = MediaHubColors.Source, fontSize = 11.sp)
+                    }
+                    MediaHubButton(
+                        label = if (uiState.changingPassword) "正在修改" else "修改密码",
+                        icon = Lucide.KeyRound,
+                        enabled = !uiState.changingPassword && uiState.newPassword.length >= 12 && uiState.newPassword == uiState.confirmation && uiState.currentPassword != uiState.newPassword,
+                        onClick = onChangePassword,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
             uiState.statistics?.let { statistics ->
                 item(key = "statistics") { OperationalSummary(statistics) }
             }
@@ -268,49 +312,6 @@ private fun ServicesScreen(
                         label = "更换服务器",
                         icon = Lucide.Server,
                         onClick = onChangeServer,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-            item(key = "password") {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = 22.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        MediaHubIcon(imageVector = Lucide.KeyRound, contentDescription = null, tint = MediaHubColors.Accent, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(9.dp))
-                        MediaHubText(text = "管理员密码", fontWeight = FontWeight.SemiBold)
-                    }
-                    MediaHubTextField(
-                        value = uiState.currentPassword,
-                        onValueChange = onCurrentPasswordChange,
-                        placeholder = "当前密码",
-                        keyboardType = KeyboardType.Password,
-                        password = true,
-                    )
-                    MediaHubTextField(
-                        value = uiState.newPassword,
-                        onValueChange = onNewPasswordChange,
-                        placeholder = "新密码（至少 12 位）",
-                        keyboardType = KeyboardType.Password,
-                        password = true,
-                    )
-                    MediaHubTextField(
-                        value = uiState.confirmation,
-                        onValueChange = onConfirmationChange,
-                        placeholder = "确认新密码",
-                        keyboardType = KeyboardType.Password,
-                        password = true,
-                    )
-                    if (uiState.passwordChanged) {
-                        MediaHubText(text = "密码已修改，其他设备的会话已撤销", color = MediaHubColors.Source, fontSize = 11.sp)
-                    }
-                    MediaHubButton(
-                        label = if (uiState.changingPassword) "正在修改" else "修改密码",
-                        icon = Lucide.KeyRound,
-                        enabled = !uiState.changingPassword && uiState.newPassword.length >= 12 && uiState.newPassword == uiState.confirmation && uiState.currentPassword != uiState.newPassword,
-                        onClick = onChangePassword,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
