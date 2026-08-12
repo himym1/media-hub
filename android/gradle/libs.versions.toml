@@ -1,0 +1,30 @@
+[versions]
+agp = "9.3.1"
+kotlin = "2.4.10"
+activity = "1.13.0"
+lifecycle = "2.11.0"
+core = "1.18.0"
+compose = "1.11.1"
+coroutines = "1.10.2"
+miuix = "0.9.3"
+lucide = "1.1.0"
+navigation3 = "1.1.5"
+junit4 = "4.13.2"
+
+[libraries]
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-core = { module = "androidx.core:core", version.ref = "core" }
+androidx-compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
+androidx-compose-ui-tooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.ref = "compose" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+miuix-ui = { module = "top.yukonga.miuix.kmp:miuix-ui", version.ref = "miuix" }
+miuix-squircle = { module = "top.yukonga.miuix.kmp:miuix-squircle", version.ref = "miuix" }
+lucide-icons = { module = "com.composables:icons-lucide", version.ref = "lucide" }
+androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "navigation3" }
+androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
+junit4 = { module = "junit:junit", version.ref = "junit4" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

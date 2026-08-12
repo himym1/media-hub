@@ -1,0 +1,16 @@
+.git
+.github
+**/.DS_Store
+**/.env
+**/.env.*
+!**/.env.example
+web/node_modules
+web/dist
+android/.gradle
+android/**/build
+backend/data
+data
+*.apk
+*.aab
+*.jks
+*.keystore

@@ -1,0 +1,28 @@
+services:
+  media-hub:
+    image: ghcr.io/himym1/media-hub:${MEDIA_HUB_IMAGE_TAG:-0.6.0}
+    container_name: media-hub
+    restart: unless-stopped
+    env_file:
+      - ${MEDIA_HUB_ENV_FILE:-.env}
+    environment:
+      MEDIA_HUB_ADDR: 0.0.0.0:8080
+      MEDIA_HUB_DATABASE_PATH: /srv/media-hub/data/media-hub.db
+      MEDIA_HUB_ANDROID_RELEASE_DIR: /srv/media-hub/releases
+    ports:
+      - 127.0.0.1:${MEDIA_HUB_HTTP_PORT:-18080}:8080
+    volumes:
+      - ./data:/srv/media-hub/data
+      - ./releases:/srv/media-hub/releases:ro
+    user: ${MEDIA_HUB_UID:-65532}:${MEDIA_HUB_GID:-65532}
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/media-hub-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s

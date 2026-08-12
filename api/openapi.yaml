@@ -1,0 +1,1873 @@
+openapi: 3.1.0
+info:
+  title: Media Hub API
+  version: 0.6.0
+  description: Control-plane API for private media search, subscriptions, and automation.
+servers:
+  - url: /api/v1
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Check API liveness
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /auth/configuration:
+    get:
+      operationId: getAuthConfiguration
+      summary: Check whether the administrator has been initialized
+      responses:
+        '200':
+          description: Authentication configuration state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfiguration'
+  /auth/login:
+    post:
+      operationId: login
+      summary: Create a revocable Web or Android session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated session. Web sessions are also set as HttpOnly cookies.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/ProblemResponse'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '429':
+          $ref: '#/components/responses/ProblemResponse'
+  /auth/session:
+    get:
+      operationId: getSession
+      summary: Read the current authenticated session
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Revoke the current session
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204':
+          description: Session revoked
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '403':
+          $ref: '#/components/responses/ProblemResponse'
+  /auth/password:
+    put:
+      operationId: changePassword
+      summary: Change the administrator password and revoke other sessions
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '204': { description: Password changed }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '422': { $ref: '#/components/responses/ProblemResponse' }
+  /client/android/releases/latest:
+    get:
+      operationId: getLatestAndroidRelease
+      summary: Read the latest private Android release metadata
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Latest signed Android release
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AndroidRelease' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /client/android/releases/{versionCode}/apk:
+    get:
+      operationId: downloadAndroidRelease
+      summary: Download one authenticated signed Android APK
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - name: versionCode
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Signed Android APK
+          headers:
+            X-Checksum-SHA256:
+              schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+          content:
+            application/vnd.android.package-archive:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /system/overview:
+    get:
+      operationId: getSystemOverview
+      summary: Read current integration health
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Integration overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemOverview'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+  /statistics/summary:
+    get:
+      operationId: getStatisticsSummary
+      summary: Read user-scoped Media Hub operational counters
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Operational counters without provider-private data
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationalStatistics' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+  /discovery/trending:
+    get:
+      operationId: getTrending
+      summary: Read normalized weekly TMDB trending identities
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - name: mediaType
+          in: query
+          schema: { type: string, enum: [all, movie, series], default: all }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 20, default: 20 }
+      responses:
+        '200':
+          description: Trending media identities
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiscoveryResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /discovery/{mediaType}/{tmdbId}/recommendations:
+    get:
+      operationId: getRecommendations
+      summary: Read normalized TMDB recommendations for one identity
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - name: mediaType
+          in: path
+          required: true
+          schema: { type: string, enum: [movie, series] }
+        - name: tmdbId
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[1-9][0-9]*$' }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 20, default: 20 }
+      responses:
+        '200':
+          description: Recommended media identities
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiscoveryResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /search:
+    get:
+      operationId: searchMedia
+      summary: Search normalized resource candidates
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+      responses:
+        '200':
+          description: Search response, including per-source partial failures
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          $ref: '#/components/responses/ProblemResponse'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+  /integrations/qmediasync/status:
+    get:
+      operationId: getQMediaSyncStatus
+      summary: Read QMediaSync version and recent synchronization records
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: QMediaSync status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QMediaSyncStatus'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '502':
+          $ref: '#/components/responses/ProblemResponse'
+        '503':
+          $ref: '#/components/responses/ProblemResponse'
+        '504':
+          $ref: '#/components/responses/ProblemResponse'
+  /integrations/emby/libraries:
+    get:
+      operationId: getEmbyLibraries
+      summary: Read configured Emby media libraries
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Emby libraries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbyLibraryResponse'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '502':
+          $ref: '#/components/responses/ProblemResponse'
+        '503':
+          $ref: '#/components/responses/ProblemResponse'
+        '504':
+          $ref: '#/components/responses/ProblemResponse'
+  /integrations/emby/items:
+    get:
+      operationId: searchEmbyItems
+      summary: Search Emby for duplicate movies or series
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Matching Emby items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbyItemSearchResponse'
+        '400':
+          $ref: '#/components/responses/ProblemResponse'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '502':
+          $ref: '#/components/responses/ProblemResponse'
+        '503':
+          $ref: '#/components/responses/ProblemResponse'
+        '504':
+          $ref: '#/components/responses/ProblemResponse'
+  /integrations/115/status:
+    get:
+      operationId: getDrive115Status
+      summary: Check 115 Open authorization without returning account identity
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 115 authorization and storage status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Drive115Status'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '502':
+          $ref: '#/components/responses/ProblemResponse'
+        '503':
+          $ref: '#/components/responses/ProblemResponse'
+        '504':
+          $ref: '#/components/responses/ProblemResponse'
+  /integrations/115/auth/device:
+    post:
+      operationId: startDrive115DeviceAuthorization
+      summary: Start encrypted PKCE device authorization for 115 Open
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      responses:
+        '201':
+          description: Device authorization with an authenticated-only QR image
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Drive115DeviceAuthorization' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/115/auth/device/{id}:
+    get:
+      operationId: pollDrive115DeviceAuthorization
+      summary: Poll one user-scoped 115 device authorization
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 16, maxLength: 128 }
+      responses:
+        '200':
+          description: Current device authorization state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Drive115DeviceAuthorization' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/115/files:
+    get:
+      operationId: listDrive115Files
+      summary: List one 115 directory without exposing download URLs or account identity
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: parentId, in: query, schema: { type: string, pattern: '^[0-9]+$', default: '0' } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: Bounded file listing
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Drive115FileList' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/115/commands:
+    get:
+      operationId: listDrive115Commands
+      summary: List encrypted durable 115 file commands
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Commands
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [commands]
+                properties:
+                  commands: { type: array, items: { $ref: '#/components/schemas/Drive115Command' } }
+    post:
+      operationId: createDrive115Command
+      summary: Persist a 115 file command before its external side effect
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Drive115CommandInput' }
+      responses:
+        '202':
+          description: Persisted command; delete commands await ID confirmation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Drive115Command' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '409': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/115/commands/{id}:
+    get:
+      operationId: getDrive115Command
+      summary: Read one user-scoped 115 command and its event history
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          description: Command detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Drive115Command' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/115/commands/{id}/confirm:
+    post:
+      operationId: confirmDrive115Command
+      summary: Confirm an awaiting destructive command by repeating its command ID
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/CSRFToken' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmation]
+              properties: { confirmation: { type: string } }
+      responses:
+        '200':
+          description: Confirmed and queued command
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Drive115Command' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/115/commands/{id}/retry:
+    post:
+      operationId: retryDrive115Command
+      summary: Explicitly replay a failed or uncertain command after repeating its command ID
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/CSRFToken' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmation]
+              properties: { confirmation: { type: string } }
+      responses:
+        '200':
+          description: Confirmed replay queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Drive115Command' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /local-uploads/roots:
+    get:
+      operationId: listLocalUploadRoots
+      summary: List opaque configured local-upload root IDs
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Upload roots without filesystem paths
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [roots]
+                properties: { roots: { type: array, items: { $ref: '#/components/schemas/LocalUploadRoot' } } }
+  /local-uploads/files:
+    get:
+      operationId: listLocalUploadFiles
+      summary: Browse bounded relative paths inside one configured upload root
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: rootId, in: query, required: true, schema: { type: string, pattern: '^root-[1-9][0-9]*$' } }
+        - { name: path, in: query, schema: { type: string, maxLength: 2048 } }
+      responses:
+        '200':
+          description: Local files and directories
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties: { items: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/LocalUploadEntry' } } }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+  /local-uploads:
+    get:
+      operationId: listLocalUploads
+      summary: List durable local upload jobs
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Upload jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [uploads]
+                properties: { uploads: { type: array, items: { $ref: '#/components/schemas/LocalUploadJob' } } }
+    post:
+      operationId: createLocalUpload
+      summary: Persist an allowed local-file upload before hashing or provider side effects
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rootId, path, destinationId]
+              properties:
+                rootId: { type: string, pattern: '^root-[1-9][0-9]*$' }
+                path: { type: string, minLength: 1, maxLength: 2048 }
+                destinationId: { type: string, pattern: '^[0-9]+$' }
+      responses:
+        '202':
+          description: Persisted upload job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LocalUploadJob' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '409': { $ref: '#/components/responses/ProblemResponse' }
+  /local-uploads/{id}:
+    get:
+      operationId: getLocalUpload
+      summary: Read a user-scoped upload job and event history
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          description: Upload detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LocalUploadJob' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /local-uploads/{id}/retry:
+    post:
+      operationId: retryLocalUpload
+      summary: Explicitly retry a failed or uncertain upload by repeating its job ID
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/CSRFToken' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmation]
+              properties: { confirmation: { type: string } }
+      responses:
+        '200':
+          description: Upload queued after explicit confirmation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LocalUploadJob' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /archive/preview:
+    post:
+      operationId: previewArchive
+      summary: Preview rename suggestions without changing 115 files
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [parentId]
+              properties: { parentId: { type: string } }
+      responses:
+        '200':
+          description: Review-only suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [suggestions]
+                properties: { suggestions: { type: array, items: { $ref: '#/components/schemas/ArchiveSuggestion' } } }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+  /archive/plans:
+    get:
+      operationId: listArchivePlans
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Archive plans
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plans]
+                properties: { plans: { type: array, items: { $ref: '#/components/schemas/ArchivePlan' } } }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+    post:
+      operationId: createArchivePlan
+      summary: Persist explicit rename and move steps before execution
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [steps]
+              properties: { steps: { type: array, minItems: 1, maxItems: 1000, items: { $ref: '#/components/schemas/ArchiveStep' } } }
+      responses:
+        '201':
+          description: Awaiting confirmation
+          content: { application/json: { schema: { $ref: '#/components/schemas/ArchivePlan' } } }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+  /archive/plans/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: getArchivePlan
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200': { description: Archive plan detail, content: { application/json: { schema: { $ref: '#/components/schemas/ArchivePlan' } } } }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /archive/plans/{id}/confirm:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: confirmArchivePlan
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [confirmation], properties: { confirmation: { type: string } } } } }
+      responses:
+        '200': { description: Queued plan, content: { application/json: { schema: { $ref: '#/components/schemas/ArchivePlan' } } } }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /archive/plans/{id}/retry:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: retryArchivePlan
+      summary: Explicitly continue a failed or uncertain plan
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [confirmation], properties: { confirmation: { type: string } } } } }
+      responses:
+        '200': { description: Queued plan, content: { application/json: { schema: { $ref: '#/components/schemas/ArchivePlan' } } } }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /subscriptions:
+    get:
+      operationId: listSubscriptions
+      summary: List durable media subscriptions
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Subscriptions ordered newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionListResponse'
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+    post:
+      operationId: createSubscription
+      summary: Create a TMDB-identified subscription
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSubscriptionRequest' }
+      responses:
+        '201':
+          description: Subscription created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '409': { $ref: '#/components/responses/ProblemResponse' }
+  /subscriptions/{subscriptionId}:
+    parameters:
+      - $ref: '#/components/parameters/SubscriptionID'
+    get:
+      operationId: getSubscription
+      summary: Read a subscription
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Subscription
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+    put:
+      operationId: updateSubscription
+      summary: Update subscription rules without changing its media identity
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateSubscriptionRequest' }
+      responses:
+        '200':
+          description: Updated subscription
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+    delete:
+      operationId: deleteSubscription
+      summary: Delete a subscription and its run history
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204': { description: Subscription deleted }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /subscriptions/{subscriptionId}/enabled:
+    parameters:
+      - $ref: '#/components/parameters/SubscriptionID'
+    patch:
+      operationId: setSubscriptionEnabled
+      summary: Pause or resume a subscription
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetSubscriptionEnabledRequest' }
+      responses:
+        '200':
+          description: Updated subscription
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /subscriptions/{subscriptionId}/runs:
+    parameters:
+      - $ref: '#/components/parameters/SubscriptionID'
+    get:
+      operationId: listSubscriptionRuns
+      summary: List subscription execution history
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Subscription runs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionRunListResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+    post:
+      operationId: runSubscription
+      summary: Trigger a subscription immediately
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '202':
+          description: Subscription run queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionRun' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '409': { $ref: '#/components/responses/ProblemResponse' }
+  /transfers:
+    get:
+      operationId: listTransfers
+      summary: List transfer jobs
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Transfer jobs ordered newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferListResponse'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+    post:
+      operationId: createTransfer
+      summary: Persist and start an idempotent transfer workflow
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransferRequest'
+      responses:
+        '200':
+          description: Existing job for the same idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferJob'
+        '202':
+          description: Transfer job persisted and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferJob'
+        '400':
+          $ref: '#/components/responses/ProblemResponse'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '403':
+          $ref: '#/components/responses/ProblemResponse'
+        '409':
+          $ref: '#/components/responses/ProblemResponse'
+  /transfers/{transferId}:
+    get:
+      operationId: getTransfer
+      summary: Read a transfer job and its state history
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: transferId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transfer detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferJobDetail'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '404':
+          $ref: '#/components/responses/ProblemResponse'
+  /transfers/{transferId}/retry:
+    post:
+      operationId: retryTransfer
+      summary: Explicitly retry a failed or uncertain transfer
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: transferId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '202':
+          description: Job queued for retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferJob'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '403':
+          $ref: '#/components/responses/ProblemResponse'
+        '404':
+          $ref: '#/components/responses/ProblemResponse'
+        '409':
+          $ref: '#/components/responses/ProblemResponse'
+  /subscriptions/backup:
+    get:
+      operationId: exportSubscriptions
+      summary: Export native subscriptions without run history or secrets
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Subscription backup
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionBackup' }
+    post:
+      operationId: importSubscriptions
+      summary: Atomically merge a validated native subscription backup
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubscriptionBackup' }
+      responses:
+        '200':
+          description: Import result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionImportResult' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+  /subscriptions/batch/enabled:
+    post:
+      operationId: setSubscriptionsBatchEnabled
+      summary: Atomically enable or pause native subscriptions
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, enabled]
+              properties:
+                ids: { type: array, minItems: 1, maxItems: 1000, items: { type: string } }
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: Updated subscription list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionListResponse' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /migration/subx/readiness:
+    get:
+      operationId: getSubXMigrationReadiness
+      summary: Report whether SubX can be safely stopped
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Migration readiness and remaining delegated capabilities
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubXMigrationReadiness' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+  /migration/subx/subscriptions:
+    post:
+      operationId: importSubXSubscriptions
+      summary: Atomically import recognizable SubX content as native subscriptions
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      responses:
+        '200':
+          description: Migration result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubXMigrationResult' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '422': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /migration/subx/source-commands:
+    get:
+      operationId: listBlockingSubXSourceCommands
+      summary: List only source commands that block SubX shutdown
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Blocking migration-source commands
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [commands]
+                properties: { commands: { type: array, items: { $ref: '#/components/schemas/MigrationSourceCommand' } } }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+  /migration/subx/source-commands/{id}/retry:
+    post:
+      operationId: retryBlockingSubXSourceCommand
+      summary: Explicitly retry an uncertain migration-source command
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/CSRFToken' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmation]
+              properties: { confirmation: { type: string, description: Must equal id } }
+      responses:
+        '202': { description: Source command queued, content: { application/json: { schema: { $ref: '#/components/schemas/MigrationSourceCommand' } } } }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '409': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /notifications:
+    get:
+      operationId: listTransferNotifications
+      summary: List persisted Enterprise WeChat transfer notifications
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 100 } }
+      responses:
+        '200':
+          description: Notification list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [notifications]
+                properties:
+                  notifications: { type: array, items: { $ref: '#/components/schemas/TransferNotification' } }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+  /notifications/{jobId}/{eventType}/retry:
+    post:
+      operationId: retryTransferNotification
+      summary: Explicitly resend an uncertain Enterprise WeChat notification
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: string } }
+        - { name: eventType, in: path, required: true, schema: { type: string, enum: [completed, failed, needs_attention] } }
+        - { $ref: '#/components/parameters/CSRFToken' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm: { type: string, description: 'Must equal jobId:eventType' }
+      responses:
+        '202':
+          description: Notification queued after explicit duplicate-delivery confirmation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransferNotification' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '409': { $ref: '#/components/responses/ProblemResponse' }
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: media_hub_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-session-token
+  parameters:
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      description: Required for state-changing requests authenticated by Web cookie.
+      schema:
+        type: string
+    SubscriptionID:
+      name: subscriptionId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9_-]{8,100}$'
+  responses:
+    ProblemResponse:
+      description: Request failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, version, time]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        version:
+          type: string
+        time:
+          type: string
+          format: date-time
+    AndroidRelease:
+      type: object
+      required: [versionCode, versionName, minimumSupportedVersionCode, sha256, sizeBytes, publishedAt, notes, downloadPath]
+      properties:
+        versionCode: { type: integer, minimum: 1 }
+        versionName: { type: string }
+        minimumSupportedVersionCode: { type: integer, minimum: 0 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        sizeBytes: { type: integer, format: int64, minimum: 1 }
+        publishedAt: { type: string, format: date-time }
+        notes: { type: string, maxLength: 4000 }
+        downloadPath: { type: string, pattern: '^/api/v1/client/android/releases/[1-9][0-9]*/apk$' }
+    AuthConfiguration:
+      type: object
+      required: [configured]
+      properties:
+        configured:
+          type: boolean
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, minLength: 1, maxLength: 1024 }
+        newPassword: { type: string, minLength: 12, maxLength: 1024 }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [password, client]
+      properties:
+        password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 1024
+        client:
+          type: string
+          enum: [web, android]
+    LoginResponse:
+      type: object
+      required: [authenticated, client, expiresAt]
+      properties:
+        authenticated:
+          type: boolean
+          const: true
+        client:
+          type: string
+          enum: [web, android]
+        expiresAt:
+          type: string
+          format: date-time
+        token:
+          type: string
+          description: Returned only for Android sessions.
+        csrfToken:
+          type: string
+          description: Returned only for Web sessions.
+    SessionResponse:
+      type: object
+      required: [authenticated, client, expiresAt]
+      properties:
+        authenticated:
+          type: boolean
+          const: true
+        client:
+          type: string
+          enum: [web, android]
+        expiresAt:
+          type: string
+          format: date-time
+    IntegrationHealth:
+      type: object
+      required: [id, label, status, detail]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        status:
+          type: string
+          enum: [healthy, degraded, unavailable, unconfigured]
+        detail:
+          type: string
+    SystemOverview:
+      type: object
+      required: [integrations]
+      properties:
+        integrations:
+          type: array
+          items:
+            $ref: '#/components/schemas/IntegrationHealth'
+    DiscoveryItem:
+      type: object
+      required: [tmdbId, title, year, mediaType]
+      properties:
+        tmdbId: { type: string }
+        title: { type: string }
+        year: { type: integer }
+        mediaType: { type: string, enum: [movie, series] }
+        posterUrl: { type: string, format: uri }
+    DiscoveryResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/DiscoveryItem' }
+    SearchResponse:
+      type: object
+      required: [query, partial, results, sourceErrors]
+      properties:
+        query:
+          type: string
+        partial:
+          type: boolean
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchCandidate'
+        sourceErrors:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceError'
+    SearchCandidate:
+      type: object
+      required: [id, title, year, mediaType, source, sourceId, release, transferState]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        year:
+          type: integer
+        season:
+          type: integer
+          minimum: 0
+          maximum: 100
+        episodeStart: { type: integer, minimum: 0, maximum: 10000 }
+        episodeEnd: { type: integer, minimum: 0, maximum: 10000 }
+        mediaType:
+          type: string
+          enum: [movie, series]
+        tmdbId:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+        source:
+          type: string
+        sourceId:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9_-]{0,49}$'
+        provider:
+          type: string
+        posterUrl:
+          type: string
+          format: uri
+        release:
+          $ref: '#/components/schemas/ReleaseFacts'
+        transferState:
+          type: string
+          enum: [available, identity_required, unavailable]
+        transferToken:
+          type: string
+          description: Short-lived opaque token required to create a transfer job.
+    ReleaseFacts:
+      type: object
+      required: [resolution, videoCodec, sizeBytes]
+      properties:
+        resolution:
+          type: string
+        videoCodec:
+          type: string
+        dynamicRange:
+          type: string
+        audio:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 0
+    SourceError:
+      type: object
+      required: [source, code, message, retryable]
+      properties:
+        source:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+    QMediaSyncStatus:
+      type: object
+      required: [version, recentSyncs, totalSyncs]
+      properties:
+        version:
+          type: string
+        releaseDate:
+          type: string
+        recentSyncs:
+          type: array
+          items:
+            $ref: '#/components/schemas/QMediaSyncRecord'
+        totalSyncs:
+          type: integer
+          minimum: 0
+    QMediaSyncRecord:
+      type: object
+      required: [id, state, totalFiles, newStrm, newMetadata, newUploads]
+      properties:
+        id:
+          type: string
+        state:
+          type: string
+          enum: [queued, running, completed, failed, unknown]
+        totalFiles:
+          type: integer
+          minimum: 0
+        newStrm:
+          type: integer
+          minimum: 0
+        newMetadata:
+          type: integer
+          minimum: 0
+        newUploads:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+    EmbyLibraryResponse:
+      type: object
+      required: [libraries]
+      properties:
+        libraries:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmbyLibrary'
+    EmbyLibrary:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        collectionType:
+          type: string
+    EmbyItemSearchResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmbyItem'
+        total:
+          type: integer
+          minimum: 0
+    EmbyItem:
+      type: object
+      required: [id, name, type]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        year:
+          type: integer
+        providerIds:
+          type: object
+          additionalProperties:
+            type: string
+    Drive115DeviceAuthorization:
+      type: object
+      required: [id, state, expiresAt]
+      properties:
+        id: { type: string }
+        qrImage:
+          type: string
+          pattern: '^data:image/png;base64,'
+        state: { type: string, enum: [pending, confirmed, expired, failed] }
+        expiresAt: { type: string, format: date-time }
+    Drive115File:
+      type: object
+      required: [id, parentId, name, kind, size, updatedAt]
+      properties:
+        id: { type: string, pattern: '^[0-9]+$' }
+        parentId: { type: string, pattern: '^[0-9]+$' }
+        name: { type: string }
+        kind: { type: string, enum: [file, folder] }
+        size: { type: integer, format: int64, minimum: 0 }
+        updatedAt: { type: integer, format: int64, minimum: 0 }
+    Drive115FileList:
+      type: object
+      required: [items, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Drive115File' } }
+        total: { type: integer, minimum: 0 }
+    Drive115CommandInput:
+      type: object
+      required: [operation, params]
+      properties:
+        operation: { type: string, enum: [create_folder, move, rename, delete] }
+        params: { type: object, additionalProperties: true }
+    Drive115CommandEvent:
+      type: object
+      required: [id, state, message, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        state: { type: string }
+        message: { type: string }
+        createdAt: { type: integer, format: int64 }
+    Drive115Command:
+      type: object
+      required: [id, operation, state, attempts, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        operation: { type: string, enum: [create_folder, move, rename, delete] }
+        state: { type: string, enum: [awaiting_confirmation, queued, submitting, completed, failed, needs_attention] }
+        attempts: { type: integer, minimum: 0 }
+        errorCode: { type: string }
+        errorMessage: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        events: { type: array, items: { $ref: '#/components/schemas/Drive115CommandEvent' } }
+    ArchiveSuggestion:
+      type: object
+      required: [fileId, currentName, suggestedName, kind, confidence]
+      properties:
+        fileId: { type: string }
+        currentName: { type: string }
+        suggestedName: { type: string }
+        kind: { type: string, enum: [file, directory] }
+        confidence: { type: string, enum: [review] }
+    ArchiveStep:
+      type: object
+      required: [operation, fileId]
+      properties:
+        operation: { type: string, enum: [rename, move] }
+        fileId: { type: string }
+        name: { type: string }
+        targetParentId: { type: string }
+    ArchivePlanEvent:
+      type: object
+      required: [id, state, message, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        state: { type: string }
+        message: { type: string }
+        createdAt: { type: integer, format: int64 }
+    ArchivePlan:
+      type: object
+      required: [id, state, stepIndex, stepTotal, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        state: { type: string, enum: [awaiting_confirmation, queued, running, completed, failed, needs_attention] }
+        stepIndex: { type: integer }
+        stepTotal: { type: integer }
+        steps: { type: array, items: { $ref: '#/components/schemas/ArchiveStep' } }
+        errorCode: { type: string }
+        errorMessage: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        events: { type: array, items: { $ref: '#/components/schemas/ArchivePlanEvent' } }
+    LocalUploadRoot:
+      type: object
+      required: [id]
+      properties: { id: { type: string, pattern: '^root-[1-9][0-9]*$' } }
+    LocalUploadEntry:
+      type: object
+      required: [name, path, directory, size]
+      properties:
+        name: { type: string }
+        path: { type: string }
+        directory: { type: boolean }
+        size: { type: integer, format: int64, minimum: 0 }
+    LocalUploadEvent:
+      type: object
+      required: [id, state, message, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        state: { type: string }
+        message: { type: string }
+        createdAt: { type: integer, format: int64 }
+    LocalUploadJob:
+      type: object
+      required: [id, path, state, bytesDone, bytesTotal, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        path: { type: string }
+        state: { type: string, enum: [queued, hashing, submitting_init, uploading, completed, failed, needs_attention] }
+        bytesDone: { type: integer, format: int64, minimum: 0 }
+        bytesTotal: { type: integer, format: int64, minimum: 0 }
+        errorCode: { type: string }
+        errorMessage: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        events: { type: array, items: { $ref: '#/components/schemas/LocalUploadEvent' } }
+    Drive115Status:
+      type: object
+      required: [authorized]
+      properties:
+        authorized:
+          type: boolean
+        usedBytes:
+          type: integer
+          format: int64
+          minimum: 0
+        totalBytes:
+          type: integer
+          format: int64
+          minimum: 0
+        memberLevel:
+          type: string
+        expiresAt:
+          type: integer
+          format: int64
+    SubscriptionPreferences:
+      type: object
+      additionalProperties: false
+      required: [resolutions, videoCodecs, dynamicRanges, audioContains, preferredSources, minSizeBytes, maxSizeBytes, allowUnknownSize, preferSmaller]
+      properties:
+        resolutions: { type: array, maxItems: 16, items: { type: string, maxLength: 80 } }
+        videoCodecs: { type: array, maxItems: 16, items: { type: string, maxLength: 80 } }
+        dynamicRanges: { type: array, maxItems: 16, items: { type: string, maxLength: 80 } }
+        audioContains: { type: array, maxItems: 16, items: { type: string, maxLength: 80 } }
+        preferredSources: { type: array, maxItems: 16, items: { type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,49}$' } }
+        minSizeBytes: { type: integer, format: int64, minimum: 0 }
+        maxSizeBytes: { type: integer, format: int64, minimum: 0 }
+        allowUnknownSize: { type: boolean }
+        preferSmaller: { type: boolean }
+    CreateSubscriptionRequest:
+      type: object
+      additionalProperties: false
+      required: [tmdbId, title, originalTitle, year, mediaType, season, policy, enabled, intervalMinutes, sourceIds, preferences]
+      properties:
+        tmdbId: { type: string, pattern: '^[1-9][0-9]{0,19}$' }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        originalTitle: { type: string, maxLength: 300 }
+        year: { type: integer, minimum: 0, maximum: 2100 }
+        mediaType: { type: string, enum: [movie, series] }
+        season: { type: integer, minimum: 0, maximum: 100 }
+        policy: { type: string, enum: [once, upgrade] }
+        enabled: { type: boolean }
+        intervalMinutes: { type: integer, minimum: 15, maximum: 10080 }
+        sourceIds:
+          type: array
+          maxItems: 16
+          items: { type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,49}$' }
+        preferences: { $ref: '#/components/schemas/SubscriptionPreferences' }
+    UpdateSubscriptionRequest:
+      type: object
+      additionalProperties: false
+      required: [title, originalTitle, year, policy, enabled, intervalMinutes, sourceIds, preferences]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        originalTitle: { type: string, maxLength: 300 }
+        year: { type: integer, minimum: 0, maximum: 2100 }
+        policy: { type: string, enum: [once, upgrade] }
+        enabled: { type: boolean }
+        intervalMinutes: { type: integer, minimum: 15, maximum: 10080 }
+        sourceIds:
+          type: array
+          maxItems: 16
+          items: { type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,49}$' }
+        preferences: { $ref: '#/components/schemas/SubscriptionPreferences' }
+    SetSubscriptionEnabledRequest:
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+    Subscription:
+      allOf:
+        - $ref: '#/components/schemas/CreateSubscriptionRequest'
+        - type: object
+          required: [id, nextRunAt, createdAt, updatedAt]
+          properties:
+            id: { type: string }
+            nextRunAt: { type: string, format: date-time }
+            lastRunAt: { type: string, format: date-time }
+            lastEpisode: { type: integer, minimum: 0, maximum: 10000 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    SubscriptionListResponse:
+      type: object
+      required: [subscriptions]
+      properties:
+        subscriptions:
+          type: array
+          items: { $ref: '#/components/schemas/Subscription' }
+    SubscriptionRun:
+      type: object
+      required: [id, subscriptionId, triggerType, state, retryable, startedAt, updatedAt]
+      properties:
+        id: { type: string }
+        subscriptionId: { type: string }
+        triggerType: { type: string, enum: [scheduled, manual] }
+        state:
+          type: string
+          enum: [queued, searching, retry_wait, no_match, duplicate, enqueued, completed, failed, needs_attention]
+        sourceId: { type: string }
+        transferJobId: { type: string }
+        errorCode: { type: string }
+        message: { type: string }
+        retryable: { type: boolean }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SubscriptionRunListResponse:
+      type: object
+      required: [runs]
+      properties:
+        runs:
+          type: array
+          items: { $ref: '#/components/schemas/SubscriptionRun' }
+    CreateTransferRequest:
+      type: object
+      required: [transferToken]
+      properties:
+        transferToken:
+          type: string
+          minLength: 1
+          maxLength: 32768
+    TransferListResponse:
+      type: object
+      required: [transfers]
+      properties:
+        transfers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransferJob'
+    TransferJob:
+      type: object
+      required: [id, title, year, mediaType, tmdbId, source, state, retryable, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        year:
+          type: integer
+        season:
+          type: integer
+          minimum: 0
+          maximum: 100
+        episodeStart: { type: integer, minimum: 0, maximum: 10000 }
+        episodeEnd: { type: integer, minimum: 0, maximum: 10000 }
+        mediaType:
+          type: string
+          enum: [movie, series]
+        tmdbId:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+        source:
+          type: string
+        state:
+          $ref: '#/components/schemas/TransferState'
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        retryable:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TransferJobDetail:
+      allOf:
+        - $ref: '#/components/schemas/TransferJob'
+        - type: object
+          required: [events]
+          properties:
+            events:
+              type: array
+              items:
+                $ref: '#/components/schemas/TransferEvent'
+    TransferEvent:
+      type: object
+      required: [id, state, message, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        state:
+          $ref: '#/components/schemas/TransferState'
+        message:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    TransferState:
+      type: string
+      enum:
+        - queued
+        - transferring
+        - retry_wait
+        - transferred
+        - submitting_sync
+        - syncing
+        - refreshing_emby
+        - indexing_emby
+        - verifying_playback
+        - completed
+        - failed
+        - needs_attention
+    SubscriptionBackup:
+      type: object
+      required: [version, exportedAt, subscriptions]
+      properties:
+        version: { type: integer, enum: [1] }
+        exportedAt: { type: string, format: date-time }
+        subscriptions:
+          type: array
+          minItems: 0
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/CreateSubscriptionRequest' }
+    SubscriptionImportResult:
+      type: object
+      required: [created, skipped]
+      properties:
+        created: { type: integer, minimum: 0 }
+        skipped: { type: integer, minimum: 0 }
+    MigrationSourceCommand:
+      type: object
+      required: [id, operationId, state, attempts, retryable, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        operationId: { type: string }
+        state: { type: string, enum: [queued, submitting, needs_attention] }
+        attempts: { type: integer, minimum: 0 }
+        errorCode: { type: string }
+        errorMessage: { type: string }
+        retryable: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SubXMigrationReadiness:
+      type: object
+      required: [canStopSubX, subxConfigured, fallbackSourceEnabled, nativeSubscriptions, delegatedOperations, delegatedGroups, blockers]
+      properties:
+        canStopSubX: { type: boolean }
+        subxConfigured: { type: boolean }
+        fallbackSourceEnabled: { type: boolean }
+        nativeSubscriptions: { type: integer, minimum: 0 }
+        delegatedOperations: { type: integer, minimum: 0 }
+        delegatedGroups: { type: array, items: { type: string } }
+        blockers: { type: array, items: { type: string } }
+    SubXMigrationResult:
+      type: object
+      required: [detected, importable, rejected, created, skipped]
+      properties:
+        detected: { type: integer, minimum: 0 }
+        importable: { type: integer, minimum: 0 }
+        rejected: { type: integer, minimum: 0 }
+        created: { type: integer, minimum: 0 }
+        skipped: { type: integer, minimum: 0 }
+    TransferNotification:
+      type: object
+      required: [id, jobId, eventType, jobState, title, state, attempts, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        jobId: { type: string }
+        eventType: { type: string, enum: [completed, failed, needs_attention] }
+        jobState: { $ref: '#/components/schemas/TransferState' }
+        title: { type: string }
+        state: { type: string, enum: [pending, submitting, sent, needs_attention] }
+        attempts: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    OperationalStatistics:
+      type: object
+      required: [transfersTotal, transfersActive, transfersCompleted, transfersFailed, transfersNeedsAttention, subscriptionsTotal, subscriptionsEnabled, runsTotal, runsFailed, commandsPending, commandsNeedsAttention, notificationsNeedsAttention]
+      properties:
+        transfersTotal: { type: integer, minimum: 0 }
+        transfersActive: { type: integer, minimum: 0 }
+        transfersCompleted: { type: integer, minimum: 0 }
+        transfersFailed: { type: integer, minimum: 0 }
+        transfersNeedsAttention: { type: integer, minimum: 0 }
+        subscriptionsTotal: { type: integer, minimum: 0 }
+        subscriptionsEnabled: { type: integer, minimum: 0 }
+        runsTotal: { type: integer, minimum: 0 }
+        runsFailed: { type: integer, minimum: 0 }
+        commandsPending: { type: integer, minimum: 0 }
+        commandsNeedsAttention: { type: integer, minimum: 0 }
+        notificationsNeedsAttention: { type: integer, minimum: 0 }
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+        detail:
+          type: string

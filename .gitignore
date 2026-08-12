@@ -1,0 +1,33 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+*.log
+
+# Go
+backend/bin/
+backend/coverage.out
+backend/data/
+/data/
+
+# Web
+web/node_modules/
+web/dist/
+web/.vite/
+backend/internal/webui/dist/*
+!backend/internal/webui/dist/index.html
+
+# Android
+android/.gradle/
+android/local.properties
+android/**/build/
+android/*.jks
+android/*.keystore
+android/*.hprof
+android/app/build/release/
+*.apk
+*.aab
+
+# IDE
+.idea/
+.vscode/
