@@ -18,11 +18,11 @@ val releaseProperties = Properties().apply {
     }
 }
 
-val releaseVersionCode = providers.gradleProperty("MEDIA_HUB_VERSION_CODE").orElse("6000").get().toInt()
-val releaseVersionName = providers.gradleProperty("MEDIA_HUB_VERSION_NAME").orElse("0.6.0").get()
+val releaseVersionCode = providers.gradleProperty("MEDIA_HUB_VERSION_CODE").orElse("6001").get().toInt()
+val releaseVersionName = providers.gradleProperty("MEDIA_HUB_VERSION_NAME").orElse("0.6.1").get()
 
 val mediaHubApiBaseUrl = providers.gradleProperty("MEDIA_HUB_API_BASE_URL")
-    .orElse("")
+    .orElse("https://media.himym.us.ci")
     .get()
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")

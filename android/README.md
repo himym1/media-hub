@@ -10,4 +10,4 @@ Native Android client for Media Hub.
 
 The client uses the shared authenticated Media Hub API for discovery, subscriptions, transfers, library access, service status, 115 operations, and migration recovery. Session tokens are encrypted with Android Keystore before private persistence; release builds reject cleartext API URLs.
 
-GitHub Release APK does not embed a private server domain. On first launch, enter the deployment HTTPS origin; the app stores it privately and uses the same origin for API and authenticated updates.
+The signed release APK defaults to `https://media.himym.us.ci`, so a fresh install opens the login flow without asking for a server address. A server URL saved by the user takes precedence, and the Services screen retains the explicit server-change flow for migration or recovery deployments.
