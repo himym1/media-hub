@@ -128,6 +128,19 @@ class MediaHubApi(baseUrl: String) {
             }
         }
     }
+    suspend fun providerSettings(token: String): ProviderSettings = parseProviderSettings(
+        JSONObject(request("/api/v1/settings/providers", token = token)),
+    )
+
+    suspend fun updateProviderSettings(token: String, input: ProviderSettingsUpdate): ProviderSettings = parseProviderSettings(
+        JSONObject(request(
+            "/api/v1/settings/providers",
+            method = "PUT",
+            token = token,
+            body = providerSettingsBody(input).toString(),
+        )),
+    )
+
 
     suspend fun operationalStatistics(token: String): OperationalStatistics {
         val item = JSONObject(request("/api/v1/statistics/summary", token = token))
@@ -643,6 +656,55 @@ class MediaHubApi(baseUrl: String) {
         finishedAt = item.optionalString("finishedAt"),
         updatedAt = item.getString("updatedAt"),
 )
+
+    private fun parseProviderSettings(item: JSONObject): ProviderSettings {
+        val qms = item.getJSONObject("qmediaSync")
+        val emby = item.getJSONObject("emby")
+        val drive = item.getJSONObject("drive115")
+        val tmdb = item.getJSONObject("tmdb")
+        val workflow = item.getJSONObject("workflow")
+        return ProviderSettings(
+            qmediaSyncBaseUrl = qms.getString("baseUrl"),
+            qmediaSyncApiKey = SecretStatus(qms.getJSONObject("apiKey").getBoolean("configured")),
+            embyBaseUrl = emby.getString("baseUrl"),
+            embyApiKey = SecretStatus(emby.getJSONObject("apiKey").getBoolean("configured")),
+            embyUserId = emby.getString("userId"),
+            drive115ClientId = drive.getString("clientId"),
+            tmdbBaseUrl = tmdb.getString("baseUrl"),
+            tmdbAccessToken = SecretStatus(tmdb.getJSONObject("accessToken").getBoolean("configured")),
+            workflow = parseWorkflowSettings(workflow),
+            sources = item.getJSONArray("sources").objects { source -> ProviderSourceSettings(
+                id = source.getString("id"), label = source.getString("label"), baseUrl = source.getString("baseUrl"),
+                token = SecretStatus(source.getJSONObject("token").getBoolean("configured")),
+            ) },
+        )
+    }
+
+    private fun parseWorkflowSettings(item: JSONObject) = WorkflowSettings(
+        qMediaSyncAccountId = item.getInt("qMediaSyncAccountId"),
+        movie = parseWorkflowTarget(item.getJSONObject("movie")),
+        series = parseWorkflowTarget(item.getJSONObject("series")),
+    )
+
+    private fun parseWorkflowTarget(item: JSONObject) = WorkflowTargetSettings(
+        destinationId = item.getString("destinationId"),
+        qMediaSyncTargetPath = item.getString("qMediaSyncTargetPath"),
+        embyLibraryId = item.getString("embyLibraryId"),
+    )
+
+    private fun providerSettingsBody(input: ProviderSettingsUpdate) = JSONObject()
+        .put("qmediaSync", JSONObject().put("baseUrl", input.qmediaSyncBaseUrl).put("apiKey", secretBody(input.qmediaSyncApiKey)))
+        .put("emby", JSONObject().put("baseUrl", input.embyBaseUrl).put("apiKey", secretBody(input.embyApiKey)).put("userId", input.embyUserId))
+        .put("drive115", JSONObject().put("clientId", input.drive115ClientId))
+        .put("tmdb", JSONObject().put("baseUrl", input.tmdbBaseUrl).put("accessToken", secretBody(input.tmdbAccessToken)))
+        .put("workflow", JSONObject().put("qMediaSyncAccountId", input.workflow.qMediaSyncAccountId).put("movie", workflowTargetBody(input.workflow.movie)).put("series", workflowTargetBody(input.workflow.series)))
+        .put("sources", JSONArray().apply { input.sources.forEach { source -> put(JSONObject().put("id", source.id).put("baseUrl", source.baseUrl).put("token", secretBody(source.token))) } })
+
+    private fun secretBody(value: SecretUpdate) = JSONObject().put("value", value.value).put("clear", value.clear)
+    private fun workflowTargetBody(value: WorkflowTargetSettings) = JSONObject()
+        .put("destinationId", value.destinationId)
+        .put("qMediaSyncTargetPath", value.qMediaSyncTargetPath)
+        .put("embyLibraryId", value.embyLibraryId)
 
     private fun <T> JSONArray.objects(transform: (JSONObject) -> T): List<T> = buildList(length()) {
         for (index in 0 until length()) add(transform(getJSONObject(index)))

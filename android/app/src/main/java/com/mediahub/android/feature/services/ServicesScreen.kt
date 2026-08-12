@@ -68,6 +68,9 @@ internal fun ServicesRoute(
     ServicesScreen(
         uiState = uiState,
         onRefresh = viewModel::refresh,
+        onToggleSettings = viewModel::toggleSettings,
+        onSettingsDraftChange = viewModel::setSettingsDraft,
+        onSaveSettings = viewModel::saveSettings,
         onStartDriveAuthorization = viewModel::startDriveAuthorization,
         onCurrentPasswordChange = viewModel::setCurrentPassword,
         onNewPasswordChange = viewModel::setNewPassword,
@@ -88,6 +91,9 @@ internal fun ServicesRoute(
 private fun ServicesScreen(
     uiState: ServicesUiState,
     onRefresh: () -> Unit,
+    onToggleSettings: () -> Unit,
+    onSettingsDraftChange: (com.mediahub.android.core.network.ProviderSettingsUpdate) -> Unit,
+    onSaveSettings: () -> Unit,
     onStartDriveAuthorization: () -> Unit,
     onCurrentPasswordChange: (String) -> Unit,
     onNewPasswordChange: (String) -> Unit,
@@ -171,6 +177,18 @@ private fun ServicesScreen(
             items(uiState.integrations, key = { it.id }) { integration -> ServiceRow(integration) }
             uiState.statistics?.let { statistics ->
                 item(key = "statistics") { OperationalSummary(statistics) }
+            }
+            item(key = "provider-settings") {
+                ProviderSettingsPanel(
+                    settings = uiState.providerSettings,
+                    draft = uiState.settingsDraft,
+                    expanded = uiState.settingsExpanded,
+                    saving = uiState.savingSettings,
+                    saved = uiState.settingsSaved,
+                    onToggle = onToggleSettings,
+                    onDraftChange = onSettingsDraftChange,
+                    onSave = onSaveSettings,
+                )
             }
             item(key = "drive-authorization") {
                 Column(

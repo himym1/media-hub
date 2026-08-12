@@ -16,7 +16,7 @@ func TestCodecRoundTripAndExpiry(t *testing.T) {
 	codec.now = func() time.Time { return now }
 	payload := Payload{
 		SourceID: "frame", CandidateID: "candidate", Title: "Movie", Year: 2026, TMDBID: "123",
-		MediaType: "movie", Reference: "private-reference", ExpiresAt: now.Add(time.Minute).Unix(),
+		MediaType: "movie", Reference: "private-reference", ExpiresAt: now.Add(time.Minute).Unix(), Revision: 1,
 	}
 	token, err := codec.Encode(payload)
 	if err != nil {

@@ -32,6 +32,7 @@ type Payload struct {
 	TMDBID       string `json:"tmdbId"`
 	Reference    string `json:"reference"`
 	ExpiresAt    int64  `json:"expiresAt"`
+	Revision     uint64 `json:"revision"`
 }
 
 type ProviderPayload struct {

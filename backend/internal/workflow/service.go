@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"sync"
 	"time"
 
 	"media-hub/backend/internal/config"
@@ -15,6 +16,7 @@ import (
 	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/selection"
+	"media-hub/backend/internal/settings"
 	"media-hub/backend/internal/store"
 )
 
@@ -45,6 +47,7 @@ type Service struct {
 	qms      *qms.Client
 	emby     *emby.Client
 	notifier Notifier
+	mutex    sync.RWMutex
 	workflow config.Workflow
 	now      func() time.Time
 	wake     chan struct{}
@@ -67,6 +70,18 @@ func NewService(
 	}
 }
 
+func (s *Service) Configure(workflowConfig config.Workflow) {
+	s.mutex.Lock()
+	s.workflow = workflowConfig
+	s.mutex.Unlock()
+}
+
+func (s *Service) workflowConfiguration() config.Workflow {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.workflow
+}
+
 func (s *Service) SelectionToken(candidate search.Candidate) string {
 	if s.codec == nil || candidate.TransferState != "available" || candidate.SourceRef == "" || candidate.TMDBID == "" {
 		return ""
@@ -80,7 +95,10 @@ func (s *Service) SelectionToken(candidate search.Candidate) string {
 	if s.qms == nil || !s.qms.Configured() || s.emby == nil || !s.emby.Configured() {
 		return ""
 	}
-	if _, ok := s.workflow.Target(candidate.MediaType); !ok {
+	if _, ok := s.workflowConfiguration().Target(candidate.MediaType); !ok {
+		return ""
+	}
+	if candidate.Revision == 0 || candidate.Revision != s.search.CurrentRevision() {
 		return ""
 	}
 	if _, ok := s.search.TransferSource(candidate.SourceID); !ok {
@@ -91,7 +109,7 @@ func (s *Service) SelectionToken(candidate search.Candidate) string {
 		Year: candidate.Year, Season: candidate.Season, EpisodeStart: candidate.EpisodeStart, EpisodeEnd: candidate.EpisodeEnd,
 		MediaType: candidate.MediaType,
 		TMDBID:    candidate.TMDBID, Reference: candidate.SourceRef,
-		ExpiresAt: s.now().UTC().Add(selectionLifetime).Unix(),
+		ExpiresAt: s.now().UTC().Add(selectionLifetime).Unix(), Revision: candidate.Revision,
 	})
 	if err != nil {
 		return ""
@@ -100,6 +118,8 @@ func (s *Service) SelectionToken(candidate search.Candidate) string {
 }
 
 func (s *Service) Enqueue(ctx context.Context, userID int64, selectionToken, idempotencyKey string) (Job, bool, error) {
+	settings.ProviderSettingsLock.RLock()
+	defer settings.ProviderSettingsLock.RUnlock()
 	if s.codec == nil {
 		return Job{}, false, ErrUnavailable
 	}
@@ -113,7 +133,10 @@ func (s *Service) Enqueue(ctx context.Context, userID int64, selectionToken, ide
 	if err != nil {
 		return Job{}, false, ErrInvalidSelection
 	}
-	if _, ok := s.workflow.Target(payload.MediaType); !ok {
+	if payload.Revision != s.search.CurrentRevision() {
+		return Job{}, false, ErrInvalidSelection
+	}
+	if _, ok := s.workflowConfiguration().Target(payload.MediaType); !ok {
 		return Job{}, false, ErrTargetUnavailable
 	}
 	if _, ok := s.search.TransferSource(payload.SourceID); !ok {
@@ -135,6 +158,7 @@ func (s *Service) Enqueue(ctx context.Context, userID int64, selectionToken, ide
 		return Job{}, false, err
 	}
 	requestHash := sha256.Sum256(canonical)
+	payload.Revision = 0
 	payload.ExpiresAt = s.now().UTC().Add(jobTokenLifetime).Unix()
 	storedToken, err := s.codec.Encode(payload)
 	if err != nil {
@@ -195,6 +219,8 @@ func (s *Service) List(ctx context.Context, userID int64, limit int) ([]Job, err
 }
 
 func (s *Service) Retry(ctx context.Context, userID int64, jobID string) (Job, error) {
+	settings.ProviderSettingsLock.RLock()
+	defer settings.ProviderSettingsLock.RUnlock()
 	job, err := s.store.RetryTransferJob(ctx, userID, jobID, s.now())
 	if err != nil {
 		return Job{}, err

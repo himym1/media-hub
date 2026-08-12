@@ -16,6 +16,41 @@ data class DownloadedAndroidRelease(
     val file: java.io.File,
  )
 
+data class SecretStatus(val configured: Boolean)
+data class SecretUpdate(val value: String = "", val clear: Boolean = false)
+data class WorkflowTargetSettings(val destinationId: String, val qMediaSyncTargetPath: String, val embyLibraryId: String)
+data class WorkflowSettings(
+    val qMediaSyncAccountId: Int,
+    val movie: WorkflowTargetSettings,
+    val series: WorkflowTargetSettings,
+ )
+data class ProviderSourceSettings(val id: String, val label: String, val baseUrl: String, val token: SecretStatus)
+data class ProviderSettings(
+    val qmediaSyncBaseUrl: String,
+    val qmediaSyncApiKey: SecretStatus,
+    val embyBaseUrl: String,
+    val embyApiKey: SecretStatus,
+    val embyUserId: String,
+    val drive115ClientId: String,
+    val tmdbBaseUrl: String,
+    val tmdbAccessToken: SecretStatus,
+    val workflow: WorkflowSettings,
+    val sources: List<ProviderSourceSettings>,
+ )
+data class ProviderSourceSettingsUpdate(val id: String, val baseUrl: String, val token: SecretUpdate = SecretUpdate())
+data class ProviderSettingsUpdate(
+    val qmediaSyncBaseUrl: String,
+    val qmediaSyncApiKey: SecretUpdate,
+    val embyBaseUrl: String,
+    val embyApiKey: SecretUpdate,
+    val embyUserId: String,
+    val drive115ClientId: String,
+    val tmdbBaseUrl: String,
+    val tmdbAccessToken: SecretUpdate,
+    val workflow: WorkflowSettings,
+    val sources: List<ProviderSourceSettingsUpdate>,
+ )
+
 data class IntegrationHealth(
     val id: String,
     val label: String,

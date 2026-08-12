@@ -16,10 +16,11 @@ type sourceState struct {
 }
 
 type Service struct {
+	mutex    sync.RWMutex
 	sources  []Source
 	identity IdentityResolver
-	mutex    sync.RWMutex
 	states   map[string]sourceState
+	revision uint64
 }
 
 type sourceOutcome struct {
@@ -37,23 +38,41 @@ func NewServiceWithIdentity(identity IdentityResolver, sources ...Source) *Servi
 		sources:  append([]Source(nil), sources...),
 		identity: identity,
 		states:   make(map[string]sourceState, len(sources)),
+		revision: 1,
 	}
+}
+
+func (s *Service) Configure(identity IdentityResolver, sources ...Source) {
+	s.mutex.Lock()
+	s.identity = identity
+	s.sources = append([]Source(nil), sources...)
+	s.states = make(map[string]sourceState, len(sources))
+	s.revision++
+	s.mutex.Unlock()
+}
+
+func (s *Service) snapshot() (IdentityResolver, []Source, map[string]sourceState, uint64) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	states := make(map[string]sourceState, len(s.states))
+	for id, state := range s.states {
+		states[id] = state
+	}
+	return s.identity, append([]Source(nil), s.sources...), states, s.revision
 }
 
 func (s *Service) Check(context.Context) integration.Health {
 	health := integration.Health{ID: "sources", Label: "资源源"}
-	if len(s.sources) == 0 {
+	_, sources, states, _ := s.snapshot()
+	if len(sources) == 0 {
 		health.Status = integration.StatusUnconfigured
 		health.Detail = "等待配置首批搜索适配器"
 		return health
 	}
-
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
 	attempted := 0
 	healthy := 0
-	for _, source := range s.sources {
-		state := s.states[source.ID()]
+	for _, source := range sources {
+		state := states[source.ID()]
 		if state.attempted {
 			attempted++
 		}
@@ -61,17 +80,16 @@ func (s *Service) Check(context.Context) integration.Health {
 			healthy++
 		}
 	}
-
 	switch {
 	case attempted == 0:
 		health.Status = integration.StatusDegraded
-		health.Detail = fmt.Sprintf("已配置 %d 个资源源，等待首次搜索", len(s.sources))
-	case healthy == len(s.sources):
+		health.Detail = fmt.Sprintf("已配置 %d 个资源源，等待首次搜索", len(sources))
+	case healthy == len(sources):
 		health.Status = integration.StatusHealthy
 		health.Detail = fmt.Sprintf("%d 个资源源可用", healthy)
 	case healthy > 0:
 		health.Status = integration.StatusDegraded
-		health.Detail = fmt.Sprintf("%d/%d 个资源源可用", healthy, len(s.sources))
+		health.Detail = fmt.Sprintf("%d/%d 个资源源可用", healthy, len(sources))
 	default:
 		health.Status = integration.StatusUnavailable
 		health.Detail = "所有资源源暂时不可用"
@@ -85,7 +103,8 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 		Results:      []Candidate{},
 		SourceErrors: []SourceError{},
 	}
-	if len(s.sources) == 0 {
+	identity, sources, _, revision := s.snapshot()
+	if len(sources) == 0 {
 		return response
 	}
 
@@ -93,9 +112,9 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 		identities []Identity
 		err        error
 	}, 1)
-	if s.identity != nil {
+	if identity != nil {
 		go func() {
-			identities, err := s.identity.Resolve(ctx, query)
+			identities, err := identity.Resolve(ctx, query)
 			identityOutcomes <- struct {
 				identities []Identity
 				err        error
@@ -103,22 +122,21 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 		}()
 	}
 
-	outcomes := make(chan sourceOutcome, len(s.sources))
-	for index, source := range s.sources {
+	outcomes := make(chan sourceOutcome, len(sources))
+	for index, source := range sources {
 		go func() {
 			candidates, err := source.Search(ctx, query)
 			outcomes <- sourceOutcome{index: index, candidates: candidates, err: err}
 		}()
 	}
-
-	ordered := make([]sourceOutcome, len(s.sources))
-	for range s.sources {
+	ordered := make([]sourceOutcome, len(sources))
+	for range sources {
 		outcome := <-outcomes
 		ordered[outcome.index] = outcome
 	}
 
 	var identities []Identity
-	if s.identity != nil {
+	if identity != nil {
 		outcome := <-identityOutcomes
 		identities = outcome.identities
 		if outcome.err != nil {
@@ -130,8 +148,8 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 	}
 
 	for index, outcome := range ordered {
-		source := s.sources[index]
-		s.setSourceState(source.ID(), outcome.err == nil)
+		source := sources[index]
+		s.setSourceState(revision, source.ID(), outcome.err == nil)
 		if outcome.err != nil {
 			response.SourceErrors = append(response.SourceErrors, publicSourceError(source, outcome.err))
 			continue
@@ -143,6 +161,7 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 			}
 			candidate.ID = source.ID() + ":" + candidate.ID
 			candidate.SourceID = source.ID()
+			candidate.Revision = revision
 			candidate.Source = source.Label()
 			if identity, ok := matchIdentity(candidate, identities); ok {
 				candidate.TMDBID = identity.TMDBID
@@ -194,10 +213,18 @@ func matchIdentity(candidate Candidate, identities []Identity) (Identity, bool) 
 	return matched, matches == 1
 }
 
-func (s *Service) setSourceState(sourceID string, healthy bool) {
+func (s *Service) setSourceState(revision uint64, sourceID string, healthy bool) {
 	s.mutex.Lock()
-	s.states[sourceID] = sourceState{attempted: true, healthy: healthy}
-	s.mutex.Unlock()
+	defer s.mutex.Unlock()
+	if s.revision != revision {
+		return
+	}
+	for _, source := range s.sources {
+		if source.ID() == sourceID {
+			s.states[sourceID] = sourceState{attempted: true, healthy: healthy}
+			return
+		}
+	}
 }
 
 func publicSourceError(source Source, err error) SourceError {
@@ -214,6 +241,12 @@ func publicSourceError(source Source, err error) SourceError {
 	}
 }
 
+func (s *Service) CurrentRevision() uint64 {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.revision
+}
+
 func (s *Service) TransferSource(sourceID string) (TransferSource, bool) {
 	switch sourceID {
 	case "frame":
@@ -221,7 +254,8 @@ func (s *Service) TransferSource(sourceID string) (TransferSource, bool) {
 	case "gather":
 		sourceID = "juying"
 	}
-	for _, source := range s.sources {
+	_, sources, _, _ := s.snapshot()
+	for _, source := range sources {
 		if source.ID() != sourceID {
 			continue
 		}

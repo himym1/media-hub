@@ -21,6 +21,8 @@ import com.mediahub.android.core.network.MigrationSourceCommand
 import com.mediahub.android.core.network.MediaLibrary
 import com.mediahub.android.core.network.MediaSubscription
 import com.mediahub.android.core.network.OperationalStatistics
+import com.mediahub.android.core.network.ProviderSettings
+import com.mediahub.android.core.network.ProviderSettingsUpdate
 import com.mediahub.android.core.network.SearchResponse
 import com.mediahub.android.core.network.SubscriptionInput
 import com.mediahub.android.core.network.SubscriptionRun
@@ -158,6 +160,9 @@ class MediaHubRepository(
     suspend fun libraries(): List<MediaLibrary> = authenticated { token -> api.libraries(token) }
 
     suspend fun items(query: String): List<EmbyItem> = authenticated { token -> api.items(token, query) }
+
+    suspend fun providerSettings(): ProviderSettings = authenticated(api::providerSettings)
+    suspend fun updateProviderSettings(input: ProviderSettingsUpdate): ProviderSettings = authenticated { api.updateProviderSettings(it, input) }
 
 
     suspend fun subXMigrationReadiness(): SubXMigrationReadiness = authenticated(api::subXMigrationReadiness)

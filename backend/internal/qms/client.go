@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"sync"
 	"time"
 
 	"media-hub/backend/internal/integration"
@@ -25,10 +26,15 @@ var (
 	ErrSubmissionUnknown = errors.New("QMediaSync submission result is unknown")
 )
 
-type Client struct {
+type clientConfig struct {
 	baseURL string
 	apiKey  string
-	client  *http.Client
+}
+
+type Client struct {
+	mutex  sync.RWMutex
+	config clientConfig
+	client *http.Client
 }
 
 type Status struct {
@@ -90,8 +96,7 @@ type actionEnvelope struct {
 
 func NewClient(baseURL, apiKey string, timeout time.Duration) *Client {
 	return &Client{
-		baseURL: baseURL,
-		apiKey:  apiKey,
+		config: clientConfig{baseURL: baseURL, apiKey: apiKey},
 		client: &http.Client{
 			Timeout: timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -101,24 +106,38 @@ func NewClient(baseURL, apiKey string, timeout time.Duration) *Client {
 	}
 }
 
+func (c *Client) Configure(baseURL, apiKey string) {
+	c.mutex.Lock()
+	c.config = clientConfig{baseURL: baseURL, apiKey: apiKey}
+	c.mutex.Unlock()
+}
+
+func (c *Client) configuration() clientConfig {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.config
+}
+
 func (c *Client) Configured() bool {
-	return c.baseURL != "" && c.apiKey != ""
+	configuration := c.configuration()
+	return configuration.baseURL != "" && configuration.apiKey != ""
 }
 
 func (c *Client) Check(ctx context.Context) integration.Health {
 	health := integration.Health{ID: "qmediasync", Label: "QMediaSync"}
-	if c.baseURL == "" {
+	configuration := c.configuration()
+	if configuration.baseURL == "" {
 		health.Status = integration.StatusUnconfigured
 		health.Detail = "尚未配置服务地址"
 		return health
 	}
-	if c.apiKey == "" {
+	if configuration.apiKey == "" {
 		health.Status = integration.StatusDegraded
 		health.Detail = "服务地址已配置，缺少 API Key"
 		return health
 	}
 
-	version, err := c.Version(ctx)
+	version, err := c.version(ctx, configuration)
 	if err == nil {
 		health.Status = integration.StatusHealthy
 		health.Detail = "QMediaSync " + version.Version + " 在线"
@@ -135,11 +154,12 @@ func (c *Client) Check(ctx context.Context) integration.Health {
 }
 
 func (c *Client) ReadStatus(ctx context.Context) (Status, error) {
-	version, err := c.Version(ctx)
+	configuration := c.configuration()
+	version, err := c.version(ctx, configuration)
 	if err != nil {
 		return Status{}, err
 	}
-	records, total, err := c.RecentSyncs(ctx, 10)
+	records, total, err := c.recentSyncs(ctx, configuration, 10)
 	if err != nil {
 		return Status{}, err
 	}
@@ -150,11 +170,15 @@ func (c *Client) ReadStatus(ctx context.Context) (Status, error) {
 }
 
 func (c *Client) Version(ctx context.Context) (versionResponse, error) {
-	if err := c.validateConfiguration(); err != nil {
+	return c.version(ctx, c.configuration())
+}
+
+func (c *Client) version(ctx context.Context, configuration clientConfig) (versionResponse, error) {
+	if err := validateClientConfiguration(configuration); err != nil {
 		return versionResponse{}, err
 	}
 	var response versionResponse
-	if err := c.getJSON(ctx, "api/version", nil, &response); err != nil {
+	if err := c.getJSON(ctx, configuration, "api/version", nil, &response); err != nil {
 		return versionResponse{}, err
 	}
 	if response.Version == "" {
@@ -164,7 +188,11 @@ func (c *Client) Version(ctx context.Context) (versionResponse, error) {
 }
 
 func (c *Client) RecentSyncs(ctx context.Context, limit int) ([]SyncRecord, int, error) {
-	if err := c.validateConfiguration(); err != nil {
+	return c.recentSyncs(ctx, c.configuration(), limit)
+}
+
+func (c *Client) recentSyncs(ctx context.Context, configuration clientConfig, limit int) ([]SyncRecord, int, error) {
+	if err := validateClientConfiguration(configuration); err != nil {
 		return nil, 0, err
 	}
 	if limit < 1 || limit > 50 {
@@ -172,7 +200,7 @@ func (c *Client) RecentSyncs(ctx context.Context, limit int) ([]SyncRecord, int,
 	}
 	query := url.Values{"page": {"1"}, "page_size": {strconv.Itoa(limit)}}
 	var response syncEnvelope
-	if err := c.getJSON(ctx, "api/sync/records", query, &response); err != nil {
+	if err := c.getJSON(ctx, configuration, "api/sync/records", query, &response); err != nil {
 		return nil, 0, err
 	}
 	if response.Code != http.StatusOK {
@@ -197,14 +225,15 @@ func (c *Client) RecentSyncs(ctx context.Context, limit int) ([]SyncRecord, int,
 }
 
 func (c *Client) SubmitManualSync(ctx context.Context, input ManualSyncRequest) error {
-	if err := c.validateConfiguration(); err != nil {
+	configuration := c.configuration()
+	if err := validateClientConfiguration(configuration); err != nil {
 		return err
 	}
 	body, err := json.Marshal(input)
 	if err != nil {
 		return fmt.Errorf("encode QMediaSync request: %w", err)
 	}
-	endpoint, err := c.endpoint("api/sync/manual", nil)
+	endpoint, err := endpointURL(configuration, "api/sync/manual", nil)
 	if err != nil {
 		return err
 	}
@@ -237,7 +266,8 @@ func (c *Client) SubmitManualSync(ctx context.Context, input ManualSyncRequest) 
 }
 
 func (c *Client) FindSyncByBaseCID(ctx context.Context, baseCID string, createdAfter time.Time) (SyncRecord, bool, error) {
-	records, _, err := c.RecentSyncs(ctx, 50)
+	configuration := c.configuration()
+	records, _, err := c.recentSyncs(ctx, configuration, 50)
 	if err != nil {
 		return SyncRecord{}, false, err
 	}
@@ -254,17 +284,21 @@ func (c *Client) FindSyncByBaseCID(ctx context.Context, baseCID string, createdA
 }
 
 func (c *Client) validateConfiguration() error {
-	if c.baseURL == "" {
+	return validateClientConfiguration(c.configuration())
+}
+
+func validateClientConfiguration(configuration clientConfig) error {
+	if configuration.baseURL == "" {
 		return ErrNotConfigured
 	}
-	if c.apiKey == "" {
+	if configuration.apiKey == "" {
 		return ErrMissingAPIKey
 	}
 	return nil
 }
 
-func (c *Client) getJSON(ctx context.Context, endpointPath string, query url.Values, target any) error {
-	endpoint, err := c.endpoint(endpointPath, query)
+func (c *Client) getJSON(ctx context.Context, configuration clientConfig, endpointPath string, query url.Values, target any) error {
+	endpoint, err := endpointURL(configuration, endpointPath, query)
 	if err != nil {
 		return err
 	}
@@ -294,8 +328,11 @@ func (c *Client) getJSON(ctx context.Context, endpointPath string, query url.Val
 	return nil
 }
 
-func (c *Client) endpoint(endpointPath string, query url.Values) (string, error) {
-	parsed, err := url.Parse(c.baseURL)
+func endpointURL(configuration clientConfig, endpointPath string, query url.Values) (string, error) {
+	if err := validateClientConfiguration(configuration); err != nil {
+		return "", err
+	}
+	parsed, err := url.Parse(configuration.baseURL)
 	if err != nil {
 		return "", fmt.Errorf("parse QMediaSync URL: %w", err)
 	}
@@ -306,7 +343,7 @@ func (c *Client) endpoint(endpointPath string, query url.Values) (string, error)
 			values.Add(key, item)
 		}
 	}
-	values.Set("api_key", c.apiKey)
+	values.Set("api_key", configuration.apiKey)
 	parsed.RawQuery = values.Encode()
 	return parsed.String(), nil
 }

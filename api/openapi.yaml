@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.6.0
+  version: 0.7.0
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -155,6 +155,40 @@ paths:
                 $ref: '#/components/schemas/SystemOverview'
         '401':
           $ref: '#/components/responses/ProblemResponse'
+  /settings/providers:
+    get:
+      operationId: getProviderSettings
+      summary: Read non-secret runtime provider settings and secret-presence flags
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Runtime provider settings without secret values
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProviderSettings' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+    put:
+      operationId: updateProviderSettings
+      summary: Atomically encrypt, persist, and apply runtime provider settings
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProviderSettingsUpdate' }
+      responses:
+        '200':
+          description: Updated settings without secret values
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProviderSettings' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '409': { $ref: '#/components/responses/ProblemResponse' }
+        '422': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
   /statistics/summary:
     get:
       operationId: getStatisticsSummary
@@ -1252,6 +1286,113 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/IntegrationHealth'
+    SecretStatus:
+      type: object
+      required: [configured]
+      properties:
+        configured: { type: boolean }
+    SecretUpdate:
+      type: object
+      properties:
+        value: { type: string, maxLength: 4096, writeOnly: true }
+        clear: { type: boolean, default: false }
+    WorkflowTargetSettings:
+      type: object
+      required: [destinationId, qMediaSyncTargetPath, embyLibraryId]
+      properties:
+        destinationId: { type: string, maxLength: 200 }
+        qMediaSyncTargetPath: { type: string, maxLength: 2048 }
+        embyLibraryId: { type: string, maxLength: 200 }
+    WorkflowSettings:
+      type: object
+      required: [qMediaSyncAccountId, movie, series]
+      properties:
+        qMediaSyncAccountId: { type: integer, minimum: 0, maximum: 4294967295 }
+        movie: { $ref: '#/components/schemas/WorkflowTargetSettings' }
+        series: { $ref: '#/components/schemas/WorkflowTargetSettings' }
+    SourceSettings:
+      type: object
+      required: [id, label, baseUrl, token]
+      properties:
+        id: { type: string, enum: [dian, framehdr, gimy, guanying, hdhive, juying, mikan, sidhub] }
+        label: { type: string }
+        baseUrl: { type: string, maxLength: 2048 }
+        token: { $ref: '#/components/schemas/SecretStatus' }
+    SourceSettingsUpdate:
+      type: object
+      required: [id, baseUrl, token]
+      properties:
+        id: { type: string, enum: [dian, framehdr, gimy, guanying, hdhive, juying, mikan, sidhub] }
+        baseUrl: { type: string, maxLength: 2048 }
+        token: { $ref: '#/components/schemas/SecretUpdate' }
+    ProviderSettings:
+      type: object
+      required: [qmediaSync, emby, drive115, tmdb, workflow, sources]
+      properties:
+        qmediaSync:
+          type: object
+          required: [baseUrl, apiKey]
+          properties:
+            baseUrl: { type: string }
+            apiKey: { $ref: '#/components/schemas/SecretStatus' }
+        emby:
+          type: object
+          required: [baseUrl, apiKey, userId]
+          properties:
+            baseUrl: { type: string }
+            apiKey: { $ref: '#/components/schemas/SecretStatus' }
+            userId: { type: string }
+        drive115:
+          type: object
+          required: [clientId]
+          properties:
+            clientId: { type: string }
+        tmdb:
+          type: object
+          required: [baseUrl, accessToken]
+          properties:
+            baseUrl: { type: string }
+            accessToken: { $ref: '#/components/schemas/SecretStatus' }
+        workflow: { $ref: '#/components/schemas/WorkflowSettings' }
+        sources:
+          type: array
+          minItems: 8
+          maxItems: 8
+          items: { $ref: '#/components/schemas/SourceSettings' }
+    ProviderSettingsUpdate:
+      type: object
+      required: [qmediaSync, emby, drive115, tmdb, workflow, sources]
+      properties:
+        qmediaSync:
+          type: object
+          required: [baseUrl, apiKey]
+          properties:
+            baseUrl: { type: string, maxLength: 2048 }
+            apiKey: { $ref: '#/components/schemas/SecretUpdate' }
+        emby:
+          type: object
+          required: [baseUrl, apiKey, userId]
+          properties:
+            baseUrl: { type: string, maxLength: 2048 }
+            apiKey: { $ref: '#/components/schemas/SecretUpdate' }
+            userId: { type: string, maxLength: 200 }
+        drive115:
+          type: object
+          required: [clientId]
+          properties:
+            clientId: { type: string, maxLength: 200 }
+        tmdb:
+          type: object
+          required: [baseUrl, accessToken]
+          properties:
+            baseUrl: { type: string, maxLength: 2048 }
+            accessToken: { $ref: '#/components/schemas/SecretUpdate' }
+        workflow: { $ref: '#/components/schemas/WorkflowSettings' }
+        sources:
+          type: array
+          minItems: 8
+          maxItems: 8
+          items: { $ref: '#/components/schemas/SourceSettingsUpdate' }
     DiscoveryItem:
       type: object
       required: [tmdbId, title, year, mediaType]

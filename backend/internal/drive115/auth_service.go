@@ -37,6 +37,7 @@ const (
 type AuthService struct {
 	store              *store.Store
 	codec              *securepayload.Codec
+	clientIDMu         sync.RWMutex
 	clientID           string
 	drive              *Client
 	httpClient         *http.Client
@@ -136,8 +137,26 @@ func (s *AuthService) Status(ctx context.Context) (Status, error) {
 	return s.drive.Status(ctx)
 }
 
+func (s *AuthService) ConfigureClientID(clientID string) {
+	if s == nil {
+		return
+	}
+	s.clientIDMu.Lock()
+	s.clientID = strings.TrimSpace(clientID)
+	s.clientIDMu.Unlock()
+}
+
+func (s *AuthService) configuredClientID() string {
+	if s == nil {
+		return ""
+	}
+	s.clientIDMu.RLock()
+	defer s.clientIDMu.RUnlock()
+	return s.clientID
+}
+
 func (s *AuthService) Configured() bool {
-	return s != nil && s.store != nil && s.codec != nil && s.drive != nil && s.clientID != ""
+	return s != nil && s.store != nil && s.codec != nil && s.drive != nil && s.configuredClientID() != ""
 }
 
 func (s *AuthService) Load(ctx context.Context, userID int64) error {
@@ -178,8 +197,9 @@ func (s *AuthService) Start(ctx context.Context, userID int64) (DeviceAuthorizat
 			Sign   string `json:"sign"`
 		} `json:"data"`
 	}
+	clientID := s.configuredClientID()
 	if err := s.formJSON(ctx, s.deviceCodeEndpoint, url.Values{
-		"client_id": {s.clientID}, "code_challenge": {challenge}, "code_challenge_method": {"sha256"},
+		"client_id": {clientID}, "code_challenge": {challenge}, "code_challenge_method": {"sha256"},
 	}, &response); err != nil {
 		return DeviceAuthorization{}, err
 	}

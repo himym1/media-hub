@@ -9,6 +9,26 @@ export type Integration = {
   detail: string
 }
 
+export type SecretStatus = { configured: boolean }
+export type SecretUpdate = { value: string; clear: boolean }
+export type WorkflowTargetSettings = { destinationId: string; qMediaSyncTargetPath: string; embyLibraryId: string }
+export type ProviderSettings = {
+  qmediaSync: { baseUrl: string; apiKey: SecretStatus }
+  emby: { baseUrl: string; apiKey: SecretStatus; userId: string }
+  drive115: { clientId: string }
+  tmdb: { baseUrl: string; accessToken: SecretStatus }
+  workflow: { qMediaSyncAccountId: number; movie: WorkflowTargetSettings; series: WorkflowTargetSettings }
+  sources: { id: string; label: string; baseUrl: string; token: SecretStatus }[]
+}
+export type ProviderSettingsUpdate = {
+  qmediaSync: { baseUrl: string; apiKey: SecretUpdate }
+  emby: { baseUrl: string; apiKey: SecretUpdate; userId: string }
+  drive115: { clientId: string }
+  tmdb: { baseUrl: string; accessToken: SecretUpdate }
+  workflow: ProviderSettings['workflow']
+  sources: { id: string; baseUrl: string; token: SecretUpdate }[]
+}
+
 export type OperationalStatistics = {
   transfersTotal: number
   transfersActive: number
@@ -369,6 +389,18 @@ export function getOperationalStatistics() {
 
 export function getSystemOverview() {
   return requestJSON<{ integrations: Integration[] }>('/api/v1/system/overview')
+}
+
+export function getProviderSettings() {
+	return requestJSON<ProviderSettings>('/api/v1/settings/providers')
+}
+
+export function updateProviderSettings(input: ProviderSettingsUpdate) {
+	return requestJSON<ProviderSettings>('/api/v1/settings/providers', {
+		method: 'PUT',
+		headers: writeHeaders(),
+		body: JSON.stringify(input),
+	})
 }
 
 export function getQMediaSyncStatus() {

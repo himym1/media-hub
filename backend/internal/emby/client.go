@@ -12,6 +12,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"media-hub/backend/internal/integration"
@@ -24,11 +25,16 @@ var (
 	ErrUpstreamResponse = errors.New("Emby returned an invalid response")
 )
 
-type Client struct {
+type clientConfig struct {
 	baseURL string
 	apiKey  string
 	userID  string
-	client  *http.Client
+}
+
+type Client struct {
+	mutex  sync.RWMutex
+	config clientConfig
+	client *http.Client
 }
 
 type ServerInfo struct {
@@ -99,9 +105,7 @@ func NewClient(baseURL, apiKey string, timeout time.Duration, userID ...string) 
 		configuredUserID = strings.TrimSpace(userID[0])
 	}
 	return &Client{
-		baseURL: baseURL,
-		apiKey:  apiKey,
-		userID:  configuredUserID,
+		config: clientConfig{baseURL: baseURL, apiKey: apiKey, userID: configuredUserID},
 		client: &http.Client{
 			Timeout: timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -111,13 +115,27 @@ func NewClient(baseURL, apiKey string, timeout time.Duration, userID ...string) 
 	}
 }
 
+func (c *Client) Configure(baseURL, apiKey, userID string) {
+	c.mutex.Lock()
+	c.config = clientConfig{baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"), apiKey: strings.TrimSpace(apiKey), userID: strings.TrimSpace(userID)}
+	c.mutex.Unlock()
+}
+
+func (c *Client) configuration() clientConfig {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.config
+}
+
 func (c *Client) Configured() bool {
-	return c.baseURL != "" && c.apiKey != ""
+	configuration := c.configuration()
+	return configuration.baseURL != "" && configuration.apiKey != ""
 }
 
 func (c *Client) Check(ctx context.Context) integration.Health {
 	health := integration.Health{ID: "emby", Label: "Emby"}
-	if c.baseURL == "" {
+	configuration := c.configuration()
+	if configuration.baseURL == "" {
 		health.Status = integration.StatusUnconfigured
 		health.Detail = "尚未配置服务地址"
 		return health
@@ -125,13 +143,13 @@ func (c *Client) Check(ctx context.Context) integration.Health {
 
 	var info ServerInfo
 	var err error
-	if c.apiKey == "" {
-		info, err = c.PublicInfo(ctx)
+	if configuration.apiKey == "" {
+		info, err = c.readServerInfo(ctx, configuration, "System/Info/Public", false)
 	} else {
-		info, err = c.ServerInfo(ctx)
+		info, err = c.readServerInfo(ctx, configuration, "System/Info", true)
 	}
 	if err == nil {
-		if c.apiKey == "" {
+		if configuration.apiKey == "" {
 			health.Status = integration.StatusDegraded
 			health.Detail = "Emby " + info.Version + " 在线，缺少 API Key"
 		} else {
@@ -151,26 +169,29 @@ func (c *Client) Check(ctx context.Context) integration.Health {
 }
 
 func (c *Client) PublicInfo(ctx context.Context) (ServerInfo, error) {
-	if c.baseURL == "" {
+	configuration := c.configuration()
+	if configuration.baseURL == "" {
 		return ServerInfo{}, ErrNotConfigured
 	}
-	return c.readServerInfo(ctx, "System/Info/Public", false)
+	return c.readServerInfo(ctx, configuration, "System/Info/Public", false)
 }
 
 func (c *Client) ServerInfo(ctx context.Context) (ServerInfo, error) {
-	if err := c.validateAuthenticated(); err != nil {
+	configuration := c.configuration()
+	if err := validateAuthenticated(configuration); err != nil {
 		return ServerInfo{}, err
 	}
-	return c.readServerInfo(ctx, "System/Info", true)
+	return c.readServerInfo(ctx, configuration, "System/Info", true)
 }
 
 func (c *Client) Libraries(ctx context.Context) ([]Library, error) {
-	if err := c.validateAuthenticated(); err != nil {
+	configuration := c.configuration()
+	if err := validateAuthenticated(configuration); err != nil {
 		return nil, err
 	}
 	query := url.Values{"Fields": {"CollectionType"}}
 	var response itemResponse
-	if err := c.getJSON(ctx, "Library/MediaFolders", query, true, &response); err != nil {
+	if err := c.getJSON(ctx, configuration, "Library/MediaFolders", query, true, &response); err != nil {
 		return nil, err
 	}
 
@@ -187,7 +208,11 @@ func (c *Client) Libraries(ctx context.Context) ([]Library, error) {
 }
 
 func (c *Client) SearchItems(ctx context.Context, queryText string, limit int) (SearchResult, error) {
-	if err := c.validateAuthenticated(); err != nil {
+	return c.searchItems(ctx, c.configuration(), queryText, limit)
+}
+
+func (c *Client) searchItems(ctx context.Context, configuration clientConfig, queryText string, limit int) (SearchResult, error) {
+	if err := validateAuthenticated(configuration); err != nil {
 		return SearchResult{}, err
 	}
 	queryText = strings.TrimSpace(queryText)
@@ -205,7 +230,7 @@ func (c *Client) SearchItems(ctx context.Context, queryText string, limit int) (
 		"SearchTerm":       {queryText},
 	}
 	var response itemResponse
-	if err := c.getJSON(ctx, "Items", query, true, &response); err != nil {
+	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
 		return SearchResult{}, err
 	}
 
@@ -223,7 +248,11 @@ func (c *Client) SearchItems(ctx context.Context, queryText string, limit int) (
 }
 
 func (c *Client) FindIndexedItem(ctx context.Context, title, mediaType string, year int, tmdbID string) (Item, bool, error) {
-	result, err := c.SearchItems(ctx, title, 50)
+	return c.findIndexedItem(ctx, c.configuration(), title, mediaType, year, tmdbID)
+}
+
+func (c *Client) findIndexedItem(ctx context.Context, configuration clientConfig, title, mediaType string, year int, tmdbID string) (Item, bool, error) {
+	result, err := c.searchItems(ctx, configuration, title, 50)
 	if err != nil {
 		return Item{}, false, err
 	}
@@ -250,12 +279,13 @@ func (c *Client) FindIndexedItem(ctx context.Context, title, mediaType string, y
 }
 
 func (c *Client) FindPlayableItem(ctx context.Context, title, mediaType string, year int, tmdbID string, season, episodeStart, episodeEnd int) (Item, bool, error) {
-	item, found, err := c.FindIndexedItem(ctx, title, mediaType, year, tmdbID)
+	configuration := c.configuration()
+	item, found, err := c.findIndexedItem(ctx, configuration, title, mediaType, year, tmdbID)
 	if err != nil || !found {
 		return Item{}, found, err
 	}
 	if mediaType == "movie" {
-		ready, err := c.PlaybackReady(ctx, item.ID)
+		ready, err := c.playbackReady(ctx, configuration, item.ID)
 		return item, ready, err
 	}
 	query := url.Values{
@@ -266,11 +296,11 @@ func (c *Client) FindPlayableItem(ctx context.Context, title, mediaType string, 
 	if season > 0 {
 		query.Set("Season", strconv.Itoa(season))
 	}
-	if c.userID != "" {
-		query.Set("UserId", c.userID)
+	if configuration.userID != "" {
+		query.Set("UserId", configuration.userID)
 	}
 	var response itemResponse
-	if err := c.getJSON(ctx, path.Join("Shows", item.ID, "Episodes"), query, true, &response); err != nil {
+	if err := c.getJSON(ctx, configuration, path.Join("Shows", item.ID, "Episodes"), query, true, &response); err != nil {
 		return Item{}, false, err
 	}
 	playable := make(map[int]Item)
@@ -304,36 +334,41 @@ func (c *Client) FindPlayableItem(ctx context.Context, title, mediaType string, 
 }
 
 func (c *Client) RefreshLibrary(ctx context.Context, libraryID string) error {
-	if err := c.validateAuthenticated(); err != nil {
+	configuration := c.configuration()
+	if err := validateAuthenticated(configuration); err != nil {
 		return err
 	}
 	if strings.TrimSpace(libraryID) == "" {
 		return ErrUpstreamResponse
 	}
-	return c.postJSON(ctx, path.Join("Items", libraryID, "Refresh"), nil, nil)
+	return c.postJSON(ctx, configuration, path.Join("Items", libraryID, "Refresh"), nil, nil)
 }
 
 func (c *Client) PlaybackReady(ctx context.Context, itemID string) (bool, error) {
-	if err := c.validateAuthenticated(); err != nil {
+	return c.playbackReady(ctx, c.configuration(), itemID)
+}
+
+func (c *Client) playbackReady(ctx context.Context, configuration clientConfig, itemID string) (bool, error) {
+	if err := validateAuthenticated(configuration); err != nil {
 		return false, err
 	}
 	if strings.TrimSpace(itemID) == "" {
 		return false, ErrUpstreamResponse
 	}
 	query := url.Values{}
-	if c.userID != "" {
-		query.Set("UserId", c.userID)
+	if configuration.userID != "" {
+		query.Set("UserId", configuration.userID)
 	}
 	var response playbackInfoResponse
-	if err := c.postJSON(ctx, path.Join("Items", itemID, "PlaybackInfo"), query, &response); err != nil {
+	if err := c.postJSON(ctx, configuration, path.Join("Items", itemID, "PlaybackInfo"), query, &response); err != nil {
 		return false, err
 	}
 	return len(response.MediaSources) > 0, nil
 }
 
-func (c *Client) readServerInfo(ctx context.Context, endpointPath string, authenticated bool) (ServerInfo, error) {
+func (c *Client) readServerInfo(ctx context.Context, configuration clientConfig, endpointPath string, authenticated bool) (ServerInfo, error) {
 	var response serverInfoResponse
-	if err := c.getJSON(ctx, endpointPath, nil, authenticated, &response); err != nil {
+	if err := c.getJSON(ctx, configuration, endpointPath, nil, authenticated, &response); err != nil {
 		return ServerInfo{}, err
 	}
 	if response.ID == "" || response.Version == "" {
@@ -342,11 +377,11 @@ func (c *Client) readServerInfo(ctx context.Context, endpointPath string, authen
 	return ServerInfo{ID: response.ID, Name: response.ServerName, Version: response.Version}, nil
 }
 
-func (c *Client) validateAuthenticated() error {
-	if c.baseURL == "" {
+func validateAuthenticated(configuration clientConfig) error {
+	if configuration.baseURL == "" {
 		return ErrNotConfigured
 	}
-	if c.apiKey == "" {
+	if configuration.apiKey == "" {
 		return ErrMissingAPIKey
 	}
 	return nil
@@ -354,12 +389,13 @@ func (c *Client) validateAuthenticated() error {
 
 func (c *Client) getJSON(
 	ctx context.Context,
+	configuration clientConfig,
 	endpointPath string,
 	query url.Values,
 	authenticated bool,
 	target any,
 ) error {
-	endpoint, err := c.endpoint(endpointPath, query)
+	endpoint, err := endpointURL(configuration.baseURL, endpointPath, query)
 	if err != nil {
 		return err
 	}
@@ -370,7 +406,7 @@ func (c *Client) getJSON(
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "Media-Hub/emby")
 	if authenticated {
-		request.Header.Set("X-Emby-Token", c.apiKey)
+		request.Header.Set("X-Emby-Token", configuration.apiKey)
 	}
 
 	response, err := c.client.Do(request)
@@ -392,8 +428,8 @@ func (c *Client) getJSON(
 	return nil
 }
 
-func (c *Client) postJSON(ctx context.Context, endpointPath string, query url.Values, target any) error {
-	endpoint, err := c.endpoint(endpointPath, query)
+func (c *Client) postJSON(ctx context.Context, configuration clientConfig, endpointPath string, query url.Values, target any) error {
+	endpoint, err := endpointURL(configuration.baseURL, endpointPath, query)
 	if err != nil {
 		return err
 	}
@@ -404,7 +440,7 @@ func (c *Client) postJSON(ctx context.Context, endpointPath string, query url.Va
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "Media-Hub/emby")
-	request.Header.Set("X-Emby-Token", c.apiKey)
+	request.Header.Set("X-Emby-Token", configuration.apiKey)
 	response, err := c.client.Do(request)
 	if err != nil {
 		return fmt.Errorf("request Emby: %w", err)
@@ -426,8 +462,8 @@ func (c *Client) postJSON(ctx context.Context, endpointPath string, query url.Va
 	return nil
 }
 
-func (c *Client) endpoint(endpointPath string, query url.Values) (string, error) {
-	parsed, err := url.Parse(c.baseURL)
+func endpointURL(baseURL, endpointPath string, query url.Values) (string, error) {
+	parsed, err := url.Parse(baseURL)
 	if err != nil {
 		return "", fmt.Errorf("parse Emby URL: %w", err)
 	}

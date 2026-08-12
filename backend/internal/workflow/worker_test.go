@@ -61,7 +61,7 @@ func TestUnknownQMediaSyncSubmissionIsNotAutomaticallyRepeated(t *testing.T) {
 	)
 	token := service.SelectionToken(search.Candidate{
 		ID: "framehdr:item-1", Title: "Movie", MediaType: "movie", TMDBID: "123", SourceID: "framehdr",
-		SourceRef: "private-reference", TransferState: "available",
+		SourceRef: "private-reference", TransferState: "available", Revision: searchService.CurrentRevision(),
 	})
 	publicJob, _, err := service.Enqueue(ctx, admin.ID, token, "request_worker")
 	if err != nil {
@@ -139,8 +139,9 @@ func TestWorkflowCompletesOnlyAfterEmbyPlaybackIsReady(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	searchService := search.NewService(transferSourceStub{})
 	service := NewService(
-		dataStore, search.NewService(transferSourceStub{}), codec,
+		dataStore, searchService, codec,
 		qms.NewClient(qmsServer.URL, "qms-key", time.Second),
 		emby.NewClient(embyServer.URL, "emby-key", time.Second),
 		nil,
@@ -151,7 +152,7 @@ func TestWorkflowCompletesOnlyAfterEmbyPlaybackIsReady(t *testing.T) {
 	)
 	token := service.SelectionToken(search.Candidate{
 		ID: "framehdr:item-1", Title: "Movie", Year: 2026, MediaType: "movie", TMDBID: "123", SourceID: "framehdr",
-		SourceRef: "private-reference", TransferState: "available",
+		SourceRef: "private-reference", TransferState: "available", Revision: searchService.CurrentRevision(),
 	})
 	publicJob, _, err := service.Enqueue(ctx, admin.ID, token, "request_complete")
 	if err != nil {

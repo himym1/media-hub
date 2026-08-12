@@ -11,6 +11,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"media-hub/backend/internal/integration"
@@ -23,10 +24,15 @@ var (
 	ErrUpstreamResponse = errors.New("TMDB returned an invalid response")
 )
 
-type Client struct {
+type clientConfig struct {
 	baseURL string
 	token   string
-	client  *http.Client
+}
+
+type Client struct {
+	mutex  sync.RWMutex
+	config clientConfig
+	client *http.Client
 }
 
 type multiSearchResponse struct {
@@ -53,8 +59,7 @@ type DiscoveryItem struct {
 
 func NewClient(baseURL, token string, timeout time.Duration) *Client {
 	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		token:   token,
+		config: clientConfig{baseURL: strings.TrimRight(baseURL, "/"), token: token},
 		client: &http.Client{
 			Timeout: timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -64,9 +69,22 @@ func NewClient(baseURL, token string, timeout time.Duration) *Client {
 	}
 }
 
+func (c *Client) Configure(baseURL, token string) {
+	c.mutex.Lock()
+	c.config = clientConfig{baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"), token: strings.TrimSpace(token)}
+	c.mutex.Unlock()
+}
+
+func (c *Client) configuration() clientConfig {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.config
+}
+
 func (c *Client) Check(ctx context.Context) integration.Health {
 	health := integration.Health{ID: "tmdb", Label: "TMDB"}
-	if c.baseURL == "" || c.token == "" {
+	configuration := c.configuration()
+	if configuration.baseURL == "" || configuration.token == "" {
 		health.Status = integration.StatusUnconfigured
 		health.Detail = "尚未配置身份匹配"
 		return health
@@ -90,7 +108,8 @@ func (c *Client) Check(ctx context.Context) integration.Health {
 }
 
 func (c *Client) Resolve(ctx context.Context, queryText string) ([]search.Identity, error) {
-	if c.baseURL == "" || c.token == "" {
+	configuration := c.configuration()
+	if configuration.baseURL == "" || configuration.token == "" {
 		return nil, ErrNotConfigured
 	}
 	queryText = strings.TrimSpace(queryText)
@@ -160,7 +179,8 @@ func (c *Client) Recommendations(ctx context.Context, mediaType, tmdbID string, 
 }
 
 func (c *Client) discovery(ctx context.Context, endpointPath, fallbackMediaType string, limit int) ([]DiscoveryItem, error) {
-	if c.baseURL == "" || c.token == "" {
+	configuration := c.configuration()
+	if configuration.baseURL == "" || configuration.token == "" {
 		return nil, ErrNotConfigured
 	}
 	if limit < 1 {
@@ -215,7 +235,8 @@ func discoveryItem(id int64, mediaType, movieTitle, seriesTitle, releaseDate, fi
 }
 
 func (c *Client) getJSON(ctx context.Context, endpointPath string, query url.Values, target any) error {
-	parsed, err := url.Parse(c.baseURL)
+	configuration := c.configuration()
+	parsed, err := url.Parse(configuration.baseURL)
 	if err != nil {
 		return fmt.Errorf("parse TMDB URL: %w", err)
 	}
@@ -232,7 +253,7 @@ func (c *Client) getJSON(ctx context.Context, endpointPath string, query url.Val
 		return fmt.Errorf("create TMDB request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", "Bearer "+c.token)
+	request.Header.Set("Authorization", "Bearer "+configuration.token)
 	request.Header.Set("User-Agent", "Media-Hub/tmdb")
 	response, err := c.client.Do(request)
 	if err != nil {

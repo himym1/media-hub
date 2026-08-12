@@ -24,6 +24,7 @@ import (
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/securepayload"
 	"media-hub/backend/internal/selection"
+	"media-hub/backend/internal/settings"
 	"media-hub/backend/internal/statistics"
 	"media-hub/backend/internal/store"
 	"media-hub/backend/internal/subscription"
@@ -35,7 +36,7 @@ import (
 	"media-hub/backend/internal/workflow"
 )
 
-var version = "0.6.0-dev"
+var version = "0.7.0-dev"
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -125,18 +126,32 @@ func run(logger *slog.Logger) error {
 	)
 	subxClient := subx.NewClient(configuration.SubX, configuration.ProbeTimeout)
 	subxService := subx.NewService(dataStore, subxClient, securePayloadCodec)
-	var identityResolver search.IdentityResolver
-	if configuration.TMDB.BaseURL != "" && configuration.TMDB.AccessToken != "" {
-		identityResolver = tmdbClient
-	}
-	sources := searchSources(configuration)
-	if subxClient.Configured() && configuration.SubX.SourceEnabled {
-		sources = append(sources, subx.NewSource(subxClient, subxService))
-	}
-	searchService := search.NewServiceWithIdentity(identityResolver, sources...)
+	searchService := search.NewServiceWithIdentity(tmdbClient)
 	workflowService := workflow.NewService(
 		dataStore, searchService, selectionCodec, qmsClient, embyClient, wecomClient, configuration.Workflow,
 	)
+	settingsService := settings.NewService(
+		dataStore, securePayloadCodec, settings.FromConfig(configuration),
+		func(value settings.Values) {
+			qmsClient.Configure(value.QMediaSync.BaseURL, value.QMediaSync.APIKey)
+			embyClient.Configure(value.Emby.BaseURL, value.Emby.APIKey, value.Emby.UserID)
+			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
+			drive115AuthService.ConfigureClientID(value.Drive115.ClientID)
+			workflowService.Configure(value.Workflow)
+			runtimeSources := searchSourcesFromSettings(value, configuration.ProbeTimeout, configuration.FixtureMode)
+			if subxClient.Configured() && configuration.SubX.SourceEnabled {
+				runtimeSources = append(runtimeSources, subx.NewSource(subxClient, subxService))
+			}
+			searchService.Configure(tmdbClient, runtimeSources...)
+		},
+	)
+	if admin, exists, err := dataStore.Admin(startupContext); err != nil {
+		return fmt.Errorf("read administrator for runtime settings: %w", err)
+	} else if exists && securePayloadCodec != nil {
+		if err := settingsService.Load(startupContext, admin.ID); err != nil {
+			return fmt.Errorf("load encrypted runtime settings: %w", err)
+		}
+	}
 	subscriptionService := subscription.NewService(dataStore, searchService, workflowService, embyClient)
 	overview := integration.NewOverviewService(
 		subxClient,
@@ -147,13 +162,10 @@ func run(logger *slog.Logger) error {
 		qmsClient,
 		embyClient,
 	)
-	_, movieTargetReady := configuration.Workflow.Target("movie")
-	_, seriesTargetReady := configuration.Workflow.Target("series")
 	migrationService := subxmigration.NewService(
 		subxService, subscriptionService, configuration.SubX.SourceEnabled,
 		subxmigration.ReadinessRequirements{
-			CoreConfigurationReady: qmsClient.Configured() && embyClient.Configured() && configuration.TMDB.BaseURL != "" && configuration.TMDB.AccessToken != "" && drive115AuthService.Configured() && movieTargetReady && seriesTargetReady,
-			NativeSourceCount:      len(configuration.Sources), ParallelValidationCompleted: configuration.SubXParallelValidated, Health: overview,
+			ParallelValidationCompleted: configuration.SubXParallelValidated, Health: overview, Configuration: settingsService,
 		},
 	)
 	statisticsService := statistics.NewService(dataStore)
@@ -206,6 +218,7 @@ func run(logger *slog.Logger) error {
 			Auth: authService, Overview: overview, Search: searchService, Discovery: tmdbClient,
 			QMediaSync: qmsClient, Emby: embyClient, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
 			Workflow: workflowService, Subscriptions: subscriptionService, Migration: migrationService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService,
+			Settings:      settingsService,
 			SecureCookies: configuration.SecureCookies,
 			Web:           webui.Handler(),
 		}),
@@ -329,22 +342,17 @@ func integrationRecords(configurations []config.Integration) []store.Integration
 	return records
 }
 
-func searchSources(configuration config.Config) []search.Source {
-	if configuration.FixtureMode {
+func searchSourcesFromSettings(value settings.Values, timeout time.Duration, fixtureMode bool) []search.Source {
+	if fixtureMode {
 		return search.FixtureSources()
 	}
-
-	sources := make([]search.Source, 0, len(configuration.Sources))
-	for _, sourceConfiguration := range configuration.Sources {
+	sources := make([]search.Source, 0, len(value.Sources))
+	for _, sourceConfiguration := range value.Sources {
 		if sourceConfiguration.BaseURL == "" {
 			continue
 		}
 		sources = append(sources, search.NewHTTPSource(
-			sourceConfiguration.ID,
-			sourceConfiguration.Label,
-			sourceConfiguration.BaseURL,
-			sourceConfiguration.Token,
-			configuration.ProbeTimeout,
+			sourceConfiguration.ID, sourceConfiguration.Label, sourceConfiguration.BaseURL, sourceConfiguration.Token, timeout,
 		))
 	}
 	return sources

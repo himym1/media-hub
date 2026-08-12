@@ -1,6 +1,6 @@
 # Development Roadmap
 
-Status: API `0.6.0-dev` contains the source-level native SubX replacement: subscriptions, eight source-adapter IDs, TMDB/Emby/QMediaSync orchestration, encrypted 115 PKCE and durable file operations, local upload, archive plans, operational statistics, and three-client management surfaces. The first uncached backend normal/race suite, Web unit/lint/build suite, Android unit/lint/debug APK suite, frozen lockfile check, and OpenAPI reference check passed on 2026-08-12. Real-provider and side-by-side SubX acceptance remain unexecuted.
+Status: API `0.7.0-dev` contains the source-level native SubX replacement plus encrypted, runtime-applied core provider settings for TMDB, 115, QMediaSync, Emby, workflow targets, and the eight source-adapter IDs across Web and Android. Uncached backend normal/race/vet, Web unit/lint/build, Android executed unit/lint/debug APK, and OpenAPI checks passed on 2026-08-12. Real-provider and side-by-side SubX acceptance remain unexecuted.
 
 ## Phase 0: Foundation
 

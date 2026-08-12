@@ -34,11 +34,16 @@ type HealthProvider interface {
 	Overview(context.Context) []integration.Health
 }
 
+type ConfigurationProvider interface {
+	ReadinessConfiguration() (coreReady bool, nativeSourceCount int)
+}
+
 type ReadinessRequirements struct {
 	CoreConfigurationReady      bool
 	NativeSourceCount           int
 	ParallelValidationCompleted bool
 	Health                      HealthProvider
+	Configuration               ConfigurationProvider
 }
 
 type Readiness struct {
@@ -102,9 +107,14 @@ func (s *Service) Readiness(ctx context.Context, userID int64) (Readiness, error
 	if s.requirements.Health != nil {
 		healthValues = s.requirements.Health.Overview(ctx)
 	}
+	coreConfigurationReady := s.requirements.CoreConfigurationReady
+	nativeSourceCount := s.requirements.NativeSourceCount
+	if s.requirements.Configuration != nil {
+		coreConfigurationReady, nativeSourceCount = s.requirements.Configuration.ReadinessConfiguration()
+	}
 	return evaluateReadiness(Readiness{
 		SubXConfigured: s.subx.Configured(), FallbackSourceEnabled: s.fallbackSourceEnabled, NativeSubscriptions: len(items),
-		CoreConfigurationReady: s.requirements.CoreConfigurationReady, NativeSourceCount: s.requirements.NativeSourceCount,
+		CoreConfigurationReady: coreConfigurationReady, NativeSourceCount: nativeSourceCount,
 		ParallelValidationCompleted: s.requirements.ParallelValidationCompleted, DelegatedGroups: []string{},
 	}, pendingCommands, healthValues), nil
 }

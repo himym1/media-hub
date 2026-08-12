@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Activity, Database, Film, HardDrive, KeyRound, QrCode, RefreshCw, Server, Waypoints } from 'lucide-react'
 import {
   changePassword,
   getDrive115Status,
   getEmbyLibraries,
+  getProviderSettings,
   getQMediaSyncStatus,
   getOperationalStatistics,
   pollDrive115Authorization,
   startDrive115Authorization,
+  updateProviderSettings,
   type Integration,
   type IntegrationStatus,
 } from '../../shared/api/mediaHub'
+import { ProviderSettingsForm } from './ProviderSettingsForm'
 import { IconButton } from '../../shared/ui/IconButton'
 
 const statusLabel: Record<IntegrationStatus, string> = {
@@ -37,6 +40,16 @@ export function SettingsView({ integrations, onRefresh }: SettingsViewProps) {
   const drive = useQuery({ queryKey: ['drive-115-status'], queryFn: getDrive115Status, retry: false })
   const refetchDrive = drive.refetch
   const emby = useQuery({ queryKey: ['emby-libraries'], queryFn: getEmbyLibraries, retry: false })
+  const queryClient = useQueryClient()
+  const providerSettings = useQuery({ queryKey: ['provider-settings'], queryFn: getProviderSettings })
+  const saveProviderSettings = useMutation({
+    mutationFn: updateProviderSettings,
+    onSuccess: async (value) => {
+      queryClient.setQueryData(['provider-settings'], value)
+      await Promise.all([qms.refetch(), drive.refetch(), emby.refetch(), queryClient.invalidateQueries({ queryKey: ['system-overview'] }), queryClient.invalidateQueries({ queryKey: ['subx-migration-readiness'] })])
+      onRefresh()
+    },
+  })
   const statistics = useQuery({ queryKey: ['operational-statistics'], queryFn: getOperationalStatistics })
   const authorization = useMutation({ mutationFn: startDrive115Authorization })
   const authorizationStatus = useQuery({
@@ -68,6 +81,7 @@ export function SettingsView({ integrations, onRefresh }: SettingsViewProps) {
     void drive.refetch()
     void emby.refetch()
     void statistics.refetch()
+    void providerSettings.refetch()
   }
 
   return (
@@ -83,6 +97,8 @@ export function SettingsView({ integrations, onRefresh }: SettingsViewProps) {
           return <article className="service-card" key={integration.id}><Icon size={20} /><div><strong>{integration.label}</strong><span>{integration.detail}</span></div><span className={`state-chip ${integration.status}`}>{statusLabel[integration.status]}</span></article>
         })}
       </div>
+
+      {providerSettings.data ? <ProviderSettingsForm error={saveProviderSettings.error?.message} isSaving={saveProviderSettings.isPending} onDirty={() => saveProviderSettings.reset()} onSave={(input) => saveProviderSettings.mutate(input)} saved={saveProviderSettings.isSuccess} settings={providerSettings.data} /> : providerSettings.isLoading ? <p className="empty-inline">正在读取服务设置</p> : <p className="form-error" role="alert">{providerSettings.error?.message ?? '无法读取服务设置'}</p>}
 
       <div className="diagnostic-grid">
         <section className="diagnostic-block"><div className="diagnostic-title"><Waypoints size={18} /><strong>QMediaSync</strong></div><dl><div><dt>版本</dt><dd>{qms.data?.version ?? '不可用'}</dd></div><div><dt>同步记录</dt><dd>{qms.data?.totalSyncs ?? 0}</dd></div><div><dt>最近状态</dt><dd>{qms.data?.recentSyncs[0]?.state ?? '无记录'}</dd></div></dl></section>

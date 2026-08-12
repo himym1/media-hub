@@ -13,6 +13,7 @@ import (
 	"media-hub/backend/internal/auth"
 	"media-hub/backend/internal/integration"
 	"media-hub/backend/internal/search"
+	"media-hub/backend/internal/settings"
 	"media-hub/backend/internal/workflow"
 )
 
@@ -83,6 +84,23 @@ func (*workflowStub) ListNotifications(context.Context, int64, int) ([]workflow.
 }
 func (*workflowStub) RetryNotification(context.Context, int64, string, string, string) (workflow.Notification, error) {
 	return workflow.Notification{}, nil
+}
+
+type settingsStub struct {
+	input settings.Update
+	err   error
+}
+
+func (*settingsStub) Get(context.Context, int64) (settings.View, error) {
+	return settings.View{QMediaSync: settings.QMediaSyncView{BaseURL: "https://qms.example", APIKey: settings.SecretStatus{Configured: true}}}, nil
+}
+
+func (stub *settingsStub) Update(_ context.Context, _ int64, input settings.Update) (settings.View, error) {
+	stub.input = input
+	if stub.err != nil {
+		return settings.View{}, stub.err
+	}
+	return settings.View{QMediaSync: settings.QMediaSyncView{BaseURL: input.QMediaSync.BaseURL, APIKey: settings.SecretStatus{Configured: input.QMediaSync.APIKey.Value != ""}}}, nil
 }
 
 func TestHealthIsPublic(t *testing.T) {
@@ -199,6 +217,59 @@ func TestSearchReturnsProviderResponse(t *testing.T) {
 	}
 	if len(response.Results) != 1 || response.Results[0].ID != "frame:release-1" {
 		t.Fatal("unexpected search response")
+	}
+}
+
+func TestProviderSettingsUpdateRequiresCSRFAndDoesNotEchoSecret(t *testing.T) {
+	provider := &settingsStub{}
+	body := `{"qmediaSync":{"baseUrl":"https://qms.example","apiKey":{"value":"private-key"}},"emby":{},"drive115":{},"tmdb":{},"workflow":{"qMediaSyncAccountId":0,"movie":{},"series":{}},"sources":[]}`
+
+	for _, test := range []struct {
+		name string
+		csrf string
+		want int
+	}{{"missing csrf", "", http.StatusForbidden}, {"valid csrf", "valid-csrf", http.StatusOK}} {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodPut, "/api/v1/settings/providers", strings.NewReader(body))
+			request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "web-session"})
+			request.Header.Set("Content-Type", "application/json")
+			if test.csrf != "" {
+				request.Header.Set("X-CSRF-Token", test.csrf)
+			}
+			NewRouter("test-version", Dependencies{Auth: authStub{}, Settings: provider}).ServeHTTP(recorder, request)
+			if recorder.Code != test.want {
+				t.Fatalf("status = %d, want %d", recorder.Code, test.want)
+			}
+			if test.want == http.StatusOK && strings.Contains(recorder.Body.String(), "private-key") {
+				t.Fatal("secret was echoed in response")
+			}
+		})
+	}
+	if provider.input.QMediaSync.APIKey.Value != "private-key" {
+		t.Fatal("settings input was not received")
+	}
+}
+
+func TestProviderSettingsUpdateReturnsConflictForActiveTransfers(t *testing.T) {
+	provider := &settingsStub{err: settings.ErrActiveTransfers}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/settings/providers", strings.NewReader(`{"qmediaSync":{},"emby":{},"drive115":{},"tmdb":{},"workflow":{"movie":{},"series":{}},"sources":[]}`))
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "web-session"})
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-CSRF-Token", "valid-csrf")
+
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Settings: provider}).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusConflict)
+	}
+	var response problem
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != "active_transfers" {
+		t.Fatalf("code = %q, want active_transfers", response.Code)
 	}
 }
 

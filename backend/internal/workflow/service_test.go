@@ -21,7 +21,10 @@ type transferSourceStub struct{}
 func (transferSourceStub) ID() string    { return "framehdr" }
 func (transferSourceStub) Label() string { return "帧影" }
 func (transferSourceStub) Search(context.Context, string) ([]search.Candidate, error) {
-	return nil, nil
+	return []search.Candidate{{
+		ID: "item-1", Title: "Movie", MediaType: "movie", TMDBID: "123", IdentityVerified: true,
+		SourceRef: "private-reference", TransferState: "available",
+	}}, nil
 }
 func (transferSourceStub) StartTransfer(context.Context, search.TransferRequest) (search.TransferResult, error) {
 	return search.TransferResult{Status: "completed", FileID: "file-1", Path: "/Movies/Movie", IsFile: false}, nil
@@ -62,10 +65,7 @@ func TestSelectionTokenAndEnqueueAreIdempotent(t *testing.T) {
 		},
 	)
 
-	candidate := search.Candidate{
-		ID: "framehdr:item-1", Title: "Movie", MediaType: "movie", TMDBID: "123", SourceID: "framehdr",
-		SourceRef: "private-reference", TransferState: "available",
-	}
+	candidate := searchService.Search(ctx, "Movie").Results[0]
 	token := service.SelectionToken(candidate)
 	if token == "" {
 		t.Fatal("selection token was not created")
@@ -79,11 +79,9 @@ func TestSelectionTokenAndEnqueueAreIdempotent(t *testing.T) {
 		t.Fatalf("repeat enqueue: job=%#v created=%v err=%v", second, created, err)
 	}
 
-	candidate.ID = "framehdr:item-2"
-	candidate.SourceRef = "another-private-reference"
-	conflictingToken := service.SelectionToken(candidate)
-	if _, _, err := service.Enqueue(ctx, admin.ID, conflictingToken, "request_one"); !errors.Is(err, store.ErrIdempotencyConflict) {
-		t.Fatalf("conflicting enqueue error = %v", err)
+	searchService.Configure(nil, transferSourceStub{})
+	if _, _, err := service.Enqueue(ctx, admin.ID, token, "request_stale"); !errors.Is(err, ErrInvalidSelection) {
+		t.Fatalf("stale selection error = %v", err)
 	}
 }
 

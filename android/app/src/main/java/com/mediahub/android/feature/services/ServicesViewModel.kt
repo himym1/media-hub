@@ -8,6 +8,10 @@ import com.mediahub.android.core.network.ApiException
 import com.mediahub.android.core.network.Drive115DeviceAuthorization
 import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.OperationalStatistics
+import com.mediahub.android.core.network.ProviderSettings
+import com.mediahub.android.core.network.ProviderSettingsUpdate
+import com.mediahub.android.core.network.ProviderSourceSettingsUpdate
+import com.mediahub.android.core.network.SecretUpdate
 import com.mediahub.android.data.MediaHubRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -19,6 +23,11 @@ import kotlinx.coroutines.launch
 data class ServicesUiState(
     val integrations: List<IntegrationHealth> = emptyList(),
     val statistics: OperationalStatistics? = null,
+    val providerSettings: ProviderSettings? = null,
+    val settingsDraft: ProviderSettingsUpdate? = null,
+    val settingsExpanded: Boolean = false,
+    val savingSettings: Boolean = false,
+    val settingsSaved: Boolean = false,
     val driveAuthorization: Drive115DeviceAuthorization? = null,
     val authorizingDrive: Boolean = false,
     val androidRelease: AndroidRelease? = null,
@@ -132,6 +141,36 @@ class ServicesViewModel(
         }
     }
 
+    fun toggleSettings() {
+        _uiState.value = _uiState.value.copy(settingsExpanded = !_uiState.value.settingsExpanded, settingsSaved = false)
+    }
+
+    fun setSettingsDraft(value: ProviderSettingsUpdate) {
+        _uiState.value = _uiState.value.copy(settingsDraft = value, settingsSaved = false)
+    }
+
+    fun saveSettings() {
+        val draft = _uiState.value.settingsDraft ?: return
+        if (_uiState.value.savingSettings) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(savingSettings = true, settingsSaved = false, errorMessage = null)
+            try {
+                val settings = repository.updateProviderSettings(draft)
+                _uiState.value = _uiState.value.copy(
+                    providerSettings = settings,
+                    settingsDraft = settings.toUpdate(),
+                    savingSettings = false,
+                    settingsSaved = true,
+                )
+                refresh()
+            } catch (error: ApiException) {
+                _uiState.value = _uiState.value.copy(savingSettings = false, errorMessage = error.message ?: "服务设置保存失败")
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(savingSettings = false, errorMessage = "无法保存服务设置")
+            }
+        }
+    }
+
     fun startDriveAuthorization() {
         if (_uiState.value.authorizingDrive) return
         authorizationJob?.cancel()
@@ -168,9 +207,13 @@ class ServicesViewModel(
             try {
                 val integrations = repository.overview()
                 val statistics = try { repository.operationalStatistics() } catch (_: Exception) { null }
-                _uiState.value = _uiState.value.copy(
+                val providerSettings = try { repository.providerSettings() } catch (_: Exception) { null }
+                val current = _uiState.value
+                _uiState.value = current.copy(
                     integrations = integrations,
                     statistics = statistics,
+                    providerSettings = providerSettings ?: current.providerSettings,
+                    settingsDraft = if (!current.settingsExpanded && providerSettings != null) providerSettings.toUpdate() else current.settingsDraft,
                     loading = false,
                 )
             } catch (error: ApiException) {
@@ -187,3 +230,16 @@ class ServicesViewModel(
         }
     }
 }
+
+private fun ProviderSettings.toUpdate() = ProviderSettingsUpdate(
+    qmediaSyncBaseUrl = qmediaSyncBaseUrl,
+    qmediaSyncApiKey = SecretUpdate(),
+    embyBaseUrl = embyBaseUrl,
+    embyApiKey = SecretUpdate(),
+    embyUserId = embyUserId,
+    drive115ClientId = drive115ClientId,
+    tmdbBaseUrl = tmdbBaseUrl,
+    tmdbAccessToken = SecretUpdate(),
+    workflow = workflow,
+    sources = sources.map { ProviderSourceSettingsUpdate(id = it.id, baseUrl = it.baseUrl) },
+)

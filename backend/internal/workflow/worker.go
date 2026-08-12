@@ -147,7 +147,7 @@ func (s *Service) processTransfer(ctx context.Context, job store.TransferJob) er
 	if err != nil {
 		return s.fail(ctx, &job, "transferring", "selection_expired", "资源选择已过期", false, "")
 	}
-	target, ok := s.workflow.Target(payload.MediaType)
+	target, ok := s.workflowConfiguration().Target(payload.MediaType)
 	if !ok {
 		return s.fail(ctx, &job, "transferring", "target_unconfigured", "转存目标未配置", true, "transferring")
 	}
@@ -225,7 +225,8 @@ func (s *Service) handleSourceFailure(ctx context.Context, job *store.TransferJo
 }
 
 func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
-	target, ok := s.workflow.Target(job.MediaType)
+	workflowConfiguration := s.workflowConfiguration()
+	target, ok := workflowConfiguration.Target(job.MediaType)
 	if !ok {
 		return s.fail(ctx, &job, "transferred", "target_unconfigured", "同步目标未配置", true, "transferred")
 	}
@@ -243,7 +244,7 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 	err = s.qms.SubmitManualSync(ctx, qms.ManualSyncRequest{
 		PathID: provider.FileID, Path: provider.Path,
 		TargetPath: target.QMediaSyncTargetPath, IsFile: provider.IsFile,
-		AccountID: s.workflow.QMediaSyncAccountID,
+		AccountID: workflowConfiguration.QMediaSyncAccountID,
 	})
 	if err != nil {
 		if errors.Is(err, qms.ErrSubmissionUnknown) {
@@ -306,7 +307,7 @@ func (s *Service) pollSync(ctx context.Context, job store.TransferJob) error {
 }
 
 func (s *Service) refreshEmby(ctx context.Context, job store.TransferJob) error {
-	target, ok := s.workflow.Target(job.MediaType)
+	target, ok := s.workflowConfiguration().Target(job.MediaType)
 	if !ok {
 		return s.fail(ctx, &job, "refreshing_emby", "emby_target_unconfigured", "Emby 媒体库未配置", true, "refreshing_emby")
 	}

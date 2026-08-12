@@ -15,6 +15,7 @@ import (
 	"media-hub/backend/internal/localupload"
 	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
+	"media-hub/backend/internal/settings"
 	"media-hub/backend/internal/statistics"
 	"media-hub/backend/internal/subscription"
 	"media-hub/backend/internal/subx"
@@ -130,6 +131,11 @@ type MigrationManager interface {
 	RetryBlockingCommand(context.Context, int64, string, string) (subx.CommandJob, error)
 }
 
+type ProviderSettings interface {
+	Get(context.Context, int64) (settings.View, error)
+	Update(context.Context, int64, settings.Update) (settings.View, error)
+}
+
 type Dependencies struct {
 	Auth             Authenticator
 	Overview         OverviewProvider
@@ -146,6 +152,7 @@ type Dependencies struct {
 	Workflow         TransferWorkflow
 	Subscriptions    SubscriptionManager
 	Migration        MigrationManager
+	Settings         ProviderSettings
 	SecureCookies    bool
 	AndroidReleases  AndroidReleaseProvider
 	Web              http.Handler
@@ -181,6 +188,8 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("POST /api/v1/auth/logout", h.protected(h.logout))
 	mux.Handle("PUT /api/v1/auth/password", h.protected(h.changePassword))
 	mux.Handle("GET /api/v1/system/overview", h.protected(h.getSystemOverview))
+	mux.Handle("GET /api/v1/settings/providers", h.protected(h.getProviderSettings))
+	mux.Handle("PUT /api/v1/settings/providers", h.protected(h.updateProviderSettings))
 	mux.Handle("GET /api/v1/search", h.protected(h.search))
 	mux.Handle("GET /api/v1/discovery/trending", h.protected(h.getTrending))
 	mux.Handle("GET /api/v1/discovery/{mediaType}/{tmdbId}/recommendations", h.protected(h.getRecommendations))
