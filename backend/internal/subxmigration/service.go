@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"media-hub/backend/internal/integration"
 	"media-hub/backend/internal/subscription"
 	"media-hub/backend/internal/subx"
 )
@@ -29,14 +30,28 @@ type SubscriptionProvider interface {
 	Import(context.Context, int64, subscription.Backup) (subscription.ImportResult, error)
 }
 
+type HealthProvider interface {
+	Overview(context.Context) []integration.Health
+}
+
+type ReadinessRequirements struct {
+	CoreConfigurationReady      bool
+	NativeSourceCount           int
+	ParallelValidationCompleted bool
+	Health                      HealthProvider
+}
+
 type Readiness struct {
-	CanStopSubX           bool     `json:"canStopSubX"`
-	SubXConfigured        bool     `json:"subxConfigured"`
-	FallbackSourceEnabled bool     `json:"fallbackSourceEnabled"`
-	NativeSubscriptions   int      `json:"nativeSubscriptions"`
-	DelegatedOperations   int      `json:"delegatedOperations"`
-	DelegatedGroups       []string `json:"delegatedGroups"`
-	Blockers              []string `json:"blockers"`
+	CanStopSubX                 bool     `json:"canStopSubX"`
+	SubXConfigured              bool     `json:"subxConfigured"`
+	FallbackSourceEnabled       bool     `json:"fallbackSourceEnabled"`
+	CoreConfigurationReady      bool     `json:"coreConfigurationReady"`
+	NativeSourceCount           int      `json:"nativeSourceCount"`
+	ParallelValidationCompleted bool     `json:"parallelValidationCompleted"`
+	NativeSubscriptions         int      `json:"nativeSubscriptions"`
+	DelegatedOperations         int      `json:"delegatedOperations"`
+	DelegatedGroups             []string `json:"delegatedGroups"`
+	Blockers                    []string `json:"blockers"`
 }
 
 type ImportResult struct {
@@ -52,11 +67,18 @@ type Service struct {
 	subscriptions         SubscriptionProvider
 	now                   func() time.Time
 	fallbackSourceEnabled bool
+	requirements          ReadinessRequirements
 }
 
-func NewService(subxProvider SubXProvider, subscriptions SubscriptionProvider, fallbackSourceEnabled ...bool) *Service {
-	enabled := len(fallbackSourceEnabled) > 0 && fallbackSourceEnabled[0]
-	return &Service{subx: subxProvider, subscriptions: subscriptions, now: time.Now, fallbackSourceEnabled: enabled}
+func NewService(subxProvider SubXProvider, subscriptions SubscriptionProvider, fallbackSourceEnabled bool, requirements ...ReadinessRequirements) *Service {
+	readinessRequirements := ReadinessRequirements{}
+	if len(requirements) > 0 {
+		readinessRequirements = requirements[0]
+	}
+	return &Service{
+		subx: subxProvider, subscriptions: subscriptions, now: time.Now,
+		fallbackSourceEnabled: fallbackSourceEnabled, requirements: readinessRequirements,
+	}
 }
 
 func (s *Service) Readiness(ctx context.Context, userID int64) (Readiness, error) {
@@ -76,30 +98,51 @@ func (s *Service) Readiness(ctx context.Context, userID int64) (Readiness, error
 			return Readiness{}, err
 		}
 	}
-	result := Readiness{
+	healthValues := []integration.Health{}
+	if s.requirements.Health != nil {
+		healthValues = s.requirements.Health.Overview(ctx)
+	}
+	return evaluateReadiness(Readiness{
 		SubXConfigured: s.subx.Configured(), FallbackSourceEnabled: s.fallbackSourceEnabled, NativeSubscriptions: len(items),
-		DelegatedGroups: []string{},
+		CoreConfigurationReady: s.requirements.CoreConfigurationReady, NativeSourceCount: s.requirements.NativeSourceCount,
+		ParallelValidationCompleted: s.requirements.ParallelValidationCompleted, DelegatedGroups: []string{},
+	}, pendingCommands, healthValues), nil
+}
+
+func evaluateReadiness(result Readiness, pendingCommands int, healthValues []integration.Health) Readiness {
+	if result.FallbackSourceEnabled {
+		result.DelegatedOperations++
+		result.DelegatedGroups = append(result.DelegatedGroups, "migration-source")
+		result.Blockers = append(result.Blockers, "SubX 迁移回退资源源仍处于启用状态")
 	}
-	if s.fallbackSourceEnabled || pendingCommands > 0 {
-		if s.fallbackSourceEnabled {
-			result.DelegatedOperations++
-			result.DelegatedGroups = append(result.DelegatedGroups, "migration-source")
-			result.Blockers = append(result.Blockers, "SubX 迁移回退资源源仍处于启用状态")
+	if pendingCommands > 0 {
+		result.DelegatedOperations += pendingCommands
+		result.DelegatedGroups = append(result.DelegatedGroups, "pending-source-commands")
+		result.Blockers = append(result.Blockers, fmt.Sprintf("仍有 %d 个 SubX source command 未得到确定终态", pendingCommands))
+		if !result.FallbackSourceEnabled {
+			result.Blockers = append(result.Blockers, "核对并重试遗留命令前需显式启用 MEDIA_HUB_SUBX_SOURCE_ENABLED")
 		}
-		if pendingCommands > 0 {
-			result.DelegatedOperations += pendingCommands
-			result.DelegatedGroups = append(result.DelegatedGroups, "pending-source-commands")
-			result.Blockers = append(result.Blockers, fmt.Sprintf("仍有 %d 个 SubX source command 未得到确定终态", pendingCommands))
-			if !s.fallbackSourceEnabled {
-				result.Blockers = append(result.Blockers, "核对并重试遗留命令前需显式启用 MEDIA_HUB_SUBX_SOURCE_ENABLED")
-			}
-		}
-		result.Blockers = append(result.Blockers, "停用前必须关闭回退能力并完成真实凭据验收")
-	} else {
-		result.CanStopSubX = true
-		result.Blockers = []string{}
 	}
-	return result, nil
+	if !result.CoreConfigurationReady {
+		result.Blockers = append(result.Blockers, "TMDB、115、QMediaSync、Emby 及电影/剧集工作流目标尚未完整配置")
+	}
+	if result.NativeSourceCount == 0 {
+		result.Blockers = append(result.Blockers, "尚未配置任何原生资源适配器")
+	}
+	healthByID := make(map[string]string, len(healthValues))
+	for _, health := range healthValues {
+		healthByID[health.ID] = health.Status
+	}
+	for _, provider := range []struct{ id, label string }{{"tmdb", "TMDB"}, {"115", "115"}, {"qmediasync", "QMediaSync"}, {"emby", "Emby"}, {"sources", "资源源"}} {
+		if healthByID[provider.id] != integration.StatusHealthy {
+			result.Blockers = append(result.Blockers, provider.label+" 当前未通过健康检查")
+		}
+	}
+	if !result.ParallelValidationCompleted {
+		result.Blockers = append(result.Blockers, "尚未显式确认 SubX 与 Media Hub 的真实并行验收已完成")
+	}
+	result.CanStopSubX = len(result.Blockers) == 0
+	return result
 }
 
 func (s *Service) ImportSubscriptions(ctx context.Context, userID int64) (ImportResult, error) {

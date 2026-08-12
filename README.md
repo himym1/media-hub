@@ -90,6 +90,7 @@ MEDIA_HUB_SUBX_TOKEN=<static-token>
 MEDIA_HUB_SUBX_USERNAME=
 MEDIA_HUB_SUBX_PASSWORD=
 MEDIA_HUB_SUBX_SOURCE_ENABLED=false
+MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED=false
 
 MEDIA_HUB_WECOM_CORP_ID=<enterprise-id>
 MEDIA_HUB_WECOM_SECRET=<application-secret>
@@ -99,7 +100,7 @@ MEDIA_HUB_WECOM_URL=https://qyapi.weixin.qq.com
 
 Integration URLs must be absolute HTTP(S) URLs without embedded credentials, query parameters, or fragments. When a TMDB token is set without `MEDIA_HUB_TMDB_URL`, the official API URL is used.
 
-Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). SubX credentials are used only for authenticated subscription-backup migration and the optional fallback source. `MEDIA_HUB_SUBX_SOURCE_ENABLED=true` explicitly enables fallback search and transfer through SubX's configured 115 destination; keep it `false` outside migration or manual recovery. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
+Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). SubX credentials are used only for authenticated subscription-backup migration and the optional fallback source. `MEDIA_HUB_SUBX_SOURCE_ENABLED=true` explicitly enables fallback search and transfer through SubX's configured 115 destination; keep it `false` outside migration or manual recovery. `MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED` defaults to `false` and must be enabled only after the real side-by-side acceptance run has verified search, transfer, QMediaSync, Emby playback, subscriptions, and recovery. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
 
 ## Local Verification
 

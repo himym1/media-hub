@@ -138,11 +138,6 @@ func run(logger *slog.Logger) error {
 		dataStore, searchService, selectionCodec, qmsClient, embyClient, wecomClient, configuration.Workflow,
 	)
 	subscriptionService := subscription.NewService(dataStore, searchService, workflowService, embyClient)
-	migrationService := subxmigration.NewService(subxService, subscriptionService, configuration.SubX.SourceEnabled)
-	statisticsService := statistics.NewService(dataStore)
-	localUploadService := localupload.NewService(dataStore, securePayloadCodec, configuration.LocalUploadRoots)
-	archiveService := archive.NewService(dataStore, securePayloadCodec, drive115AuthService)
-	androidReleaseService := androidrelease.NewService(configuration.AndroidReleaseDir)
 	overview := integration.NewOverviewService(
 		subxClient,
 		searchService,
@@ -152,6 +147,19 @@ func run(logger *slog.Logger) error {
 		qmsClient,
 		embyClient,
 	)
+	_, movieTargetReady := configuration.Workflow.Target("movie")
+	_, seriesTargetReady := configuration.Workflow.Target("series")
+	migrationService := subxmigration.NewService(
+		subxService, subscriptionService, configuration.SubX.SourceEnabled,
+		subxmigration.ReadinessRequirements{
+			CoreConfigurationReady: qmsClient.Configured() && embyClient.Configured() && configuration.TMDB.BaseURL != "" && configuration.TMDB.AccessToken != "" && drive115AuthService.Configured() && movieTargetReady && seriesTargetReady,
+			NativeSourceCount:      len(configuration.Sources), ParallelValidationCompleted: configuration.SubXParallelValidated, Health: overview,
+		},
+	)
+	statisticsService := statistics.NewService(dataStore)
+	localUploadService := localupload.NewService(dataStore, securePayloadCodec, configuration.LocalUploadRoots)
+	archiveService := archive.NewService(dataStore, securePayloadCodec, drive115AuthService)
+	androidReleaseService := androidrelease.NewService(configuration.AndroidReleaseDir)
 
 	runtimeContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

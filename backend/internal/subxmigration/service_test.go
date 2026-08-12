@@ -3,6 +3,8 @@ package subxmigration
 import (
 	"encoding/json"
 	"testing"
+
+	"media-hub/backend/internal/integration"
 )
 
 func TestExtractSubscriptionsExpandsSeasonsAndRejectsIncompleteSeries(t *testing.T) {
@@ -29,5 +31,42 @@ func TestExtractSubscriptionsExpandsSeasonsAndRejectsIncompleteSeries(t *testing
 				t.Fatalf("migration retained SubX source: %#v", item.SourceIDs)
 			}
 		}
+	}
+}
+
+func TestReadinessFailsClosedUntilEveryReplacementGatePasses(t *testing.T) {
+	healthy := []integration.Health{
+		{ID: "tmdb", Status: integration.StatusHealthy},
+		{ID: "115", Status: integration.StatusHealthy},
+		{ID: "qmediasync", Status: integration.StatusHealthy},
+		{ID: "emby", Status: integration.StatusHealthy},
+		{ID: "sources", Status: integration.StatusHealthy},
+	}
+	ready := evaluateReadiness(Readiness{
+		CoreConfigurationReady: true, NativeSourceCount: 1, ParallelValidationCompleted: true, DelegatedGroups: []string{},
+	}, 0, healthy)
+	if !ready.CanStopSubX || len(ready.Blockers) != 0 {
+		t.Fatalf("ready = %#v", ready)
+	}
+
+	notValidated := evaluateReadiness(Readiness{
+		CoreConfigurationReady: true, NativeSourceCount: 1, DelegatedGroups: []string{},
+	}, 0, healthy)
+	if notValidated.CanStopSubX || len(notValidated.Blockers) != 1 {
+		t.Fatalf("not validated = %#v", notValidated)
+	}
+
+	unhealthy := append([]integration.Health(nil), healthy...)
+	unhealthy[1].Status = integration.StatusUnavailable
+	providerDown := evaluateReadiness(Readiness{
+		CoreConfigurationReady: true, NativeSourceCount: 1, ParallelValidationCompleted: true, DelegatedGroups: []string{},
+	}, 0, unhealthy)
+	if providerDown.CanStopSubX || len(providerDown.Blockers) != 1 {
+		t.Fatalf("provider down = %#v", providerDown)
+	}
+
+	empty := evaluateReadiness(Readiness{DelegatedGroups: []string{}}, 2, nil)
+	if empty.CanStopSubX || empty.DelegatedOperations != 2 || len(empty.Blockers) < 8 {
+		t.Fatalf("empty = %#v", empty)
 	}
 }

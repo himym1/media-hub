@@ -162,7 +162,7 @@ private fun ServicesScreen(
         ) {
             item(key = "summary") {
                 MediaHubText(
-                    text = if (uiState.loading) "正在检查服务" else "${uiState.integrations.count { it.status == "healthy" }} / ${uiState.integrations.size} 在线",
+                    text = serviceSummary(uiState.loading, uiState.integrations),
                     modifier = Modifier.padding(bottom = 6.dp),
                     color = MediaHubColors.TextMuted,
                     fontSize = 11.sp,
@@ -376,6 +376,13 @@ private fun decodeQRImage(dataURL: String): androidx.compose.ui.graphics.ImageBi
         val bytes = Base64.decode(encoded, Base64.DEFAULT)
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
     }.getOrNull()
+}
+
+private fun serviceSummary(loading: Boolean, integrations: List<IntegrationHealth>): String {
+    if (loading) return "正在检查服务"
+    val healthy = integrations.count { it.status == "healthy" }
+    if (healthy > 0) return "$healthy / ${integrations.size} 在线"
+    return if (integrations.any { it.status != "unconfigured" }) "已配置服务当前不可用" else "尚未配置服务"
 }
 
 private fun statusLabel(status: String): String = when (status) {

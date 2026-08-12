@@ -22,6 +22,7 @@ type Config struct {
 	ProbeTimeout           time.Duration
 	FixtureMode            bool
 	SecureCookies          bool
+	SubXParallelValidated  bool
 	BootstrapAdminPassword string
 	DataEncryptionKey      string
 	QMediaSync             QMediaSync
@@ -132,6 +133,10 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		return Config{}, err
 	}
 	subxSourceEnabled, err := boolValue(lookup, "MEDIA_HUB_SUBX_SOURCE_ENABLED", false)
+	if err != nil {
+		return Config{}, err
+	}
+	subxParallelValidated, err := boolValue(lookup, "MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED", false)
 	if err != nil {
 		return Config{}, err
 	}
@@ -251,6 +256,7 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		ProbeTimeout:           probeTimeout,
 		FixtureMode:            fixtureMode,
 		SecureCookies:          secureCookies,
+		SubXParallelValidated:  subxParallelValidated,
 		BootstrapAdminPassword: adminPassword,
 		DataEncryptionKey:      secretValue(lookup, "MEDIA_HUB_DATA_ENCRYPTION_KEY"),
 		QMediaSync:             qms,

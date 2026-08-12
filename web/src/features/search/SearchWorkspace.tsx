@@ -53,7 +53,15 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
     refetchInterval: 5_000,
   })
 
-  const connectedCount = overview.data?.integrations.filter((item) => item.status === 'healthy').length ?? 0
+  const integrations = overview.data?.integrations ?? []
+  const connectedCount = integrations.filter((item) => item.status === 'healthy').length
+  const configuredCount = integrations.filter((item) => item.status !== 'unconfigured').length
+  const connectionLabel = overview.isLoading
+    ? '正在检查服务'
+    : connectedCount > 0
+      ? `${connectedCount} 个服务在线`
+      : configuredCount > 0 ? '已配置服务当前不可用' : '尚未配置服务'
+  const connectionState = connectedCount > 0 ? 'healthy' : configuredCount > 0 ? 'degraded' : 'unconfigured'
   const activeTransferCount = transfers.data?.transfers.filter((job) => activeTransferStates.has(job.state)).length ?? 0
 
   return (
@@ -86,9 +94,9 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
 
         <div className="sidebar-bottom">
           <div className="sidebar-section-label">连接状态</div>
-          <div className="connection-summary">
+          <div className={`connection-summary ${connectionState}`}>
             <span className="connection-pulse" />
-            <span>{connectedCount > 0 ? `${connectedCount} 个服务在线` : '等待连接服务'}</span>
+            <span>{connectionLabel}</span>
           </div>
           <button className="profile-row" disabled={isLoggingOut} onClick={onLogout} type="button">
             <span className="avatar">W</span>
@@ -101,8 +109,8 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
       <main className="main-content">
         <header className="topbar">
           <div className="breadcrumb"><span>工作区</span><ChevronRight size={14} /><strong>{activeView}</strong></div>
-          <div className={connectedCount > 0 ? 'system-dot' : 'system-dot degraded'}>
-            <span />{connectedCount > 0 ? '服务已连接' : '服务未连接'}
+          <div className={`system-dot ${connectionState}`}>
+            <span />{connectionLabel}
           </div>
         </header>
 
@@ -124,7 +132,7 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
           {activeView === '媒体库' ? <LibraryView /> : null}
           {activeView === '运维' ? <OperationsView /> : null}
           {activeView === '服务' ? <SettingsView integrations={overview.data?.integrations ?? []} onRefresh={() => void overview.refetch()} /> : null}
-          <footer className="page-footer"><span>MEDIA HUB / CONTROL PLANE</span><span>API v0.5 · NAS LOCAL</span></footer>
+          <footer className="page-footer"><span>MEDIA HUB / CONTROL PLANE</span><span>API v1 · PRIVATE</span></footer>
         </div>
       </main>
     </div>

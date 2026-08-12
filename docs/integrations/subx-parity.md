@@ -101,7 +101,7 @@ Parity therefore means exposing equivalent control, queue, audit, and readiness 
 | Enterprise WeChat | Native | Persisted terminal notifications, uncertain-send recovery, and authenticated manual resend confirmation |
 | Statistics and logs | Native | User-scoped operational counters and Media Hub-owned structured runtime logs; provider-private logs are not proxied |
 
-Current code readiness: `canStopSubX` is true when `MEDIA_HUB_SUBX_SOURCE_ENABLED` is disabled and no persisted SubX source command remains in `queued`, `submitting`, or `needs_attention`. The explicit migration fallback and commands without a determined outcome are the only remaining machine blockers. Blocking command IDs and states are exposed only through the authenticated migration recovery API; uncertain commands require exact-ID retry after the fallback source is explicitly re-enabled. Production shutdown still requires the sanitized parallel acceptance run below.
+`canStopSubX` now fails closed. It is true only when the fallback source is disabled, no persisted SubX source command remains in `queued`, `submitting`, or `needs_attention`, the TMDB/115/QMediaSync/Emby and movie/series workflow configuration is complete, at least one native source adapter is configured and has passed a real search, every core provider is currently healthy, and `MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED=true` explicitly records a successful side-by-side acceptance run. Blocking command IDs and states remain available only through the authenticated migration recovery API; uncertain commands require exact-ID retry after the fallback source is explicitly re-enabled.
 
 ## Completion Gates
 

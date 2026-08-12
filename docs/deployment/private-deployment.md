@@ -34,6 +34,7 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
    MEDIA_HUB_DATA_ENCRYPTION_KEY=<base64 AES-256 key>
    MEDIA_HUB_ENABLE_FIXTURES=false
    MEDIA_HUB_SUBX_SOURCE_ENABLED=false
+   MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED=false
    ```
 
    密码只用于首次初始化；数据库已有管理员后可以从 `.env` 删除。加密密钥必须长期保留，否则无法恢复加密的 provider 凭据和 workflow payload。
@@ -61,5 +62,5 @@ Android 签名密钥只保存在 GitHub Actions secrets 和离线备份中，不
 - 不停止或修改 SubX。
 - `MEDIA_HUB_SUBX_SOURCE_ENABLED=false`，除非专门验证 fallback。
 - 先验证登录、Web/API 同源、115 授权状态和只读 provider 状态。
-- 再逐项验证搜索、单次转存、QMediaSync、Emby 可播放性、订阅调度、未知态恢复和 Android 更新。
+- 完成真实搜索、单次转存、QMediaSync、Emby 可播放性、订阅调度、未知态恢复和 Android 更新对照后，才将 `MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED=true`。
 - 只有 `/migration/subx/readiness` 无 blocker 且并行结果对照通过后，才另行审批 SubX 下线。

@@ -56,6 +56,9 @@ export function DiscoveryView({
   const [query, setQuery] = useState('范海辛')
   const [submittedQuery, setSubmittedQuery] = useState('范海辛')
   const [selected, setSelected] = useState<Candidate | null | undefined>(undefined)
+  const sourceIntegration = integrations.find((item) => item.id === 'sources')
+  const configuredIntegrations = integrations.filter((item) => item.status !== 'unconfigured').length
+  const workflowStatus = integrationsLoading ? '健康检查中' : configuredIntegrations > 0 ? '实时状态' : '尚未配置'
 
   const search = useQuery({
     queryKey: ['search', submittedQuery],
@@ -135,11 +138,11 @@ export function DiscoveryView({
           />
           <button disabled={!query.trim() || search.isFetching} type="submit">{search.isFetching ? '搜索中' : '搜索'}</button>
         </form>
-        <div className="search-meta"><span>帧影 · 聚影</span><span>·</span><span>{search.data?.partial ? '部分结果' : '已完成'}</span></div>
+        <div className="search-meta"><span>{sourceIntegration?.detail ?? '等待配置资源适配器'}</span><span>·</span><span>{search.data?.partial ? '部分结果' : '已完成'}</span></div>
       </section>
 
       <section className="status-strip" aria-label="服务状态">
-        <div className="status-intro"><span className="status-icon"><Wifi size={16} /></span><div><strong>工作流状态</strong><span>实时连接</span></div></div>
+        <div className="status-intro"><span className="status-icon"><Wifi size={16} /></span><div><strong>工作流状态</strong><span>{workflowStatus}</span></div></div>
         <div className="status-items">
           {integrations.map((item) => (
             <div className="status-item" key={item.id} title={item.detail}><span className={`status-dot ${item.status}`} /><span>{item.label}</span><small>{statusLabel[item.status]}</small></div>

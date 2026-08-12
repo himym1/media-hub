@@ -32,6 +32,9 @@
 .icon-button.subtle { width: 30px; height: 30px; }
 .system-dot { display: flex; align-items: center; gap: 7px; color: #929793; font-size: 11px; }
 .system-dot span { width: 6px; height: 6px; background: #d7f36a; border-radius: 50%; }
+.connection-summary.unconfigured .connection-pulse { background: #777d79; box-shadow: none; }
+.connection-summary.degraded .connection-pulse { background: #e5af53; box-shadow: none; }
+.system-dot.unconfigured span { background: #777d79; }
 .system-dot.degraded span { background: #e5af53; }
 .page-wrap { max-width: 1440px; margin: 0 auto; padding: 48px 42px 28px; }
 .welcome-row { display: flex; align-items: end; justify-content: space-between; gap: 30px; }

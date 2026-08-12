@@ -571,6 +571,9 @@ export type SubXMigrationReadiness = {
   canStopSubX: boolean
   subxConfigured: boolean
   fallbackSourceEnabled: boolean
+  coreConfigurationReady: boolean
+  nativeSourceCount: number
+  parallelValidationCompleted: boolean
   nativeSubscriptions: number
   delegatedOperations: number
   delegatedGroups: string[]

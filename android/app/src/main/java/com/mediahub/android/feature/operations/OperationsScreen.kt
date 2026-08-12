@@ -154,14 +154,19 @@ private fun OperationsScreen(
                         ) {
                             Column(Modifier.weight(1f)) {
                                 MediaHubText(
-                                    text = if (migration.canStopSubX) "SubX 可停用" else "SubX 仍有运行依赖",
+                                    text = if (migration.canStopSubX) "已满足 SubX 停用门槛" else "SubX 不可停用",
                                     color = if (migration.canStopSubX) MediaHubColors.Source else MediaHubColors.Warning,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 MediaHubText(
-                                    text = "${migration.nativeSubscriptions} 个原生订阅 · ${migration.delegatedOperations} 个委托操作",
+                                    text = "${migration.nativeSubscriptions} 个原生订阅 · ${migration.nativeSourceCount} 个原生来源 · ${migration.delegatedOperations} 个委托操作",
                                     color = MediaHubColors.TextSecondary,
+                                    fontSize = 11.sp,
+                                )
+                                MediaHubText(
+                                    text = "核心配置 ${if (migration.coreConfigurationReady) "完整" else "未完成"} · 并行验收 ${if (migration.parallelValidationCompleted) "已确认" else "未确认"}",
+                                    color = MediaHubColors.TextMuted,
                                     fontSize = 11.sp,
                                 )
                             }

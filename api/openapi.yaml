@@ -1809,11 +1809,14 @@ components:
         updatedAt: { type: string, format: date-time }
     SubXMigrationReadiness:
       type: object
-      required: [canStopSubX, subxConfigured, fallbackSourceEnabled, nativeSubscriptions, delegatedOperations, delegatedGroups, blockers]
+      required: [canStopSubX, subxConfigured, fallbackSourceEnabled, coreConfigurationReady, nativeSourceCount, parallelValidationCompleted, nativeSubscriptions, delegatedOperations, delegatedGroups, blockers]
       properties:
         canStopSubX: { type: boolean }
         subxConfigured: { type: boolean }
         fallbackSourceEnabled: { type: boolean }
+        coreConfigurationReady: { type: boolean }
+        nativeSourceCount: { type: integer, minimum: 0 }
+        parallelValidationCompleted: { type: boolean }
         nativeSubscriptions: { type: integer, minimum: 0 }
         delegatedOperations: { type: integer, minimum: 0 }
         delegatedGroups: { type: array, items: { type: string } }

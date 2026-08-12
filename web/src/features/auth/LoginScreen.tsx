@@ -84,7 +84,7 @@ export function LoginScreen({ onAuthenticated, serviceError }: LoginScreenProps)
         </div>
       </section>
 
-      <footer className="auth-footer"><span>MEDIA HUB / NAS LOCAL</span><span>API v0.3</span></footer>
+      <footer className="auth-footer"><span>MEDIA HUB / PRIVATE</span><span>API v1</span></footer>
     </main>
   )
 }
