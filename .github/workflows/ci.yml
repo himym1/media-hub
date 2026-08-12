@@ -54,4 +54,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: ruby -ryaml -e 'YAML.safe_load(File.read("api/openapi.yaml"), [], [], true)'
+      - run: ruby scripts/check-openapi.rb api/openapi.yaml
