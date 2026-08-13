@@ -64,6 +64,62 @@ func TestClientAuthenticatesAndSanitizesReadResult(t *testing.T) {
 	}
 }
 
+func TestClientConfigurationChangeClearsCachedToken(t *testing.T) {
+	var firstLogin atomic.Int32
+	var secondLogin atomic.Int32
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/auth/login":
+			firstLogin.Add(1)
+			_ = json.NewEncoder(w).Encode(map[string]string{"access_token": "first-token"})
+		case "/api/sources/search":
+			if r.Header.Get("Authorization") != "Bearer first-token" {
+				http.Error(w, "wrong token", http.StatusUnauthorized)
+				return
+			}
+			_, _ = w.Write([]byte(`{"title":"first"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer first.Close()
+	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/auth/login":
+			secondLogin.Add(1)
+			_ = json.NewEncoder(w).Encode(map[string]string{"access_token": "second-token"})
+		case "/api/sources/search":
+			if r.Header.Get("Authorization") != "Bearer second-token" {
+				http.Error(w, "wrong token", http.StatusUnauthorized)
+				return
+			}
+			_, _ = w.Write([]byte(`{"title":"second"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer second.Close()
+
+	client := NewClient(config.SubX{BaseURL: first.URL, Username: "admin", Password: "first"}, time.Second)
+	if _, err := client.Read(context.Background(), "sources.search", Invocation{Query: map[string]string{"keyword": "test"}}); err != nil {
+		t.Fatal(err)
+	}
+	client.Configure(config.SubX{BaseURL: first.URL, Username: "admin", Password: "first"})
+	if _, err := client.Read(context.Background(), "sources.search", Invocation{Query: map[string]string{"keyword": "test"}}); err != nil {
+		t.Fatal(err)
+	}
+	if firstLogin.Load() != 1 {
+		t.Fatalf("unchanged configuration caused %d logins", firstLogin.Load())
+	}
+	client.Configure(config.SubX{BaseURL: second.URL, Username: "admin", Password: "second"})
+	if _, err := client.Read(context.Background(), "sources.search", Invocation{Query: map[string]string{"keyword": "test"}}); err != nil {
+		t.Fatal(err)
+	}
+	if firstLogin.Load() != 1 || secondLogin.Load() != 1 {
+		t.Fatalf("login counts first=%d second=%d", firstLogin.Load(), secondLogin.Load())
+	}
+}
+
 func TestInvocationRejectsUnknownParametersAndNativeOperations(t *testing.T) {
 	operation, ok := LookupOperation("sources.search")
 	if !ok {

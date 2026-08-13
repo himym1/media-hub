@@ -545,6 +545,7 @@ class MediaHubApi(baseUrl: String) {
             nativeSourceCount = root.getInt("nativeSourceCount"),
             parallelValidationCompleted = root.getBoolean("parallelValidationCompleted"),
             nativeSubscriptions = root.getInt("nativeSubscriptions"),
+            fallbackSubscriptions = root.getInt("fallbackSubscriptions"),
             delegatedOperations = root.getInt("delegatedOperations"),
             delegatedGroups = root.getJSONArray("delegatedGroups").strings(),
             blockers = root.getJSONArray("blockers").strings(),
@@ -662,6 +663,7 @@ class MediaHubApi(baseUrl: String) {
         val emby = item.getJSONObject("emby")
         val drive = item.getJSONObject("drive115")
         val tmdb = item.getJSONObject("tmdb")
+        val subx = item.getJSONObject("subx")
         val workflow = item.getJSONObject("workflow")
         return ProviderSettings(
             qmediaSyncBaseUrl = qms.getString("baseUrl"),
@@ -672,6 +674,13 @@ class MediaHubApi(baseUrl: String) {
             drive115ClientId = drive.getString("clientId"),
             tmdbBaseUrl = tmdb.getString("baseUrl"),
             tmdbAccessToken = SecretStatus(tmdb.getJSONObject("accessToken").getBoolean("configured")),
+            subx = SubXSettings(
+                baseUrl = subx.getString("baseUrl"),
+                username = subx.getString("username"),
+                password = SecretStatus(subx.getJSONObject("password").getBoolean("configured")),
+                token = SecretStatus(subx.getJSONObject("token").getBoolean("configured")),
+                sourceEnabled = subx.getBoolean("sourceEnabled"),
+            ),
             workflow = parseWorkflowSettings(workflow),
             sources = item.getJSONArray("sources").objects { source -> ProviderSourceSettings(
                 id = source.getString("id"), label = source.getString("label"), baseUrl = source.getString("baseUrl"),
@@ -697,6 +706,12 @@ class MediaHubApi(baseUrl: String) {
         .put("emby", JSONObject().put("baseUrl", input.embyBaseUrl).put("apiKey", secretBody(input.embyApiKey)).put("userId", input.embyUserId))
         .put("drive115", JSONObject().put("clientId", input.drive115ClientId))
         .put("tmdb", JSONObject().put("baseUrl", input.tmdbBaseUrl).put("accessToken", secretBody(input.tmdbAccessToken)))
+        .put("subx", JSONObject()
+            .put("baseUrl", input.subx.baseUrl)
+            .put("username", input.subx.username)
+            .put("password", secretBody(input.subx.password))
+            .put("token", secretBody(input.subx.token))
+            .put("sourceEnabled", input.subx.sourceEnabled))
         .put("workflow", JSONObject().put("qMediaSyncAccountId", input.workflow.qMediaSyncAccountId).put("movie", workflowTargetBody(input.workflow.movie)).put("series", workflowTargetBody(input.workflow.series)))
         .put("sources", JSONArray().apply { input.sources.forEach { source -> put(JSONObject().put("id", source.id).put("baseUrl", source.baseUrl).put("token", secretBody(source.token))) } })
 

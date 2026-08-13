@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var ErrActiveTransfers = errors.New("provider settings cannot change while recoverable transfer jobs exist")
+var ErrActiveProviderOperations = errors.New("provider settings cannot change while recoverable provider operations exist")
 
 var ErrProviderChallengeNotFound = errors.New("provider authorization challenge not found")
 
@@ -38,7 +38,7 @@ func (s *Store) UpsertProviderCredential(ctx context.Context, userID int64, prov
 	return nil
 }
 
-func (s *Store) UpsertProviderCredentialWithoutActiveTransfers(ctx context.Context, userID int64, provider, payloadToken string, now time.Time) error {
+func (s *Store) UpsertProviderCredentialWithOperationGuard(ctx context.Context, userID int64, provider, payloadToken string, allowActiveSubX bool, now time.Time) error {
 	if userID == 0 || provider == "" || payloadToken == "" {
 		return fmt.Errorf("provider credential fields are required")
 	}
@@ -51,11 +51,14 @@ func (s *Store) UpsertProviderCredentialWithoutActiveTransfers(ctx context.Conte
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(
 		SELECT 1 FROM transfer_jobs WHERE user_id = ?
 		AND (state NOT IN ('completed','failed') OR (state = 'failed' AND retryable = 1))
-	)`, userID).Scan(&active); err != nil {
-		return fmt.Errorf("check active transfer jobs: %w", err)
+	) OR (? = 0 AND EXISTS(
+		SELECT 1 FROM subx_command_jobs WHERE user_id = ?
+		AND (state IN ('queued','submitting','needs_attention') OR (state = 'failed' AND retryable = 1))
+	))`, userID, boolInt(allowActiveSubX), userID).Scan(&active); err != nil {
+		return fmt.Errorf("check active provider operations: %w", err)
 	}
 	if active {
-		return ErrActiveTransfers
+		return ErrActiveProviderOperations
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO provider_credentials (user_id, provider, payload_token, updated_at)
@@ -68,6 +71,13 @@ func (s *Store) UpsertProviderCredentialWithoutActiveTransfers(ctx context.Conte
 		return fmt.Errorf("commit provider settings update: %w", err)
 	}
 	return nil
+}
+
+func boolInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func (s *Store) ProviderCredential(ctx context.Context, userID int64, provider string) (string, bool, error) {

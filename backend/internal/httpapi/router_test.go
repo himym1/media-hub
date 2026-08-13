@@ -100,7 +100,11 @@ func (stub *settingsStub) Update(_ context.Context, _ int64, input settings.Upda
 	if stub.err != nil {
 		return settings.View{}, stub.err
 	}
-	return settings.View{QMediaSync: settings.QMediaSyncView{BaseURL: input.QMediaSync.BaseURL, APIKey: settings.SecretStatus{Configured: input.QMediaSync.APIKey.Value != ""}}}, nil
+	result := settings.View{QMediaSync: settings.QMediaSyncView{BaseURL: input.QMediaSync.BaseURL, APIKey: settings.SecretStatus{Configured: input.QMediaSync.APIKey.Value != ""}}}
+	if input.SubX != nil {
+		result.SubX = settings.SubXView{BaseURL: input.SubX.BaseURL, Username: input.SubX.Username, Password: settings.SecretStatus{Configured: input.SubX.Password.Value != ""}, Token: settings.SecretStatus{Configured: input.SubX.Token.Value != ""}, SourceEnabled: input.SubX.SourceEnabled}
+	}
+	return result, nil
 }
 
 func TestHealthIsPublic(t *testing.T) {
@@ -222,7 +226,7 @@ func TestSearchReturnsProviderResponse(t *testing.T) {
 
 func TestProviderSettingsUpdateRequiresCSRFAndDoesNotEchoSecret(t *testing.T) {
 	provider := &settingsStub{}
-	body := `{"qmediaSync":{"baseUrl":"https://qms.example","apiKey":{"value":"private-key"}},"emby":{},"drive115":{},"tmdb":{},"workflow":{"qMediaSyncAccountId":0,"movie":{},"series":{}},"sources":[]}`
+	body := `{"qmediaSync":{"baseUrl":"https://qms.example","apiKey":{"value":"private-key"}},"emby":{},"drive115":{},"tmdb":{},"subx":{"baseUrl":"https://subx.example","username":"admin","password":{"value":"subx-password"},"token":{"value":"subx-token"},"sourceEnabled":true},"workflow":{"qMediaSyncAccountId":0,"movie":{},"series":{}},"sources":[]}`
 
 	for _, test := range []struct {
 		name string
@@ -241,20 +245,27 @@ func TestProviderSettingsUpdateRequiresCSRFAndDoesNotEchoSecret(t *testing.T) {
 			if recorder.Code != test.want {
 				t.Fatalf("status = %d, want %d", recorder.Code, test.want)
 			}
-			if test.want == http.StatusOK && strings.Contains(recorder.Body.String(), "private-key") {
-				t.Fatal("secret was echoed in response")
+			if test.want == http.StatusOK {
+				for _, secret := range []string{"private-key", "subx-password", "subx-token"} {
+					if strings.Contains(recorder.Body.String(), secret) {
+						t.Fatalf("secret %q was echoed in response", secret)
+					}
+				}
 			}
 		})
 	}
 	if provider.input.QMediaSync.APIKey.Value != "private-key" {
 		t.Fatal("settings input was not received")
 	}
+	if provider.input.SubX == nil || provider.input.SubX.Password.Value != "subx-password" || provider.input.SubX.Token.Value != "subx-token" {
+		t.Fatal("SubX settings input was not received")
+	}
 }
 
-func TestProviderSettingsUpdateReturnsConflictForActiveTransfers(t *testing.T) {
-	provider := &settingsStub{err: settings.ErrActiveTransfers}
+func TestProviderSettingsUpdateReturnsConflictForActiveProviderOperations(t *testing.T) {
+	provider := &settingsStub{err: settings.ErrActiveProviderOperations}
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPut, "/api/v1/settings/providers", strings.NewReader(`{"qmediaSync":{},"emby":{},"drive115":{},"tmdb":{},"workflow":{"movie":{},"series":{}},"sources":[]}`))
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/settings/providers", strings.NewReader(`{"qmediaSync":{},"emby":{},"drive115":{},"tmdb":{},"subx":{},"workflow":{"movie":{},"series":{}},"sources":[]}`))
 	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "web-session"})
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-CSRF-Token", "valid-csrf")
@@ -268,8 +279,8 @@ func TestProviderSettingsUpdateReturnsConflictForActiveTransfers(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.Code != "active_transfers" {
-		t.Fatalf("code = %q, want active_transfers", response.Code)
+	if response.Code != "active_provider_operations" {
+		t.Fatalf("code = %q, want active_provider_operations", response.Code)
 	}
 }
 

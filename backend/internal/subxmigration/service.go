@@ -36,6 +36,7 @@ type HealthProvider interface {
 
 type ConfigurationProvider interface {
 	ReadinessConfiguration() (coreReady bool, nativeSourceCount int)
+	FallbackSourceEnabled() bool
 }
 
 type ReadinessRequirements struct {
@@ -54,6 +55,7 @@ type Readiness struct {
 	NativeSourceCount           int      `json:"nativeSourceCount"`
 	ParallelValidationCompleted bool     `json:"parallelValidationCompleted"`
 	NativeSubscriptions         int      `json:"nativeSubscriptions"`
+	FallbackSubscriptions       int      `json:"fallbackSubscriptions"`
 	DelegatedOperations         int      `json:"delegatedOperations"`
 	DelegatedGroups             []string `json:"delegatedGroups"`
 	Blockers                    []string `json:"blockers"`
@@ -68,11 +70,10 @@ type ImportResult struct {
 }
 
 type Service struct {
-	subx                  SubXProvider
-	subscriptions         SubscriptionProvider
-	now                   func() time.Time
-	fallbackSourceEnabled bool
-	requirements          ReadinessRequirements
+	subx          SubXProvider
+	subscriptions SubscriptionProvider
+	now           func() time.Time
+	requirements  ReadinessRequirements
 }
 
 func NewService(subxProvider SubXProvider, subscriptions SubscriptionProvider, fallbackSourceEnabled bool, requirements ...ReadinessRequirements) *Service {
@@ -81,8 +82,7 @@ func NewService(subxProvider SubXProvider, subscriptions SubscriptionProvider, f
 		readinessRequirements = requirements[0]
 	}
 	return &Service{
-		subx: subxProvider, subscriptions: subscriptions, now: time.Now,
-		fallbackSourceEnabled: fallbackSourceEnabled, requirements: readinessRequirements,
+		subx: subxProvider, subscriptions: subscriptions, now: time.Now, requirements: readinessRequirements,
 	}
 }
 
@@ -112,8 +112,13 @@ func (s *Service) Readiness(ctx context.Context, userID int64) (Readiness, error
 	if s.requirements.Configuration != nil {
 		coreConfigurationReady, nativeSourceCount = s.requirements.Configuration.ReadinessConfiguration()
 	}
+	fallbackSourceEnabled := false
+	if s.requirements.Configuration != nil {
+		fallbackSourceEnabled = s.requirements.Configuration.FallbackSourceEnabled()
+	}
+	fallbackSubscriptions := countFallbackSubscriptions(items)
 	return evaluateReadiness(Readiness{
-		SubXConfigured: s.subx.Configured(), FallbackSourceEnabled: s.fallbackSourceEnabled, NativeSubscriptions: len(items),
+		SubXConfigured: s.subx.Configured(), FallbackSourceEnabled: fallbackSourceEnabled, NativeSubscriptions: len(items), FallbackSubscriptions: fallbackSubscriptions,
 		CoreConfigurationReady: coreConfigurationReady, NativeSourceCount: nativeSourceCount,
 		ParallelValidationCompleted: s.requirements.ParallelValidationCompleted, DelegatedGroups: []string{},
 	}, pendingCommands, healthValues), nil
@@ -125,12 +130,17 @@ func evaluateReadiness(result Readiness, pendingCommands int, healthValues []int
 		result.DelegatedGroups = append(result.DelegatedGroups, "migration-source")
 		result.Blockers = append(result.Blockers, "SubX 迁移回退资源源仍处于启用状态")
 	}
+	if result.FallbackSubscriptions > 0 {
+		result.DelegatedOperations += result.FallbackSubscriptions
+		result.DelegatedGroups = append(result.DelegatedGroups, "fallback-subscriptions")
+		result.Blockers = append(result.Blockers, fmt.Sprintf("仍有 %d 个订阅显式依赖 SubX 资源源", result.FallbackSubscriptions))
+	}
 	if pendingCommands > 0 {
 		result.DelegatedOperations += pendingCommands
 		result.DelegatedGroups = append(result.DelegatedGroups, "pending-source-commands")
 		result.Blockers = append(result.Blockers, fmt.Sprintf("仍有 %d 个 SubX source command 未得到确定终态", pendingCommands))
 		if !result.FallbackSourceEnabled {
-			result.Blockers = append(result.Blockers, "核对并重试遗留命令前需显式启用 MEDIA_HUB_SUBX_SOURCE_ENABLED")
+			result.Blockers = append(result.Blockers, "核对并重试遗留命令前需在设置中心显式启用 SubX 迁移资源源")
 		}
 	}
 	if !result.CoreConfigurationReady {
@@ -153,6 +163,25 @@ func evaluateReadiness(result Readiness, pendingCommands int, healthValues []int
 	}
 	result.CanStopSubX = len(result.Blockers) == 0
 	return result
+}
+
+func countFallbackSubscriptions(items []subscription.Subscription) int {
+	count := 0
+	for _, item := range items {
+		if containsString(item.SourceIDs, "subx") || containsString(item.Preferences.PreferredSources, "subx") {
+			count++
+		}
+	}
+	return count
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) ImportSubscriptions(ctx context.Context, userID int64) (ImportResult, error) {
@@ -200,7 +229,7 @@ func (s *Service) BlockingCommands(ctx context.Context, userID int64) ([]subx.Co
 }
 
 func (s *Service) RetryBlockingCommand(ctx context.Context, userID int64, id, confirmation string) (subx.CommandJob, error) {
-	if !s.fallbackSourceEnabled {
+	if s.requirements.Configuration == nil || !s.requirements.Configuration.FallbackSourceEnabled() {
 		return subx.CommandJob{}, ErrUnavailable
 	}
 	provider, ok := s.subx.(interface {

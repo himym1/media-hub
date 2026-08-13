@@ -35,7 +35,7 @@ TMDB trends and recommendations are native. 115 supports encrypted PKCE device a
 
 ## Configuration
 
-The backend reads environment variables and applies embedded SQLite migrations at startup. Secrets remain in process memory and must not be placed in logs or committed files.
+The backend reads environment variables as a startup baseline and applies embedded SQLite migrations. Authenticated Web and Android settings store encrypted runtime overrides in SQLite and apply them without a restart; secret values are never returned by the settings API. Secrets remain in process memory and must not be placed in logs or committed files.
 
 ```text
 MEDIA_HUB_ADDR=:8080
@@ -100,7 +100,7 @@ MEDIA_HUB_WECOM_URL=https://qyapi.weixin.qq.com
 
 Integration URLs must be absolute HTTP(S) URLs without embedded credentials, query parameters, or fragments. When a TMDB token is set without `MEDIA_HUB_TMDB_URL`, the official API URL is used.
 
-Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). SubX credentials are used only for authenticated subscription-backup migration and the optional fallback source. `MEDIA_HUB_SUBX_SOURCE_ENABLED=true` explicitly enables fallback search and transfer through SubX's configured 115 destination; keep it `false` outside migration or manual recovery. `MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED` defaults to `false` and must be enabled only after the real side-by-side acceptance run has verified search, transfer, QMediaSync, Emby playback, subscriptions, and recovery. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
+Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). The repository contains the adapter client and contract, not deployable implementations of the eight source services. SubX credentials are used only for authenticated subscription-backup migration and the optional fallback source. Fallback URL, credentials, and activation can be managed through encrypted runtime settings; environment variables remain a startup baseline. Enabling fallback permits search and transfer through SubX's configured 115 destination and means SubX must remain running. Explicitly fallback-bound subscriptions and unresolved or retryable SubX commands remain shutdown blockers. `MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED` defaults to `false` and must be enabled only after the real side-by-side acceptance run has verified search, transfer, QMediaSync, Emby playback, subscriptions, and recovery. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
 
 ## Local Verification
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"media-hub/backend/internal/integration"
+	"media-hub/backend/internal/subscription"
 )
 
 func TestExtractSubscriptionsExpandsSeasonsAndRejectsIncompleteSeries(t *testing.T) {
@@ -68,5 +69,20 @@ func TestReadinessFailsClosedUntilEveryReplacementGatePasses(t *testing.T) {
 	empty := evaluateReadiness(Readiness{DelegatedGroups: []string{}}, 2, nil)
 	if empty.CanStopSubX || empty.DelegatedOperations != 2 || len(empty.Blockers) < 8 {
 		t.Fatalf("empty = %#v", empty)
+	}
+}
+
+func TestFallbackSubscriptionsRemainShutdownBlockers(t *testing.T) {
+	items := []subscription.Subscription{
+		{SourceIDs: []string{"subx"}},
+		{Preferences: subscription.Preferences{PreferredSources: []string{"subx"}}},
+		{},
+	}
+	if got := countFallbackSubscriptions(items); got != 2 {
+		t.Fatalf("fallback subscriptions = %d", got)
+	}
+	result := evaluateReadiness(Readiness{FallbackSubscriptions: 2, DelegatedGroups: []string{}}, 0, nil)
+	if result.CanStopSubX || result.DelegatedOperations != 2 || !containsString(result.DelegatedGroups, "fallback-subscriptions") {
+		t.Fatalf("readiness = %#v", result)
 	}
 }

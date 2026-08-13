@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"media-hub/backend/internal/securepayload"
+	"media-hub/backend/internal/settings"
 	"media-hub/backend/internal/store"
 )
 
@@ -77,6 +78,8 @@ func (s *Service) ExportContents(ctx context.Context) (json.RawMessage, error) {
 }
 
 func (s *Service) enqueueInternal(ctx context.Context, userID int64, operationID, idempotencyKey string, invocation Invocation) (CommandJob, bool, error) {
+	settings.ProviderSettingsLock.RLock()
+	defer settings.ProviderSettingsLock.RUnlock()
 	if s == nil || s.client == nil || s.store == nil || s.codec == nil || !s.client.Configured() {
 		return CommandJob{}, false, ErrNotConfigured
 	}
@@ -166,6 +169,8 @@ func (s *Service) List(ctx context.Context, userID int64, limit int) ([]CommandJ
 }
 
 func (s *Service) Retry(ctx context.Context, userID int64, id, confirmation string) (CommandJob, error) {
+	settings.ProviderSettingsLock.RLock()
+	defer settings.ProviderSettingsLock.RUnlock()
 	if confirmation != id {
 		return CommandJob{}, ErrInvalidInvocation
 	}
@@ -204,6 +209,15 @@ func (s *Service) run(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
+		if !s.client.SourceEnabled() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-s.wake:
+			case <-ticker.C:
+			}
+			continue
+		}
 		for {
 			job, found, err := s.store.NextQueuedSubXCommand(ctx)
 			if err != nil || !found {

@@ -51,8 +51,8 @@ func writeProviderSettingsProblem(w http.ResponseWriter, err error) {
 		writeProblem(w, problem{Title: "服务设置无效", Status: http.StatusUnprocessableEntity, Code: "invalid_provider_settings"})
 		return
 	}
-	if errors.Is(err, settings.ErrActiveTransfers) {
-		writeProblem(w, problem{Title: "存在未完成或可恢复的转存任务，请处理后再修改服务设置", Status: http.StatusConflict, Code: "active_transfers"})
+	if errors.Is(err, settings.ErrActiveProviderOperations) {
+		writeProblem(w, problem{Title: "存在未完成或可恢复的 Provider 操作，请处理后再修改服务设置", Status: http.StatusConflict, Code: "active_provider_operations"})
 		return
 	}
 	if errors.Is(err, settings.ErrUnavailable) {

@@ -17,6 +17,7 @@ export type ProviderSettings = {
   emby: { baseUrl: string; apiKey: SecretStatus; userId: string }
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretStatus }
+  subx: { baseUrl: string; username: string; password: SecretStatus; token: SecretStatus; sourceEnabled: boolean }
   workflow: { qMediaSyncAccountId: number; movie: WorkflowTargetSettings; series: WorkflowTargetSettings }
   sources: { id: string; label: string; baseUrl: string; token: SecretStatus }[]
 }
@@ -25,6 +26,7 @@ export type ProviderSettingsUpdate = {
   emby: { baseUrl: string; apiKey: SecretUpdate; userId: string }
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretUpdate }
+  subx: { baseUrl: string; username: string; password: SecretUpdate; token: SecretUpdate; sourceEnabled: boolean }
   workflow: ProviderSettings['workflow']
   sources: { id: string; baseUrl: string; token: SecretUpdate }[]
 }
@@ -607,6 +609,7 @@ export type SubXMigrationReadiness = {
   nativeSourceCount: number
   parallelValidationCompleted: boolean
   nativeSubscriptions: number
+  fallbackSubscriptions: number
   delegatedOperations: number
   delegatedGroups: string[]
   blockers: string[]

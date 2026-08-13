@@ -1,6 +1,6 @@
 # Development Roadmap
 
-Status: API `0.7.0-dev` contains the source-level native SubX replacement plus encrypted, runtime-applied core provider settings for TMDB, 115, QMediaSync, Emby, workflow targets, and the eight source-adapter IDs across Web and Android. Uncached backend normal/race/vet, Web unit/lint/build, Android executed unit/lint/debug APK, and OpenAPI checks passed on 2026-08-12. Real-provider and side-by-side SubX acceptance remain unexecuted.
+Status: API `0.8.0-dev` contains encrypted, runtime-applied provider settings for TMDB, 115, QMediaSync, Emby, workflow targets, the eight source-adapter IDs, and a guarded SubX migration fallback across Web and Android. QMediaSync, Emby, workflow targets, and TMDB have been configured and health-checked in production; 115 Open API authorization, deployable native source adapters, and full side-by-side acceptance remain incomplete.
 
 ## Phase 0: Foundation
 
@@ -52,8 +52,8 @@ Implementation status: SQLite persistence, scheduler, source/release rules, epis
 ## Phase 4: Full Operational Parity
 
 - [x] Native TMDB trending and recommendations plus tracked-content catalog and Emby presence summaries.
-- [x] Project-owned adapters for `dian`, `framehdr`, `gimy`, `guanying`, `hdhive`, `juying`, `mikan`, and `sidhub`; SubX remains only an explicit migration fallback.
-- [x] Source health/search/transfer capabilities use one project-owned contract; provider-specific login, feeds, and check-in are intentionally outside that contract unless an adapter implements them.
+- [ ] Deploy project-owned adapters for `dian`, `framehdr`, `gimy`, `guanying`, `hdhive`, `juying`, `mikan`, and `sidhub`; Media Hub currently has only the shared adapter contract/client, with SubX available as an explicitly enabled migration fallback.
+- [x] Source health/search/transfer capabilities use one project-owned contract; provider-specific login, feeds, and check-in remain adapter responsibilities.
 - [x] 115 QR login, connection testing, destination routing, bounded browsing, durable file commands, archive plans, and symlink-rejecting local upload.
 - [x] QMediaSync-backed synchronization records, persisted transfer events, Emby refresh, and playback verification replace SubX STRM operations.
 - [x] Native user-scoped operational summary and Media Hub-owned structured logs; provider-private logs are not proxied.
@@ -65,7 +65,7 @@ Media Hub will not implement SubX playback proxy routes: QMediaSync owns STRM ge
 
 Exit gate: every item in the [SubX parity matrix](../integrations/subx-parity.md) has a tested native, delegated, optional, or intentionally rejected mapping.
 
-Implementation status: each evidenced capability now has a native or intentionally rejected mapping. The compatibility catalog is no longer advertised to clients; its internal allowlist remains only for read-only backup migration and the explicitly enabled SubX source fallback.
+Implementation status: native control paths exist for the main workflow, but the eight deployable source adapters remain unfinished. The compatibility catalog is not advertised to clients; its internal allowlist remains only for read-only backup migration and the explicitly enabled SubX source fallback.
 
 ## Phase 5: Remove SubX
 
@@ -74,7 +74,7 @@ Implementation status: each evidenced capability now has a native or intentional
 - Compare feature outcomes and failure-mode behavior.
 - Stop SubX only after parity gates pass and Media Hub can recover independently.
 
-Implementation status: backup imports now map subscriptions to native source IDs instead of `subx`. `/migration/subx/readiness` returns `canStopSubX=true` when the explicit fallback source flag is disabled and every persisted SubX source command has a determined terminal state; the remaining shutdown gates are the deliberately unexecuted parallel fixtures and real-provider acceptance.
+Implementation status: backup imports map recognized subscriptions to native source IDs instead of `subx`. `/migration/subx/readiness` also blocks on an enabled fallback, explicitly fallback-bound subscriptions, queued/submitting/uncertain commands, retryable failed commands, missing or unhealthy core providers, absent healthy native sources, and incomplete parallel acceptance.
 
 ## Deferred
 

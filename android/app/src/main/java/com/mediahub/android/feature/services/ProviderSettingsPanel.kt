@@ -88,6 +88,22 @@ internal fun ProviderSettingsPanel(
             LabeledField("115 Client ID", draft.drive115ClientId) { onDraftChange(draft.copy(drive115ClientId = it)) }
         }
 
+        SettingsSection("SubX 迁移资源源") {
+            MediaHubText("临时复用 SubX 搜索与转存；启用期间 SubX 不能停用。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
+            LabeledField("SubX 地址", draft.subx.baseUrl) { onDraftChange(draft.copy(subx = draft.subx.copy(baseUrl = it))) }
+            LabeledField("用户名", draft.subx.username) { onDraftChange(draft.copy(subx = draft.subx.copy(username = it))) }
+            SecretField("SubX 密码", settings.subx.password, draft.subx.password) {
+                onDraftChange(draft.copy(subx = draft.subx.copy(password = it)))
+            }
+            SecretField("SubX 静态 Token", settings.subx.token, draft.subx.token) {
+                onDraftChange(draft.copy(subx = draft.subx.copy(token = it)))
+            }
+            ToggleRow(
+                label = if (draft.subx.sourceEnabled) "SubX 迁移资源源已启用" else "启用 SubX 迁移资源源",
+                checked = draft.subx.sourceEnabled,
+            ) { onDraftChange(draft.copy(subx = draft.subx.copy(sourceEnabled = it))) }
+        }
+
         SettingsSection("工作流目标") {
             LabeledField("QMediaSync Account ID", draft.workflow.qMediaSyncAccountId.toString(), KeyboardType.Number) {
                 onDraftChange(draft.copy(workflow = draft.workflow.copy(qMediaSyncAccountId = it.toIntOrNull() ?: 0)))
@@ -176,6 +192,17 @@ private fun SecretField(label: String, status: SecretStatus, value: SecretUpdate
         ) {
             MediaHubText(if (value.clear) "将清除已保存密钥" else "保留已保存密钥", color = if (value.clear) MediaHubColors.Error else MediaHubColors.TextMuted, fontSize = 11.sp)
         }
+    }
+}
+
+@Composable
+private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().toggleable(checked, role = Role.Checkbox) { onChange(it) }
+            .background(MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp)).padding(11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MediaHubText(label, color = if (checked) MediaHubColors.Source else MediaHubColors.TextMuted, fontSize = 11.sp)
     }
 }
 

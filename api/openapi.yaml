@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.7.0
+  version: 0.8.0
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -1327,7 +1327,7 @@ components:
         token: { $ref: '#/components/schemas/SecretUpdate' }
     ProviderSettings:
       type: object
-      required: [qmediaSync, emby, drive115, tmdb, workflow, sources]
+      required: [qmediaSync, emby, drive115, tmdb, subx, workflow, sources]
       properties:
         qmediaSync:
           type: object
@@ -1353,6 +1353,15 @@ components:
           properties:
             baseUrl: { type: string }
             accessToken: { $ref: '#/components/schemas/SecretStatus' }
+        subx:
+          type: object
+          required: [baseUrl, username, password, token, sourceEnabled]
+          properties:
+            baseUrl: { type: string }
+            username: { type: string }
+            password: { $ref: '#/components/schemas/SecretStatus' }
+            token: { $ref: '#/components/schemas/SecretStatus' }
+            sourceEnabled: { type: boolean }
         workflow: { $ref: '#/components/schemas/WorkflowSettings' }
         sources:
           type: array
@@ -1387,6 +1396,15 @@ components:
           properties:
             baseUrl: { type: string, maxLength: 2048 }
             accessToken: { $ref: '#/components/schemas/SecretUpdate' }
+        subx:
+          type: object
+          required: [baseUrl, username, password, token, sourceEnabled]
+          properties:
+            baseUrl: { type: string, maxLength: 2048 }
+            username: { type: string, maxLength: 200 }
+            password: { $ref: '#/components/schemas/SecretUpdate' }
+            token: { $ref: '#/components/schemas/SecretUpdate' }
+            sourceEnabled: { type: boolean }
         workflow: { $ref: '#/components/schemas/WorkflowSettings' }
         sources:
           type: array
@@ -1950,7 +1968,7 @@ components:
         updatedAt: { type: string, format: date-time }
     SubXMigrationReadiness:
       type: object
-      required: [canStopSubX, subxConfigured, fallbackSourceEnabled, coreConfigurationReady, nativeSourceCount, parallelValidationCompleted, nativeSubscriptions, delegatedOperations, delegatedGroups, blockers]
+      required: [canStopSubX, subxConfigured, fallbackSourceEnabled, coreConfigurationReady, nativeSourceCount, parallelValidationCompleted, nativeSubscriptions, fallbackSubscriptions, delegatedOperations, delegatedGroups, blockers]
       properties:
         canStopSubX: { type: boolean }
         subxConfigured: { type: boolean }
@@ -1959,6 +1977,7 @@ components:
         nativeSourceCount: { type: integer, minimum: 0 }
         parallelValidationCompleted: { type: boolean }
         nativeSubscriptions: { type: integer, minimum: 0 }
+        fallbackSubscriptions: { type: integer, minimum: 0 }
         delegatedOperations: { type: integer, minimum: 0 }
         delegatedGroups: { type: array, items: { type: string } }
         blockers: { type: array, items: { type: string } }

@@ -36,7 +36,7 @@ import (
 	"media-hub/backend/internal/workflow"
 )
 
-var version = "0.7.0-dev"
+var version = "0.8.0-dev"
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -137,9 +137,10 @@ func run(logger *slog.Logger) error {
 			embyClient.Configure(value.Emby.BaseURL, value.Emby.APIKey, value.Emby.UserID)
 			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
 			drive115AuthService.ConfigureClientID(value.Drive115.ClientID)
+			subxClient.Configure(value.SubX)
 			workflowService.Configure(value.Workflow)
 			runtimeSources := searchSourcesFromSettings(value, configuration.ProbeTimeout, configuration.FixtureMode)
-			if subxClient.Configured() && configuration.SubX.SourceEnabled {
+			if subxClient.Configured() && value.SubX.SourceEnabled {
 				runtimeSources = append(runtimeSources, subx.NewSource(subxClient, subxService))
 			}
 			searchService.Configure(tmdbClient, runtimeSources...)
@@ -197,12 +198,11 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("start subscription worker: %w", err)
 	}
 	subscriptionWorkerStarted := true
-	subxWorkerStarted := false
-	if configuration.SubX.SourceEnabled {
+	subxWorkerStarted := securePayloadCodec != nil
+	if subxWorkerStarted {
 		if err := subxService.Start(runtimeContext); err != nil {
 			return fmt.Errorf("start SubX migration-source worker: %w", err)
 		}
-		subxWorkerStarted = true
 	}
 	workerStarted := false
 	if selectionCodec != nil || wecomClient.Configured() {

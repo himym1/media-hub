@@ -9,6 +9,7 @@ type Values struct {
 	Emby       config.Emby           `json:"emby"`
 	Drive115   config.Drive115       `json:"drive115"`
 	TMDB       config.TMDB           `json:"tmdb"`
+	SubX       config.SubX           `json:"subx"`
 	Workflow   config.Workflow       `json:"workflow"`
 	Sources    []config.SearchSource `json:"sources"`
 }
@@ -72,11 +73,20 @@ type SourceUpdate struct {
 	Token   SecretUpdate `json:"token"`
 }
 
+type SubXUpdate struct {
+	BaseURL       string       `json:"baseUrl"`
+	Username      string       `json:"username"`
+	Password      SecretUpdate `json:"password"`
+	Token         SecretUpdate `json:"token"`
+	SourceEnabled bool         `json:"sourceEnabled"`
+}
+
 type Update struct {
 	QMediaSync QMediaSyncUpdate `json:"qmediaSync"`
 	Emby       EmbyUpdate       `json:"emby"`
 	Drive115   Drive115Update   `json:"drive115"`
 	TMDB       TMDBUpdate       `json:"tmdb"`
+	SubX       *SubXUpdate      `json:"subx"`
 	Workflow   Workflow         `json:"workflow"`
 	Sources    []SourceUpdate   `json:"sources"`
 }
@@ -112,11 +122,20 @@ type SourceView struct {
 	Token   SecretStatus `json:"token"`
 }
 
+type SubXView struct {
+	BaseURL       string       `json:"baseUrl"`
+	Username      string       `json:"username"`
+	Password      SecretStatus `json:"password"`
+	Token         SecretStatus `json:"token"`
+	SourceEnabled bool         `json:"sourceEnabled"`
+}
+
 type View struct {
 	QMediaSync QMediaSyncView `json:"qmediaSync"`
 	Emby       EmbyView       `json:"emby"`
 	Drive115   Drive115View   `json:"drive115"`
 	TMDB       TMDBView       `json:"tmdb"`
+	SubX       SubXView       `json:"subx"`
 	Workflow   Workflow       `json:"workflow"`
 	Sources    []SourceView   `json:"sources"`
 }
@@ -132,6 +151,7 @@ func FromConfig(value config.Config) Values {
 		Emby:       value.Emby,
 		Drive115:   value.Drive115,
 		TMDB:       value.TMDB,
+		SubX:       value.SubX,
 		Workflow:   value.Workflow,
 		Sources:    append([]config.SearchSource(nil), value.Sources...),
 	}

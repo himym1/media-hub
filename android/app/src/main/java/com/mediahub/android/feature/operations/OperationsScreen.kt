@@ -160,7 +160,7 @@ private fun OperationsScreen(
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 MediaHubText(
-                                    text = "${migration.nativeSubscriptions} 个原生订阅 · ${migration.nativeSourceCount} 个原生来源 · ${migration.delegatedOperations} 个委托操作",
+                                    text = "${migration.nativeSubscriptions} 个原生订阅 · ${migration.fallbackSubscriptions} 个依赖回退源 · ${migration.nativeSourceCount} 个原生来源 · ${migration.delegatedOperations} 个委托操作",
                                     color = MediaHubColors.TextSecondary,
                                     fontSize = 11.sp,
                                 )

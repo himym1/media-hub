@@ -64,3 +64,36 @@ func TestSubXCommandIdempotencyAndInterruptedRecovery(t *testing.T) {
 		t.Fatalf("blocking commands = %d, err=%v", count, err)
 	}
 }
+
+func TestSubXCommandRetryabilityControlsBlocking(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "encoded-password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1_720_000_000, 0).UTC()
+	for _, item := range []SubXCommandJob{
+		{ID: "terminal", UserID: 1, OperationID: "framehdr.save", IdempotencyKey: "terminal", RequestHash: []byte("a"), PayloadToken: "encrypted", State: "failed", Retryable: false, CreatedAt: now.Unix(), UpdatedAt: now.Unix()},
+		{ID: "retryable", UserID: 1, OperationID: "framehdr.save", IdempotencyKey: "retryable", RequestHash: []byte("b"), PayloadToken: "encrypted", State: "failed", Retryable: true, CreatedAt: now.Unix(), UpdatedAt: now.Unix()},
+	} {
+		if _, _, err := dataStore.CreateSubXCommand(ctx, item); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := dataStore.database.ExecContext(ctx, `UPDATE subx_command_jobs SET retryable = ? WHERE id = ?`, boolInt(item.Retryable), item.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := dataStore.RetrySubXCommand(ctx, 1, "terminal", now.Add(time.Second)); !errors.Is(err, ErrSubXCommandNotRetryable) {
+		t.Fatalf("terminal retry error = %v", err)
+	}
+	if count, err := dataStore.CountBlockingSubXCommands(ctx, 1); err != nil || count != 1 {
+		t.Fatalf("blocking commands = %d, err=%v", count, err)
+	}
+	if job, err := dataStore.RetrySubXCommand(ctx, 1, "retryable", now.Add(time.Second)); err != nil || job.State != "queued" {
+		t.Fatalf("retryable command = %#v, err=%v", job, err)
+	}
+}

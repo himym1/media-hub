@@ -60,7 +60,7 @@ export function OperationsView() {
         <section className="migration-status" aria-label="SubX 迁移状态">
           <div>
             <span className={`service-state ${migration.data.canStopSubX ? 'healthy' : 'unconfigured'}`}>{migration.data.canStopSubX ? '已满足停用门槛' : '不可停用'}</span>
-            <strong>{migration.data.nativeSubscriptions} 个原生订阅 · {migration.data.nativeSourceCount} 个原生来源 · {migration.data.delegatedOperations} 个委托操作</strong>
+            <strong>{migration.data.nativeSubscriptions} 个原生订阅 · {migration.data.fallbackSubscriptions} 个依赖回退源 · {migration.data.nativeSourceCount} 个原生来源 · {migration.data.delegatedOperations} 个委托操作</strong>
             <small>核心配置 {migration.data.coreConfigurationReady ? '完整' : '未完成'} · 并行验收 {migration.data.parallelValidationCompleted ? '已确认' : '未确认'}</small>
             <small>{migration.data.blockers[0] ?? '所有替代门槛和实时健康检查均已通过'}</small>
           </div>

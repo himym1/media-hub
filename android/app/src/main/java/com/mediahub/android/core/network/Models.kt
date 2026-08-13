@@ -25,6 +25,20 @@ data class WorkflowSettings(
     val series: WorkflowTargetSettings,
  )
 data class ProviderSourceSettings(val id: String, val label: String, val baseUrl: String, val token: SecretStatus)
+data class SubXSettings(
+    val baseUrl: String,
+    val username: String,
+    val password: SecretStatus,
+    val token: SecretStatus,
+    val sourceEnabled: Boolean,
+ )
+data class SubXSettingsUpdate(
+    val baseUrl: String,
+    val username: String,
+    val password: SecretUpdate = SecretUpdate(),
+    val token: SecretUpdate = SecretUpdate(),
+    val sourceEnabled: Boolean,
+ )
 data class ProviderSettings(
     val qmediaSyncBaseUrl: String,
     val qmediaSyncApiKey: SecretStatus,
@@ -34,6 +48,7 @@ data class ProviderSettings(
     val drive115ClientId: String,
     val tmdbBaseUrl: String,
     val tmdbAccessToken: SecretStatus,
+    val subx: SubXSettings,
     val workflow: WorkflowSettings,
     val sources: List<ProviderSourceSettings>,
  )
@@ -47,6 +62,7 @@ data class ProviderSettingsUpdate(
     val drive115ClientId: String,
     val tmdbBaseUrl: String,
     val tmdbAccessToken: SecretUpdate,
+    val subx: SubXSettingsUpdate,
     val workflow: WorkflowSettings,
     val sources: List<ProviderSourceSettingsUpdate>,
  )
@@ -290,6 +306,7 @@ data class SubXMigrationReadiness(
     val nativeSourceCount: Int,
     val parallelValidationCompleted: Boolean,
     val nativeSubscriptions: Int,
+    val fallbackSubscriptions: Int,
     val delegatedOperations: Int,
     val delegatedGroups: List<String>,
     val blockers: List<String>,

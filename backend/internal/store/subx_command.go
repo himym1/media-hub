@@ -215,7 +215,8 @@ func (s *Store) RetrySubXCommand(ctx context.Context, userID int64, id string, n
 	result, err := tx.ExecContext(ctx, `
 		UPDATE subx_command_jobs SET state = 'queued', result_token = '', error_code = '',
 			error_message = '', retryable = 0, updated_at = ?
-		WHERE id = ? AND user_id = ? AND state IN ('failed', 'needs_attention')`, now.UTC().Unix(), id, userID)
+		WHERE id = ? AND user_id = ?
+		AND (state = 'needs_attention' OR (state = 'failed' AND retryable = 1))`, now.UTC().Unix(), id, userID)
 	if err != nil {
 		return SubXCommandJob{}, err
 	}
@@ -308,6 +309,7 @@ func scanSubXCommand(scanner subscriptionScanner) (SubXCommandJob, error) {
 
 func (s *Store) CountBlockingSubXCommands(ctx context.Context, userID int64) (int, error) {
 	var count int
-	err := s.database.QueryRowContext(ctx, `SELECT count(*) FROM subx_command_jobs WHERE user_id = ? AND state IN ('queued','submitting','needs_attention')`, userID).Scan(&count)
+	err := s.database.QueryRowContext(ctx, `SELECT count(*) FROM subx_command_jobs WHERE user_id = ?
+		AND (state IN ('queued','submitting','needs_attention') OR (state = 'failed' AND retryable = 1))`, userID).Scan(&count)
 	return count, err
 }

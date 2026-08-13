@@ -17,9 +17,9 @@ import (
 var ProviderSettingsLock sync.RWMutex
 
 var (
-	ErrUnavailable     = errors.New("runtime settings are unavailable")
-	ErrInvalid         = errors.New("runtime settings are invalid")
-	ErrActiveTransfers = errors.New("recoverable transfer jobs must finish before provider settings can change")
+	ErrUnavailable              = errors.New("runtime settings are unavailable")
+	ErrInvalid                  = errors.New("runtime settings are invalid")
+	ErrActiveProviderOperations = errors.New("provider operations must finish before provider settings can change")
 )
 
 type Applier func(Values)
@@ -75,7 +75,8 @@ func (s *Service) Update(ctx context.Context, userID int64, input Update) (View,
 	}
 	ProviderSettingsLock.Lock()
 	defer ProviderSettingsLock.Unlock()
-	value := merge(s.snapshot(), input)
+	current := s.snapshot()
+	value := merge(current, input)
 	if err := validate(value); err != nil {
 		return View{}, err
 	}
@@ -83,9 +84,10 @@ func (s *Service) Update(ctx context.Context, userID int64, input Update) (View,
 	if err != nil {
 		return View{}, err
 	}
-	if err := s.store.UpsertProviderCredentialWithoutActiveTransfers(ctx, userID, ProviderKey, sealed, s.now()); err != nil {
-		if errors.Is(err, store.ErrActiveTransfers) {
-			return View{}, ErrActiveTransfers
+	allowActiveSubX := value.SubX.SourceEnabled && sameSubXConnection(current.SubX, value.SubX)
+	if err := s.store.UpsertProviderCredentialWithOperationGuard(ctx, userID, ProviderKey, sealed, allowActiveSubX, s.now()); err != nil {
+		if errors.Is(err, store.ErrActiveProviderOperations) {
+			return View{}, ErrActiveProviderOperations
 		}
 		return View{}, err
 	}
@@ -134,6 +136,10 @@ func (s *Service) ReadinessConfiguration() (bool, int) {
 	return coreReady, nativeSources
 }
 
+func (s *Service) FallbackSourceEnabled() bool {
+	return s.snapshot().SubX.SourceEnabled
+}
+
 func merge(current Values, input Update) Values {
 	current.QMediaSync.BaseURL = strings.TrimSpace(input.QMediaSync.BaseURL)
 	current.QMediaSync.APIKey = mergeSecret(current.QMediaSync.APIKey, input.QMediaSync.APIKey)
@@ -145,6 +151,13 @@ func merge(current Values, input Update) Values {
 	current.TMDB.AccessToken = mergeSecret(current.TMDB.AccessToken, input.TMDB.AccessToken)
 	if current.TMDB.BaseURL == "" && current.TMDB.AccessToken != "" {
 		current.TMDB.BaseURL = "https://api.themoviedb.org/3"
+	}
+	if input.SubX != nil {
+		current.SubX.BaseURL = strings.TrimSpace(input.SubX.BaseURL)
+		current.SubX.Username = strings.TrimSpace(input.SubX.Username)
+		current.SubX.Password = mergeSecret(current.SubX.Password, input.SubX.Password)
+		current.SubX.Token = mergeSecret(current.SubX.Token, input.SubX.Token)
+		current.SubX.SourceEnabled = input.SubX.SourceEnabled
 	}
 	current.Workflow = input.Workflow.Config()
 
@@ -181,6 +194,9 @@ func mergeSecret(current string, update SecretUpdate) string {
 	return current
 }
 
+func sameSubXConnection(left, right config.SubX) bool {
+	return left.BaseURL == right.BaseURL && left.Username == right.Username && left.Password == right.Password && left.Token == right.Token
+}
 func validate(value Values) error {
 	if err := validateURL("QMediaSync URL", value.QMediaSync.BaseURL); err != nil {
 		return err
@@ -191,13 +207,26 @@ func validate(value Values) error {
 	if err := validateURL("TMDB URL", value.TMDB.BaseURL); err != nil {
 		return err
 	}
+	if err := validateURL("SubX URL", value.SubX.BaseURL); err != nil {
+		return err
+	}
 	if value.Workflow.QMediaSyncAccountID > uint(^uint32(0)) {
 		return fmt.Errorf("%w: QMediaSync account ID is out of range", ErrInvalid)
 	}
 	if len(value.QMediaSync.BaseURL) > 2048 || len(value.QMediaSync.APIKey) > 4096 ||
 		len(value.Emby.BaseURL) > 2048 || len(value.Emby.APIKey) > 4096 || len(value.Emby.UserID) > 200 ||
-		len(value.Drive115.ClientID) > 200 || len(value.TMDB.BaseURL) > 2048 || len(value.TMDB.AccessToken) > 4096 {
+		len(value.Drive115.ClientID) > 200 || len(value.TMDB.BaseURL) > 2048 || len(value.TMDB.AccessToken) > 4096 ||
+		len(value.SubX.BaseURL) > 2048 || len(value.SubX.Username) > 200 || len(value.SubX.Password) > 4096 || len(value.SubX.Token) > 4096 {
 		return fmt.Errorf("%w: provider setting is too long", ErrInvalid)
+	}
+	if value.SubX.BaseURL == "" && (value.SubX.Username != "" || value.SubX.Password != "" || value.SubX.Token != "" || value.SubX.SourceEnabled) {
+		return fmt.Errorf("%w: SubX URL is required when fallback credentials are configured", ErrInvalid)
+	}
+	if (value.SubX.Username == "") != (value.SubX.Password == "") {
+		return fmt.Errorf("%w: SubX username and password must be configured together", ErrInvalid)
+	}
+	if value.SubX.SourceEnabled && value.SubX.Token == "" && value.SubX.Username == "" {
+		return fmt.Errorf("%w: SubX credentials are required when the fallback source is enabled", ErrInvalid)
 	}
 	for _, target := range []config.WorkflowTarget{value.Workflow.Movie, value.Workflow.Series} {
 		if len(target.DestinationID) > 200 || len(target.QMediaSyncTargetPath) > 2048 || len(target.EmbyLibraryID) > 200 {
@@ -255,6 +284,7 @@ func publicView(value Values) View {
 		Emby:       EmbyView{BaseURL: value.Emby.BaseURL, APIKey: SecretStatus{Configured: value.Emby.APIKey != ""}, UserID: value.Emby.UserID},
 		Drive115:   Drive115View{ClientID: value.Drive115.ClientID},
 		TMDB:       TMDBView{BaseURL: value.TMDB.BaseURL, AccessToken: SecretStatus{Configured: value.TMDB.AccessToken != ""}},
+		SubX:       SubXView{BaseURL: value.SubX.BaseURL, Username: value.SubX.Username, Password: SecretStatus{Configured: value.SubX.Password != ""}, Token: SecretStatus{Configured: value.SubX.Token != ""}, SourceEnabled: value.SubX.SourceEnabled},
 		Workflow:   workflowFromConfig(value.Workflow),
 		Sources:    sources,
 	}
