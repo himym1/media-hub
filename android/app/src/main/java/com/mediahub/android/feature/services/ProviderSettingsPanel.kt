@@ -107,7 +107,7 @@ internal fun ProviderSettingsPanel(
         }
 
         SettingsSection("原生资源源") {
-            MediaHubText("蜜柑可留空地址，使用内置适配器。其他源填写实现合同的适配器地址与 Token。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
+            MediaHubText("蜜柑和 Sidhub 可留空地址，使用内置匿名适配器。其他源填写实现合同的适配器地址与 Token。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
             settings.sources.forEachIndexed { index, source ->
                 val item = draft.sources[index]
                 MediaHubText(source.label, color = MediaHubColors.TextStrong, fontSize = 12.sp, fontWeight = FontWeight.Medium)

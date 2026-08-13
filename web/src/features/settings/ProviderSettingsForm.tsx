@@ -99,7 +99,7 @@ export function ProviderSettingsForm({ settings, isSaving, error, saved, onSave,
 
       <fieldset className="source-settings">
         <legend>原生资源源</legend>
-        <p className="settings-note">蜜柑可留空地址，使用内置适配器。其他源填写实现合同的适配器地址与 Token。</p>
+        <p className="settings-note">蜜柑和 Sidhub 可留空地址，使用内置匿名适配器。其他源填写实现合同的适配器地址与 Token。</p>
         {settings.sources.map((source, index) => {
           const item = draft.sources[index]
           return <div className="source-setting-row" key={source.id}><strong>{source.label}</strong>

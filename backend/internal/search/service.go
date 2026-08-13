@@ -170,9 +170,12 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 				if candidate.Year == 0 {
 					candidate.Year = identity.Year
 				}
+				if candidate.MediaType == "" {
+					candidate.MediaType = identity.MediaType
+				}
 				candidate.PosterURL = identity.PosterURL
 			}
-			if supportsTransfer && candidate.SourceRef != "" && candidate.IdentityVerified {
+			if supportsTransfer && candidate.SourceRef != "" && candidate.IdentityVerified && validTransferShape(candidate) {
 				candidate.TransferState = "available"
 			} else if supportsTransfer && candidate.SourceRef != "" {
 				candidate.TransferState = "identity_required"
@@ -184,6 +187,17 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 	}
 	response.Partial = len(response.SourceErrors) > 0
 	return response
+}
+
+func validTransferShape(candidate Candidate) bool {
+	switch candidate.MediaType {
+	case "movie":
+		return candidate.Season == 0 && candidate.EpisodeStart == 0 && candidate.EpisodeEnd == 0
+	case "series":
+		return candidate.Season > 0 && candidate.EpisodeStart > 0 && candidate.EpisodeEnd >= candidate.EpisodeStart
+	default:
+		return false
+	}
 }
 
 func matchIdentity(candidate Candidate, identities []Identity) (Identity, bool) {

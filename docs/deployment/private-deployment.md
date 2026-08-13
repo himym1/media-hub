@@ -37,15 +37,15 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
 
    密码只用于首次初始化；数据库已有管理员后可以从 `.env` 删除。加密密钥必须长期保留，否则无法恢复加密的 provider 凭据和 workflow payload。
 
-   内置蜜柑需要独立代理时，在生产 `.env` 中启用可选覆盖文件；该设置只影响蜜柑 HTTP 客户端：
+   内置公开源需要独立代理时，在生产 `.env` 中启用可选覆盖文件；该设置只影响蜜柑、Sidhub 等内置源的 HTTP 客户端：
 
    ```text
    COMPOSE_FILE=compose.yaml:compose.mikan-egress.yaml
-   MEDIA_HUB_MIKAN_PROXY_URL=http://mikan-egress:17898
+   MEDIA_HUB_SOURCE_PROXY_URL=http://source-egress:17898
    MEDIA_HUB_MIKAN_EGRESS_NETWORK=existing-egress-network
    ```
 
-   `install-layout.sh` 会安装覆盖文件。`COMPOSE_FILE` 让发布、备份、恢复和重启都保留外部网络连接。代理必须是无凭据的 HTTP(S) URL；不要把全局 `HTTP_PROXY` / `HTTPS_PROXY` 注入 Media Hub。
+   `install-layout.sh` 会安装覆盖文件。`COMPOSE_FILE` 让发布、备份、恢复和重启都保留外部网络连接。代理必须是无凭据的 HTTP(S) URL；旧的 `MEDIA_HUB_MIKAN_PROXY_URL` 仍可作为兼容回退。不要把全局 `HTTP_PROXY` / `HTTPS_PROXY` 注入 Media Hub。
 
 3. 先备份，再拉取固定版本：
 
@@ -68,4 +68,4 @@ Android 签名密钥只保存在 GitHub Actions secrets 和离线备份中，不
 ## 验收
 
 - 先验证登录、Web/API 同源、115 授权状态和只读 provider 状态。
-- 再验证真实搜索（蜜柑内置或已部署的合同适配器）、单次转存、QMediaSync、Emby 可播放性、订阅调度和未知态恢复。
+- 再验证真实搜索（蜜柑/Sidhub 内置或已部署的合同适配器）、单次转存、QMediaSync、Emby 可播放性、订阅调度和未知态恢复。

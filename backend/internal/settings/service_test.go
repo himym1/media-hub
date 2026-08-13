@@ -225,3 +225,11 @@ func TestMergeDefaultsOfficialWeComURL(t *testing.T) {
 		t.Fatalf("defaulted WeCom rejected: %v", err)
 	}
 }
+
+func TestReadinessCountsBuiltinSourcesWithoutURLs(t *testing.T) {
+	service := NewService(nil, nil, Values{Sources: configSources()}, nil)
+	_, nativeSources := service.ReadinessConfiguration()
+	if nativeSources != 2 {
+		t.Fatalf("native sources = %d, want 2", nativeSources)
+	}
+}

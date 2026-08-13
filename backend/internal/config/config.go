@@ -20,7 +20,7 @@ type Config struct {
 	Address                string
 	DatabasePath           string
 	ProbeTimeout           time.Duration
-	MikanProxyURL          *url.URL
+	SourceProxyURL         *url.URL
 	FixtureMode            bool
 	SecureCookies          bool
 	BootstrapAdminPassword string
@@ -115,9 +115,15 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	mikanProxyURL, err := proxyURLValue(lookup, "MEDIA_HUB_MIKAN_PROXY_URL")
+	sourceProxyURL, err := proxyURLValue(lookup, "MEDIA_HUB_SOURCE_PROXY_URL")
 	if err != nil {
 		return Config{}, err
+	}
+	if sourceProxyURL == nil {
+		sourceProxyURL, err = proxyURLValue(lookup, "MEDIA_HUB_MIKAN_PROXY_URL")
+		if err != nil {
+			return Config{}, err
+		}
 	}
 	fixtureMode, err := boolValue(lookup, "MEDIA_HUB_ENABLE_FIXTURES", false)
 	if err != nil {
@@ -220,7 +226,7 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		Address:                stringValue(lookup, "MEDIA_HUB_ADDR", defaultAddress),
 		DatabasePath:           stringValue(lookup, "MEDIA_HUB_DATABASE_PATH", defaultDatabasePath),
 		ProbeTimeout:           probeTimeout,
-		MikanProxyURL:          mikanProxyURL,
+		SourceProxyURL:         sourceProxyURL,
 		FixtureMode:            fixtureMode,
 		SecureCookies:          secureCookies,
 		BootstrapAdminPassword: adminPassword,

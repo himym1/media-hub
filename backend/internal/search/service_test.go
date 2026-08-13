@@ -85,7 +85,8 @@ func TestServiceRequiresVerifiedIdentityForTransfer(t *testing.T) {
 func TestServiceMatchesIdentityInsideReleaseTitle(t *testing.T) {
 	source := transferSearchStub{sourceStub: sourceStub{
 		id: "mikan", label: "蜜柑", candidates: []Candidate{{
-			ID: "release-1", Title: "[北宇治字幕组] 葬送的芙莉莲 / Sousou no Frieren - 38 [1080p HEVC]", MediaType: "series", SourceID: "mikan", SourceRef: "private",
+			ID: "release-1", Title: "[北宇治字幕组] 葬送的芙莉莲 / Sousou no Frieren - 38 [1080p HEVC]",
+			Season: 1, EpisodeStart: 38, EpisodeEnd: 38, MediaType: "series", SourceID: "mikan", SourceRef: "private",
 			Release: ReleaseFacts{Resolution: "1080p", VideoCodec: "HEVC"},
 		}},
 	}}
@@ -165,5 +166,33 @@ func TestServiceDoesNotGuessAmbiguousIdentity(t *testing.T) {
 	response := service.Search(context.Background(), "同名电影")
 	if response.Results[0].TransferState != "identity_required" || response.Results[0].TMDBID != "" {
 		t.Fatalf("ambiguous candidate = %#v", response.Results[0])
+	}
+}
+
+func TestServiceCompletesUnknownMediaTypeAndRejectsIncompleteSeriesShape(t *testing.T) {
+	identity := identityStub{identities: []Identity{{
+		TMDBID: "7131", Title: "范海辛", OriginalTitle: "Van Helsing", Year: 2004, MediaType: "movie",
+	}}}
+	movieSource := transferSearchStub{sourceStub: sourceStub{
+		id: "sidhub", label: "Sidhub", candidates: []Candidate{{
+			ID: "movie", Title: "范海辛", Year: 2004, SourceRef: "private",
+		}},
+	}}
+	movie := NewServiceWithIdentity(identity, movieSource).Search(context.Background(), "范海辛").Results[0]
+	if movie.MediaType != "movie" || movie.TMDBID != "7131" || movie.TransferState != "available" {
+		t.Fatalf("movie = %#v", movie)
+	}
+
+	seriesIdentity := identityStub{identities: []Identity{{
+		TMDBID: "209867", Title: "葬送的芙莉莲", Year: 2023, MediaType: "series",
+	}}}
+	seriesSource := transferSearchStub{sourceStub: sourceStub{
+		id: "sidhub", label: "Sidhub", candidates: []Candidate{{
+			ID: "collection", Title: "葬送的芙莉莲", Year: 2023, SourceRef: "private",
+		}},
+	}}
+	series := NewServiceWithIdentity(seriesIdentity, seriesSource).Search(context.Background(), "葬送的芙莉莲").Results[0]
+	if series.MediaType != "series" || series.TMDBID != "209867" || series.TransferState != "identity_required" {
+		t.Fatalf("series = %#v", series)
 	}
 }

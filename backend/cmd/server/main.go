@@ -133,7 +133,7 @@ func run(logger *slog.Logger) error {
 			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
 			wecomClient.Configure(value.WeCom.BaseURL, value.WeCom.CorpID, value.WeCom.Secret, value.WeCom.ChatID)
 			workflowService.Configure(value.Workflow)
-			runtimeSources := searchSourcesFromSettings(value, configuration.ProbeTimeout, configuration.FixtureMode, drive115AuthService, configuration.MikanProxyURL)
+			runtimeSources := searchSourcesFromSettings(value, configuration.ProbeTimeout, configuration.FixtureMode, drive115AuthService, configuration.SourceProxyURL)
 			searchService.Configure(tmdbClient, runtimeSources...)
 		},
 	)
@@ -308,13 +308,13 @@ func integrationRecords(configurations []config.Integration) []store.Integration
 	return records
 }
 
-func searchSourcesFromSettings(value settings.Values, timeout time.Duration, fixtureMode bool, offline adapter.Offline, mikanProxyURL *url.URL) []search.Source {
+func searchSourcesFromSettings(value settings.Values, timeout time.Duration, fixtureMode bool, offline adapter.Offline, sourceProxyURL *url.URL) []search.Source {
 	if fixtureMode {
 		return search.FixtureSources()
 	}
 	sources := make([]search.Source, 0, len(value.Sources))
 	for _, sourceConfiguration := range value.Sources {
-		if source := adapter.New(sourceConfiguration, timeout, offline, mikanProxyURL); source != nil {
+		if source := adapter.New(sourceConfiguration, timeout, offline, sourceProxyURL); source != nil {
 			sources = append(sources, source)
 		}
 	}

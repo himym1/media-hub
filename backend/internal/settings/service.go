@@ -128,7 +128,7 @@ func (s *Service) ReadinessConfiguration() (bool, int) {
 		movieReady && seriesReady
 	nativeSources := 0
 	for _, source := range value.Sources {
-		if source.BaseURL != "" || source.ID == "mikan" {
+		if source.BaseURL != "" || isBuiltinSource(source.ID) {
 			nativeSources++
 		}
 	}
@@ -243,7 +243,7 @@ func validate(value Values) error {
 		if err := validateURL("source URL", source.BaseURL); err != nil {
 			return err
 		}
-		if source.BaseURL == "" && source.Token != "" && source.ID != "mikan" {
+		if source.BaseURL == "" && source.Token != "" && !isBuiltinSource(source.ID) {
 			return fmt.Errorf("%w: source URL is required when a token is configured", ErrInvalid)
 		}
 		if len(source.BaseURL) > 2048 || len(source.Token) > 4096 {
@@ -262,6 +262,10 @@ func validateURL(label, raw string) error {
 		return fmt.Errorf("%w: %s must be an absolute HTTP(S) URL without credentials, query, or fragment", ErrInvalid, label)
 	}
 	return nil
+}
+
+func isBuiltinSource(id string) bool {
+	return id == "mikan" || id == "sidhub"
 }
 
 func publicView(value Values) View {

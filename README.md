@@ -29,7 +29,7 @@ Transfer jobs and append-only events are persisted before external side effects.
 
 Web and Android expose the same search, transfer status, event history, explicit retry, provider status, and Emby library semantics. Web uses an HttpOnly session cookie plus CSRF protection; Android uses a revocable bearer session stored through Android Keystore.
 
-Native subscriptions persist movie, series, season, and episode progress with source selection, release preferences, durable scheduling, duplicate suppression, manual runs, batch pause/resume, and atomic backup import/export. Native 115 operations add encrypted PKCE authorization, bounded browsing, durable file commands, symlink-rejecting local uploads, and review-first archive plans across Web and Android. The SubX compatibility layer has been removed. Native adapters are built-in Mikan plus other sources through the HTTP adapter contract.
+Native subscriptions persist movie, series, season, and episode progress with source selection, release preferences, durable scheduling, duplicate suppression, manual runs, batch pause/resume, and atomic backup import/export. Native 115 operations add encrypted PKCE authorization, bounded browsing, durable file commands, symlink-rejecting local uploads, and review-first archive plans across Web and Android. The SubX compatibility layer has been removed. Native adapters are built-in Mikan and Sidhub plus other sources through the HTTP adapter contract.
 
 TMDB trends and recommendations are native. 115 supports encrypted PKCE device authorization with automatic refresh plus user-scoped directory browsing and durable file commands. Create-folder, move, rename, and delete requests are persisted with encrypted parameters before provider submission; delete and uncertain retries require explicit command-ID confirmation.
 
@@ -41,7 +41,7 @@ The backend reads environment variables as a startup baseline and applies embedd
 MEDIA_HUB_ADDR=:8080
 MEDIA_HUB_DATABASE_PATH=data/media-hub.db
 MEDIA_HUB_PROBE_TIMEOUT=3s
-MEDIA_HUB_MIKAN_PROXY_URL=<optional-http-proxy-for-built-in-mikan>
+MEDIA_HUB_SOURCE_PROXY_URL=<optional-http-proxy-for-built-in-sources>
 MEDIA_HUB_SECURE_COOKIES=true
 MEDIA_HUB_ENABLE_FIXTURES=false
 
@@ -94,7 +94,7 @@ MEDIA_HUB_WECOM_URL=https://qyapi.weixin.qq.com
 
 Integration URLs must be absolute HTTP(S) URLs without embedded credentials, query parameters, or fragments. When a TMDB token is set without `MEDIA_HUB_TMDB_URL`, the official API URL is used.
 
-Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). Mikan is a built-in adapter and can run without a custom address. `MEDIA_HUB_MIKAN_PROXY_URL` optionally routes only the built-in Mikan HTTP client through an unauthenticated HTTP(S) proxy; it does not affect 115, TMDB, QMediaSync, Emby, WeCom, or contract adapters. Other sources use the HTTP adapter contract; the repository contains the client and contract, not deployable implementations of those source services. The SubX compatibility layer has been removed. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
+Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). Mikan and Sidhub are built-in adapters and can run without custom addresses. `MEDIA_HUB_SOURCE_PROXY_URL` optionally routes only built-in source HTTP clients through an unauthenticated HTTP(S) proxy; the legacy `MEDIA_HUB_MIKAN_PROXY_URL` remains a fallback. Neither setting affects 115, TMDB, QMediaSync, Emby, WeCom, or contract adapters. Other sources use the HTTP adapter contract. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
 
 ## Local Verification
 
