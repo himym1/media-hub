@@ -99,6 +99,22 @@ func TestServiceMatchesIdentityInsideReleaseTitle(t *testing.T) {
 	}
 }
 
+func TestServiceRejectsMikanMovieForSeriesIdentity(t *testing.T) {
+	source := transferSearchStub{sourceStub: sourceStub{
+		id: "mikan", label: "蜜柑", candidates: []Candidate{{
+			ID: "movie-release", Title: "[Group] 名侦探柯南 独眼的残像 [MOVIE Fin]", MediaType: "movie", SourceID: "mikan", SourceRef: "private",
+		}},
+	}}
+	service := NewServiceWithIdentity(identityStub{identities: []Identity{{
+		TMDBID: "30983", Title: "名侦探柯南", OriginalTitle: "Detective Conan", Year: 1996, MediaType: "series",
+	}}}, source)
+
+	response := service.Search(context.Background(), "名侦探柯南")
+	if response.Results[0].TransferState != "identity_required" || response.Results[0].TMDBID != "" {
+		t.Fatalf("candidate = %#v", response.Results[0])
+	}
+}
+
 func TestTitleContainsIdentityUsesLatinWordBoundariesAndRejectsShortTitles(t *testing.T) {
 	for _, test := range []struct {
 		candidate string

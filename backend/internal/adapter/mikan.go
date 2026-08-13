@@ -25,7 +25,7 @@ var (
 	mikanResolution = regexp.MustCompile(`(?i)\b(2160p|1080p|720p|480p|4k)\b`)
 	mikanCodec      = regexp.MustCompile(`(?i)\b(hevc|x265|h[. ]?265|avc|x264|h[. ]?264|av1)\b`)
 	mikanEpisode    = regexp.MustCompile(`(?i)(?:S(\d{1,2})E(\d{1,3})|[\[\s-](\d{1,3})(?:v\d+)?[\]]?(?:\s|$))`)
-	mikanMovieMark  = regexp.MustCompile(`剧场版|电影|movie`)
+	mikanMovieMark  = regexp.MustCompile(`(?i:剧场版|电影|movie)`)
 )
 
 type Mikan struct {

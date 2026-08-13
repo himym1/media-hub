@@ -60,6 +60,13 @@ func TestMikanSearchParsesRSSItems(t *testing.T) {
 	if results[1].MediaType != "movie" || results[1].Release.Resolution != "2160p" {
 		t.Fatalf("movie candidate = %+v", results[1])
 	}
+	caseCandidate, ok := mikanCandidate(rssItem{
+		Title: "[银色子弹字幕组&VCB-Studio] 名侦探柯南 独眼的残像 / Detective Conan M28: One-eyed Flashback 10-bit 1080p HEVC BDRip [MOVIE Fin]",
+		Link:  "https://mikanani.me/Home/Episode/example",
+	})
+	if !ok || caseCandidate.MediaType != "movie" || caseCandidate.Season != 0 || caseCandidate.EpisodeStart != 0 {
+		t.Fatalf("uppercase movie candidate = %+v, ok = %v", caseCandidate, ok)
+	}
 }
 
 func TestMikanSearchUsesConfiguredProxy(t *testing.T) {
