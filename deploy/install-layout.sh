@@ -10,6 +10,7 @@ gid=${MEDIA_HUB_GID:-65532}
 chown "$uid:$gid" "$root/data"
 
 install -m 644 deploy/compose.yaml "$root/compose.yaml"
+install -m 644 deploy/compose.mikan-egress.yaml "$root/compose.mikan-egress.yaml"
 install -m 755 deploy/backup.sh "$root/backup.sh"
 install -m 755 deploy/restore.sh "$root/restore.sh"
 

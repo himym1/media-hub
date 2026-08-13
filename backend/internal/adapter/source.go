@@ -15,9 +15,9 @@ type Offline interface {
 	AddOfflineURLs(ctx context.Context, destinationID string, urls []string) error
 }
 
-func New(source config.SearchSource, timeout time.Duration, offline Offline) search.TransferSource {
+func New(source config.SearchSource, timeout time.Duration, offline Offline, proxyURL *url.URL) search.TransferSource {
 	if source.ID == "mikan" && (source.BaseURL == "" || isMikanHost(source.BaseURL)) {
-		return NewMikan(source.BaseURL, source.Token, timeout, offline)
+		return NewMikan(source.BaseURL, source.Token, timeout, offline, proxyURL)
 	}
 	if source.BaseURL == "" {
 		return nil

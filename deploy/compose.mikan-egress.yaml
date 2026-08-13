@@ -1,0 +1,12 @@
+services:
+  media-hub:
+    environment:
+      MEDIA_HUB_MIKAN_PROXY_URL: ${MEDIA_HUB_MIKAN_PROXY_URL:-http://subx-dian-egress:17898}
+    networks:
+      - default
+      - mikan-egress
+
+networks:
+  mikan-egress:
+    external: true
+    name: ${MEDIA_HUB_MIKAN_EGRESS_NETWORK:-subx_default}

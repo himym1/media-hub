@@ -28,6 +28,7 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 		"MEDIA_HUB_EMBY_MOVIE_LIBRARY_ID":    "library-movies",
 		"MEDIA_HUB_SOURCE_FRAME_TOKEN":       "frame-test-value",
 		"MEDIA_HUB_ANDROID_RELEASE_DIR":      "/srv/media-hub/releases",
+		"MEDIA_HUB_MIKAN_PROXY_URL":          "http://mikan-egress:17898",
 	}
 
 	loaded, err := load(func(key string) (string, bool) {
@@ -43,6 +44,9 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 	}
 	if loaded.ProbeTimeout != 750*time.Millisecond || !loaded.FixtureMode || !loaded.SecureCookies {
 		t.Fatal("unexpected runtime configuration")
+	}
+	if loaded.MikanProxyURL == nil || loaded.MikanProxyURL.String() != "http://mikan-egress:17898" {
+		t.Fatal("unexpected Mikan proxy configuration")
 	}
 	if loaded.BootstrapAdminPassword == "" {
 		t.Fatal("bootstrap administrator password was not loaded")
@@ -67,6 +71,19 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 	}
 	if target, ok := loaded.Workflow.Target("movie"); !ok || target.DestinationID != "100" {
 		t.Fatal("unexpected movie workflow target")
+	}
+}
+
+func TestLoadRejectsInvalidMikanProxyURL(t *testing.T) {
+	for _, raw := range []string{
+		"socks5://proxy.local:1080",
+		"http********************[REDACTED:Connection String with Password]proxy.local:8080",
+		"http://proxy.local:8080/path",
+		"http://proxy.local:8080?target=mikan",
+	} {
+		if _, err := load(testLookup(map[string]string{"MEDIA_HUB_MIKAN_PROXY_URL": raw})); err == nil {
+			t.Fatalf("expected %q to fail", raw)
+		}
 	}
 }
 

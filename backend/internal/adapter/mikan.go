@@ -55,19 +55,24 @@ type rssItem struct {
 	} `xml:"enclosure"`
 }
 
-func NewMikan(baseURL, token string, timeout time.Duration, offline Offline) *Mikan {
+func NewMikan(baseURL, token string, timeout time.Duration, offline Offline, proxyURL *url.URL) *Mikan {
 	if strings.TrimSpace(baseURL) == "" {
 		baseURL = defaultMikanURL
 	}
 	if timeout <= 0 {
 		timeout = 8 * time.Second
 	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if proxyURL != nil {
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
 	return &Mikan{
 		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
-		token:   strings.TrimSpace(token),
+		token:   token,
 		offline: offline,
 		client: &http.Client{
-			Timeout: timeout,
+			Timeout:   timeout,
+			Transport: transport,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse
 			},

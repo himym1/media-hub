@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -45,7 +46,7 @@ func TestMikanSearchParsesRSSItems(t *testing.T) {
 	}))
 	defer server.Close()
 
-	source := NewMikan(server.URL, "", time.Second, nil)
+	source := NewMikan(server.URL, "", time.Second, nil, nil)
 	results, err := source.Search(context.Background(), "范海辛")
 	if err != nil {
 		t.Fatal(err)
@@ -61,9 +62,30 @@ func TestMikanSearchParsesRSSItems(t *testing.T) {
 	}
 }
 
+func TestMikanSearchUsesConfiguredProxy(t *testing.T) {
+	var requestedURL string
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedURL = r.URL.String()
+		_, _ = w.Write([]byte(`<?xml version="1.0"?><rss version="2.0"><channel></channel></rss>`))
+	}))
+	defer proxy.Close()
+	proxyURL, err := url.Parse(proxy.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	source := NewMikan("http://mikan.invalid", "", time.Second, nil, proxyURL)
+	if _, err := source.Search(context.Background(), "proxy test"); err != nil {
+		t.Fatal(err)
+	}
+	if requestedURL != "http://mikan.invalid/RSS/Search?searchstr=proxy+test" {
+		t.Fatalf("proxy request URL = %q", requestedURL)
+	}
+}
+
 func TestMikanTransferSubmitsOfflineURL(t *testing.T) {
 	offline := &memoryOffline{}
-	source := NewMikan("https://mikanani.me", "", time.Second, offline)
+	source := NewMikan("https://mikanani.me", "", time.Second, offline, nil)
 	reference, _ := json.Marshal(mikanReference{Title: "Van Helsing", URL: "magnet:?xt=urn:btih:abc"})
 	result, err := source.StartTransfer(context.Background(), search.TransferRequest{
 		Reference: string(reference), DestinationID: "folder-1", IdempotencyKey: "job-1",
@@ -86,7 +108,7 @@ func (uncertainOfflineError) SubmissionUncertain() bool { return true }
 
 func TestMikanTransferPreservesUncertainSubmission(t *testing.T) {
 	offline := &memoryOffline{err: uncertainOfflineError{}}
-	source := NewMikan("https://mikanani.me", "", time.Second, offline)
+	source := NewMikan("https://mikanani.me", "", time.Second, offline, nil)
 	reference, _ := json.Marshal(mikanReference{Title: "Van Helsing", URL: "magnet:?xt=urn:btih:abc"})
 	_, err := source.StartTransfer(context.Background(), search.TransferRequest{
 		Reference: string(reference), DestinationID: "folder-1", IdempotencyKey: "job-1",

@@ -41,6 +41,7 @@ The backend reads environment variables as a startup baseline and applies embedd
 MEDIA_HUB_ADDR=:8080
 MEDIA_HUB_DATABASE_PATH=data/media-hub.db
 MEDIA_HUB_PROBE_TIMEOUT=3s
+MEDIA_HUB_MIKAN_PROXY_URL=<optional-http-proxy-for-built-in-mikan>
 MEDIA_HUB_SECURE_COOKIES=true
 MEDIA_HUB_ENABLE_FIXTURES=false
 
@@ -93,7 +94,7 @@ MEDIA_HUB_WECOM_URL=https://qyapi.weixin.qq.com
 
 Integration URLs must be absolute HTTP(S) URLs without embedded credentials, query parameters, or fragments. When a TMDB token is set without `MEDIA_HUB_TMDB_URL`, the official API URL is used.
 
-Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). Mikan is a built-in adapter and can run without a custom address. Other sources use the HTTP adapter contract; the repository contains the client and contract, not deployable implementations of those source services. The SubX compatibility layer has been removed. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
+Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). Mikan is a built-in adapter and can run without a custom address. `MEDIA_HUB_MIKAN_PROXY_URL` optionally routes only the built-in Mikan HTTP client through an unauthenticated HTTP(S) proxy; it does not affect 115, TMDB, QMediaSync, Emby, WeCom, or contract adapters. Other sources use the HTTP adapter contract; the repository contains the client and contract, not deployable implementations of those source services. The SubX compatibility layer has been removed. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
 
 ## Local Verification
 

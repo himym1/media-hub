@@ -9,6 +9,7 @@ services:
       MEDIA_HUB_ADDR: 0.0.0.0:8080
       MEDIA_HUB_DATABASE_PATH: /srv/media-hub/data/media-hub.db
       MEDIA_HUB_ANDROID_RELEASE_DIR: /srv/media-hub/releases
+      MEDIA_HUB_MIKAN_PROXY_URL: ${MEDIA_HUB_MIKAN_PROXY_URL:-}
     ports:
       - 127.0.0.1:${MEDIA_HUB_HTTP_PORT:-18080}:8080
     volumes:

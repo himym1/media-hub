@@ -20,6 +20,7 @@ type Config struct {
 	Address                string
 	DatabasePath           string
 	ProbeTimeout           time.Duration
+	MikanProxyURL          *url.URL
 	FixtureMode            bool
 	SecureCookies          bool
 	BootstrapAdminPassword string
@@ -111,6 +112,10 @@ func Load() (Config, error) {
 
 func load(lookup func(string) (string, bool)) (Config, error) {
 	probeTimeout, err := durationValue(lookup, "MEDIA_HUB_PROBE_TIMEOUT", defaultProbeTimeout)
+	if err != nil {
+		return Config{}, err
+	}
+	mikanProxyURL, err := proxyURLValue(lookup, "MEDIA_HUB_MIKAN_PROXY_URL")
 	if err != nil {
 		return Config{}, err
 	}
@@ -215,6 +220,7 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		Address:                stringValue(lookup, "MEDIA_HUB_ADDR", defaultAddress),
 		DatabasePath:           stringValue(lookup, "MEDIA_HUB_DATABASE_PATH", defaultDatabasePath),
 		ProbeTimeout:           probeTimeout,
+		MikanProxyURL:          mikanProxyURL,
 		FixtureMode:            fixtureMode,
 		SecureCookies:          secureCookies,
 		BootstrapAdminPassword: adminPassword,
@@ -369,6 +375,22 @@ func uintValue(lookup func(string) (string, bool), key string) (uint, error) {
 		return 0, fmt.Errorf("%s must be a positive integer", key)
 	}
 	return uint(parsed), nil
+}
+
+func proxyURLValue(lookup func(string) (string, bool), key string) (*url.URL, error) {
+	value, ok := lookup(key)
+	if !ok || strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return nil, fmt.Errorf("%s must be an absolute HTTP(S) URL", key)
+	}
+	if parsed.User != nil || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, fmt.Errorf("%s must not contain credentials, a path, query parameters, or fragments", key)
+	}
+	parsed.Path = ""
+	return parsed, nil
 }
 
 func baseURLValue(lookup func(string) (string, bool), key string) (string, error) {
