@@ -82,6 +82,59 @@ func TestServiceRequiresVerifiedIdentityForTransfer(t *testing.T) {
 	}
 }
 
+func TestServiceMatchesIdentityInsideReleaseTitle(t *testing.T) {
+	source := transferSearchStub{sourceStub: sourceStub{
+		id: "mikan", label: "蜜柑", candidates: []Candidate{{
+			ID: "release-1", Title: "[北宇治字幕组] 葬送的芙莉莲 / Sousou no Frieren - 38 [1080p HEVC]", MediaType: "series", SourceID: "mikan", SourceRef: "private",
+			Release: ReleaseFacts{Resolution: "1080p", VideoCodec: "HEVC"},
+		}},
+	}}
+	service := NewServiceWithIdentity(identityStub{identities: []Identity{{
+		TMDBID: "209867", Title: "葬送的芙莉莲", OriginalTitle: "Sousou no Frieren", Year: 2023, MediaType: "series",
+	}}}, source)
+
+	response := service.Search(context.Background(), "葬送的芙莉莲")
+	if response.Results[0].TMDBID != "209867" || response.Results[0].TransferState != "available" {
+		t.Fatalf("candidate = %#v", response.Results[0])
+	}
+}
+
+func TestTitleContainsIdentityUsesLatinWordBoundariesAndRejectsShortTitles(t *testing.T) {
+	for _, test := range []struct {
+		candidate string
+		identity  string
+		want      bool
+	}{
+		{"[Group] Sousou no Frieren S02 [1080p]", "Sousou no Frieren", true},
+		{"[Group] The Office US S01", "The Office", true},
+		{"[Group] OfficeSpace 1999", "Office", false},
+		{"[Group] Spirited Away [1080p]", "IT", false},
+		{"[Group] What's Up [1080p]", "Up", false},
+		{"[字幕组] 你好 第二季", "你好", true},
+		{"[字幕组] 流浪地球2", "流浪地球", false},
+		{"[字幕组] 英雄联盟", "英雄", false},
+	} {
+		if got := titleContainsIdentity(test.candidate, test.identity); got != test.want {
+			t.Fatalf("titleContainsIdentity(%q, %q) = %v, want %v", test.candidate, test.identity, got, test.want)
+		}
+	}
+}
+
+func TestServiceDoesNotUseReleaseTitleContainmentForContractSources(t *testing.T) {
+	source := transferSearchStub{sourceStub: sourceStub{
+		id: "framehdr", label: "帧影", candidates: []Candidate{{
+			ID: "release-1", Title: "[Group] Van Helsing [2160p]", MediaType: "movie", SourceRef: "private",
+		}},
+	}}
+	service := NewServiceWithIdentity(identityStub{identities: []Identity{{
+		TMDBID: "7131", Title: "范海辛", OriginalTitle: "Van Helsing", Year: 2004, MediaType: "movie",
+	}}}, source)
+	response := service.Search(context.Background(), "范海辛")
+	if response.Results[0].TransferState != "identity_required" || response.Results[0].TMDBID != "" {
+		t.Fatalf("candidate = %#v", response.Results[0])
+	}
+}
+
 func TestServiceDoesNotGuessAmbiguousIdentity(t *testing.T) {
 	source := transferSearchStub{sourceStub: sourceStub{
 		id: "frame", label: "帧影", candidates: []Candidate{{

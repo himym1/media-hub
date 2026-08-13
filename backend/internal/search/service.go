@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"unicode"
 
 	"media-hub/backend/internal/integration"
 )
@@ -198,10 +199,9 @@ func matchIdentity(candidate Candidate, identities []Identity) (Identity, bool) 
 		if candidate.Year > 0 && identity.Year > 0 && candidate.Year != identity.Year {
 			continue
 		}
-		candidateTitle := strings.TrimSpace(candidate.Title)
 		if candidate.TMDBID == "" &&
-			!strings.EqualFold(candidateTitle, strings.TrimSpace(identity.Title)) &&
-			!strings.EqualFold(candidateTitle, strings.TrimSpace(identity.OriginalTitle)) {
+			!candidateTitleMatchesIdentity(candidate, identity.Title) &&
+			!candidateTitleMatchesIdentity(candidate, identity.OriginalTitle) {
 			continue
 		}
 		if candidate.TMDBID != "" {
@@ -211,6 +211,49 @@ func matchIdentity(candidate Candidate, identities []Identity) (Identity, bool) 
 		matches++
 	}
 	return matched, matches == 1
+}
+
+func candidateTitleMatchesIdentity(candidate Candidate, identityTitle string) bool {
+	if strings.EqualFold(strings.TrimSpace(candidate.Title), strings.TrimSpace(identityTitle)) {
+		return true
+	}
+	return candidate.SourceID == "mikan" && titleContainsIdentity(candidate.Title, identityTitle)
+}
+
+func titleContainsIdentity(candidateTitle, identityTitle string) bool {
+	candidateTitle = strings.TrimSpace(candidateTitle)
+	identityTitle = strings.TrimSpace(identityTitle)
+	if candidateTitle == "" || identityTitle == "" {
+		return false
+	}
+	identityRunes := []rune(strings.ToLower(identityTitle))
+	if len(identityRunes) < 2 || (len(identityRunes) < 3 && allASCII(identityRunes)) {
+		return false
+	}
+	candidateRunes := []rune(strings.ToLower(candidateTitle))
+	for start := 0; start+len(identityRunes) <= len(candidateRunes); start++ {
+		if string(candidateRunes[start:start+len(identityRunes)]) != string(identityRunes) {
+			continue
+		}
+		if start > 0 && (unicode.IsLetter(candidateRunes[start-1]) || unicode.IsDigit(candidateRunes[start-1])) {
+			continue
+		}
+		end := start + len(identityRunes)
+		if end < len(candidateRunes) && (unicode.IsLetter(candidateRunes[end]) || unicode.IsDigit(candidateRunes[end])) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func allASCII(values []rune) bool {
+	for _, value := range values {
+		if value > unicode.MaxASCII {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Service) setSourceState(revision uint64, sourceID string, healthy bool) {
