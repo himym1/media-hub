@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,19 +17,36 @@ import (
 	"media-hub/backend/internal/integration"
 )
 
-const userInfoEndpoint = "https://proapi.115.com/open/user/info"
+const (
+	userAgent           = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 115Browser/27.0.3.7"
+	userInfoEndpoint    = "https://webapi.115.com/files/index_info"
+	userProfileEndpoint = "https://my.115.com/?ct=ajax&ac=nav"
+	filesEndpoint       = "https://webapi.115.com/files"
+	folderAddEndpoint   = "https://webapi.115.com/files/add"
+	fileMoveEndpoint    = "https://webapi.115.com/files/move"
+	fileRenameEndpoint  = "https://webapi.115.com/files/batch_rename"
+	fileDeleteEndpoint  = "https://webapi.115.com/rb/delete"
+	offlineAddEndpoint  = "https://lixian.115.com/lixianssp/?ac=add_task_urls"
+)
 
 var (
-	ErrNotConfigured    = errors.New("115 access token is not configured")
+	ErrNotConfigured    = errors.New("115 session is not configured")
 	ErrUnauthorized     = errors.New("115 rejected authentication")
 	ErrUpstreamResponse = errors.New("115 returned an invalid response")
 )
 
 type Client struct {
-	mu          sync.RWMutex
-	accessToken string
-	endpoint    string
-	client      *http.Client
+	mu             sync.RWMutex
+	cookie         string
+	userInfoURL    string
+	userProfileURL string
+	filesURL       string
+	folderAddURL   string
+	fileMoveURL    string
+	fileRenameURL  string
+	fileDeleteURL  string
+	offlineAddURL  string
+	client         *http.Client
 }
 
 type Status struct {
@@ -39,28 +57,17 @@ type Status struct {
 	ExpiresAt   int64  `json:"expiresAt,omitempty"`
 }
 
-type userInfoResponse struct {
-	Code int `json:"code"`
-	Data struct {
-		Space struct {
-			Used struct {
-				Size int64 `json:"size"`
-			} `json:"all_use"`
-			Total struct {
-				Size int64 `json:"size"`
-			} `json:"all_total"`
-		} `json:"rt_space_info"`
-		VIP struct {
-			LevelName string `json:"level_name"`
-			Expire    int64  `json:"expire"`
-		} `json:"vip_info"`
-	} `json:"data"`
-}
-
-func NewClient(accessToken string, timeout time.Duration) *Client {
+func NewClient(cookie string, timeout time.Duration) *Client {
 	return &Client{
-		accessToken: accessToken,
-		endpoint:    userInfoEndpoint,
+		cookie:         strings.TrimSpace(cookie),
+		userInfoURL:    userInfoEndpoint,
+		userProfileURL: userProfileEndpoint,
+		filesURL:       filesEndpoint,
+		folderAddURL:   folderAddEndpoint,
+		fileMoveURL:    fileMoveEndpoint,
+		fileRenameURL:  fileRenameEndpoint,
+		fileDeleteURL:  fileDeleteEndpoint,
+		offlineAddURL:  offlineAddEndpoint,
 		client: &http.Client{
 			Timeout: timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -70,31 +77,30 @@ func NewClient(accessToken string, timeout time.Duration) *Client {
 	}
 }
 
-func (c *Client) SetAccessToken(value string) {
+func (c *Client) SetSession(value string) {
 	c.mu.Lock()
-	c.accessToken = value
+	c.cookie = strings.TrimSpace(value)
 	c.mu.Unlock()
 }
 
-func (c *Client) token() string {
+func (c *Client) session() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.accessToken
+	return c.cookie
 }
 
 func (c *Client) Check(ctx context.Context) integration.Health {
 	health := integration.Health{ID: "115", Label: "115"}
-	if c.token() == "" {
+	if c.session() == "" {
 		health.Status = integration.StatusUnconfigured
-		health.Detail = "尚未配置开放平台授权"
+		health.Detail = "尚未扫码授权"
 		return health
 	}
-
 	status, err := c.Status(ctx)
 	if err == nil && status.Authorized {
 		health.Status = integration.StatusHealthy
 		if status.MemberLevel == "" {
-			health.Detail = "开放平台授权正常"
+			health.Detail = "扫码授权正常"
 		} else {
 			health.Detail = status.MemberLevel + "授权正常"
 		}
@@ -102,7 +108,7 @@ func (c *Client) Check(ctx context.Context) integration.Health {
 	}
 	if errors.Is(err, ErrUnauthorized) {
 		health.Status = integration.StatusDegraded
-		health.Detail = "开放平台授权已失效"
+		health.Detail = "扫码授权已失效"
 		return health
 	}
 	health.Status = integration.StatusUnavailable
@@ -111,46 +117,64 @@ func (c *Client) Check(ctx context.Context) integration.Health {
 }
 
 func (c *Client) Status(ctx context.Context) (Status, error) {
-	accessToken := c.token()
-	if accessToken == "" {
+	cookie := c.session()
+	if cookie == "" {
 		return Status{}, ErrNotConfigured
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint, nil)
-	if err != nil {
-		return Status{}, fmt.Errorf("create 115 request: %w", err)
+	var payload struct {
+		State bool   `json:"state"`
+		Error string `json:"error"`
+		Data  struct {
+			Space struct {
+				Used  byteSize `json:"all_use"`
+				Total byteSize `json:"all_total"`
+			} `json:"space_info"`
+		} `json:"data"`
 	}
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", "Bearer "+accessToken)
-	request.Header.Set("User-Agent", "Media-Hub/115-open")
-
-	response, err := c.client.Do(request)
-	if err != nil {
-		return Status{}, fmt.Errorf("request 115: %w", err)
+	if err := c.getJSONWithSession(ctx, c.userInfoURL, nil, cookie, &payload); err != nil {
+		return Status{}, err
 	}
-	defer response.Body.Close()
-	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-		return Status{}, ErrUnauthorized
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return Status{}, ErrUpstreamResponse
-	}
-
-	var payload userInfoResponse
-	decoder := json.NewDecoder(io.LimitReader(response.Body, 2<<20))
-	if err := decoder.Decode(&payload); err != nil {
-		return Status{}, fmt.Errorf("decode 115 response: %w", err)
-	}
-	if payload.Code != 0 {
+	if !payload.State {
 		return Status{}, ErrUnauthorized
 	}
 	return Status{
-		Authorized:  true,
-		UsedBytes:   payload.Data.Space.Used.Size,
-		TotalBytes:  payload.Data.Space.Total.Size,
-		MemberLevel: payload.Data.VIP.LevelName,
-		ExpiresAt:   payload.Data.VIP.Expire,
+		Authorized: true,
+		UsedBytes:  payload.Data.Space.Used.Int64(),
+		TotalBytes: payload.Data.Space.Total.Int64(),
 	}, nil
 }
+
+type byteSize int64
+
+func (value *byteSize) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Size json.RawMessage `json:"size"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if len(raw.Size) == 0 || string(raw.Size) == "null" {
+		return nil
+	}
+	text := strings.TrimSpace(string(raw.Size))
+	if len(text) > 0 && text[0] == '"' {
+		if err := json.Unmarshal(raw.Size, &text); err != nil {
+			return err
+		}
+	}
+	number, _, err := big.ParseFloat(strings.TrimSpace(text), 10, 256, big.ToZero)
+	if err != nil {
+		return err
+	}
+	integer, _ := number.Int(nil)
+	if integer == nil || !integer.IsInt64() || integer.Sign() < 0 {
+		return ErrUpstreamResponse
+	}
+	*value = byteSize(integer.Int64())
+	return nil
+}
+
+func (value byteSize) Int64() int64 { return int64(value) }
 
 type FileItem struct {
 	ID        string `json:"id"`
@@ -162,8 +186,8 @@ type FileItem struct {
 }
 
 func (c *Client) ListFiles(ctx context.Context, parentID string, limit, offset int) ([]FileItem, int, error) {
-	accessToken := c.token()
-	if accessToken == "" {
+	cookie := c.session()
+	if cookie == "" {
 		return nil, 0, ErrNotConfigured
 	}
 	if parentID == "" {
@@ -175,66 +199,58 @@ func (c *Client) ListFiles(ctx context.Context, parentID string, limit, offset i
 	if offset < 0 {
 		offset = 0
 	}
-	parsed, err := url.Parse("https://proapi.115.com/open/ufile/files")
-	if err != nil {
-		return nil, 0, err
-	}
-	query := parsed.Query()
+	query := url.Values{}
 	query.Set("aid", "1")
 	query.Set("cid", parentID)
-	query.Set("limit", strconv.Itoa(limit))
+	query.Set("o", "user_ptime")
+	query.Set("asc", "0")
 	query.Set("offset", strconv.Itoa(offset))
-	query.Set("custom_order", "2")
-	query.Set("o", "filename")
-	query.Set("asc", "1")
-	parsed.RawQuery = query.Encode()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
-	if err != nil {
-		return nil, 0, err
-	}
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", "Bearer "+accessToken)
-	request.Header.Set("User-Agent", "Media-Hub/115-open")
-	response, err := c.client.Do(request)
-	if err != nil {
-		return nil, 0, fmt.Errorf("list 115 files: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-		return nil, 0, ErrUnauthorized
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, 0, ErrUpstreamResponse
-	}
+	query.Set("show_dir", "1")
+	query.Set("limit", strconv.Itoa(limit))
+	query.Set("format", "json")
 	var payload struct {
 		State bool `json:"state"`
 		Count int  `json:"count"`
 		Data  []struct {
-			ID       string      `json:"fid"`
-			ParentID string      `json:"pid"`
-			Name     string      `json:"fn"`
-			Category string      `json:"fc"`
-			Size     json.Number `json:"fs"`
-			Updated  json.Number `json:"upt"`
+			FileID   string          `json:"fid"`
+			Category string          `json:"cid"`
+			ParentID string          `json:"pid"`
+			Name     string          `json:"n"`
+			AltName  string          `json:"fn"`
+			Size     json.Number     `json:"s"`
+			AltSize  json.Number     `json:"fs"`
+			Updated  json.RawMessage `json:"t"`
 		} `json:"data"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(response.Body, 4<<20))
-	decoder.UseNumber()
-	if err := decoder.Decode(&payload); err != nil {
-		return nil, 0, ErrUpstreamResponse
+	if err := c.getJSONWithSession(ctx, c.filesURL, query, cookie, &payload); err != nil {
+		return nil, 0, err
+	}
+	if !payload.State {
+		return nil, 0, ErrUnauthorized
 	}
 	items := make([]FileItem, 0, len(payload.Data))
 	for _, value := range payload.Data {
-		if value.ID == "" || value.Name == "" {
+		name := value.Name
+		if name == "" {
+			name = value.AltName
+		}
+		id := value.FileID
+		kind := "file"
+		parent := value.ParentID
+		if value.FileID == "" || value.FileID == "0" {
+			id = value.Category
+			kind = "folder"
+		} else if parent == "" {
+			parent = value.Category
+		}
+		if id == "" || name == "" {
 			continue
 		}
-		kind := "file"
-		if value.Category == "0" {
-			kind = "folder"
-		}
 		size, _ := value.Size.Int64()
-		updated, _ := value.Updated.Int64()
-		items = append(items, FileItem{ID: value.ID, ParentID: value.ParentID, Name: value.Name, Kind: kind, Size: size, UpdatedAt: updated})
+		if size == 0 {
+			size, _ = value.AltSize.Int64()
+		}
+		items = append(items, FileItem{ID: id, ParentID: parent, Name: name, Kind: kind, Size: size, UpdatedAt: parse115Time(value.Updated)})
 	}
 	return items, payload.Count, nil
 }
@@ -247,25 +263,36 @@ type WriteError struct {
 
 func (e *WriteError) Error() string { return e.Err.Error() }
 
+func (e *WriteError) SubmissionUncertain() bool {
+	return e != nil && e.Uncertain
+}
+
 func (c *Client) ExecuteFileCommand(ctx context.Context, operation string, input map[string]any) error {
 	values := url.Values{}
 	endpoint := ""
 	switch operation {
 	case "create_folder":
-		endpoint = "https://proapi.115.com/open/folder/add"
+		endpoint = c.folderAddURL
 		values.Set("pid", stringValue(input["parentId"]))
-		values.Set("file_name", stringValue(input["name"]))
+		values.Set("cname", stringValue(input["name"]))
 	case "move":
-		endpoint = "https://proapi.115.com/open/ufile/move"
-		values.Set("file_ids", strings.Join(stringSlice(input["fileIds"]), ","))
-		values.Set("to_cid", stringValue(input["targetParentId"]))
+		endpoint = c.fileMoveURL
+		for index, id := range stringSlice(input["fileIds"]) {
+			values.Set("fid["+strconv.Itoa(index)+"]", id)
+		}
+		values.Set("pid", stringValue(input["targetParentId"]))
 	case "rename":
-		endpoint = "https://proapi.115.com/open/ufile/update"
-		values.Set("file_id", stringValue(input["fileId"]))
-		values.Set("file_name", stringValue(input["name"]))
+		endpoint = c.fileRenameURL
+		fileID := stringValue(input["fileId"])
+		name := stringValue(input["name"])
+		values.Set("fid", fileID)
+		values.Set("file_name", name)
+		values.Set("files_new_name["+fileID+"]", name)
 	case "delete":
-		endpoint = "https://proapi.115.com/open/ufile/delete"
-		values.Set("file_ids", strings.Join(stringSlice(input["fileIds"]), ","))
+		endpoint = c.fileDeleteURL
+		for index, id := range stringSlice(input["fileIds"]) {
+			values.Set("fid["+strconv.Itoa(index)+"]", id)
+		}
 	default:
 		return &WriteError{Code: "unsupported_operation", Err: errors.New("unsupported 115 operation")}
 	}
@@ -273,18 +300,16 @@ func (c *Client) ExecuteFileCommand(ctx context.Context, operation string, input
 }
 
 func (c *Client) executeForm(ctx context.Context, endpoint string, values url.Values) error {
-	accessToken := c.token()
-	if accessToken == "" {
+	cookie := c.session()
+	if cookie == "" {
 		return ErrNotConfigured
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(values.Encode()))
 	if err != nil {
 		return &WriteError{Code: "invalid_request", Err: err}
 	}
-	request.Header.Set("Authorization", "Bearer "+accessToken)
+	c.applyAuth(request, cookie)
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("User-Agent", "Media-Hub/115-open")
 	response, err := c.client.Do(request)
 	if err != nil {
 		return &WriteError{Uncertain: true, Code: "uncertain_result", Err: fmt.Errorf("submit 115 command: %w", err)}
@@ -298,7 +323,6 @@ func (c *Client) executeForm(ctx context.Context, endpoint string, values url.Va
 	}
 	var payload struct {
 		State   bool   `json:"state"`
-		Code    any    `json:"code"`
 		Error   string `json:"error"`
 		Message string `json:"message"`
 	}
@@ -309,6 +333,70 @@ func (c *Client) executeForm(ctx context.Context, endpoint string, values url.Va
 		return &WriteError{Code: "provider_rejected", Err: ErrUpstreamResponse}
 	}
 	return nil
+}
+
+func (c *Client) getJSONWithSession(ctx context.Context, endpoint string, query url.Values, cookie string, target any) error {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return err
+	}
+	if query != nil {
+		existing := parsed.Query()
+		for key, values := range query {
+			for _, value := range values {
+				existing.Set(key, value)
+			}
+		}
+		parsed.RawQuery = existing.Encode()
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+	if err != nil {
+		return err
+	}
+	c.applyAuth(request, cookie)
+	response, err := c.client.Do(request)
+	if err != nil {
+		return fmt.Errorf("request 115: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		return ErrUnauthorized
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return ErrUpstreamResponse
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 4<<20)).Decode(target); err != nil {
+		return ErrUpstreamResponse
+	}
+	return nil
+}
+
+func (c *Client) applyAuth(request *http.Request, cookie string) {
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("User-Agent", userAgent)
+	if cookie != "" {
+		request.Header.Set("Cookie", cookie)
+	}
+}
+
+func parse115Time(raw json.RawMessage) int64 {
+	if len(raw) == 0 {
+		return 0
+	}
+	var number json.Number
+	if err := json.Unmarshal(raw, &number); err == nil {
+		value, _ := number.Int64()
+		return value
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err != nil {
+		return 0
+	}
+	parsed, err := time.ParseInLocation("2006-01-02 15:04:05", text, time.Local)
+	if err != nil {
+		return 0
+	}
+	return parsed.Unix()
 }
 
 func stringValue(value any) string {

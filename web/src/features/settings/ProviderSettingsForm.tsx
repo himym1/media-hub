@@ -69,9 +69,8 @@ export function ProviderSettingsForm({ settings, isSaving, error, saved, onSave,
         </fieldset>
 
         <fieldset>
-          <legend>115 开放平台</legend>
-          <p className="settings-note">扫码授权在本页上方完成。</p>
-          <label><span>Client ID</span><input onChange={(event) => setDraft((current) => ({ ...current, drive115: { clientId: event.target.value } }))} value={draft.drive115.clientId} /></label>
+          <legend>115</legend>
+          <p className="settings-note">用 115 App 在本页上方扫码授权。不需要开放平台开发者账号或 Client ID。</p>
         </fieldset>
 
         <fieldset>

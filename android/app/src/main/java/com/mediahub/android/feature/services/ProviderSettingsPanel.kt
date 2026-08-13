@@ -85,8 +85,7 @@ internal fun ProviderSettingsPanel(
                 onDraftChange(draft.copy(embyApiKey = it))
             }
             LabeledField("Emby 用户 ID", draft.embyUserId) { onDraftChange(draft.copy(embyUserId = it)) }
-            LabeledField("115 Client ID", draft.drive115ClientId) { onDraftChange(draft.copy(drive115ClientId = it)) }
-            MediaHubText("扫码授权在本页上方完成。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
+            MediaHubText("用 115 App 在本页上方扫码授权。不需要开放平台开发者账号。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
             LabeledField("企业微信 API 地址", draft.wecom.baseUrl) { onDraftChange(draft.copy(wecom = draft.wecom.copy(baseUrl = it))) }
             LabeledField("企业微信 Corp ID", draft.wecom.corpId) { onDraftChange(draft.copy(wecom = draft.wecom.copy(corpId = it))) }
             SecretField("企业微信 Secret", settings.wecom.secret, draft.wecom.secret) {

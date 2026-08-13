@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -142,6 +143,10 @@ func (m *Mikan) StartTransfer(ctx context.Context, input search.TransferRequest)
 		return search.TransferResult{}, search.Failure{Code: "source_unconfigured", Message: "115 离线转存未配置", Retryable: false}
 	}
 	if err := m.offline.AddOfflineURLs(ctx, input.DestinationID, []string{reference.URL}); err != nil {
+		var uncertain interface{ SubmissionUncertain() bool }
+		if errors.As(err, &uncertain) && uncertain.SubmissionUncertain() {
+			return search.TransferResult{}, search.Failure{Code: "source_submission_unknown", Message: "115 离线转存结果未知，需要人工确认", Retryable: true}
+		}
 		return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "蜜柑转存到 115 失败", Retryable: true}
 	}
 	return search.TransferResult{

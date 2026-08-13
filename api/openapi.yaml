@@ -358,7 +358,7 @@ paths:
   /integrations/115/status:
     get:
       operationId: getDrive115Status
-      summary: Check 115 Open authorization without returning account identity
+      summary: Check 115 QR authorization without returning account identity
       security:
         - cookieAuth: []
         - bearerAuth: []
@@ -380,7 +380,7 @@ paths:
   /integrations/115/auth/device:
     post:
       operationId: startDrive115DeviceAuthorization
-      summary: Start encrypted PKCE device authorization for 115 Open
+      summary: Start encrypted 115 QR login without an Open Platform client id
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
       responses:
@@ -395,7 +395,7 @@ paths:
   /integrations/115/auth/device/{id}:
     get:
       operationId: pollDrive115DeviceAuthorization
-      summary: Poll one user-scoped 115 device authorization
+      summary: Poll one user-scoped 115 QR authorization
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       parameters:
         - name: id

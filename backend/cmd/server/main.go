@@ -96,12 +96,9 @@ func run(logger *slog.Logger) error {
 		configuration.ProbeTimeout,
 		configuration.Emby.UserID,
 	)
-	drive115Client := drive115.NewClient(
-		configuration.Drive115.AccessToken,
-		configuration.ProbeTimeout,
-	)
+	drive115Client := drive115.NewClient("", configuration.ProbeTimeout)
 	drive115AuthService := drive115.NewAuthService(
-		dataStore, securePayloadCodec, configuration.Drive115.ClientID, drive115Client, configuration.ProbeTimeout,
+		dataStore, securePayloadCodec, drive115Client, configuration.ProbeTimeout,
 	)
 	drive115CommandService := drive115.NewCommandService(dataStore, securePayloadCodec)
 	if admin, exists, err := dataStore.Admin(startupContext); err != nil {
@@ -134,7 +131,6 @@ func run(logger *slog.Logger) error {
 			embyClient.Configure(value.Emby.BaseURL, value.Emby.APIKey, value.Emby.UserID)
 			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
 			wecomClient.Configure(value.WeCom.BaseURL, value.WeCom.CorpID, value.WeCom.Secret, value.WeCom.ChatID)
-			drive115AuthService.ConfigureClientID(value.Drive115.ClientID)
 			workflowService.Configure(value.Workflow)
 			runtimeSources := searchSourcesFromSettings(value, configuration.ProbeTimeout, configuration.FixtureMode, drive115AuthService)
 			searchService.Configure(tmdbClient, runtimeSources...)

@@ -125,7 +125,7 @@ func (s *Service) ReadinessConfiguration() (bool, int) {
 	coreReady := value.QMediaSync.BaseURL != "" && value.QMediaSync.APIKey != "" &&
 		value.Emby.BaseURL != "" && value.Emby.APIKey != "" &&
 		value.TMDB.BaseURL != "" && value.TMDB.AccessToken != "" &&
-		value.Drive115.ClientID != "" && movieReady && seriesReady
+		movieReady && seriesReady
 	nativeSources := 0
 	for _, source := range value.Sources {
 		if source.BaseURL != "" || source.ID == "mikan" {

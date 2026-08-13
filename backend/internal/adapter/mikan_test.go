@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -75,5 +76,23 @@ func TestMikanTransferSubmitsOfflineURL(t *testing.T) {
 	}
 	if len(offline.urls) != 1 || !strings.HasPrefix(offline.urls[0], "magnet:") {
 		t.Fatalf("urls = %#v", offline.urls)
+	}
+}
+
+type uncertainOfflineError struct{}
+
+func (uncertainOfflineError) Error() string             { return "submission uncertain" }
+func (uncertainOfflineError) SubmissionUncertain() bool { return true }
+
+func TestMikanTransferPreservesUncertainSubmission(t *testing.T) {
+	offline := &memoryOffline{err: uncertainOfflineError{}}
+	source := NewMikan("https://mikanani.me", "", time.Second, offline)
+	reference, _ := json.Marshal(mikanReference{Title: "Van Helsing", URL: "magnet:?xt=urn:btih:abc"})
+	_, err := source.StartTransfer(context.Background(), search.TransferRequest{
+		Reference: string(reference), DestinationID: "folder-1", IdempotencyKey: "job-1",
+	})
+	var failure search.Failure
+	if !errors.As(err, &failure) || failure.Code != "source_submission_unknown" || !failure.Retryable {
+		t.Fatalf("failure = %#v", err)
 	}
 }
