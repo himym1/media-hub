@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.8.0
+  version: 0.9.0
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -1031,72 +1031,6 @@ paths:
               schema: { $ref: '#/components/schemas/SubscriptionListResponse' }
         '400': { $ref: '#/components/responses/ProblemResponse' }
         '404': { $ref: '#/components/responses/ProblemResponse' }
-  /migration/subx/readiness:
-    get:
-      operationId: getSubXMigrationReadiness
-      summary: Report whether SubX can be safely stopped
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      responses:
-        '200':
-          description: Migration readiness and remaining delegated capabilities
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SubXMigrationReadiness' }
-        '401': { $ref: '#/components/responses/ProblemResponse' }
-  /migration/subx/subscriptions:
-    post:
-      operationId: importSubXSubscriptions
-      summary: Atomically import recognizable SubX content as native subscriptions
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
-      responses:
-        '200':
-          description: Migration result
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SubXMigrationResult' }
-        '401': { $ref: '#/components/responses/ProblemResponse' }
-        '422': { $ref: '#/components/responses/ProblemResponse' }
-        '503': { $ref: '#/components/responses/ProblemResponse' }
-  /migration/subx/source-commands:
-    get:
-      operationId: listBlockingSubXSourceCommands
-      summary: List only source commands that block SubX shutdown
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      responses:
-        '200':
-          description: Blocking migration-source commands
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [commands]
-                properties: { commands: { type: array, items: { $ref: '#/components/schemas/MigrationSourceCommand' } } }
-        '401': { $ref: '#/components/responses/ProblemResponse' }
-  /migration/subx/source-commands/{id}/retry:
-    post:
-      operationId: retryBlockingSubXSourceCommand
-      summary: Explicitly retry an uncertain migration-source command
-      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
-      parameters:
-        - { name: id, in: path, required: true, schema: { type: string } }
-        - { $ref: '#/components/parameters/CSRFToken' }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [confirmation]
-              properties: { confirmation: { type: string, description: Must equal id } }
-      responses:
-        '202': { description: Source command queued, content: { application/json: { schema: { $ref: '#/components/schemas/MigrationSourceCommand' } } } }
-        '400': { $ref: '#/components/responses/ProblemResponse' }
-        '401': { $ref: '#/components/responses/ProblemResponse' }
-        '403': { $ref: '#/components/responses/ProblemResponse' }
-        '404': { $ref: '#/components/responses/ProblemResponse' }
-        '409': { $ref: '#/components/responses/ProblemResponse' }
-        '503': { $ref: '#/components/responses/ProblemResponse' }
   /notifications:
     get:
       operationId: listTransferNotifications
@@ -1327,7 +1261,7 @@ components:
         token: { $ref: '#/components/schemas/SecretUpdate' }
     ProviderSettings:
       type: object
-      required: [qmediaSync, emby, drive115, tmdb, subx, workflow, sources]
+      required: [qmediaSync, emby, drive115, tmdb, wecom, workflow, sources]
       properties:
         qmediaSync:
           type: object
@@ -1353,15 +1287,14 @@ components:
           properties:
             baseUrl: { type: string }
             accessToken: { $ref: '#/components/schemas/SecretStatus' }
-        subx:
+        wecom:
           type: object
-          required: [baseUrl, username, password, token, sourceEnabled]
+          required: [baseUrl, corpId, secret, chatId]
           properties:
-            baseUrl: { type: string }
-            username: { type: string }
-            password: { $ref: '#/components/schemas/SecretStatus' }
-            token: { $ref: '#/components/schemas/SecretStatus' }
-            sourceEnabled: { type: boolean }
+            baseUrl: { type: string, maxLength: 2048 }
+            corpId: { type: string, maxLength: 200 }
+            secret: { $ref: '#/components/schemas/SecretStatus' }
+            chatId: { type: string, maxLength: 200 }
         workflow: { $ref: '#/components/schemas/WorkflowSettings' }
         sources:
           type: array
@@ -1396,15 +1329,14 @@ components:
           properties:
             baseUrl: { type: string, maxLength: 2048 }
             accessToken: { $ref: '#/components/schemas/SecretUpdate' }
-        subx:
+        wecom:
           type: object
-          required: [baseUrl, username, password, token, sourceEnabled]
+          required: [baseUrl, corpId, secret, chatId]
           properties:
             baseUrl: { type: string, maxLength: 2048 }
-            username: { type: string, maxLength: 200 }
-            password: { $ref: '#/components/schemas/SecretUpdate' }
-            token: { $ref: '#/components/schemas/SecretUpdate' }
-            sourceEnabled: { type: boolean }
+            corpId: { type: string, maxLength: 200 }
+            secret: { $ref: '#/components/schemas/SecretUpdate' }
+            chatId: { type: string, maxLength: 200 }
         workflow: { $ref: '#/components/schemas/WorkflowSettings' }
         sources:
           type: array
@@ -1951,43 +1883,6 @@ components:
       type: object
       required: [created, skipped]
       properties:
-        created: { type: integer, minimum: 0 }
-        skipped: { type: integer, minimum: 0 }
-    MigrationSourceCommand:
-      type: object
-      required: [id, operationId, state, attempts, retryable, createdAt, updatedAt]
-      properties:
-        id: { type: string }
-        operationId: { type: string }
-        state: { type: string, enum: [queued, submitting, needs_attention] }
-        attempts: { type: integer, minimum: 0 }
-        errorCode: { type: string }
-        errorMessage: { type: string }
-        retryable: { type: boolean }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-    SubXMigrationReadiness:
-      type: object
-      required: [canStopSubX, subxConfigured, fallbackSourceEnabled, coreConfigurationReady, nativeSourceCount, parallelValidationCompleted, nativeSubscriptions, fallbackSubscriptions, delegatedOperations, delegatedGroups, blockers]
-      properties:
-        canStopSubX: { type: boolean }
-        subxConfigured: { type: boolean }
-        fallbackSourceEnabled: { type: boolean }
-        coreConfigurationReady: { type: boolean }
-        nativeSourceCount: { type: integer, minimum: 0 }
-        parallelValidationCompleted: { type: boolean }
-        nativeSubscriptions: { type: integer, minimum: 0 }
-        fallbackSubscriptions: { type: integer, minimum: 0 }
-        delegatedOperations: { type: integer, minimum: 0 }
-        delegatedGroups: { type: array, items: { type: string } }
-        blockers: { type: array, items: { type: string } }
-    SubXMigrationResult:
-      type: object
-      required: [detected, importable, rejected, created, skipped]
-      properties:
-        detected: { type: integer, minimum: 0 }
-        importable: { type: integer, minimum: 0 }
-        rejected: { type: integer, minimum: 0 }
         created: { type: integer, minimum: 0 }
         skipped: { type: integer, minimum: 0 }
     TransferNotification:

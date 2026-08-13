@@ -18,8 +18,6 @@ import (
 	"media-hub/backend/internal/settings"
 	"media-hub/backend/internal/statistics"
 	"media-hub/backend/internal/subscription"
-	"media-hub/backend/internal/subx"
-	"media-hub/backend/internal/subxmigration"
 	"media-hub/backend/internal/tmdb"
 	"media-hub/backend/internal/workflow"
 )
@@ -124,13 +122,6 @@ type SubscriptionManager interface {
 	Runs(context.Context, int64, string, int) ([]subscription.Run, error)
 }
 
-type MigrationManager interface {
-	Readiness(context.Context, int64) (subxmigration.Readiness, error)
-	ImportSubscriptions(context.Context, int64) (subxmigration.ImportResult, error)
-	BlockingCommands(context.Context, int64) ([]subx.CommandJob, error)
-	RetryBlockingCommand(context.Context, int64, string, string) (subx.CommandJob, error)
-}
-
 type ProviderSettings interface {
 	Get(context.Context, int64) (settings.View, error)
 	Update(context.Context, int64, settings.Update) (settings.View, error)
@@ -151,7 +142,6 @@ type Dependencies struct {
 	Archive          ArchiveService
 	Workflow         TransferWorkflow
 	Subscriptions    SubscriptionManager
-	Migration        MigrationManager
 	Settings         ProviderSettings
 	SecureCookies    bool
 	AndroidReleases  AndroidReleaseProvider
@@ -229,10 +219,6 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("PATCH /api/v1/subscriptions/{id}/enabled", h.protected(h.setSubscriptionEnabled))
 	mux.Handle("POST /api/v1/subscriptions/{id}/runs", h.protected(h.runSubscription))
 	mux.Handle("GET /api/v1/subscriptions/{id}/runs", h.protected(h.listSubscriptionRuns))
-	mux.Handle("GET /api/v1/migration/subx/readiness", h.protected(h.getSubXMigrationReadiness))
-	mux.Handle("POST /api/v1/migration/subx/subscriptions", h.protected(h.importSubXSubscriptions))
-	mux.Handle("GET /api/v1/migration/subx/source-commands", h.protected(h.listSubXMigrationCommands))
-	mux.Handle("POST /api/v1/migration/subx/source-commands/{id}/retry", h.protected(h.retrySubXMigrationCommand))
 	mux.Handle("GET /api/v1/transfers", h.protected(h.listTransfers))
 	mux.Handle("POST /api/v1/transfers", h.protected(h.createTransfer))
 	mux.Handle("GET /api/v1/transfers/{id}", h.protected(h.getTransfer))

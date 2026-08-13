@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"media-hub/backend/internal/adapter"
 	"media-hub/backend/internal/androidrelease"
 	"media-hub/backend/internal/archive"
 	"media-hub/backend/internal/auth"
@@ -28,8 +29,6 @@ import (
 	"media-hub/backend/internal/statistics"
 	"media-hub/backend/internal/store"
 	"media-hub/backend/internal/subscription"
-	"media-hub/backend/internal/subx"
-	"media-hub/backend/internal/subxmigration"
 	"media-hub/backend/internal/tmdb"
 	"media-hub/backend/internal/webui"
 	"media-hub/backend/internal/wecom"
@@ -124,8 +123,6 @@ func run(logger *slog.Logger) error {
 		configuration.WeCom.ChatID,
 		configuration.ProbeTimeout,
 	)
-	subxClient := subx.NewClient(configuration.SubX, configuration.ProbeTimeout)
-	subxService := subx.NewService(dataStore, subxClient, securePayloadCodec)
 	searchService := search.NewServiceWithIdentity(tmdbClient)
 	workflowService := workflow.NewService(
 		dataStore, searchService, selectionCodec, qmsClient, embyClient, wecomClient, configuration.Workflow,
@@ -136,13 +133,10 @@ func run(logger *slog.Logger) error {
 			qmsClient.Configure(value.QMediaSync.BaseURL, value.QMediaSync.APIKey)
 			embyClient.Configure(value.Emby.BaseURL, value.Emby.APIKey, value.Emby.UserID)
 			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
+			wecomClient.Configure(value.WeCom.BaseURL, value.WeCom.CorpID, value.WeCom.Secret, value.WeCom.ChatID)
 			drive115AuthService.ConfigureClientID(value.Drive115.ClientID)
-			subxClient.Configure(value.SubX)
 			workflowService.Configure(value.Workflow)
-			runtimeSources := searchSourcesFromSettings(value, configuration.ProbeTimeout, configuration.FixtureMode)
-			if subxClient.Configured() && value.SubX.SourceEnabled {
-				runtimeSources = append(runtimeSources, subx.NewSource(subxClient, subxService))
-			}
+			runtimeSources := searchSourcesFromSettings(value, configuration.ProbeTimeout, configuration.FixtureMode, drive115AuthService)
 			searchService.Configure(tmdbClient, runtimeSources...)
 		},
 	)
@@ -155,19 +149,12 @@ func run(logger *slog.Logger) error {
 	}
 	subscriptionService := subscription.NewService(dataStore, searchService, workflowService, embyClient)
 	overview := integration.NewOverviewService(
-		subxClient,
 		searchService,
 		drive115AuthService,
 		tmdbClient,
 		wecomClient,
 		qmsClient,
 		embyClient,
-	)
-	migrationService := subxmigration.NewService(
-		subxService, subscriptionService, configuration.SubX.SourceEnabled,
-		subxmigration.ReadinessRequirements{
-			ParallelValidationCompleted: configuration.SubXParallelValidated, Health: overview, Configuration: settingsService,
-		},
 	)
 	statisticsService := statistics.NewService(dataStore)
 	localUploadService := localupload.NewService(dataStore, securePayloadCodec, configuration.LocalUploadRoots)
@@ -198,12 +185,6 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("start subscription worker: %w", err)
 	}
 	subscriptionWorkerStarted := true
-	subxWorkerStarted := securePayloadCodec != nil
-	if subxWorkerStarted {
-		if err := subxService.Start(runtimeContext); err != nil {
-			return fmt.Errorf("start SubX migration-source worker: %w", err)
-		}
-	}
 	workerStarted := false
 	if selectionCodec != nil || wecomClient.Configured() {
 		if err := workflowService.Start(runtimeContext); err != nil {
@@ -217,7 +198,7 @@ func run(logger *slog.Logger) error {
 		Handler: httpapi.NewRouter(version, httpapi.Dependencies{
 			Auth: authService, Overview: overview, Search: searchService, Discovery: tmdbClient,
 			QMediaSync: qmsClient, Emby: embyClient, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
-			Workflow: workflowService, Subscriptions: subscriptionService, Migration: migrationService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService,
+			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService,
 			Settings:      settingsService,
 			SecureCookies: configuration.SecureCookies,
 			Web:           webui.Handler(),
@@ -237,13 +218,6 @@ func run(logger *slog.Logger) error {
 	select {
 	case err := <-serverErrors:
 		stop()
-		if subxWorkerStarted {
-			waitContext, cancelWait := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancelWait()
-			if waitErr := subxService.Wait(waitContext); waitErr != nil {
-				return fmt.Errorf("stop SubX compatibility worker: %w", waitErr)
-			}
-		}
 		if driveCommandWorkerStarted {
 			if waitErr := <-driveCommandDone; waitErr != nil {
 				return fmt.Errorf("stop 115 command worker: %w", waitErr)
@@ -282,11 +256,6 @@ func run(logger *slog.Logger) error {
 		defer cancelShutdown()
 		if err := server.Shutdown(shutdownContext); err != nil {
 			return fmt.Errorf("shutdown server: %w", err)
-		}
-		if subxWorkerStarted {
-			if err := subxService.Wait(shutdownContext); err != nil {
-				return fmt.Errorf("stop SubX compatibility worker: %w", err)
-			}
 		}
 		if driveCommandWorkerStarted {
 			select {
@@ -342,18 +311,15 @@ func integrationRecords(configurations []config.Integration) []store.Integration
 	return records
 }
 
-func searchSourcesFromSettings(value settings.Values, timeout time.Duration, fixtureMode bool) []search.Source {
+func searchSourcesFromSettings(value settings.Values, timeout time.Duration, fixtureMode bool, offline adapter.Offline) []search.Source {
 	if fixtureMode {
 		return search.FixtureSources()
 	}
 	sources := make([]search.Source, 0, len(value.Sources))
 	for _, sourceConfiguration := range value.Sources {
-		if sourceConfiguration.BaseURL == "" {
-			continue
+		if source := adapter.New(sourceConfiguration, timeout, offline); source != nil {
+			sources = append(sources, source)
 		}
-		sources = append(sources, search.NewHTTPSource(
-			sourceConfiguration.ID, sourceConfiguration.Label, sourceConfiguration.BaseURL, sourceConfiguration.Token, timeout,
-		))
 	}
 	return sources
 }

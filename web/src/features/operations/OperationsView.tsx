@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Archive, ArrowRightLeft, CircleAlert, FolderOpen, HardDrive, RefreshCw, Upload } from 'lucide-react'
+import { Archive, CircleAlert, FolderOpen, HardDrive, RefreshCw, Upload } from 'lucide-react'
 import {
   confirmArchivePlan,
   createArchivePlan,
@@ -14,11 +14,7 @@ import {
   listLocalUploadRoots,
   listLocalUploads,
   type Drive115Command,
-  importSubXSubscriptions,
-  listSubXMigrationCommands,
-  loadSubXMigrationReadiness,
   previewArchive,
-  retrySubXMigrationCommand,
   retryArchivePlan,
   type ArchiveStep,
   retryDrive115Command,
@@ -31,19 +27,6 @@ import './OperationsView.css'
 
 
 export function OperationsView() {
-  const queryClient = useQueryClient()
-  const migration = useQuery({ queryKey: ['subx-migration-readiness'], queryFn: loadSubXMigrationReadiness })
-  const migrationCommands = useQuery({ queryKey: ['subx-migration-commands'], queryFn: listSubXMigrationCommands, refetchInterval: 3_000 })
-  const retryMigrationCommand = useMutation({ mutationFn: retrySubXMigrationCommand, onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['subx-migration-commands'] }); void queryClient.invalidateQueries({ queryKey: ['subx-migration-readiness'] }) } })
-  const migrateSubscriptions = useMutation({
-    mutationFn: importSubXSubscriptions,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
-      void queryClient.invalidateQueries({ queryKey: ['subx-migration-readiness'] })
-    },
-  })
-
-
   return (
     <section className="operations-view" aria-label="运营工具">
       <header className="view-heading">
@@ -51,25 +34,8 @@ export function OperationsView() {
           <span className="eyebrow">OPERATIONS</span>
           <h2>运营工具</h2>
         </div>
-        <span className={`service-state ${migration.data?.subxConfigured ? 'healthy' : 'unconfigured'}`}>
-          {migration.data?.subxConfigured ? '迁移源可用' : '原生模式'}
-        </span>
+        <span className="service-state unconfigured">原生模式</span>
       </header>
-
-      {migration.data && (
-        <section className="migration-status" aria-label="SubX 迁移状态">
-          <div>
-            <span className={`service-state ${migration.data.canStopSubX ? 'healthy' : 'unconfigured'}`}>{migration.data.canStopSubX ? '已满足停用门槛' : '不可停用'}</span>
-            <strong>{migration.data.nativeSubscriptions} 个原生订阅 · {migration.data.fallbackSubscriptions} 个依赖回退源 · {migration.data.nativeSourceCount} 个原生来源 · {migration.data.delegatedOperations} 个委托操作</strong>
-            <small>核心配置 {migration.data.coreConfigurationReady ? '完整' : '未完成'} · 并行验收 {migration.data.parallelValidationCompleted ? '已确认' : '未确认'}</small>
-            <small>{migration.data.blockers[0] ?? '所有替代门槛和实时健康检查均已通过'}</small>
-          </div>
-          <button className="primary-button" disabled={!migration.data.subxConfigured || migrateSubscriptions.isPending} onClick={() => migrateSubscriptions.mutate()} type="button"><ArrowRightLeft size={16} />{migrateSubscriptions.isPending ? '迁移中' : '迁移订阅'}</button>
-          {migrationCommands.data?.length ? <div className="migration-command-list">{migrationCommands.data.map((command) => <div key={command.id}><span><strong>{command.state}</strong><small>{command.operationId} · {command.id}</small>{command.errorMessage ? <small>{command.errorMessage}</small> : null}</span>{command.state === 'needs_attention' ? <button className="danger-button" disabled={!migration.data.fallbackSourceEnabled || retryMigrationCommand.isPending} onClick={() => retryMigrationCommand.mutate(command.id)} type="button">核对后重试</button> : null}</div>)}</div> : null}
-          {migrateSubscriptions.data ? <small className="migration-result">新增 {migrateSubscriptions.data.created} · 已有 {migrateSubscriptions.data.skipped} · 无法识别 {migrateSubscriptions.data.rejected}</small> : null}
-          {migrateSubscriptions.isError ? <InlineError message={migrateSubscriptions.error instanceof Error ? migrateSubscriptions.error.message : '订阅迁移失败'} /> : null}
-        </section>
-      )}
 
       <Drive115Workspace />
       <LocalUploadWorkspace />

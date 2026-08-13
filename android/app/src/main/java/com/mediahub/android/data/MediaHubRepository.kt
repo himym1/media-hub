@@ -17,7 +17,6 @@ import com.mediahub.android.core.network.MediaHubApi
 import com.mediahub.android.core.network.LocalUploadEntry
 import com.mediahub.android.core.network.LocalUploadJob
 import com.mediahub.android.core.network.LocalUploadRoot
-import com.mediahub.android.core.network.MigrationSourceCommand
 import com.mediahub.android.core.network.MediaLibrary
 import com.mediahub.android.core.network.MediaSubscription
 import com.mediahub.android.core.network.OperationalStatistics
@@ -26,8 +25,6 @@ import com.mediahub.android.core.network.ProviderSettingsUpdate
 import com.mediahub.android.core.network.SearchResponse
 import com.mediahub.android.core.network.SubscriptionInput
 import com.mediahub.android.core.network.SubscriptionRun
-import com.mediahub.android.core.network.SubXMigrationReadiness
-import com.mediahub.android.core.network.SubXMigrationResult
 import com.mediahub.android.core.network.TransferJob
 import com.mediahub.android.core.network.TransferNotification
 import java.util.UUID
@@ -163,13 +160,6 @@ class MediaHubRepository(
 
     suspend fun providerSettings(): ProviderSettings = authenticated(api::providerSettings)
     suspend fun updateProviderSettings(input: ProviderSettingsUpdate): ProviderSettings = authenticated { api.updateProviderSettings(it, input) }
-
-
-    suspend fun subXMigrationReadiness(): SubXMigrationReadiness = authenticated(api::subXMigrationReadiness)
-    suspend fun subXMigrationCommands(): List<MigrationSourceCommand> = authenticated(api::subXMigrationCommands)
-    suspend fun retrySubXMigrationCommand(command: MigrationSourceCommand): MigrationSourceCommand = authenticated { api.retrySubXMigrationCommand(it, command) }
-
-    suspend fun importSubXSubscriptions(): SubXMigrationResult = authenticated(api::importSubXSubscriptions)
 
     private suspend fun <T> authenticated(block: suspend (String) -> T): T {
         val token = sessionStore.load() ?: throw ApiException(401, "authentication_required", "需要登录")

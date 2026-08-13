@@ -1,6 +1,6 @@
 # Development Roadmap
 
-Status: API `0.8.0-dev` contains encrypted, runtime-applied provider settings for TMDB, 115, QMediaSync, Emby, workflow targets, the eight source-adapter IDs, and a guarded SubX migration fallback across Web and Android. QMediaSync, Emby, workflow targets, and TMDB have been configured and health-checked in production; 115 Open API authorization, deployable native source adapters, and full side-by-side acceptance remain incomplete.
+Status: API `0.8.0-dev` removed the SubX compatibility layer. Provider settings cover TMDB, 115, QMediaSync, Emby, WeCom, workflow targets, and eight native source IDs. Mikan has a built-in adapter; the other seven still require a contract-compliant adapter URL.
 
 ## Phase 0: Foundation
 

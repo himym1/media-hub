@@ -17,7 +17,7 @@ export type ProviderSettings = {
   emby: { baseUrl: string; apiKey: SecretStatus; userId: string }
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretStatus }
-  subx: { baseUrl: string; username: string; password: SecretStatus; token: SecretStatus; sourceEnabled: boolean }
+  wecom: { baseUrl: string; corpId: string; secret: SecretStatus; chatId: string }
   workflow: { qMediaSyncAccountId: number; movie: WorkflowTargetSettings; series: WorkflowTargetSettings }
   sources: { id: string; label: string; baseUrl: string; token: SecretStatus }[]
 }
@@ -26,7 +26,7 @@ export type ProviderSettingsUpdate = {
   emby: { baseUrl: string; apiKey: SecretUpdate; userId: string }
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretUpdate }
-  subx: { baseUrl: string; username: string; password: SecretUpdate; token: SecretUpdate; sourceEnabled: boolean }
+  wecom: { baseUrl: string; corpId: string; secret: SecretUpdate; chatId: string }
   workflow: ProviderSettings['workflow']
   sources: { id: string; baseUrl: string; token: SecretUpdate }[]
 }
@@ -601,31 +601,6 @@ function readCookie(name: string) {
 }
 
 
-export type SubXMigrationReadiness = {
-  canStopSubX: boolean
-  subxConfigured: boolean
-  fallbackSourceEnabled: boolean
-  coreConfigurationReady: boolean
-  nativeSourceCount: number
-  parallelValidationCompleted: boolean
-  nativeSubscriptions: number
-  fallbackSubscriptions: number
-  delegatedOperations: number
-  delegatedGroups: string[]
-  blockers: string[]
-}
-
-export type SubXMigrationResult = {
-  detected: number
-  importable: number
-  rejected: number
-  created: number
-  skipped: number
-}
-
-export type MigrationSourceCommand = { id: string; operationId: string; state: 'queued' | 'submitting' | 'needs_attention'; attempts: number; errorCode?: string; errorMessage?: string; retryable: boolean; createdAt: string; updatedAt: string }
-
-
 export type SubscriptionBackup = {
   version: 1
   exportedAt: string
@@ -652,18 +627,4 @@ export function setSubscriptionsEnabled(ids: string[], enabled: boolean) {
   })
 }
 
-export async function loadSubXMigrationReadiness() {
-  return requestJSON<SubXMigrationReadiness>('/api/v1/migration/subx/readiness')
-}
-export async function listSubXMigrationCommands() { return requestJSON<{ commands: MigrationSourceCommand[] }>('/api/v1/migration/subx/source-commands').then((value) => value.commands) }
-export async function retrySubXMigrationCommand(id: string) {
-  return requestJSON<MigrationSourceCommand>(`/api/v1/migration/subx/source-commands/${encodeURIComponent(id)}/retry`, { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ confirmation: id }) })
-}
 
-
-export async function importSubXSubscriptions() {
-  return requestJSON<SubXMigrationResult>('/api/v1/migration/subx/subscriptions', {
-    method: 'POST',
-    headers: writeHeaders(false),
-  })
-}

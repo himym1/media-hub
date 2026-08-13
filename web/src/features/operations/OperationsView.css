@@ -232,24 +232,6 @@
   }
 }
 
-.migration-status {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px 18px;
-  align-items: center;
-  padding: 14px 0;
-  border-bottom: 1px solid #2a2d30;
-}
-.migration-status > div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; }
-.migration-status strong { color: #f2f1eb; font-size: 13px; }
-.migration-status small { grid-column: 1 / -1; color: #858b88; }
-.migration-status .migration-result { grid-column: 1 / -1; color: #d7f36a; }
-
-@media (max-width: 680px) {
-  .migration-status { grid-template-columns: 1fr; }
-  .migration-status .primary-button { width: 100%; }
-}
-
 .drive-workspace { margin: 20px 0 28px; padding: 18px 0; border-top: 1px solid #2a2d30; border-bottom: 1px solid #2a2d30; }
 .drive-workspace .section-heading h3 { display: flex; align-items: center; gap: 8px; }
 .drive-workspace > .form-field { max-width: 360px; margin: 12px 0; }

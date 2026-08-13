@@ -10,9 +10,6 @@ import com.mediahub.android.core.network.Drive115File
 import com.mediahub.android.core.network.LocalUploadEntry
 import com.mediahub.android.core.network.LocalUploadJob
 import com.mediahub.android.core.network.LocalUploadRoot
-import com.mediahub.android.core.network.MigrationSourceCommand
-import com.mediahub.android.core.network.SubXMigrationReadiness
-import com.mediahub.android.core.network.SubXMigrationResult
 import com.mediahub.android.data.MediaHubRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -23,11 +20,6 @@ import kotlinx.coroutines.launch
 
 data class OperationsUiState(
     val loading: Boolean = true,
-    val configured: Boolean = false,
-    val migration: SubXMigrationReadiness? = null,
-    val migrationResult: SubXMigrationResult? = null,
-    val migrationCommands: List<MigrationSourceCommand> = emptyList(),
-    val migrating: Boolean = false,
     val driveFiles: List<Drive115File> = emptyList(),
     val driveCommands: List<Drive115Command> = emptyList(),
     val driveParentId: String = "0",
@@ -68,8 +60,6 @@ class OperationsViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(loading = true, error = null)
             try {
-                val migration = repository.subXMigrationReadiness()
-                val migrationCommands = runCatching { repository.subXMigrationCommands() }.getOrDefault(emptyList())
                 val driveFiles = runCatching { repository.drive115Files(_uiState.value.driveParentId) }.getOrDefault(emptyList())
                 val driveCommands = runCatching { repository.drive115Commands() }.getOrDefault(emptyList())
                 val localRoots = runCatching { repository.localUploadRoots() }.getOrDefault(emptyList())
@@ -79,8 +69,6 @@ class OperationsViewModel(
                 val archivePlans = runCatching { repository.archivePlans() }.getOrDefault(emptyList())
                 _uiState.value = _uiState.value.copy(
                     loading = false,
-                    configured = migration.subXConfigured,
-                    migration = migration, migrationCommands = migrationCommands,
                     driveFiles = driveFiles,
                     driveCommands = driveCommands,
                     localRoots = localRoots, localRootId = localRootId, localEntries = localEntries, localUploads = localUploads, archivePlans = archivePlans,
@@ -225,48 +213,9 @@ class OperationsViewModel(
     }
 
 
-    fun retryMigrationCommand(command: MigrationSourceCommand) {
-        viewModelScope.launch {
-            try {
-                repository.retrySubXMigrationCommand(command)
-                _uiState.value = _uiState.value.copy(
-                    migrationCommands = repository.subXMigrationCommands(),
-                    migration = repository.subXMigrationReadiness(),
-                    error = null,
-                )
-                startPollingIfNeeded()
-            } catch (error: ApiException) {
-				_uiState.value = _uiState.value.copy(error = error.message ?: "无法重试迁移来源命令")
-			}
-        }
-    }
-
-    fun migrateSubscriptions() {
-        if (_uiState.value.migrating || _uiState.value.migration?.subXConfigured != true) return
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(migrating = true, error = null)
-            try {
-                val result = repository.importSubXSubscriptions()
-                _uiState.value = _uiState.value.copy(
-                    migrating = false,
-                    migrationResult = result,
-                    migration = repository.subXMigrationReadiness(),
-                )
-            } catch (error: ApiException) {
-                _uiState.value = _uiState.value.copy(
-                    migrating = false,
-                    error = error.message ?: "订阅迁移失败",
-                )
-            } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(migrating = false, error = "订阅迁移失败")
-            }
-        }
-    }
-
     private fun startPollingIfNeeded() {
         val state = _uiState.value
-        val active = state.migrationCommands.any { it.state == "queued" || it.state == "submitting" } ||
-            state.driveCommands.any { it.state == "queued" || it.state == "submitting" } ||
+        val active = state.driveCommands.any { it.state == "queued" || it.state == "submitting" } ||
             state.localUploads.any { it.state in setOf("queued", "hashing", "submitting_init", "uploading") } ||
             state.archivePlans.any { it.state == "queued" || it.state == "running" }
         if (!active || pollingJob?.isActive == true) return
@@ -276,11 +225,9 @@ class OperationsViewModel(
                 val driveCommands = runCatching { repository.drive115Commands() }.getOrDefault(_uiState.value.driveCommands)
                 val localUploads = runCatching { repository.localUploads() }.getOrDefault(_uiState.value.localUploads)
                 val archivePlans = runCatching { repository.archivePlans() }.getOrDefault(_uiState.value.archivePlans)
-                val migrationCommands = runCatching { repository.subXMigrationCommands() }.getOrDefault(_uiState.value.migrationCommands)
-                _uiState.value = _uiState.value.copy(driveCommands = driveCommands, localUploads = localUploads, archivePlans = archivePlans, migrationCommands = migrationCommands)
+                _uiState.value = _uiState.value.copy(driveCommands = driveCommands, localUploads = localUploads, archivePlans = archivePlans)
                 if (driveCommands.none { it.state == "queued" || it.state == "submitting" } &&
                     localUploads.none { it.state in setOf("queued", "hashing", "submitting_init", "uploading") } &&
-                    migrationCommands.none { it.state == "queued" || it.state == "submitting" } &&
                     archivePlans.none { it.state == "queued" || it.state == "running" }) break
             }
         }

@@ -29,7 +29,7 @@ Transfer jobs and append-only events are persisted before external side effects.
 
 Web and Android expose the same search, transfer status, event history, explicit retry, provider status, and Emby library semantics. Web uses an HttpOnly session cookie plus CSRF protection; Android uses a revocable bearer session stored through Android Keystore.
 
-Native subscriptions persist movie, series, season, and episode progress with source selection, release preferences, durable scheduling, duplicate suppression, manual runs, batch pause/resume, and atomic backup import/export. Native 115 operations add encrypted PKCE authorization, bounded browsing, durable file commands, symlink-rejecting local uploads, and review-first archive plans across Web and Android. SubX credentials are retained only for read-only backup migration and the explicitly enabled fallback source; the compatibility catalog is no longer advertised to clients.
+Native subscriptions persist movie, series, season, and episode progress with source selection, release preferences, durable scheduling, duplicate suppression, manual runs, batch pause/resume, and atomic backup import/export. Native 115 operations add encrypted PKCE authorization, bounded browsing, durable file commands, symlink-rejecting local uploads, and review-first archive plans across Web and Android. The SubX compatibility layer has been removed. Native adapters are built-in Mikan plus other sources through the HTTP adapter contract.
 
 TMDB trends and recommendations are native. 115 supports encrypted PKCE device authorization with automatic refresh plus user-scoped directory browsing and durable file commands. Create-folder, move, rename, and delete requests are persisted with encrypted parameters before provider submission; delete and uncertain retries require explicit command-ID confirmation.
 
@@ -85,13 +85,6 @@ MEDIA_HUB_SOURCE_MIKAN_TOKEN=<adapter-token>
 MEDIA_HUB_SOURCE_SIDHUB_URL=<adapter-base-url>
 MEDIA_HUB_SOURCE_SIDHUB_TOKEN=<adapter-token>
 
-MEDIA_HUB_SUBX_URL=<subx-base-url>
-MEDIA_HUB_SUBX_TOKEN=<static-token>
-MEDIA_HUB_SUBX_USERNAME=
-MEDIA_HUB_SUBX_PASSWORD=
-MEDIA_HUB_SUBX_SOURCE_ENABLED=false
-MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED=false
-
 MEDIA_HUB_WECOM_CORP_ID=<enterprise-id>
 MEDIA_HUB_WECOM_SECRET=<application-secret>
 MEDIA_HUB_WECOM_CHAT_ID=<application-created-chat-id>
@@ -100,7 +93,7 @@ MEDIA_HUB_WECOM_URL=https://qyapi.weixin.qq.com
 
 Integration URLs must be absolute HTTP(S) URLs without embedded credentials, query parameters, or fragments. When a TMDB token is set without `MEDIA_HUB_TMDB_URL`, the official API URL is used.
 
-Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). The repository contains the adapter client and contract, not deployable implementations of the eight source services. SubX credentials are used only for authenticated subscription-backup migration and the optional fallback source. Fallback URL, credentials, and activation can be managed through encrypted runtime settings; environment variables remain a startup baseline. Enabling fallback permits search and transfer through SubX's configured 115 destination and means SubX must remain running. Explicitly fallback-bound subscriptions and unresolved or retryable SubX commands remain shutdown blockers. `MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED` defaults to `false` and must be enabled only after the real side-by-side acceptance run has verified search, transfer, QMediaSync, Emby playback, subscriptions, and recovery. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
+Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). Mikan is a built-in adapter and can run without a custom address. Other sources use the HTTP adapter contract; the repository contains the client and contract, not deployable implementations of those source services. The SubX compatibility layer has been removed. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
 
 ## Local Verification
 

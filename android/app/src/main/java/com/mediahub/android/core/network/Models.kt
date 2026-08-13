@@ -25,19 +25,17 @@ data class WorkflowSettings(
     val series: WorkflowTargetSettings,
  )
 data class ProviderSourceSettings(val id: String, val label: String, val baseUrl: String, val token: SecretStatus)
-data class SubXSettings(
+data class WeComSettings(
     val baseUrl: String,
-    val username: String,
-    val password: SecretStatus,
-    val token: SecretStatus,
-    val sourceEnabled: Boolean,
+    val corpId: String,
+    val secret: SecretStatus,
+    val chatId: String,
  )
-data class SubXSettingsUpdate(
+data class WeComSettingsUpdate(
     val baseUrl: String,
-    val username: String,
-    val password: SecretUpdate = SecretUpdate(),
-    val token: SecretUpdate = SecretUpdate(),
-    val sourceEnabled: Boolean,
+    val corpId: String,
+    val secret: SecretUpdate = SecretUpdate(),
+    val chatId: String,
  )
 data class ProviderSettings(
     val qmediaSyncBaseUrl: String,
@@ -48,7 +46,7 @@ data class ProviderSettings(
     val drive115ClientId: String,
     val tmdbBaseUrl: String,
     val tmdbAccessToken: SecretStatus,
-    val subx: SubXSettings,
+    val wecom: WeComSettings,
     val workflow: WorkflowSettings,
     val sources: List<ProviderSourceSettings>,
  )
@@ -62,7 +60,7 @@ data class ProviderSettingsUpdate(
     val drive115ClientId: String,
     val tmdbBaseUrl: String,
     val tmdbAccessToken: SecretUpdate,
-    val subx: SubXSettingsUpdate,
+    val wecom: WeComSettingsUpdate,
     val workflow: WorkflowSettings,
     val sources: List<ProviderSourceSettingsUpdate>,
  )
@@ -296,31 +294,6 @@ class ApiException(
     val code: String,
     message: String,
 ) : Exception(message)
-
-
-data class SubXMigrationReadiness(
-    val canStopSubX: Boolean,
-    val subXConfigured: Boolean,
-    val fallbackSourceEnabled: Boolean,
-    val coreConfigurationReady: Boolean,
-    val nativeSourceCount: Int,
-    val parallelValidationCompleted: Boolean,
-    val nativeSubscriptions: Int,
-    val fallbackSubscriptions: Int,
-    val delegatedOperations: Int,
-    val delegatedGroups: List<String>,
-    val blockers: List<String>,
-)
-
-data class SubXMigrationResult(
-    val detected: Int,
-    val importable: Int,
-    val rejected: Int,
-    val created: Int,
-    val skipped: Int,
-)
-
-data class MigrationSourceCommand(val id: String, val operationId: String, val state: String, val attempts: Int, val errorMessage: String, val createdAt: String)
 
 data class ArchiveSuggestion(val fileId: String, val currentName: String, val suggestedName: String, val kind: String, val confidence: String)
 data class ArchiveStep(val operation: String, val fileId: String, val name: String = "", val targetParentId: String = "")

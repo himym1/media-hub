@@ -46,7 +46,7 @@ export function SettingsView({ integrations, onRefresh }: SettingsViewProps) {
     mutationFn: updateProviderSettings,
     onSuccess: async (value) => {
       queryClient.setQueryData(['provider-settings'], value)
-      await Promise.all([qms.refetch(), drive.refetch(), emby.refetch(), queryClient.invalidateQueries({ queryKey: ['system-overview'] }), queryClient.invalidateQueries({ queryKey: ['subx-migration-readiness'] })])
+      await Promise.all([qms.refetch(), drive.refetch(), emby.refetch(), queryClient.invalidateQueries({ queryKey: ['system-overview'] })])
       onRefresh()
     },
   })

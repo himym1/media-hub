@@ -27,7 +27,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.LogOut
-import com.composables.icons.lucide.ArrowRightLeft
 import com.composables.icons.lucide.FolderOpen
 import com.composables.icons.lucide.HardDrive
 import com.composables.icons.lucide.Lucide
@@ -70,8 +69,6 @@ internal fun OperationsRoute(
         onCreateArchivePlan = viewModel::createArchivePlan,
         onConfirmArchive = viewModel::confirmArchive,
         onRetryArchive = viewModel::retryArchive,
-        onMigrateSubscriptions = viewModel::migrateSubscriptions,
-        onRetryMigrationCommand = viewModel::retryMigrationCommand,
         onLogout = onLogout,
     )
 }
@@ -101,8 +98,6 @@ private fun OperationsScreen(
     onCreateArchivePlan: () -> Unit,
     onConfirmArchive: (com.mediahub.android.core.network.ArchivePlan) -> Unit,
     onRetryArchive: (com.mediahub.android.core.network.ArchivePlan) -> Unit,
-    onMigrateSubscriptions: () -> Unit,
-    onRetryMigrationCommand: (com.mediahub.android.core.network.MigrationSourceCommand) -> Unit,
     onLogout: () -> Unit,
 ) {
     LazyColumn(
@@ -124,8 +119,8 @@ private fun OperationsScreen(
                 Column {
                     MediaHubText(text = "运维", color = MediaHubColors.TextPrimary, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
                     MediaHubText(
-                        text = if (state.configured) "SubX 迁移源可用" else "原生运营模式",
-                        color = if (state.configured) MediaHubColors.Source else MediaHubColors.TextMuted,
+                        text = "原生运营模式",
+                        color = MediaHubColors.TextMuted,
                         fontSize = 11.sp,
                     )
                 }
@@ -141,71 +136,6 @@ private fun OperationsScreen(
         if (state.loading) {
             item { MediaHubText(text = "正在读取运维能力...", color = MediaHubColors.TextMuted, fontSize = 13.sp) }
         } else {
-            state.migration?.let { migration ->
-                item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                MediaHubText(
-                                    text = if (migration.canStopSubX) "已满足 SubX 停用门槛" else "SubX 不可停用",
-                                    color = if (migration.canStopSubX) MediaHubColors.Source else MediaHubColors.Warning,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                MediaHubText(
-                                    text = "${migration.nativeSubscriptions} 个原生订阅 · ${migration.fallbackSubscriptions} 个依赖回退源 · ${migration.nativeSourceCount} 个原生来源 · ${migration.delegatedOperations} 个委托操作",
-                                    color = MediaHubColors.TextSecondary,
-                                    fontSize = 11.sp,
-                                )
-                                MediaHubText(
-                                    text = "核心配置 ${if (migration.coreConfigurationReady) "完整" else "未完成"} · 并行验收 ${if (migration.parallelValidationCompleted) "已确认" else "未确认"}",
-                                    color = MediaHubColors.TextMuted,
-                                    fontSize = 11.sp,
-                                )
-                            }
-                            MediaHubButton(
-                                label = if (state.migrating) "迁移中" else "迁移订阅",
-                                onClick = onMigrateSubscriptions,
-                                enabled = migration.subXConfigured && !state.migrating,
-                                icon = Lucide.ArrowRightLeft,
-                            )
-                        }
-                        migration.blockers.firstOrNull()?.let { blocker ->
-                            MediaHubText(text = blocker, color = MediaHubColors.TextMuted, fontSize = 11.sp)
-                        }
-                        state.migrationCommands.forEach { command ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    MediaHubText(command.state, color = commandStateColor(command.state), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    MediaHubText("${command.operationId} · ${command.id}", color = MediaHubColors.TextMuted, fontSize = 9.sp)
-                                    if (command.errorMessage.isNotBlank()) MediaHubText(command.errorMessage, color = MediaHubColors.Warning, fontSize = 10.sp)
-                                }
-                                if (command.state == "needs_attention") {
-                                    MediaHubButton("核对后重试", onClick = { onRetryMigrationCommand(command) }, enabled = migration.fallbackSourceEnabled)
-                                }
-                            }
-                        }
-                        state.migrationResult?.let { result ->
-                            MediaHubText(
-                                text = "新增 ${result.created} · 已有 ${result.skipped} · 无法识别 ${result.rejected}",
-                                color = MediaHubColors.Source,
-                                fontSize = 11.sp,
-                            )
-                        }
-                    }
-                }
-            }
             item {
                 Drive115Section(
                     state = state,

@@ -240,13 +240,13 @@ private fun ProviderSettings.toUpdate() = ProviderSettingsUpdate(
     drive115ClientId = drive115ClientId,
     tmdbBaseUrl = tmdbBaseUrl,
     tmdbAccessToken = SecretUpdate(),
-    subx = subx.toUpdate(),
+    wecom = wecom.toUpdate(),
     workflow = workflow,
     sources = sources.map { ProviderSourceSettingsUpdate(id = it.id, baseUrl = it.baseUrl) },
 )
 
-private fun com.mediahub.android.core.network.SubXSettings.toUpdate() = com.mediahub.android.core.network.SubXSettingsUpdate(
+private fun com.mediahub.android.core.network.WeComSettings.toUpdate() = com.mediahub.android.core.network.WeComSettingsUpdate(
     baseUrl = baseUrl,
-    username = username,
-    sourceEnabled = sourceEnabled,
+    corpId = corpId,
+    chatId = chatId,
  )

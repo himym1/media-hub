@@ -84,8 +84,7 @@ func (s *Service) Update(ctx context.Context, userID int64, input Update) (View,
 	if err != nil {
 		return View{}, err
 	}
-	allowActiveSubX := value.SubX.SourceEnabled && sameSubXConnection(current.SubX, value.SubX)
-	if err := s.store.UpsertProviderCredentialWithOperationGuard(ctx, userID, ProviderKey, sealed, allowActiveSubX, s.now()); err != nil {
+	if err := s.store.UpsertProviderCredentialWithOperationGuard(ctx, userID, ProviderKey, sealed, false, s.now()); err != nil {
 		if errors.Is(err, store.ErrActiveProviderOperations) {
 			return View{}, ErrActiveProviderOperations
 		}
@@ -129,15 +128,11 @@ func (s *Service) ReadinessConfiguration() (bool, int) {
 		value.Drive115.ClientID != "" && movieReady && seriesReady
 	nativeSources := 0
 	for _, source := range value.Sources {
-		if source.BaseURL != "" {
+		if source.BaseURL != "" || source.ID == "mikan" {
 			nativeSources++
 		}
 	}
 	return coreReady, nativeSources
-}
-
-func (s *Service) FallbackSourceEnabled() bool {
-	return s.snapshot().SubX.SourceEnabled
 }
 
 func merge(current Values, input Update) Values {
@@ -152,12 +147,14 @@ func merge(current Values, input Update) Values {
 	if current.TMDB.BaseURL == "" && current.TMDB.AccessToken != "" {
 		current.TMDB.BaseURL = "https://api.themoviedb.org/3"
 	}
-	if input.SubX != nil {
-		current.SubX.BaseURL = strings.TrimSpace(input.SubX.BaseURL)
-		current.SubX.Username = strings.TrimSpace(input.SubX.Username)
-		current.SubX.Password = mergeSecret(current.SubX.Password, input.SubX.Password)
-		current.SubX.Token = mergeSecret(current.SubX.Token, input.SubX.Token)
-		current.SubX.SourceEnabled = input.SubX.SourceEnabled
+	if input.WeCom != nil {
+		current.WeCom.BaseURL = strings.TrimSpace(input.WeCom.BaseURL)
+		current.WeCom.CorpID = strings.TrimSpace(input.WeCom.CorpID)
+		current.WeCom.Secret = mergeSecret(current.WeCom.Secret, input.WeCom.Secret)
+		current.WeCom.ChatID = strings.TrimSpace(input.WeCom.ChatID)
+		if current.WeCom.BaseURL == "" && (current.WeCom.CorpID != "" || current.WeCom.Secret != "" || current.WeCom.ChatID != "") {
+			current.WeCom.BaseURL = "https://qyapi.weixin.qq.com"
+		}
 	}
 	current.Workflow = input.Workflow.Config()
 
@@ -194,9 +191,6 @@ func mergeSecret(current string, update SecretUpdate) string {
 	return current
 }
 
-func sameSubXConnection(left, right config.SubX) bool {
-	return left.BaseURL == right.BaseURL && left.Username == right.Username && left.Password == right.Password && left.Token == right.Token
-}
 func validate(value Values) error {
 	if err := validateURL("QMediaSync URL", value.QMediaSync.BaseURL); err != nil {
 		return err
@@ -207,7 +201,7 @@ func validate(value Values) error {
 	if err := validateURL("TMDB URL", value.TMDB.BaseURL); err != nil {
 		return err
 	}
-	if err := validateURL("SubX URL", value.SubX.BaseURL); err != nil {
+	if err := validateURL("WeCom URL", value.WeCom.BaseURL); err != nil {
 		return err
 	}
 	if value.Workflow.QMediaSyncAccountID > uint(^uint32(0)) {
@@ -216,17 +210,18 @@ func validate(value Values) error {
 	if len(value.QMediaSync.BaseURL) > 2048 || len(value.QMediaSync.APIKey) > 4096 ||
 		len(value.Emby.BaseURL) > 2048 || len(value.Emby.APIKey) > 4096 || len(value.Emby.UserID) > 200 ||
 		len(value.Drive115.ClientID) > 200 || len(value.TMDB.BaseURL) > 2048 || len(value.TMDB.AccessToken) > 4096 ||
-		len(value.SubX.BaseURL) > 2048 || len(value.SubX.Username) > 200 || len(value.SubX.Password) > 4096 || len(value.SubX.Token) > 4096 {
+		len(value.WeCom.BaseURL) > 2048 || len(value.WeCom.CorpID) > 200 || len(value.WeCom.Secret) > 4096 || len(value.WeCom.ChatID) > 200 {
 		return fmt.Errorf("%w: provider setting is too long", ErrInvalid)
 	}
-	if value.SubX.BaseURL == "" && (value.SubX.Username != "" || value.SubX.Password != "" || value.SubX.Token != "" || value.SubX.SourceEnabled) {
-		return fmt.Errorf("%w: SubX URL is required when fallback credentials are configured", ErrInvalid)
+	wecomFields := []string{value.WeCom.BaseURL, value.WeCom.CorpID, value.WeCom.Secret, value.WeCom.ChatID}
+	configuredWeComFields := 0
+	for _, field := range wecomFields {
+		if field != "" {
+			configuredWeComFields++
+		}
 	}
-	if (value.SubX.Username == "") != (value.SubX.Password == "") {
-		return fmt.Errorf("%w: SubX username and password must be configured together", ErrInvalid)
-	}
-	if value.SubX.SourceEnabled && value.SubX.Token == "" && value.SubX.Username == "" {
-		return fmt.Errorf("%w: SubX credentials are required when the fallback source is enabled", ErrInvalid)
+	if configuredWeComFields != 0 && configuredWeComFields != len(wecomFields) {
+		return fmt.Errorf("%w: WeCom URL, corp ID, secret, and chat ID must be configured together", ErrInvalid)
 	}
 	for _, target := range []config.WorkflowTarget{value.Workflow.Movie, value.Workflow.Series} {
 		if len(target.DestinationID) > 200 || len(target.QMediaSyncTargetPath) > 2048 || len(target.EmbyLibraryID) > 200 {
@@ -248,7 +243,7 @@ func validate(value Values) error {
 		if err := validateURL("source URL", source.BaseURL); err != nil {
 			return err
 		}
-		if source.BaseURL == "" && source.Token != "" {
+		if source.BaseURL == "" && source.Token != "" && source.ID != "mikan" {
 			return fmt.Errorf("%w: source URL is required when a token is configured", ErrInvalid)
 		}
 		if len(source.BaseURL) > 2048 || len(source.Token) > 4096 {
@@ -284,7 +279,7 @@ func publicView(value Values) View {
 		Emby:       EmbyView{BaseURL: value.Emby.BaseURL, APIKey: SecretStatus{Configured: value.Emby.APIKey != ""}, UserID: value.Emby.UserID},
 		Drive115:   Drive115View{ClientID: value.Drive115.ClientID},
 		TMDB:       TMDBView{BaseURL: value.TMDB.BaseURL, AccessToken: SecretStatus{Configured: value.TMDB.AccessToken != ""}},
-		SubX:       SubXView{BaseURL: value.SubX.BaseURL, Username: value.SubX.Username, Password: SecretStatus{Configured: value.SubX.Password != ""}, Token: SecretStatus{Configured: value.SubX.Token != ""}, SourceEnabled: value.SubX.SourceEnabled},
+		WeCom:      WeComView{BaseURL: value.WeCom.BaseURL, CorpID: value.WeCom.CorpID, Secret: SecretStatus{Configured: value.WeCom.Secret != ""}, ChatID: value.WeCom.ChatID},
 		Workflow:   workflowFromConfig(value.Workflow),
 		Sources:    sources,
 	}

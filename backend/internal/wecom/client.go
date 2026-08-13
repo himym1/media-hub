@@ -31,15 +31,20 @@ type SubmissionError struct {
 func (failure SubmissionError) Error() string { return failure.Err.Error() }
 func (failure SubmissionError) Unwrap() error { return failure.Err }
 
-type Client struct {
+type clientConfig struct {
 	baseURL string
 	corpID  string
 	secret  string
 	chatID  string
-	client  *http.Client
-	mutex   sync.Mutex
-	token   string
-	expires time.Time
+}
+
+type Client struct {
+	configMutex sync.RWMutex
+	config      clientConfig
+	client      *http.Client
+	tokenMutex  sync.Mutex
+	token       string
+	expires     time.Time
 }
 
 type apiResponse struct {
@@ -50,7 +55,7 @@ type apiResponse struct {
 
 func NewClient(baseURL, corpID, secret, chatID string, timeout time.Duration) *Client {
 	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"), corpID: corpID, secret: secret, chatID: chatID,
+		config: clientConfig{baseURL: strings.TrimRight(baseURL, "/"), corpID: corpID, secret: secret, chatID: chatID},
 		client: &http.Client{
 			Timeout: timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -60,8 +65,27 @@ func NewClient(baseURL, corpID, secret, chatID string, timeout time.Duration) *C
 	}
 }
 
+func (c *Client) Configure(baseURL, corpID, secret, chatID string) {
+	c.configMutex.Lock()
+	c.config = clientConfig{
+		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
+		corpID:  strings.TrimSpace(corpID),
+		secret:  strings.TrimSpace(secret),
+		chatID:  strings.TrimSpace(chatID),
+	}
+	c.configMutex.Unlock()
+	c.invalidateToken()
+}
+
+func (c *Client) configuration() clientConfig {
+	c.configMutex.RLock()
+	defer c.configMutex.RUnlock()
+	return c.config
+}
+
 func (c *Client) Configured() bool {
-	return c.baseURL != "" && c.corpID != "" && c.secret != "" && c.chatID != ""
+	configuration := c.configuration()
+	return configuration.baseURL != "" && configuration.corpID != "" && configuration.secret != "" && configuration.chatID != ""
 }
 
 func (c *Client) Check(ctx context.Context) integration.Health {
@@ -114,12 +138,13 @@ func (c *Client) Send(ctx context.Context, content string) (bool, error) {
 }
 
 func (c *Client) accessToken(ctx context.Context) (string, error) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	configuration := c.configuration()
+	c.tokenMutex.Lock()
+	defer c.tokenMutex.Unlock()
 	if c.token != "" && time.Now().UTC().Add(time.Minute).Before(c.expires) {
 		return c.token, nil
 	}
-	endpoint, err := c.endpoint("gettoken", url.Values{"corpid": {c.corpID}, "corpsecret": {c.secret}})
+	endpoint, err := endpointURL(configuration, "gettoken", url.Values{"corpid": {configuration.corpID}, "corpsecret": {configuration.secret}})
 	if err != nil {
 		return "", ErrNotConfigured
 	}
@@ -142,7 +167,8 @@ func (c *Client) accessToken(ctx context.Context) (string, error) {
 }
 
 func (c *Client) send(ctx context.Context, token, content string) (int, error) {
-	endpoint, err := c.endpoint("appchat/send", url.Values{"access_token": {token}})
+	configuration := c.configuration()
+	endpoint, err := endpointURL(configuration, "appchat/send", url.Values{"access_token": {token}})
 	if err != nil {
 		return 0, SubmissionError{Err: ErrNotConfigured}
 	}
@@ -152,7 +178,7 @@ func (c *Client) send(ctx context.Context, token, content string) (int, error) {
 		Text    struct {
 			Content string `json:"content"`
 		} `json:"text"`
-	}{ChatID: c.chatID, MsgType: "text", Text: struct {
+	}{ChatID: configuration.chatID, MsgType: "text", Text: struct {
 		Content string `json:"content"`
 	}{Content: content}})
 	if err != nil {
@@ -198,14 +224,14 @@ func (c *Client) do(request *http.Request, target any, submission bool) error {
 }
 
 func (c *Client) invalidateToken() {
-	c.mutex.Lock()
+	c.tokenMutex.Lock()
 	c.token = ""
 	c.expires = time.Time{}
-	c.mutex.Unlock()
+	c.tokenMutex.Unlock()
 }
 
-func (c *Client) endpoint(endpointPath string, query url.Values) (string, error) {
-	parsed, err := url.Parse(c.baseURL)
+func endpointURL(configuration clientConfig, endpointPath string, query url.Values) (string, error) {
+	parsed, err := url.Parse(configuration.baseURL)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return "", ErrNotConfigured
 	}

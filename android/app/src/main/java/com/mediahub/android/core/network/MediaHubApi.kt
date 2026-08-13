@@ -535,53 +535,6 @@ class MediaHubApi(baseUrl: String) {
     }
 
 
-    suspend fun subXMigrationReadiness(token: String): SubXMigrationReadiness {
-        val root = JSONObject(request("/api/v1/migration/subx/readiness", token = token))
-        return SubXMigrationReadiness(
-            canStopSubX = root.getBoolean("canStopSubX"),
-            subXConfigured = root.getBoolean("subxConfigured"),
-            fallbackSourceEnabled = root.getBoolean("fallbackSourceEnabled"),
-            coreConfigurationReady = root.getBoolean("coreConfigurationReady"),
-            nativeSourceCount = root.getInt("nativeSourceCount"),
-            parallelValidationCompleted = root.getBoolean("parallelValidationCompleted"),
-            nativeSubscriptions = root.getInt("nativeSubscriptions"),
-            fallbackSubscriptions = root.getInt("fallbackSubscriptions"),
-            delegatedOperations = root.getInt("delegatedOperations"),
-            delegatedGroups = root.getJSONArray("delegatedGroups").strings(),
-            blockers = root.getJSONArray("blockers").strings(),
-        )
-    }
-    suspend fun subXMigrationCommands(token: String): List<MigrationSourceCommand> {
-        val root = JSONObject(request("/api/v1/migration/subx/source-commands", token = token))
-        return root.getJSONArray("commands").objects(::parseMigrationSourceCommand)
-    }
-    suspend fun retrySubXMigrationCommand(token: String, command: MigrationSourceCommand): MigrationSourceCommand = parseMigrationSourceCommand(JSONObject(request(
-        "/api/v1/migration/subx/source-commands/${encode(command.id)}/retry", method = "POST", token = token,
-        body = JSONObject().put("confirmation", command.id).toString(),
-    )))
-
-    suspend fun importSubXSubscriptions(token: String): SubXMigrationResult {
-        val root = JSONObject(request(
-            "/api/v1/migration/subx/subscriptions",
-            method = "POST",
-            body = "{}",
-            token = token,
-        ))
-        return SubXMigrationResult(
-            detected = root.getInt("detected"),
-            importable = root.getInt("importable"),
-            rejected = root.getInt("rejected"),
-            created = root.getInt("created"),
-            skipped = root.getInt("skipped"),
-        )
-    }
-
-
-    private fun parseMigrationSourceCommand(item: JSONObject) = MigrationSourceCommand(
-        id = item.getString("id"), operationId = item.getString("operationId"), state = item.getString("state"),
-        attempts = item.getInt("attempts"), errorMessage = item.optString("errorMessage"), createdAt = item.getString("createdAt"),
-    )
-
     private fun subscriptionBody(input: SubscriptionInput, includeIdentity: Boolean): String {
         val preferences = JSONObject()
             .put("resolutions", JSONArray(input.preferences.resolutions))
@@ -663,7 +616,7 @@ class MediaHubApi(baseUrl: String) {
         val emby = item.getJSONObject("emby")
         val drive = item.getJSONObject("drive115")
         val tmdb = item.getJSONObject("tmdb")
-        val subx = item.getJSONObject("subx")
+        val wecom = item.getJSONObject("wecom")
         val workflow = item.getJSONObject("workflow")
         return ProviderSettings(
             qmediaSyncBaseUrl = qms.getString("baseUrl"),
@@ -674,12 +627,11 @@ class MediaHubApi(baseUrl: String) {
             drive115ClientId = drive.getString("clientId"),
             tmdbBaseUrl = tmdb.getString("baseUrl"),
             tmdbAccessToken = SecretStatus(tmdb.getJSONObject("accessToken").getBoolean("configured")),
-            subx = SubXSettings(
-                baseUrl = subx.getString("baseUrl"),
-                username = subx.getString("username"),
-                password = SecretStatus(subx.getJSONObject("password").getBoolean("configured")),
-                token = SecretStatus(subx.getJSONObject("token").getBoolean("configured")),
-                sourceEnabled = subx.getBoolean("sourceEnabled"),
+            wecom = WeComSettings(
+                baseUrl = wecom.getString("baseUrl"),
+                corpId = wecom.getString("corpId"),
+                secret = SecretStatus(wecom.getJSONObject("secret").getBoolean("configured")),
+                chatId = wecom.getString("chatId"),
             ),
             workflow = parseWorkflowSettings(workflow),
             sources = item.getJSONArray("sources").objects { source -> ProviderSourceSettings(
@@ -706,12 +658,11 @@ class MediaHubApi(baseUrl: String) {
         .put("emby", JSONObject().put("baseUrl", input.embyBaseUrl).put("apiKey", secretBody(input.embyApiKey)).put("userId", input.embyUserId))
         .put("drive115", JSONObject().put("clientId", input.drive115ClientId))
         .put("tmdb", JSONObject().put("baseUrl", input.tmdbBaseUrl).put("accessToken", secretBody(input.tmdbAccessToken)))
-        .put("subx", JSONObject()
-            .put("baseUrl", input.subx.baseUrl)
-            .put("username", input.subx.username)
-            .put("password", secretBody(input.subx.password))
-            .put("token", secretBody(input.subx.token))
-            .put("sourceEnabled", input.subx.sourceEnabled))
+        .put("wecom", JSONObject()
+            .put("baseUrl", input.wecom.baseUrl)
+            .put("corpId", input.wecom.corpId)
+            .put("secret", secretBody(input.wecom.secret))
+            .put("chatId", input.wecom.chatId))
         .put("workflow", JSONObject().put("qMediaSyncAccountId", input.workflow.qMediaSyncAccountId).put("movie", workflowTargetBody(input.workflow.movie)).put("series", workflowTargetBody(input.workflow.series)))
         .put("sources", JSONArray().apply { input.sources.forEach { source -> put(JSONObject().put("id", source.id).put("baseUrl", source.baseUrl).put("token", secretBody(source.token))) } })
 

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"media-hub/backend/internal/config"
 	"media-hub/backend/internal/securepayload"
@@ -31,7 +30,6 @@ func TestUpdatePreservesSecretsAndPersistsEncryptedSettings(t *testing.T) {
 	initial := Values{
 		QMediaSync: config.QMediaSync{BaseURL: "https://qms.example", APIKey: "old-key"},
 		TMDB:       config.TMDB{AccessToken: "tmdb-token"},
-		SubX:       config.SubX{BaseURL: "https://subx.example", Username: "admin", Password: "subx-password", SourceEnabled: true},
 		Sources:    []config.SearchSource{{ID: "framehdr", Label: "帧影", BaseURL: "https://source.example", Token: "source-token"}},
 	}
 	var applied Values
@@ -39,16 +37,15 @@ func TestUpdatePreservesSecretsAndPersistsEncryptedSettings(t *testing.T) {
 	view, err := service.Update(ctx, 1, Update{
 		QMediaSync: QMediaSyncUpdate{BaseURL: "https://qms-new.example"},
 		TMDB:       TMDBUpdate{AccessToken: SecretUpdate{}},
-		SubX:       &SubXUpdate{BaseURL: "https://subx.example", Username: "admin", SourceEnabled: true},
 		Sources:    sourceUpdates("framehdr", "https://source-new.example"),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !view.QMediaSync.APIKey.Configured || !view.TMDB.AccessToken.Configured || !view.SubX.Password.Configured || !view.Sources[1].Token.Configured {
+	if !view.QMediaSync.APIKey.Configured || !view.TMDB.AccessToken.Configured || !view.Sources[1].Token.Configured {
 		t.Fatalf("secret configuration was not preserved: %+v", view)
 	}
-	if applied.QMediaSync.APIKey != "old-key" || applied.TMDB.BaseURL != "https://api.themoviedb.org/3" || applied.SubX.Password != "subx-password" || applied.Sources[1].Token != "source-token" {
+	if applied.QMediaSync.APIKey != "old-key" || applied.TMDB.BaseURL != "https://api.themoviedb.org/3" || applied.Sources[1].Token != "source-token" {
 		t.Fatalf("applied settings = %+v", applied)
 	}
 	sealed, exists, err := dataStore.ProviderCredential(ctx, 1, ProviderKey)
@@ -64,7 +61,7 @@ func TestUpdatePreservesSecretsAndPersistsEncryptedSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	values := reloaded.Values()
-	if values.QMediaSync.APIKey != "old-key" || values.SubX.Password != "subx-password" || values.Sources[1].Token != "source-token" {
+	if values.QMediaSync.APIKey != "old-key" || values.Sources[1].Token != "source-token" {
 		t.Fatalf("reloaded values = %+v", values)
 	}
 }
@@ -98,50 +95,6 @@ func TestUpdateRejectsInvalidSourceAndSupportsExplicitSecretClear(t *testing.T) 
 	}
 	if view.QMediaSync.APIKey.Configured {
 		t.Fatal("API key was not cleared")
-	}
-}
-
-func TestMergePreservesSubXForOlderClients(t *testing.T) {
-	current := Values{SubX: config.SubX{BaseURL: "https://subx.example", Username: "admin", Password: "secret", SourceEnabled: true}}
-	merged := merge(current, Update{Sources: sourceUpdates("", "")})
-	if merged.SubX != current.SubX {
-		t.Fatalf("SubX settings changed without an explicit update: %+v", merged.SubX)
-	}
-}
-
-func TestLoadLegacyPayloadPreservesSubXBaseline(t *testing.T) {
-	ctx := context.Background()
-	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dataStore.Close()
-	if _, err := dataStore.EnsureAdmin(ctx, "test-hash"); err != nil {
-		t.Fatal(err)
-	}
-	codec, _ := securepayload.New(base64.StdEncoding.EncodeToString(make([]byte, 32)))
-	legacy := struct {
-		QMediaSync config.QMediaSync     `json:"qmediaSync"`
-		Emby       config.Emby           `json:"emby"`
-		Drive115   config.Drive115       `json:"drive115"`
-		TMDB       config.TMDB           `json:"tmdb"`
-		Workflow   config.Workflow       `json:"workflow"`
-		Sources    []config.SearchSource `json:"sources"`
-	}{Sources: configSources()}
-	sealed, err := codec.Seal(legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := dataStore.UpsertProviderCredential(ctx, 1, ProviderKey, sealed, time.Now()); err != nil {
-		t.Fatal(err)
-	}
-	baseline := config.SubX{BaseURL: "https://subx.example", Username: "admin", Password: "secret", SourceEnabled: true}
-	service := NewService(dataStore, codec, Values{SubX: baseline, Sources: configSources()}, nil)
-	if err := service.Load(ctx, 1); err != nil {
-		t.Fatal(err)
-	}
-	if service.Values().SubX != baseline {
-		t.Fatalf("legacy load changed SubX baseline: %+v", service.Values().SubX)
 	}
 }
 
@@ -214,62 +167,10 @@ func TestUpdateRejectsBlockingSubXCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	codec, _ := securepayload.New(base64.StdEncoding.EncodeToString(make([]byte, 32)))
-	service := NewService(dataStore, codec, Values{SubX: config.SubX{BaseURL: "https://subx.example", Username: "admin", Password: "secret"}}, nil)
+	service := NewService(dataStore, codec, Values{Sources: configSources()}, nil)
 	_, err = service.Update(ctx, admin.ID, Update{Sources: sourceUpdates("", "")})
 	if !errors.Is(err, ErrActiveProviderOperations) {
 		t.Fatalf("err = %v", err)
-	}
-}
-
-func TestUpdateAllowsEnablingSameSubXConnectionWithBlockingCommand(t *testing.T) {
-	ctx := context.Background()
-	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dataStore.Close()
-	if _, err := dataStore.EnsureAdmin(ctx, "test-hash"); err != nil {
-		t.Fatal(err)
-	}
-	admin, _, err := dataStore.Admin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _, err = dataStore.CreateSubXCommand(ctx, store.SubXCommandJob{
-		ID: "subx-command", UserID: admin.ID, OperationID: "framehdr.save", IdempotencyKey: "subx_command",
-		RequestHash: []byte("request"), PayloadToken: "encrypted", State: "queued", CreatedAt: 1, UpdatedAt: 1,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	codec, _ := securepayload.New(base64.StdEncoding.EncodeToString(make([]byte, 32)))
-	initial := Values{SubX: config.SubX{BaseURL: "https://subx.example", Username: "admin", Password: "secret"}}
-	var applied Values
-	service := NewService(dataStore, codec, initial, func(value Values) { applied = value })
-	view, err := service.Update(ctx, admin.ID, Update{
-		SubX:    &SubXUpdate{BaseURL: "https://subx.example", Username: "admin", SourceEnabled: true},
-		Sources: sourceUpdates("", ""),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !view.SubX.SourceEnabled || !applied.SubX.SourceEnabled {
-		t.Fatal("fallback was not enabled")
-	}
-}
-
-func TestUpdateRejectsIncompleteSubXFallback(t *testing.T) {
-	value := Values{SubX: config.SubX{BaseURL: "https://subx.example", SourceEnabled: true}, Sources: configSources()}
-	if !errors.Is(validate(value), ErrInvalid) {
-		t.Fatal("enabled fallback without credentials was accepted")
-	}
-	value.SubX.Username = "admin"
-	if !errors.Is(validate(value), ErrInvalid) {
-		t.Fatal("username without password was accepted")
-	}
-	value.SubX.Password = "password"
-	if err := validate(value); err != nil {
-		t.Fatalf("valid fallback rejected: %v", err)
 	}
 }
 
@@ -280,4 +181,47 @@ func configSources() []config.SearchSource {
 		result = append(result, config.SearchSource{ID: item.ID, Label: sourceLabels[item.ID]})
 	}
 	return result
+}
+
+func TestMergePreservesWeComForOlderClients(t *testing.T) {
+	current := Values{WeCom: config.WeCom{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp", Secret: "secret", ChatID: "chat"}}
+	merged := merge(current, Update{Sources: sourceUpdates("", "")})
+	if merged.WeCom != current.WeCom {
+		t.Fatalf("WeCom settings changed without an explicit update: %+v", merged.WeCom)
+	}
+}
+
+func TestMergeWeComSecretPreserveAndClear(t *testing.T) {
+	current := Values{WeCom: config.WeCom{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp", Secret: "secret", ChatID: "chat"}}
+	preserved := merge(current, Update{WeCom: &WeComUpdate{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp", ChatID: "chat"}})
+	if preserved.WeCom.Secret != "secret" {
+		t.Fatalf("empty secret update did not preserve secret: %+v", preserved.WeCom)
+	}
+	cleared := merge(current, Update{WeCom: &WeComUpdate{
+		BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp", Secret: SecretUpdate{Clear: true}, ChatID: "chat",
+	}})
+	if cleared.WeCom.Secret != "" {
+		t.Fatalf("explicit clear did not remove secret: %+v", cleared.WeCom)
+	}
+}
+
+func TestValidateRejectsPartialWeCom(t *testing.T) {
+	value := Values{WeCom: config.WeCom{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp"}, Sources: configSources()}
+	if !errors.Is(validate(value), ErrInvalid) {
+		t.Fatal("partial WeCom was accepted")
+	}
+	value.WeCom = config.WeCom{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp", Secret: "secret", ChatID: "chat"}
+	if err := validate(value); err != nil {
+		t.Fatalf("complete WeCom rejected: %v", err)
+	}
+}
+
+func TestMergeDefaultsOfficialWeComURL(t *testing.T) {
+	merged := merge(Values{}, Update{WeCom: &WeComUpdate{CorpID: "corp", Secret: SecretUpdate{Value: "secret"}, ChatID: "chat"}})
+	if merged.WeCom.BaseURL != "https://qyapi.weixin.qq.com" {
+		t.Fatalf("default WeCom URL = %q", merged.WeCom.BaseURL)
+	}
+	if err := validate(Values{WeCom: merged.WeCom, Sources: configSources()}); err != nil {
+		t.Fatalf("defaulted WeCom rejected: %v", err)
+	}
 }

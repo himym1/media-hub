@@ -1,6 +1,6 @@
 # Media Hub 私有部署
 
-Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 和 Android release 文件保留在宿主机持久目录。SubX 在并行验收期间保持运行。
+Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 和 Android release 文件保留在宿主机持久目录。
 
 ## 目录
 
@@ -33,8 +33,6 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
    MEDIA_HUB_ADMIN_PASSWORD=<one-time bootstrap password, 12+ bytes>
    MEDIA_HUB_DATA_ENCRYPTION_KEY=<base64 AES-256 key>
    MEDIA_HUB_ENABLE_FIXTURES=false
-   MEDIA_HUB_SUBX_SOURCE_ENABLED=false
-   MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED=false
    ```
 
    密码只用于首次初始化；数据库已有管理员后可以从 `.env` 删除。加密密钥必须长期保留，否则无法恢复加密的 provider 凭据和 workflow payload。
@@ -43,8 +41,8 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
 
    ```sh
    ./backup.sh
-   MEDIA_HUB_IMAGE_TAG=0.6.0 docker compose pull
-   MEDIA_HUB_IMAGE_TAG=0.6.0 docker compose up -d
+   MEDIA_HUB_IMAGE_TAG=0.9.0 docker compose pull
+   MEDIA_HUB_IMAGE_TAG=0.9.0 docker compose up -d
    docker compose ps
    curl --fail http://127.0.0.1:18080/api/v1/health
    ```
@@ -57,10 +55,7 @@ GitHub tag workflow 生成签名 APK 和 `latest.json`。将两者放入 `releas
 
 Android 签名密钥只保存在 GitHub Actions secrets 和离线备份中，不能提交到仓库或放入 Docker 镜像。所有后续 APK 必须使用同一签名密钥。
 
-## 并行验收
+## 验收
 
-- 不停止或修改 SubX。
-- `MEDIA_HUB_SUBX_SOURCE_ENABLED=false`，除非专门验证 fallback。
 - 先验证登录、Web/API 同源、115 授权状态和只读 provider 状态。
-- 完成真实搜索、单次转存、QMediaSync、Emby 可播放性、订阅调度、未知态恢复和 Android 更新对照后，才将 `MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED=true`。
-- 只有 `/migration/subx/readiness` 无 blocker 且并行结果对照通过后，才另行审批 SubX 下线。
+- 再验证真实搜索（蜜柑内置或已部署的合同适配器）、单次转存、QMediaSync、Emby 可播放性、订阅调度和未知态恢复。

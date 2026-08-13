@@ -23,7 +23,7 @@ function createDraft(settings: ProviderSettings): Draft {
     emby: { baseUrl: settings.emby.baseUrl, apiKey: secret(), userId: settings.emby.userId },
     drive115: { clientId: settings.drive115.clientId },
     tmdb: { baseUrl: settings.tmdb.baseUrl, accessToken: secret() },
-    subx: { baseUrl: settings.subx.baseUrl, username: settings.subx.username, password: secret(), token: secret(), sourceEnabled: settings.subx.sourceEnabled },
+    wecom: { baseUrl: settings.wecom.baseUrl, corpId: settings.wecom.corpId, secret: secret(), chatId: settings.wecom.chatId },
     workflow: structuredClone(settings.workflow),
     sources: settings.sources.map((source) => ({ id: source.id, baseUrl: source.baseUrl, token: secret() })),
   }
@@ -70,25 +70,19 @@ export function ProviderSettingsForm({ settings, isSaving, error, saved, onSave,
 
         <fieldset>
           <legend>115 开放平台</legend>
+          <p className="settings-note">扫码授权在本页上方完成。</p>
           <label><span>Client ID</span><input onChange={(event) => setDraft((current) => ({ ...current, drive115: { clientId: event.target.value } }))} value={draft.drive115.clientId} /></label>
         </fieldset>
-      </div>
 
-      <fieldset className="subx-settings">
-        <legend>SubX 迁移资源源</legend>
-        <p className="settings-note">临时复用 SubX 的八源搜索与转存；启用期间 SubX 不能停用。</p>
-        <div className="subx-settings-grid">
-          <label><span>SubX 地址</span><input onChange={(event) => setDraft((current) => ({ ...current, subx: { ...current.subx, baseUrl: event.target.value } }))} type="url" value={draft.subx.baseUrl} /></label>
-          <label><span>用户名</span><input autoComplete="username" onChange={(event) => setDraft((current) => ({ ...current, subx: { ...current.subx, username: event.target.value } }))} value={draft.subx.username} /></label>
-          <label><span>密码 · {secretHint(settings.subx.password.configured)}</span><input autoComplete="new-password" onChange={(event) => setDraft((current) => ({ ...current, subx: { ...current.subx, password: { ...current.subx.password, value: event.target.value } } }))} type="password" value={draft.subx.password.value} /></label>
-          <label><span>静态 Token · {secretHint(settings.subx.token.configured)}</span><input autoComplete="off" onChange={(event) => setDraft((current) => ({ ...current, subx: { ...current.subx, token: { ...current.subx.token, value: event.target.value } } }))} type="password" value={draft.subx.token.value} /></label>
-        </div>
-        <div className="subx-settings-controls">
-          {settings.subx.password.configured ? <label className="inline-check"><input checked={draft.subx.password.clear} onChange={(event) => setDraft((current) => ({ ...current, subx: { ...current.subx, password: { value: '', clear: event.target.checked } } }))} type="checkbox" />清除已保存密码</label> : null}
-          {settings.subx.token.configured ? <label className="inline-check"><input checked={draft.subx.token.clear} onChange={(event) => setDraft((current) => ({ ...current, subx: { ...current.subx, token: { value: '', clear: event.target.checked } } }))} type="checkbox" />清除静态 Token</label> : null}
-          <label className="inline-check fallback-toggle"><input checked={draft.subx.sourceEnabled} onChange={(event) => setDraft((current) => ({ ...current, subx: { ...current.subx, sourceEnabled: event.target.checked } }))} type="checkbox" />启用 SubX 迁移资源源</label>
-        </div>
-      </fieldset>
+        <fieldset>
+          <legend>企业微信</legend>
+          <label><span>API 地址</span><input onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, baseUrl: event.target.value } }))} placeholder="https://qyapi.weixin.qq.com" type="url" value={draft.wecom.baseUrl} /></label>
+          <label><span>Corp ID</span><input onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, corpId: event.target.value } }))} value={draft.wecom.corpId} /></label>
+          <label><span>Secret · {secretHint(settings.wecom.secret.configured)}</span><input autoComplete="off" onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, secret: { ...current.wecom.secret, value: event.target.value } } }))} type="password" value={draft.wecom.secret.value} /></label>
+          <label><span>Chat ID</span><input onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, chatId: event.target.value } }))} value={draft.wecom.chatId} /></label>
+          {settings.wecom.secret.configured ? <label className="inline-check"><input checked={draft.wecom.secret.clear} onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, secret: { value: '', clear: event.target.checked } } }))} type="checkbox" />清除已保存 Secret</label> : null}
+        </fieldset>
+      </div>
 
       <fieldset className="workflow-settings">
         <legend>工作流目标</legend>
@@ -106,6 +100,7 @@ export function ProviderSettingsForm({ settings, isSaving, error, saved, onSave,
 
       <fieldset className="source-settings">
         <legend>原生资源源</legend>
+        <p className="settings-note">蜜柑可留空地址，使用内置适配器。其他源填写实现合同的适配器地址与 Token。</p>
         {settings.sources.map((source, index) => {
           const item = draft.sources[index]
           return <div className="source-setting-row" key={source.id}><strong>{source.label}</strong>

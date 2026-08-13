@@ -22,7 +22,6 @@ type Config struct {
 	ProbeTimeout           time.Duration
 	FixtureMode            bool
 	SecureCookies          bool
-	SubXParallelValidated  bool
 	BootstrapAdminPassword string
 	DataEncryptionKey      string
 	QMediaSync             QMediaSync
@@ -30,7 +29,6 @@ type Config struct {
 	Drive115               Drive115
 	TMDB                   TMDB
 	WeCom                  WeCom
-	SubX                   SubX
 	Workflow               Workflow
 	Sources                []SearchSource
 	LocalUploadRoots       []string
@@ -64,14 +62,6 @@ type WeCom struct {
 	CorpID  string
 	Secret  string
 	ChatID  string
-}
-
-type SubX struct {
-	BaseURL       string
-	Username      string
-	Password      string
-	Token         string
-	SourceEnabled bool
 }
 
 type Workflow struct {
@@ -132,14 +122,6 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	subxSourceEnabled, err := boolValue(lookup, "MEDIA_HUB_SUBX_SOURCE_ENABLED", false)
-	if err != nil {
-		return Config{}, err
-	}
-	subxParallelValidated, err := boolValue(lookup, "MEDIA_HUB_SUBX_PARALLEL_VALIDATION_COMPLETED", false)
-	if err != nil {
-		return Config{}, err
-	}
 	qmsAccountID, err := uintValue(lookup, "MEDIA_HUB_QMS_ACCOUNT_ID")
 	if err != nil {
 		return Config{}, err
@@ -173,10 +155,6 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		return Config{}, err
 	}
 	wecomURL, err := baseURLValue(lookup, "MEDIA_HUB_WECOM_URL")
-	if err != nil {
-		return Config{}, err
-	}
-	subxURL, err := baseURLValue(lookup, "MEDIA_HUB_SUBX_URL")
 	if err != nil {
 		return Config{}, err
 	}
@@ -223,23 +201,6 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 	if configuredWeComFields != 0 && configuredWeComFields != len(wecomFields) {
 		return Config{}, fmt.Errorf("WeCom URL, corp ID, secret, and chat ID must be configured together")
 	}
-	subxConfig := SubX{
-		BaseURL:       subxURL,
-		Username:      stringValue(lookup, "MEDIA_HUB_SUBX_USERNAME", ""),
-		Password:      secretValue(lookup, "MEDIA_HUB_SUBX_PASSWORD"),
-		Token:         secretValue(lookup, "MEDIA_HUB_SUBX_TOKEN"),
-		SourceEnabled: subxSourceEnabled,
-	}
-	if subxConfig.BaseURL == "" && (subxConfig.Username != "" || subxConfig.Password != "" || subxConfig.Token != "") {
-		return Config{}, fmt.Errorf("MEDIA_HUB_SUBX_URL is required when SubX credentials are configured")
-	}
-	if (subxConfig.Username == "") != (subxConfig.Password == "") {
-		return Config{}, fmt.Errorf("MEDIA_HUB_SUBX_USERNAME and MEDIA_HUB_SUBX_PASSWORD must be configured together")
-	}
-	if subxConfig.SourceEnabled && (subxConfig.BaseURL == "" || (subxConfig.Token == "" && subxConfig.Username == "")) {
-		return Config{}, fmt.Errorf("SubX credentials are required when MEDIA_HUB_SUBX_SOURCE_ENABLED=true")
-	}
-
 	sources, err := searchSourceConfigurations(lookup, frameURL, gatherURL)
 	if err != nil {
 		return Config{}, err
@@ -256,7 +217,6 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		ProbeTimeout:           probeTimeout,
 		FixtureMode:            fixtureMode,
 		SecureCookies:          secureCookies,
-		SubXParallelValidated:  subxParallelValidated,
 		BootstrapAdminPassword: adminPassword,
 		DataEncryptionKey:      secretValue(lookup, "MEDIA_HUB_DATA_ENCRYPTION_KEY"),
 		QMediaSync:             qms,
@@ -264,7 +224,6 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		Drive115:               drive115,
 		TMDB:                   tmdbConfig,
 		WeCom:                  wecomConfig,
-		SubX:                   subxConfig,
 		Workflow: Workflow{
 			QMediaSyncAccountID: qmsAccountID,
 			Movie: WorkflowTarget{
@@ -286,7 +245,6 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 			{ID: "115", Label: "115", BaseURL: drive115URL},
 			{ID: "tmdb", Label: "TMDB", BaseURL: tmdbConfig.BaseURL},
 			{ID: "wecom", Label: "企业微信", BaseURL: wecomConfig.BaseURL},
-			{ID: "subx", Label: "SubX 兼容层", BaseURL: subxConfig.BaseURL},
 			{ID: "qmediasync", Label: "QMediaSync", BaseURL: qms.BaseURL},
 			{ID: "emby", Label: "Emby", BaseURL: emby.BaseURL},
 		},

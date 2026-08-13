@@ -130,38 +130,6 @@ func TestLoadRejectsInvalidQMediaSyncAccountID(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsPartialSubXConfiguration(t *testing.T) {
-	_, err := load(func(key string) (string, bool) {
-		switch key {
-		case "MEDIA_HUB_SUBX_URL":
-			return "https://subx.local", true
-		case "MEDIA_HUB_SUBX_USERNAME":
-			return "admin", true
-		default:
-			return "", false
-		}
-	})
-	if err == nil {
-		t.Fatal("expected partial SubX credentials to fail")
-	}
-}
-
-func TestLoadRejectsSubXSourceWithoutCredentials(t *testing.T) {
-	_, err := load(func(key string) (string, bool) {
-		switch key {
-		case "MEDIA_HUB_SUBX_URL":
-			return "https://subx.local", true
-		case "MEDIA_HUB_SUBX_SOURCE_ENABLED":
-			return "true", true
-		default:
-			return "", false
-		}
-	})
-	if err == nil {
-		t.Fatal("expected SubX source configuration error")
-	}
-}
-
 func TestLoadConfiguresEightCanonicalSources(t *testing.T) {
 	values := map[string]string{
 		"MEDIA_HUB_SOURCE_DIAN_URL":     "https://dian.local",
