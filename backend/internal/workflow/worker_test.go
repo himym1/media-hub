@@ -89,6 +89,24 @@ func TestUnknownSourceAccessIsNotAutomaticallyRepeated(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("uncertain access was repeated %d times", calls)
 	}
+	retried, err := service.Retry(ctx, admin.ID, publicJob.ID)
+	if err != nil || retried.State != "transferring" {
+		t.Fatalf("explicit retry state=%q err=%v", retried.State, err)
+	}
+	job, err = dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.processJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	job, err = dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != "needs_attention" || calls != 2 {
+		t.Fatalf("explicit retry state=%q calls=%d", job.State, calls)
+	}
 }
 
 func TestUnknownQMediaSyncSubmissionIsNotAutomaticallyRepeated(t *testing.T) {

@@ -228,11 +228,15 @@ func (s *Store) RetryTransferJob(ctx context.Context, userID int64, jobID string
 	if err != nil {
 		return TransferJob{}, err
 	}
-	if job.State != "needs_attention" && (job.State != "failed" || !job.Retryable) {
+	recoverSourceTransfer := job.State == "failed" && job.ErrorCode == "provider_state_invalid" && job.ProviderToken == "" && job.SelectionToken != ""
+	if job.State != "needs_attention" && (job.State != "failed" || (!job.Retryable && !recoverSourceTransfer)) {
 		return TransferJob{}, ErrTransferNotRetryable
 	}
 	resumeState := job.ResumeState
-	if job.State == "needs_attention" {
+	if recoverSourceTransfer {
+		resumeState = "transferring"
+	}
+	if resumeState == "" && job.State == "needs_attention" {
 		resumeState = "transferred"
 	}
 	if resumeState == "" {

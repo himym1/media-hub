@@ -88,6 +88,67 @@ func TestInterruptedQMediaSyncSubmissionRequiresAttention(t *testing.T) {
 	}
 }
 
+func TestRetryTransferUsesPersistedResumeStateAndRecoversDamagedSourceJob(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name           string
+		state          string
+		resumeState    string
+		selectionToken string
+		providerToken  string
+		errorCode      string
+		wantState      string
+		wantErr        error
+	}{
+		{name: "source-unknown", state: "needs_attention", resumeState: "transferring", selectionToken: "encrypted", wantState: "transferring"},
+		{name: "sync-unknown", state: "needs_attention", resumeState: "transferred", providerToken: "provider", wantState: "transferred"},
+		{name: "legacy-attention", state: "needs_attention", selectionToken: "encrypted", wantState: "transferred"},
+		{name: "damaged-source-retry", state: "failed", selectionToken: "encrypted", errorCode: "provider_state_invalid", wantState: "transferring"},
+		{name: "unrecoverable-provider-state", state: "failed", errorCode: "provider_state_invalid", wantErr: ErrTransferNotRetryable},
+	}
+	for index, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			job := TransferJob{
+				ID: test.name, UserID: admin.ID, IdempotencyKey: "retry_case_" + test.name,
+				RequestHash: []byte("hash"), SelectionToken: test.selectionToken,
+				SourceID: "juying", CandidateID: "candidate", Title: "Movie", MediaType: "movie", TMDBID: "123",
+				State: "queued", CreatedAt: int64(100 + index), UpdatedAt: int64(100 + index),
+			}
+			if _, _, err := dataStore.CreateTransferJob(ctx, job); err != nil {
+				t.Fatal(err)
+			}
+			job.State = test.state
+			job.ResumeState = test.resumeState
+			job.ProviderToken = test.providerToken
+			job.ErrorCode = test.errorCode
+			job.Retryable = test.state == "needs_attention"
+			job.UpdatedAt++
+			if updated, err := dataStore.UpdateTransferJob(ctx, job, "queued", "prepare retry case"); err != nil || !updated {
+				t.Fatalf("prepare retry case: updated=%v err=%v", updated, err)
+			}
+			retried, err := dataStore.RetryTransferJob(ctx, admin.ID, job.ID, time.Unix(200, 0))
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("error = %v, want %v", err, test.wantErr)
+			}
+			if test.wantErr == nil && retried.State != test.wantState {
+				t.Fatalf("state = %q, want %q", retried.State, test.wantState)
+			}
+		})
+	}
+}
+
 func TestInterruptedNotificationIsNotAutomaticallyReplayed(t *testing.T) {
 	ctx := context.Background()
 	dataStore, err := Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
