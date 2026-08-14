@@ -242,7 +242,7 @@ private fun ProviderSettings.toUpdate() = ProviderSettingsUpdate(
     tmdbAccessToken = SecretUpdate(),
     wecom = wecom.toUpdate(),
     workflow = workflow,
-    sources = sources.map { ProviderSourceSettingsUpdate(id = it.id, baseUrl = it.baseUrl) },
+    sources = sources.map { ProviderSourceSettingsUpdate(id = it.id, baseUrl = it.baseUrl, account = it.account) },
 )
 
 private fun com.mediahub.android.core.network.WeComSettings.toUpdate() = com.mediahub.android.core.network.WeComSettingsUpdate(

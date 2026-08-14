@@ -636,7 +636,7 @@ class MediaHubApi(baseUrl: String) {
             workflow = parseWorkflowSettings(workflow),
             sources = item.getJSONArray("sources").objects { source -> ProviderSourceSettings(
                 id = source.getString("id"), label = source.getString("label"), baseUrl = source.getString("baseUrl"),
-                token = SecretStatus(source.getJSONObject("token").getBoolean("configured")),
+                account = source.optString("account"), token = SecretStatus(source.getJSONObject("token").getBoolean("configured")),
             ) },
         )
     }
@@ -664,7 +664,7 @@ class MediaHubApi(baseUrl: String) {
             .put("secret", secretBody(input.wecom.secret))
             .put("chatId", input.wecom.chatId))
         .put("workflow", JSONObject().put("qMediaSyncAccountId", input.workflow.qMediaSyncAccountId).put("movie", workflowTargetBody(input.workflow.movie)).put("series", workflowTargetBody(input.workflow.series)))
-        .put("sources", JSONArray().apply { input.sources.forEach { source -> put(JSONObject().put("id", source.id).put("baseUrl", source.baseUrl).put("token", secretBody(source.token))) } })
+        .put("sources", JSONArray().apply { input.sources.forEach { source -> put(JSONObject().put("id", source.id).put("baseUrl", source.baseUrl).put("account", source.account).put("token", secretBody(source.token))) } })
 
     private fun secretBody(value: SecretUpdate) = JSONObject().put("value", value.value).put("clear", value.clear)
     private fun workflowTargetBody(value: WorkflowTargetSettings) = JSONObject()

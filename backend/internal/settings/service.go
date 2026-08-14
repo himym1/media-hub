@@ -128,7 +128,7 @@ func (s *Service) ReadinessConfiguration() (bool, int) {
 		movieReady && seriesReady
 	nativeSources := 0
 	for _, source := range value.Sources {
-		if source.BaseURL != "" || isBuiltinSource(source.ID) {
+		if sourceReady(source) {
 			nativeSources++
 		}
 	}
@@ -172,8 +172,12 @@ func merge(current Values, input Update) Values {
 		}
 		seen[id] = struct{}{}
 		previous := byID[id]
+		account := previous.Account
+		if source.Account != nil {
+			account = strings.TrimSpace(*source.Account)
+		}
 		updated = append(updated, config.SearchSource{
-			ID: id, Label: sourceLabels[id], BaseURL: strings.TrimSpace(source.BaseURL),
+			ID: id, Label: sourceLabels[id], BaseURL: strings.TrimSpace(source.BaseURL), Account: account,
 			Token: mergeSecret(previous.Token, source.Token),
 		})
 	}
@@ -246,7 +250,28 @@ func validate(value Values) error {
 		if source.BaseURL == "" && source.Token != "" && !isBuiltinSource(source.ID) {
 			return fmt.Errorf("%w: source URL is required when a token is configured", ErrInvalid)
 		}
-		if len(source.BaseURL) > 2048 || len(source.Token) > 4096 {
+		if source.ID == "framehdr" {
+			native := source.BaseURL == "" || isOfficialSourceRoot(source.BaseURL, "framehdr.com")
+			if native && (source.Account == "") != (source.Token == "") {
+				return fmt.Errorf("%w: FrameHDR username and password must be configured together", ErrInvalid)
+			}
+			if !native && source.Account != "" {
+				return fmt.Errorf("%w: FrameHDR account credentials require the official source URL", ErrInvalid)
+			}
+		}
+		if source.ID == "juying" {
+			native := source.BaseURL == "" || isOfficialSourceRoot(source.BaseURL, "jying.top")
+			if native && (source.Account == "") != (source.Token == "") {
+				return fmt.Errorf("%w: Juying App ID and API Key must be configured together", ErrInvalid)
+			}
+			if !native && source.Account != "" {
+				return fmt.Errorf("%w: Juying app credentials require the official source URL", ErrInvalid)
+			}
+		}
+		if source.Account != "" && source.ID != "framehdr" && source.ID != "juying" {
+			return fmt.Errorf("%w: source account is not supported", ErrInvalid)
+		}
+		if len(source.BaseURL) > 2048 || len(source.Account) > 200 || len(source.Token) > 4096 {
 			return fmt.Errorf("%w: source setting is too long", ErrInvalid)
 		}
 	}
@@ -265,7 +290,35 @@ func validateURL(label, raw string) error {
 }
 
 func isBuiltinSource(id string) bool {
-	return id == "mikan" || id == "sidhub"
+	return id == "mikan" || id == "sidhub" || id == "framehdr" || id == "juying"
+}
+
+func sourceReady(source config.SearchSource) bool {
+	switch source.ID {
+	case "mikan", "sidhub":
+		return true
+	case "framehdr":
+		if source.BaseURL == "" || isOfficialSourceRoot(source.BaseURL, "framehdr.com") {
+			return source.Account != "" && source.Token != ""
+		}
+		return source.BaseURL != ""
+	case "juying":
+		if source.BaseURL == "" || isOfficialSourceRoot(source.BaseURL, "jying.top") {
+			return source.Account != "" && source.Token != ""
+		}
+		return source.BaseURL != ""
+	default:
+		return source.BaseURL != ""
+	}
+}
+
+func isOfficialSourceRoot(raw, host string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Port() != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return false
+	}
+	name := strings.ToLower(parsed.Hostname())
+	return name == host || name == "www."+host
 }
 
 func publicView(value Values) View {
@@ -276,7 +329,7 @@ func publicView(value Values) View {
 	}
 	for _, id := range []string{"dian", "framehdr", "gimy", "guanying", "hdhive", "juying", "mikan", "sidhub"} {
 		source := byID[id]
-		sources = append(sources, SourceView{ID: id, Label: sourceLabels[id], BaseURL: source.BaseURL, Token: SecretStatus{Configured: source.Token != ""}})
+		sources = append(sources, SourceView{ID: id, Label: sourceLabels[id], BaseURL: source.BaseURL, Account: source.Account, Token: SecretStatus{Configured: source.Token != ""}})
 	}
 	return View{
 		QMediaSync: QMediaSyncView{BaseURL: value.QMediaSync.BaseURL, APIKey: SecretStatus{Configured: value.QMediaSync.APIKey != ""}},

@@ -37,7 +37,7 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
 
    密码只用于首次初始化；数据库已有管理员后可以从 `.env` 删除。加密密钥必须长期保留，否则无法恢复加密的 provider 凭据和 workflow payload。
 
-   内置公开源需要独立代理时，在生产 `.env` 中启用可选覆盖文件；该设置只影响蜜柑、Sidhub 等内置源的 HTTP 客户端：
+   内置资源源需要独立代理时，在生产 `.env` 中启用可选覆盖文件；该设置只影响蜜柑、Sidhub、FrameHDR、聚影等内置源的 HTTP 客户端：
 
    ```text
    COMPOSE_FILE=compose.yaml:compose.mikan-egress.yaml

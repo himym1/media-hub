@@ -15,7 +15,26 @@ type Offline interface {
 	AddOfflineURLs(ctx context.Context, destinationID string, urls []string) error
 }
 
+// ShareReceiver imports a 115 share into an existing destination folder.
+type ShareReceiver interface {
+	ReceiveShare(ctx context.Context, destinationID, shareCode, receiveCode string, fileIDs []string) error
+}
+
 func New(source config.SearchSource, timeout time.Duration, offline Offline, proxyURL *url.URL) search.TransferSource {
+	if source.ID == "framehdr" && (source.BaseURL == "" || isFrameHDRHost(source.BaseURL)) {
+		if strings.TrimSpace(source.Account) == "" || strings.TrimSpace(source.Token) == "" {
+			return nil
+		}
+		receiver, _ := offline.(ShareReceiver)
+		return NewFrameHDR(source.BaseURL, source.Account, source.Token, timeout, receiver, proxyURL)
+	}
+	if source.ID == "juying" && (source.BaseURL == "" || isJuyingHost(source.BaseURL)) {
+		if strings.TrimSpace(source.Account) == "" || strings.TrimSpace(source.Token) == "" {
+			return nil
+		}
+		receiver, _ := offline.(ShareReceiver)
+		return NewJuying(source.BaseURL, source.Account, source.Token, timeout, offline, receiver, proxyURL)
+	}
 	if source.ID == "mikan" && (source.BaseURL == "" || isMikanHost(source.BaseURL)) {
 		return NewMikan(source.BaseURL, source.Token, timeout, offline, proxyURL)
 	}
@@ -44,4 +63,22 @@ func isSidhubHost(raw string) bool {
 	}
 	host := strings.ToLower(parsed.Hostname())
 	return host == "sidhub.cc" || host == "www.sidhub.cc" || host == "seeduck.cc" || host == "www.seeduck.cc"
+}
+
+func isFrameHDRHost(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Port() != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host == "framehdr.com" || host == "www.framehdr.com"
+}
+
+func isJuyingHost(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Port() != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host == "jying.top" || host == "www.jying.top"
 }

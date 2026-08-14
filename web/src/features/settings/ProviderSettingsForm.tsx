@@ -25,7 +25,7 @@ function createDraft(settings: ProviderSettings): Draft {
     tmdb: { baseUrl: settings.tmdb.baseUrl, accessToken: secret() },
     wecom: { baseUrl: settings.wecom.baseUrl, corpId: settings.wecom.corpId, secret: secret(), chatId: settings.wecom.chatId },
     workflow: structuredClone(settings.workflow),
-    sources: settings.sources.map((source) => ({ id: source.id, baseUrl: source.baseUrl, token: secret() })),
+    sources: settings.sources.map((source) => ({ id: source.id, baseUrl: source.baseUrl, account: source.account, token: secret() })),
   }
 }
 
@@ -99,13 +99,15 @@ export function ProviderSettingsForm({ settings, isSaving, error, saved, onSave,
 
       <fieldset className="source-settings">
         <legend>原生资源源</legend>
-        <p className="settings-note">蜜柑和 Sidhub 可留空地址，使用内置匿名适配器。其他源填写实现合同的适配器地址与 Token。</p>
+        <p className="settings-note">蜜柑和 Sidhub 使用内置匿名适配器；帧影和聚影可留空地址并填写官方账户凭据。癫影需 VIP OpenAPI 与审批 SDK，当前仍使用合同适配器。</p>
         {settings.sources.map((source, index) => {
           const item = draft.sources[index]
+          const credential = source.id === 'framehdr' ? { account: '用户名', secret: '密码' } : source.id === 'dian' ? { secret: 'OpenAPI Key' } : source.id === 'juying' ? { account: 'App ID', secret: 'API Key' } : source.id === 'mikan' || source.id === 'sidhub' ? null : { secret: 'Bearer Token' }
           return <div className="source-setting-row" key={source.id}><strong>{source.label}</strong>
             <label><span>适配器地址</span><input onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, baseUrl: event.target.value } : value) }))} type="url" value={item.baseUrl} /></label>
-            <label><span>Bearer Token · {secretHint(source.token.configured)}</span><input autoComplete="off" onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, token: { ...value.token, value: event.target.value } } : value) }))} type="password" value={item.token.value} /></label>
-            {source.token.configured ? <label className="inline-check"><input checked={item.token.clear} onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, token: { value: '', clear: event.target.checked } } : value) }))} type="checkbox" />清除 Token</label> : <span />}
+            {credential?.account ? <label><span>{credential.account}</span><input autoComplete="username" onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, account: event.target.value } : value) }))} value={item.account} /></label> : null}
+            {credential ? <label><span>{credential.secret} · {secretHint(source.token.configured)}</span><input autoComplete="new-password" onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, token: { ...value.token, value: event.target.value } } : value) }))} type="password" value={item.token.value} /></label> : null}
+            {credential && source.token.configured ? <label className="inline-check"><input checked={item.token.clear} onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, token: { value: '', clear: event.target.checked } } : value) }))} type="checkbox" />清除已保存 {credential.secret}</label> : <span />}
           </div>
         })}
       </fieldset>

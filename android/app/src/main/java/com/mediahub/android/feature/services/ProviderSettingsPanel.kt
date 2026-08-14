@@ -107,14 +107,19 @@ internal fun ProviderSettingsPanel(
         }
 
         SettingsSection("原生资源源") {
-            MediaHubText("蜜柑和 Sidhub 可留空地址，使用内置匿名适配器。其他源填写实现合同的适配器地址与 Token。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
+            MediaHubText("蜜柑和 Sidhub 使用内置匿名适配器；帧影和聚影可留空地址并填写官方账户凭据。癫影需 VIP OpenAPI 与审批 SDK，当前仍使用合同适配器。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
             settings.sources.forEachIndexed { index, source ->
                 val item = draft.sources[index]
+                val accountLabel = when (source.id) { "framehdr" -> "用户名"; "juying" -> "App ID"; else -> null }
+                val secretLabel = when (source.id) { "framehdr" -> "密码"; "dian" -> "OpenAPI Key"; "juying" -> "API Key"; "mikan", "sidhub" -> null; else -> "Bearer Token" }
                 MediaHubText(source.label, color = MediaHubColors.TextStrong, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 LabeledField("${source.label} 适配器地址", item.baseUrl) { value ->
                     onDraftChange(draft.copy(sources = draft.sources.mapIndexed { itemIndex, current -> if (itemIndex == index) current.copy(baseUrl = value) else current }))
                 }
-                SecretField("${source.label} Bearer Token", source.token, item.token) { value ->
+                if (accountLabel != null) LabeledField("${source.label} $accountLabel", item.account) { value ->
+                    onDraftChange(draft.copy(sources = draft.sources.mapIndexed { itemIndex, current -> if (itemIndex == index) current.copy(account = value.take(200)) else current }))
+                }
+                if (secretLabel != null) SecretField("${source.label} $secretLabel", source.token, item.token) { value ->
                     onDraftChange(draft.copy(sources = draft.sources.mapIndexed { itemIndex, current -> if (itemIndex == index) current.copy(token = value) else current }))
                 }
             }

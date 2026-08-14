@@ -97,6 +97,7 @@ type SearchSource struct {
 	ID      string
 	Label   string
 	BaseURL string
+	Account string
 	Token   string
 }
 
@@ -343,8 +344,9 @@ func searchSourceConfigurations(
 			baseURL = legacyGatherURL
 			token = firstNonEmpty(token, secretValue(lookup, "MEDIA_HUB_SOURCE_GATHER_TOKEN"))
 		}
-		if baseURL != "" {
-			result = append(result, SearchSource{ID: specification.id, Label: specification.label, BaseURL: baseURL, Token: token})
+		account := stringValue(lookup, "MEDIA_HUB_SOURCE_"+specification.env+"_ACCOUNT", "")
+		if baseURL != "" || account != "" || token != "" {
+			result = append(result, SearchSource{ID: specification.id, Label: specification.label, BaseURL: baseURL, Account: account, Token: token})
 		}
 	}
 	return result, nil

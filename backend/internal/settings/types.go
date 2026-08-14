@@ -70,6 +70,7 @@ type TMDBUpdate struct {
 type SourceUpdate struct {
 	ID      string       `json:"id"`
 	BaseURL string       `json:"baseUrl"`
+	Account *string      `json:"account,omitempty"`
 	Token   SecretUpdate `json:"token"`
 }
 
@@ -118,6 +119,7 @@ type SourceView struct {
 	ID      string       `json:"id"`
 	Label   string       `json:"label"`
 	BaseURL string       `json:"baseUrl"`
+	Account string       `json:"account"`
 	Token   SecretStatus `json:"token"`
 }
 

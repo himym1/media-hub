@@ -18,15 +18,16 @@ import (
 )
 
 const (
-	userAgent           = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 115Browser/27.0.3.7"
-	userInfoEndpoint    = "https://webapi.115.com/files/index_info"
-	userProfileEndpoint = "https://my.115.com/?ct=ajax&ac=nav"
-	filesEndpoint       = "https://webapi.115.com/files"
-	folderAddEndpoint   = "https://webapi.115.com/files/add"
-	fileMoveEndpoint    = "https://webapi.115.com/files/move"
-	fileRenameEndpoint  = "https://webapi.115.com/files/batch_rename"
-	fileDeleteEndpoint  = "https://webapi.115.com/rb/delete"
-	offlineAddEndpoint  = "https://lixian.115.com/lixianssp/?ac=add_task_urls"
+	userAgent            = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 115Browser/27.0.3.7"
+	userInfoEndpoint     = "https://webapi.115.com/files/index_info"
+	userProfileEndpoint  = "https://my.115.com/?ct=ajax&ac=nav"
+	filesEndpoint        = "https://webapi.115.com/files"
+	folderAddEndpoint    = "https://webapi.115.com/files/add"
+	fileMoveEndpoint     = "https://webapi.115.com/files/move"
+	fileRenameEndpoint   = "https://webapi.115.com/files/batch_rename"
+	fileDeleteEndpoint   = "https://webapi.115.com/rb/delete"
+	offlineAddEndpoint   = "https://lixian.115.com/lixianssp/?ac=add_task_urls"
+	shareReceiveEndpoint = "https://webapi.115.com/share/receive"
 )
 
 var (
@@ -36,17 +37,18 @@ var (
 )
 
 type Client struct {
-	mu             sync.RWMutex
-	cookie         string
-	userInfoURL    string
-	userProfileURL string
-	filesURL       string
-	folderAddURL   string
-	fileMoveURL    string
-	fileRenameURL  string
-	fileDeleteURL  string
-	offlineAddURL  string
-	client         *http.Client
+	mu              sync.RWMutex
+	cookie          string
+	userInfoURL     string
+	userProfileURL  string
+	filesURL        string
+	folderAddURL    string
+	fileMoveURL     string
+	fileRenameURL   string
+	fileDeleteURL   string
+	offlineAddURL   string
+	shareReceiveURL string
+	client          *http.Client
 }
 
 type Status struct {
@@ -59,15 +61,16 @@ type Status struct {
 
 func NewClient(cookie string, timeout time.Duration) *Client {
 	return &Client{
-		cookie:         strings.TrimSpace(cookie),
-		userInfoURL:    userInfoEndpoint,
-		userProfileURL: userProfileEndpoint,
-		filesURL:       filesEndpoint,
-		folderAddURL:   folderAddEndpoint,
-		fileMoveURL:    fileMoveEndpoint,
-		fileRenameURL:  fileRenameEndpoint,
-		fileDeleteURL:  fileDeleteEndpoint,
-		offlineAddURL:  offlineAddEndpoint,
+		cookie:          strings.TrimSpace(cookie),
+		userInfoURL:     userInfoEndpoint,
+		userProfileURL:  userProfileEndpoint,
+		filesURL:        filesEndpoint,
+		folderAddURL:    folderAddEndpoint,
+		fileMoveURL:     fileMoveEndpoint,
+		fileRenameURL:   fileRenameEndpoint,
+		fileDeleteURL:   fileDeleteEndpoint,
+		offlineAddURL:   offlineAddEndpoint,
+		shareReceiveURL: shareReceiveEndpoint,
 		client: &http.Client{
 			Timeout: timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {

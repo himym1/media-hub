@@ -19,7 +19,7 @@ export type ProviderSettings = {
   tmdb: { baseUrl: string; accessToken: SecretStatus }
   wecom: { baseUrl: string; corpId: string; secret: SecretStatus; chatId: string }
   workflow: { qMediaSyncAccountId: number; movie: WorkflowTargetSettings; series: WorkflowTargetSettings }
-  sources: { id: string; label: string; baseUrl: string; token: SecretStatus }[]
+  sources: { id: string; label: string; baseUrl: string; account: string; token: SecretStatus }[]
 }
 export type ProviderSettingsUpdate = {
   qmediaSync: { baseUrl: string; apiKey: SecretUpdate }
@@ -28,9 +28,8 @@ export type ProviderSettingsUpdate = {
   tmdb: { baseUrl: string; accessToken: SecretUpdate }
   wecom: { baseUrl: string; corpId: string; secret: SecretUpdate; chatId: string }
   workflow: ProviderSettings['workflow']
-  sources: { id: string; baseUrl: string; token: SecretUpdate }[]
+  sources: { id: string; baseUrl: string; account: string; token: SecretUpdate }[]
 }
-
 export type OperationalStatistics = {
   transfersTotal: number
   transfersActive: number

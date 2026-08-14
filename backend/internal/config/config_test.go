@@ -179,6 +179,20 @@ func TestLoadConfiguresEightCanonicalSources(t *testing.T) {
 	}
 }
 
+func TestLoadConfiguresAccountSourceWithoutURL(t *testing.T) {
+	values := map[string]string{
+		"MEDIA_HUB_SOURCE_FRAMEHDR_ACCOUNT": "user",
+		"MEDIA_HUB_SOURCE_FRAMEHDR_TOKEN":   "pass",
+	}
+	loaded, err := load(testLookup(values))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Sources) != 1 || loaded.Sources[0].ID != "framehdr" || loaded.Sources[0].BaseURL != "" || loaded.Sources[0].Account != "user" || loaded.Sources[0].Token != "pass" {
+		t.Fatalf("sources = %#v", loaded.Sources)
+	}
+}
+
 func TestAndroidReleaseDirectoryRequiresAbsolutePath(t *testing.T) {
 	if _, err := load(testLookup(map[string]string{"MEDIA_HUB_ANDROID_RELEASE_DIR": "relative/releases"})); err == nil {
 		t.Fatal("expected relative Android release directory to fail")

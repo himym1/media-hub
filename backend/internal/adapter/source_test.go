@@ -47,6 +47,26 @@ func TestNewPassesProxyOnlyToBuiltinSources(t *testing.T) {
 	if err != nil || resolved.String() != proxyURL.String() {
 		t.Fatalf("proxy = %v, err = %v", resolved, err)
 	}
+	frame, ok := New(config.SearchSource{ID: "framehdr", Account: "user", Token: "pass"}, time.Second, nil, proxyURL).(*FrameHDR)
+	if !ok {
+		t.Fatalf("source = %#v", frame)
+	}
+	request, _ = http.NewRequest(http.MethodGet, "https://framehdr.com/search.php?q=test", nil)
+	transport = frame.client.Transport.(*http.Transport)
+	resolved, err = transport.Proxy(request)
+	if err != nil || resolved.String() != proxyURL.String() {
+		t.Fatalf("proxy = %v, err = %v", resolved, err)
+	}
+	juying, ok := New(config.SearchSource{ID: "juying", Account: "app-id", Token: "app-key"}, time.Second, nil, proxyURL).(*Juying)
+	if !ok {
+		t.Fatalf("source = %#v", juying)
+	}
+	request, _ = http.NewRequest(http.MethodGet, "https://www.jying.top/api/dev/movies/", nil)
+	transport = juying.client.Transport.(*http.Transport)
+	resolved, err = transport.Proxy(request)
+	if err != nil || resolved.String() != proxyURL.String() {
+		t.Fatalf("proxy = %v, err = %v", resolved, err)
+	}
 }
 
 func TestNewDoesNotApplyBuiltinProxyToContractSource(t *testing.T) {
@@ -76,6 +96,53 @@ func TestNewUsesContractAdapterForNonOfficialSidhubHost(t *testing.T) {
 		source := New(config.SearchSource{ID: "sidhub", Label: "Sidhub", BaseURL: raw}, time.Second, nil, nil)
 		if _, ok := source.(*search.HTTPSource); !ok {
 			t.Fatalf("source for %q = %#v", raw, source)
+		}
+	}
+}
+func TestNewUsesNativeFrameHDROnlyWithCompleteOfficialCredentials(t *testing.T) {
+	for _, source := range []config.SearchSource{
+		{ID: "framehdr"},
+		{ID: "framehdr", Account: "user"},
+		{ID: "framehdr", Token: "pass"},
+	} {
+		if got := New(source, time.Second, nil, nil); got != nil {
+			t.Fatalf("source = %#v", got)
+		}
+	}
+	for _, raw := range []string{"", "https://framehdr.com", "https://www.framehdr.com/"} {
+		got := New(config.SearchSource{ID: "framehdr", BaseURL: raw, Account: "user", Token: "pass"}, time.Second, nil, nil)
+		if _, ok := got.(*FrameHDR); !ok {
+			t.Fatalf("source for %q = %#v", raw, got)
+		}
+	}
+	for _, raw := range []string{"http://framehdr.com", "https://framehdr.com/path", "https://framehdr.com:8443", "https://evil.example"} {
+		got := New(config.SearchSource{ID: "framehdr", BaseURL: raw, Account: "user", Token: "pass"}, time.Second, nil, nil)
+		if _, ok := got.(*search.HTTPSource); !ok {
+			t.Fatalf("source for %q = %#v", raw, got)
+		}
+	}
+}
+
+func TestNewUsesNativeJuyingOnlyWithCompleteOfficialCredentials(t *testing.T) {
+	for _, source := range []config.SearchSource{
+		{ID: "juying"},
+		{ID: "juying", Account: "app-id"},
+		{ID: "juying", Token: "app-key"},
+	} {
+		if got := New(source, time.Second, nil, nil); got != nil {
+			t.Fatalf("source = %#v", got)
+		}
+	}
+	for _, raw := range []string{"", "https://jying.top", "https://www.jying.top/"} {
+		got := New(config.SearchSource{ID: "juying", BaseURL: raw, Account: "app-id", Token: "app-key"}, time.Second, nil, nil)
+		if _, ok := got.(*Juying); !ok {
+			t.Fatalf("source for %q = %#v", raw, got)
+		}
+	}
+	for _, raw := range []string{"http://jying.top", "https://jying.top/path", "https://jying.top:8443", "https://evil.example"} {
+		got := New(config.SearchSource{ID: "juying", BaseURL: raw, Account: "app-id", Token: "app-key"}, time.Second, nil, nil)
+		if _, ok := got.(*search.HTTPSource); !ok {
+			t.Fatalf("source for %q = %#v", raw, got)
 		}
 	}
 }
