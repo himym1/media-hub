@@ -229,6 +229,9 @@ func (c *Client) searchItems(ctx context.Context, configuration clientConfig, qu
 		"Recursive":        {"true"},
 		"SearchTerm":       {queryText},
 	}
+	if configuration.userID != "" {
+		query.Set("UserId", configuration.userID)
+	}
 	var response itemResponse
 	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
 		return SearchResult{}, err
@@ -263,6 +266,9 @@ func (c *Client) findIndexedItem(ctx context.Context, configuration clientConfig
 			"IncludeItemTypes":    {expectedType},
 			"Limit":               {"10"},
 			"Recursive":           {"true"},
+		}
+		if configuration.userID != "" {
+			query.Set("UserId", configuration.userID)
 		}
 		var response itemResponse
 		if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {

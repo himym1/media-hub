@@ -20,6 +20,10 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 		case "/Library/MediaFolders":
 			_, _ = w.Write([]byte(`{"Items":[{"Id":"library-1","Name":"电影","CollectionType":"movies"}],"TotalRecordCount":1}`))
 		case "/Items":
+			if request.URL.Query().Get("UserId") != "user-1" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			if providerID := request.URL.Query().Get("AnyProviderIdEquals"); providerID != "" {
 				providerQueries++
 				if providerID != "Tmdb.7131" {
