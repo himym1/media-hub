@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -54,6 +55,11 @@ func (c *Client) ReceiveShare(ctx context.Context, destinationID, shareCode, rec
 	if cookie == "" {
 		return ErrNotConfigured
 	}
+	userID, err := c.offlineUserID(ctx, cookie)
+	if err != nil {
+		return err
+	}
+	values.Set("user_id", strconv.FormatInt(userID, 10))
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.shareReceiveURL, strings.NewReader(values.Encode()))
 	if err != nil {
 		return &WriteError{Code: "invalid_request", Err: err}
