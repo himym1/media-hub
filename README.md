@@ -91,13 +91,18 @@ MEDIA_HUB_SOURCE_SIDHUB_TOKEN=<adapter-token>
 
 MEDIA_HUB_WECOM_CORP_ID=<enterprise-id>
 MEDIA_HUB_WECOM_SECRET=<application-secret>
-MEDIA_HUB_WECOM_CHAT_ID=<application-created-chat-id>
+MEDIA_HUB_WECOM_SEND_MODE=app
+MEDIA_HUB_WECOM_AGENT_ID=<application-agent-id>
+MEDIA_HUB_WECOM_TO_USER=@all
+MEDIA_HUB_WECOM_CHAT_ID=
 MEDIA_HUB_WECOM_URL=https://qyapi.weixin.qq.com
 ```
 
 Integration URLs must be absolute HTTP(S) URLs without embedded credentials, query parameters, or fragments. When a TMDB token is set without `MEDIA_HUB_TMDB_URL`, the official API URL is used.
 
 Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). Mikan and Sidhub are built-in anonymous adapters. FrameHDR and Juying are built-in account adapters whose official URLs may be left empty. FrameHDR `ACCOUNT`/`TOKEN` are username/password. Juying `AUTH_MODE=web` uses username/password, while `AUTH_MODE=developer` uses App ID/API Key; legacy Juying credentials without `AUTH_MODE` remain developer mode. `MEDIA_HUB_SOURCE_PROXY_URL` optionally routes only built-in source HTTP clients through an unauthenticated HTTP(S) proxy; the legacy `MEDIA_HUB_MIKAN_PROXY_URL` remains a fallback. Neither setting affects 115, TMDB, QMediaSync, Emby, WeCom, or contract adapters. Other sources use the HTTP adapter contract. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
+
+Enterprise WeChat supports `app` delivery through a normal self-built application's `message/send` API using Agent ID and ToUser, plus legacy `appchat` delivery using Chat ID. Prefer encrypted Provider Settings over environment variables and verify a saved configuration with the fixed test-notification action. Unknown submission results are never retried automatically.
 
 ## Local Verification
 

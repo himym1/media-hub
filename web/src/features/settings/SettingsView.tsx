@@ -10,6 +10,7 @@ import {
   getOperationalStatistics,
   pollDrive115Authorization,
   startDrive115Authorization,
+  testWeComNotification,
   updateProviderSettings,
   type Integration,
   type IntegrationStatus,
@@ -50,6 +51,7 @@ export function SettingsView({ integrations, onRefresh }: SettingsViewProps) {
       onRefresh()
     },
   })
+  const testWeCom = useMutation({ mutationFn: testWeComNotification })
   const statistics = useQuery({ queryKey: ['operational-statistics'], queryFn: getOperationalStatistics })
   const authorization = useMutation({ mutationFn: startDrive115Authorization })
   const authorizationStatus = useQuery({
@@ -111,7 +113,12 @@ export function SettingsView({ integrations, onRefresh }: SettingsViewProps) {
         <button className="primary-action" disabled={password.isPending || newPassword.length < 12 || newPassword !== confirmation || currentPassword === newPassword} type="submit"><KeyRound size={16} />{password.isPending ? '正在修改' : '修改密码'}</button>
       </form>
 
-      {providerSettings.data ? <ProviderSettingsForm error={saveProviderSettings.error?.message} isSaving={saveProviderSettings.isPending} onDirty={() => saveProviderSettings.reset()} onSave={(input) => saveProviderSettings.mutate(input)} saved={saveProviderSettings.isSuccess} settings={providerSettings.data} /> : providerSettings.isLoading ? <p className="empty-inline">正在读取服务设置</p> : <p className="form-error" role="alert">{providerSettings.error?.message ?? '无法读取服务设置'}</p>}
+      {providerSettings.data ? <ProviderSettingsForm
+        error={saveProviderSettings.error?.message} isSaving={saveProviderSettings.isPending} saved={saveProviderSettings.isSuccess}
+        isTesting={testWeCom.isPending} testError={testWeCom.error?.message} tested={testWeCom.isSuccess}
+        onDirty={() => { saveProviderSettings.reset(); testWeCom.reset() }} onSave={(input) => saveProviderSettings.mutate(input)} onTest={() => testWeCom.mutate()}
+        settings={providerSettings.data}
+      /> : providerSettings.isLoading ? <p className="empty-inline">正在读取服务设置</p> : <p className="form-error" role="alert">{providerSettings.error?.message ?? '无法读取服务设置'}</p>}
 
       <div className="diagnostic-grid">
         <section className="diagnostic-block"><div className="diagnostic-title"><Waypoints size={18} /><strong>QMediaSync</strong></div><dl><div><dt>版本</dt><dd>{qms.data?.version ?? '不可用'}</dd></div><div><dt>同步记录</dt><dd>{qms.data?.totalSyncs ?? 0}</dd></div><div><dt>最近状态</dt><dd>{qms.data?.recentSyncs[0]?.state ?? '无记录'}</dd></div></dl></section>

@@ -160,6 +160,7 @@ class MediaHubRepository(
 
     suspend fun providerSettings(): ProviderSettings = authenticated(api::providerSettings)
     suspend fun updateProviderSettings(input: ProviderSettingsUpdate): ProviderSettings = authenticated { api.updateProviderSettings(it, input) }
+    suspend fun testWeComNotification() = authenticated(api::testWeComNotification)
 
     private suspend fun <T> authenticated(block: suspend (String) -> T): T {
         val token = sessionStore.load() ?: throw ApiException(401, "authentication_required", "需要登录")

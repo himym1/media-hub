@@ -29,12 +29,18 @@ data class WeComSettings(
     val baseUrl: String,
     val corpId: String,
     val secret: SecretStatus,
+    val sendMode: String,
+    val agentId: Long,
+    val toUser: String,
     val chatId: String,
  )
 data class WeComSettingsUpdate(
     val baseUrl: String,
     val corpId: String,
     val secret: SecretUpdate = SecretUpdate(),
+    val sendMode: String,
+    val agentId: Long,
+    val toUser: String,
     val chatId: String,
  )
 data class ProviderSettings(

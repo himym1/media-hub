@@ -5,9 +5,13 @@ import type { ProviderSettings, ProviderSettingsUpdate, SecretUpdate } from '../
 type Props = {
   settings: ProviderSettings
   isSaving: boolean
+  isTesting: boolean
   error?: string
+  testError?: string
   saved: boolean
+  tested: boolean
   onSave: (input: ProviderSettingsUpdate) => void
+  onTest: () => void
   onDirty: () => void
 }
 
@@ -23,7 +27,11 @@ function createDraft(settings: ProviderSettings): Draft {
     emby: { baseUrl: settings.emby.baseUrl, apiKey: secret(), userId: settings.emby.userId },
     drive115: { clientId: settings.drive115.clientId },
     tmdb: { baseUrl: settings.tmdb.baseUrl, accessToken: secret() },
-    wecom: { baseUrl: settings.wecom.baseUrl, corpId: settings.wecom.corpId, secret: secret(), chatId: settings.wecom.chatId },
+    wecom: {
+      baseUrl: settings.wecom.baseUrl, corpId: settings.wecom.corpId, secret: secret(),
+      sendMode: settings.wecom.sendMode || (settings.wecom.chatId ? 'appchat' : 'app'),
+      agentId: settings.wecom.agentId, toUser: settings.wecom.toUser || '@all', chatId: settings.wecom.chatId,
+    },
     workflow: structuredClone(settings.workflow),
     sources: settings.sources.map((source) => ({
       id: source.id, baseUrl: source.baseUrl, account: source.account,
@@ -37,7 +45,7 @@ function secretHint(configured: boolean) {
   return configured ? '已保存，留空保持不变' : '尚未保存'
 }
 
-export function ProviderSettingsForm({ settings, isSaving, error, saved, onSave, onDirty }: Props) {
+export function ProviderSettingsForm({ settings, isSaving, isTesting, error, testError, saved, tested, onSave, onTest, onDirty }: Props) {
   const [draft, setDraft] = useState<Draft>(() => createDraft(settings))
   useEffect(() => setDraft(createDraft(settings)), [settings])
 
@@ -79,11 +87,18 @@ export function ProviderSettingsForm({ settings, isSaving, error, saved, onSave,
 
         <fieldset>
           <legend>企业微信</legend>
+          <div aria-label="企业微信发送方式" className="source-auth-mode" role="group"><button aria-pressed={draft.wecom.sendMode === 'app'} onClick={() => { onDirty(); setDraft((current) => ({ ...current, wecom: { ...current.wecom, sendMode: 'app', agentId: 0, toUser: '@all', chatId: '' } })) }} type="button">自建应用</button><button aria-pressed={draft.wecom.sendMode === 'appchat'} onClick={() => { onDirty(); setDraft((current) => ({ ...current, wecom: { ...current.wecom, sendMode: 'appchat', agentId: 0, toUser: '', chatId: '' } })) }} type="button">AppChat</button></div>
           <label><span>API 地址</span><input onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, baseUrl: event.target.value } }))} placeholder="https://qyapi.weixin.qq.com" type="url" value={draft.wecom.baseUrl} /></label>
           <label><span>Corp ID</span><input onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, corpId: event.target.value } }))} value={draft.wecom.corpId} /></label>
           <label><span>Secret · {secretHint(settings.wecom.secret.configured)}</span><input autoComplete="off" onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, secret: { ...current.wecom.secret, value: event.target.value } } }))} type="password" value={draft.wecom.secret.value} /></label>
-          <label><span>Chat ID</span><input onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, chatId: event.target.value } }))} value={draft.wecom.chatId} /></label>
+          {draft.wecom.sendMode === 'app' ? <>
+            <label><span>Agent ID</span><input min="1" onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, agentId: Number(event.target.value) || 0 } }))} type="number" value={draft.wecom.agentId || ''} /></label>
+            <label><span>接收人</span><input onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, toUser: event.target.value } }))} placeholder="@all" value={draft.wecom.toUser} /></label>
+          </> : <label><span>Chat ID</span><input onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, chatId: event.target.value } }))} value={draft.wecom.chatId} /></label>}
           {settings.wecom.secret.configured ? <label className="inline-check"><input checked={draft.wecom.secret.clear} onChange={(event) => setDraft((current) => ({ ...current, wecom: { ...current.wecom, secret: { value: '', clear: event.target.checked } } }))} type="checkbox" />清除已保存 Secret</label> : null}
+          <button className="secondary-command" disabled={!settings.wecom.secret.configured || isSaving || isTesting} onClick={onTest} type="button">{isTesting ? '正在发送' : '测试已保存配置'}</button>
+          {tested ? <span className="form-success" role="status">测试通知已提交</span> : null}
+          {testError ? <span className="form-error" role="alert">{testError}</span> : null}
         </fieldset>
       </div>
 

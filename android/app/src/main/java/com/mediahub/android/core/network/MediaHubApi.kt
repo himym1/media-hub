@@ -141,6 +141,10 @@ class MediaHubApi(baseUrl: String) {
         )),
     )
 
+    suspend fun testWeComNotification(token: String) {
+        request("/api/v1/integrations/wecom/test", method = "POST", token = token)
+    }
+
 
     suspend fun operationalStatistics(token: String): OperationalStatistics {
         val item = JSONObject(request("/api/v1/statistics/summary", token = token))
@@ -631,6 +635,9 @@ class MediaHubApi(baseUrl: String) {
                 baseUrl = wecom.getString("baseUrl"),
                 corpId = wecom.getString("corpId"),
                 secret = SecretStatus(wecom.getJSONObject("secret").getBoolean("configured")),
+                sendMode = wecom.optString("sendMode", if (wecom.optString("chatId").isNotBlank()) "appchat" else "app"),
+                agentId = wecom.optLong("agentId"),
+                toUser = wecom.optString("toUser", "@all"),
                 chatId = wecom.getString("chatId"),
             ),
             workflow = parseWorkflowSettings(workflow),
@@ -671,6 +678,9 @@ class MediaHubApi(baseUrl: String) {
             .put("baseUrl", input.wecom.baseUrl)
             .put("corpId", input.wecom.corpId)
             .put("secret", secretBody(input.wecom.secret))
+            .put("sendMode", input.wecom.sendMode)
+            .put("agentId", input.wecom.agentId)
+            .put("toUser", input.wecom.toUser)
             .put("chatId", input.wecom.chatId))
         .put("workflow", JSONObject().put("qMediaSyncAccountId", input.workflow.qMediaSyncAccountId).put("movie", workflowTargetBody(input.workflow.movie)).put("series", workflowTargetBody(input.workflow.series)))
         .put("sources", JSONArray().apply { input.sources.forEach { source -> put(JSONObject().put("id", source.id).put("baseUrl", source.baseUrl).put("account", source.account).put("authMode", source.authMode).put("token", secretBody(source.token))) } })

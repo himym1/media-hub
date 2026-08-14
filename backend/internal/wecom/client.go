@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"media-hub/backend/internal/config"
 	"media-hub/backend/internal/integration"
 )
 
@@ -32,10 +33,13 @@ func (failure SubmissionError) Error() string { return failure.Err.Error() }
 func (failure SubmissionError) Unwrap() error { return failure.Err }
 
 type clientConfig struct {
-	baseURL string
-	corpID  string
-	secret  string
-	chatID  string
+	baseURL  string
+	corpID   string
+	secret   string
+	sendMode string
+	agentID  uint
+	toUser   string
+	chatID   string
 }
 
 type Client struct {
@@ -45,6 +49,7 @@ type Client struct {
 	tokenMutex  sync.Mutex
 	token       string
 	expires     time.Time
+	tokenConfig clientConfig
 }
 
 type apiResponse struct {
@@ -54,8 +59,13 @@ type apiResponse struct {
 }
 
 func NewClient(baseURL, corpID, secret, chatID string, timeout time.Duration) *Client {
-	return &Client{
-		config: clientConfig{baseURL: strings.TrimRight(baseURL, "/"), corpID: corpID, secret: secret, chatID: chatID},
+	return NewConfiguredClient(config.WeCom{
+		BaseURL: baseURL, CorpID: corpID, Secret: secret, SendMode: config.WeComSendModeAppChat, ChatID: chatID,
+	}, timeout)
+}
+
+func NewConfiguredClient(configuration config.WeCom, timeout time.Duration) *Client {
+	client := &Client{
 		client: &http.Client{
 			Timeout: timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -63,15 +73,26 @@ func NewClient(baseURL, corpID, secret, chatID string, timeout time.Duration) *C
 			},
 		},
 	}
+	client.ConfigureDelivery(configuration)
+	return client
 }
 
 func (c *Client) Configure(baseURL, corpID, secret, chatID string) {
+	c.ConfigureDelivery(config.WeCom{
+		BaseURL: baseURL, CorpID: corpID, Secret: secret, SendMode: config.WeComSendModeAppChat, ChatID: chatID,
+	})
+}
+
+func (c *Client) ConfigureDelivery(configuration config.WeCom) {
 	c.configMutex.Lock()
 	c.config = clientConfig{
-		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
-		corpID:  strings.TrimSpace(corpID),
-		secret:  strings.TrimSpace(secret),
-		chatID:  strings.TrimSpace(chatID),
+		baseURL:  strings.TrimRight(strings.TrimSpace(configuration.BaseURL), "/"),
+		corpID:   strings.TrimSpace(configuration.CorpID),
+		secret:   strings.TrimSpace(configuration.Secret),
+		sendMode: configuration.DeliveryMode(),
+		agentID:  configuration.AgentID,
+		toUser:   strings.TrimSpace(configuration.ToUser),
+		chatID:   strings.TrimSpace(configuration.ChatID),
 	}
 	c.configMutex.Unlock()
 	c.invalidateToken()
@@ -84,18 +105,32 @@ func (c *Client) configuration() clientConfig {
 }
 
 func (c *Client) Configured() bool {
-	configuration := c.configuration()
-	return configuration.baseURL != "" && configuration.corpID != "" && configuration.secret != "" && configuration.chatID != ""
+	return configured(c.configuration())
+}
+
+func configured(configuration clientConfig) bool {
+	if configuration.baseURL == "" || configuration.corpID == "" || configuration.secret == "" {
+		return false
+	}
+	switch configuration.sendMode {
+	case config.WeComSendModeApp:
+		return configuration.agentID != 0 && configuration.toUser != "" && configuration.chatID == ""
+	case config.WeComSendModeAppChat:
+		return configuration.chatID != "" && configuration.agentID == 0 && configuration.toUser == ""
+	default:
+		return false
+	}
 }
 
 func (c *Client) Check(ctx context.Context) integration.Health {
 	health := integration.Health{ID: "wecom", Label: "企业微信"}
-	if !c.Configured() {
+	configuration := c.configuration()
+	if !configured(configuration) {
 		health.Status = integration.StatusUnconfigured
 		health.Detail = "尚未配置通知"
 		return health
 	}
-	if _, err := c.accessToken(ctx); err != nil {
+	if _, err := c.accessToken(ctx, configuration); err != nil {
 		health.Status = integration.StatusUnavailable
 		health.Detail = "无法取得通知凭证"
 		return health
@@ -106,18 +141,19 @@ func (c *Client) Check(ctx context.Context) integration.Health {
 }
 
 func (c *Client) Send(ctx context.Context, content string) (bool, error) {
-	if !c.Configured() {
+	configuration := c.configuration()
+	if !configured(configuration) {
 		return false, SubmissionError{Err: ErrNotConfigured}
 	}
 	if len([]byte(content)) > 2048 {
 		return false, SubmissionError{Err: ErrRejected}
 	}
 	for attempt := 0; attempt < 2; attempt++ {
-		token, err := c.accessToken(ctx)
+		token, err := c.accessToken(ctx, configuration)
 		if err != nil {
 			return false, SubmissionError{Err: err}
 		}
-		errorCode, err := c.send(ctx, token, content)
+		errorCode, err := c.send(ctx, configuration, token, content)
 		if err != nil {
 			var failure SubmissionError
 			if errors.As(err, &failure) {
@@ -129,7 +165,7 @@ func (c *Client) Send(ctx context.Context, content string) (bool, error) {
 			return false, nil
 		}
 		if (errorCode == 40014 || errorCode == 42001) && attempt == 0 {
-			c.invalidateToken()
+			c.invalidateTokenFor(configuration)
 			continue
 		}
 		return false, SubmissionError{Err: ErrRejected}
@@ -137,11 +173,10 @@ func (c *Client) Send(ctx context.Context, content string) (bool, error) {
 	return false, SubmissionError{Err: ErrRejected}
 }
 
-func (c *Client) accessToken(ctx context.Context) (string, error) {
-	configuration := c.configuration()
+func (c *Client) accessToken(ctx context.Context, configuration clientConfig) (string, error) {
 	c.tokenMutex.Lock()
 	defer c.tokenMutex.Unlock()
-	if c.token != "" && time.Now().UTC().Add(time.Minute).Before(c.expires) {
+	if c.token != "" && c.tokenConfig == configuration && time.Now().UTC().Add(time.Minute).Before(c.expires) {
 		return c.token, nil
 	}
 	endpoint, err := endpointURL(configuration, "gettoken", url.Values{"corpid": {configuration.corpID}, "corpsecret": {configuration.secret}})
@@ -161,28 +196,48 @@ func (c *Client) accessToken(ctx context.Context) (string, error) {
 	if response.ErrorCode != 0 || response.AccessToken == "" || response.ExpiresIn < 60 {
 		return "", ErrRejected
 	}
-	c.token = response.AccessToken
-	c.expires = time.Now().UTC().Add(time.Duration(response.ExpiresIn) * time.Second)
-	return c.token, nil
+	expires := time.Now().UTC().Add(time.Duration(response.ExpiresIn) * time.Second)
+	if c.configuration() == configuration {
+		c.token = response.AccessToken
+		c.expires = expires
+		c.tokenConfig = configuration
+	}
+	return response.AccessToken, nil
 }
 
-func (c *Client) send(ctx context.Context, token, content string) (int, error) {
-	configuration := c.configuration()
-	endpoint, err := endpointURL(configuration, "appchat/send", url.Values{"access_token": {token}})
-	if err != nil {
-		return 0, SubmissionError{Err: ErrNotConfigured}
-	}
-	body, err := json.Marshal(struct {
-		ChatID  string `json:"chatid"`
-		MsgType string `json:"msgtype"`
-		Text    struct {
+func (c *Client) send(ctx context.Context, configuration clientConfig, token, content string) (int, error) {
+	endpointPath := "appchat/send"
+	var body []byte
+	var err error
+	if configuration.sendMode == config.WeComSendModeApp {
+		endpointPath = "message/send"
+		body, err = json.Marshal(struct {
+			ToUser  string `json:"touser"`
+			MsgType string `json:"msgtype"`
+			AgentID uint   `json:"agentid"`
+			Text    struct {
+				Content string `json:"content"`
+			} `json:"text"`
+		}{ToUser: configuration.toUser, MsgType: "text", AgentID: configuration.agentID, Text: struct {
 			Content string `json:"content"`
-		} `json:"text"`
-	}{ChatID: configuration.chatID, MsgType: "text", Text: struct {
-		Content string `json:"content"`
-	}{Content: content}})
+		}{Content: content}})
+	} else {
+		body, err = json.Marshal(struct {
+			ChatID  string `json:"chatid"`
+			MsgType string `json:"msgtype"`
+			Text    struct {
+				Content string `json:"content"`
+			} `json:"text"`
+		}{ChatID: configuration.chatID, MsgType: "text", Text: struct {
+			Content string `json:"content"`
+		}{Content: content}})
+	}
 	if err != nil {
 		return 0, SubmissionError{Err: ErrRejected}
+	}
+	endpoint, err := endpointURL(configuration, endpointPath, url.Values{"access_token": {token}})
+	if err != nil {
+		return 0, SubmissionError{Err: ErrNotConfigured}
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
@@ -227,6 +282,17 @@ func (c *Client) invalidateToken() {
 	c.tokenMutex.Lock()
 	c.token = ""
 	c.expires = time.Time{}
+	c.tokenConfig = clientConfig{}
+	c.tokenMutex.Unlock()
+}
+
+func (c *Client) invalidateTokenFor(configuration clientConfig) {
+	c.tokenMutex.Lock()
+	if c.tokenConfig == configuration {
+		c.token = ""
+		c.expires = time.Time{}
+		c.tokenConfig = clientConfig{}
+	}
 	c.tokenMutex.Unlock()
 }
 

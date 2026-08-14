@@ -122,6 +122,11 @@ type SubscriptionManager interface {
 	Runs(context.Context, int64, string, int) ([]subscription.Run, error)
 }
 
+type WeComNotificationTester interface {
+	Configured() bool
+	Send(context.Context, string) (bool, error)
+}
+
 type ProviderSettings interface {
 	Get(context.Context, int64) (settings.View, error)
 	Update(context.Context, int64, settings.Update) (settings.View, error)
@@ -143,6 +148,7 @@ type Dependencies struct {
 	Workflow         TransferWorkflow
 	Subscriptions    SubscriptionManager
 	Settings         ProviderSettings
+	WeComTester      WeComNotificationTester
 	SecureCookies    bool
 	AndroidReleases  AndroidReleaseProvider
 	Web              http.Handler
@@ -186,6 +192,7 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/integrations/qmediasync/status", h.protected(h.getQMediaSyncStatus))
 	mux.Handle("GET /api/v1/integrations/emby/libraries", h.protected(h.getEmbyLibraries))
 	mux.Handle("GET /api/v1/integrations/emby/items", h.protected(h.searchEmbyItems))
+	mux.Handle("POST /api/v1/integrations/wecom/test", h.protected(h.testWeComNotification))
 	mux.Handle("GET /api/v1/integrations/115/status", h.protected(h.getDrive115Status))
 	mux.Handle("POST /api/v1/integrations/115/auth/device", h.protected(h.startDrive115Authorization))
 	mux.Handle("GET /api/v1/integrations/115/auth/device/{id}", h.protected(h.pollDrive115Authorization))

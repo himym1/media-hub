@@ -114,13 +114,7 @@ func run(logger *slog.Logger) error {
 		configuration.TMDB.AccessToken,
 		configuration.ProbeTimeout,
 	)
-	wecomClient := wecom.NewClient(
-		configuration.WeCom.BaseURL,
-		configuration.WeCom.CorpID,
-		configuration.WeCom.Secret,
-		configuration.WeCom.ChatID,
-		configuration.ProbeTimeout,
-	)
+	wecomClient := wecom.NewConfiguredClient(configuration.WeCom, configuration.ProbeTimeout)
 	searchService := search.NewServiceWithIdentity(tmdbClient)
 	workflowService := workflow.NewService(
 		dataStore, searchService, selectionCodec, qmsClient, embyClient, wecomClient, configuration.Workflow,
@@ -131,7 +125,7 @@ func run(logger *slog.Logger) error {
 			qmsClient.Configure(value.QMediaSync.BaseURL, value.QMediaSync.APIKey)
 			embyClient.Configure(value.Emby.BaseURL, value.Emby.APIKey, value.Emby.UserID)
 			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
-			wecomClient.Configure(value.WeCom.BaseURL, value.WeCom.CorpID, value.WeCom.Secret, value.WeCom.ChatID)
+			wecomClient.ConfigureDelivery(value.WeCom)
 			workflowService.Configure(value.Workflow)
 			runtimeSources := searchSourcesFromSettings(value, configuration.ProbeTimeout, configuration.FixtureMode, drive115AuthService, configuration.SourceProxyURL)
 			searchService.Configure(tmdbClient, runtimeSources...)
@@ -196,7 +190,7 @@ func run(logger *slog.Logger) error {
 			Auth: authService, Overview: overview, Search: searchService, Discovery: tmdbClient,
 			QMediaSync: qmsClient, Emby: embyClient, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
 			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService,
-			Settings:      settingsService,
+			Settings: settingsService, WeComTester: wecomClient,
 			SecureCookies: configuration.SecureCookies,
 			Web:           webui.Handler(),
 		}),

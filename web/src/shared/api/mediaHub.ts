@@ -17,7 +17,7 @@ export type ProviderSettings = {
   emby: { baseUrl: string; apiKey: SecretStatus; userId: string }
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretStatus }
-  wecom: { baseUrl: string; corpId: string; secret: SecretStatus; chatId: string }
+  wecom: { baseUrl: string; corpId: string; secret: SecretStatus; sendMode: 'app' | 'appchat'; agentId: number; toUser: string; chatId: string }
   workflow: { qMediaSyncAccountId: number; movie: WorkflowTargetSettings; series: WorkflowTargetSettings }
   sources: { id: string; label: string; baseUrl: string; account: string; authMode: string; token: SecretStatus }[]
 }
@@ -26,7 +26,7 @@ export type ProviderSettingsUpdate = {
   emby: { baseUrl: string; apiKey: SecretUpdate; userId: string }
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretUpdate }
-  wecom: { baseUrl: string; corpId: string; secret: SecretUpdate; chatId: string }
+  wecom: { baseUrl: string; corpId: string; secret: SecretUpdate; sendMode: 'app' | 'appchat'; agentId: number; toUser: string; chatId: string }
   workflow: ProviderSettings['workflow']
   sources: { id: string; baseUrl: string; account: string; authMode: string; token: SecretUpdate }[]
 }
@@ -402,6 +402,13 @@ export function updateProviderSettings(input: ProviderSettingsUpdate) {
 		headers: writeHeaders(),
 		body: JSON.stringify(input),
 	})
+}
+
+export function testWeComNotification() {
+  return requestJSON<{ status: 'sent' }>('/api/v1/integrations/wecom/test', {
+    method: 'POST',
+    headers: writeHeaders(false),
+  })
 }
 
 export function getQMediaSyncStatus() {

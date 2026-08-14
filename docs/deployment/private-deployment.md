@@ -49,6 +49,8 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
 
    聚影官方源支持两种认证模式：`web` 使用站点用户名/密码并在服务端维护短期 Cookie/token 会话；`developer` 使用 App ID/API Key。建议通过加密 Provider Settings 配置。若使用 `.env` 启动基线，则设置 `MEDIA_HUB_SOURCE_JUYING_AUTH_MODE=web|developer`、`..._ACCOUNT` 和 `..._TOKEN`；历史凭据未设置 mode 时继续按 `developer` 解释。显式切换 mode 会清空旧模式凭据，防止密码与 API Key 互相复用。
 
+企业微信通知支持两种发送模式。`app` 复用普通自建应用，通过 `message/send` 使用 Corp ID、Secret、Agent ID 和 ToUser；`appchat` 继续兼容通过 Chat ID 调用 `appchat/send` 的历史配置。生产优先在加密 Provider Settings 中配置并使用“发送测试通知”验收；`.env` 启动基线可设置 `MEDIA_HUB_WECOM_SEND_MODE=app|appchat`，自建应用模式还需 `MEDIA_HUB_WECOM_AGENT_ID` 和 `MEDIA_HUB_WECOM_TO_USER`。测试请求结果未知时不会自动重发。
+
 3. 先备份，再拉取固定版本：
 
    ```sh

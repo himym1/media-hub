@@ -28,6 +28,8 @@ data class ServicesUiState(
     val settingsExpanded: Boolean = false,
     val savingSettings: Boolean = false,
     val settingsSaved: Boolean = false,
+    val testingWeCom: Boolean = false,
+    val weComTested: Boolean = false,
     val driveAuthorization: Drive115DeviceAuthorization? = null,
     val authorizingDrive: Boolean = false,
     val androidRelease: AndroidRelease? = null,
@@ -146,7 +148,7 @@ class ServicesViewModel(
     }
 
     fun setSettingsDraft(value: ProviderSettingsUpdate) {
-        _uiState.value = _uiState.value.copy(settingsDraft = value, settingsSaved = false)
+        _uiState.value = _uiState.value.copy(settingsDraft = value, settingsSaved = false, weComTested = false)
     }
 
     fun saveSettings() {
@@ -167,6 +169,21 @@ class ServicesViewModel(
                 _uiState.value = _uiState.value.copy(savingSettings = false, errorMessage = error.message ?: "服务设置保存失败")
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(savingSettings = false, errorMessage = "无法保存服务设置")
+            }
+        }
+    }
+
+    fun testWeComNotification() {
+        if (_uiState.value.testingWeCom) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(testingWeCom = true, weComTested = false, errorMessage = null)
+            try {
+                repository.testWeComNotification()
+                _uiState.value = _uiState.value.copy(testingWeCom = false, weComTested = true)
+            } catch (error: ApiException) {
+                _uiState.value = _uiState.value.copy(testingWeCom = false, errorMessage = error.message ?: "企业微信测试通知失败")
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(testingWeCom = false, errorMessage = "无法发送企业微信测试通知")
             }
         }
     }
@@ -248,5 +265,8 @@ private fun ProviderSettings.toUpdate() = ProviderSettingsUpdate(
 private fun com.mediahub.android.core.network.WeComSettings.toUpdate() = com.mediahub.android.core.network.WeComSettingsUpdate(
     baseUrl = baseUrl,
     corpId = corpId,
+    sendMode = sendMode,
+    agentId = agentId,
+    toUser = toUser.ifBlank { "@all" },
     chatId = chatId,
- )
+)

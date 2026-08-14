@@ -147,6 +147,35 @@ func TestLoadRejectsPartialWeComConfiguration(t *testing.T) {
 	}
 }
 
+func TestLoadAcceptsWeComApplicationDelivery(t *testing.T) {
+	values := map[string]string{
+		"MEDIA_HUB_WECOM_CORP_ID":   "corp",
+		"MEDIA_HUB_WECOM_SECRET":    "secret",
+		"MEDIA_HUB_WECOM_SEND_MODE": "app",
+		"MEDIA_HUB_WECOM_AGENT_ID":  "1000005",
+		"MEDIA_HUB_WECOM_TO_USER":   "@all",
+	}
+	configuration, err := load(func(key string) (string, bool) { value, ok := values[key]; return value, ok })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configuration.WeCom.DeliveryMode() != "app" || configuration.WeCom.AgentID != 1000005 || configuration.WeCom.ToUser != "@all" {
+		t.Fatalf("WeCom application delivery = %+v", configuration.WeCom)
+	}
+}
+
+func TestLoadRejectsInvalidWeComSendMode(t *testing.T) {
+	_, err := load(func(key string) (string, bool) {
+		if key == "MEDIA_HUB_WECOM_SEND_MODE" {
+			return "invalid", true
+		}
+		return "", false
+	})
+	if err == nil {
+		t.Fatal("expected invalid WeCom send mode error")
+	}
+}
+
 func TestLoadRejectsInvalidQMediaSyncAccountID(t *testing.T) {
 	_, err := load(func(key string) (string, bool) {
 		if key == "MEDIA_HUB_QMS_ACCOUNT_ID" {

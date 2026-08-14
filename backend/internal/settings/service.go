@@ -151,8 +151,23 @@ func merge(current Values, input Update) Values {
 		current.WeCom.BaseURL = strings.TrimSpace(input.WeCom.BaseURL)
 		current.WeCom.CorpID = strings.TrimSpace(input.WeCom.CorpID)
 		current.WeCom.Secret = mergeSecret(current.WeCom.Secret, input.WeCom.Secret)
+		previousMode := current.WeCom.DeliveryMode()
+		if input.WeCom.SendMode != nil {
+			current.WeCom.SendMode = strings.ToLower(strings.TrimSpace(*input.WeCom.SendMode))
+			if current.WeCom.DeliveryMode() != previousMode {
+				current.WeCom.AgentID = 0
+				current.WeCom.ToUser = ""
+				current.WeCom.ChatID = ""
+			}
+		}
+		if input.WeCom.AgentID != nil {
+			current.WeCom.AgentID = *input.WeCom.AgentID
+		}
+		if input.WeCom.ToUser != nil {
+			current.WeCom.ToUser = strings.TrimSpace(*input.WeCom.ToUser)
+		}
 		current.WeCom.ChatID = strings.TrimSpace(input.WeCom.ChatID)
-		if current.WeCom.BaseURL == "" && (current.WeCom.CorpID != "" || current.WeCom.Secret != "" || current.WeCom.ChatID != "") {
+		if current.WeCom.BaseURL == "" && (current.WeCom.CorpID != "" || current.WeCom.Secret != "" || current.WeCom.AgentID != 0 || current.WeCom.ToUser != "" || current.WeCom.ChatID != "") {
 			current.WeCom.BaseURL = "https://qyapi.weixin.qq.com"
 		}
 	}
@@ -226,18 +241,31 @@ func validate(value Values) error {
 	if len(value.QMediaSync.BaseURL) > 2048 || len(value.QMediaSync.APIKey) > 4096 ||
 		len(value.Emby.BaseURL) > 2048 || len(value.Emby.APIKey) > 4096 || len(value.Emby.UserID) > 200 ||
 		len(value.Drive115.ClientID) > 200 || len(value.TMDB.BaseURL) > 2048 || len(value.TMDB.AccessToken) > 4096 ||
-		len(value.WeCom.BaseURL) > 2048 || len(value.WeCom.CorpID) > 200 || len(value.WeCom.Secret) > 4096 || len(value.WeCom.ChatID) > 200 {
+		len(value.WeCom.BaseURL) > 2048 || len(value.WeCom.CorpID) > 200 || len(value.WeCom.Secret) > 4096 || len(value.WeCom.SendMode) > 20 || len(value.WeCom.ToUser) > 200 || len(value.WeCom.ChatID) > 200 {
 		return fmt.Errorf("%w: provider setting is too long", ErrInvalid)
 	}
-	wecomFields := []string{value.WeCom.BaseURL, value.WeCom.CorpID, value.WeCom.Secret, value.WeCom.ChatID}
-	configuredWeComFields := 0
-	for _, field := range wecomFields {
-		if field != "" {
-			configuredWeComFields++
-		}
+	if value.WeCom.AgentID > uint(^uint32(0)) {
+		return fmt.Errorf("%w: WeCom agent ID is out of range", ErrInvalid)
 	}
-	if configuredWeComFields != 0 && configuredWeComFields != len(wecomFields) {
-		return fmt.Errorf("%w: WeCom URL, corp ID, secret, and chat ID must be configured together", ErrInvalid)
+	configuredWeCom := value.WeCom.BaseURL != "" || value.WeCom.CorpID != "" || value.WeCom.Secret != "" || value.WeCom.AgentID != 0 || value.WeCom.ToUser != "" || value.WeCom.ChatID != ""
+	if configuredWeCom {
+		if value.WeCom.BaseURL == "" || value.WeCom.CorpID == "" || value.WeCom.Secret == "" {
+			return fmt.Errorf("%w: WeCom URL, corp ID, and secret must be configured together", ErrInvalid)
+		}
+		switch value.WeCom.DeliveryMode() {
+		case config.WeComSendModeApp:
+			if value.WeCom.AgentID == 0 || value.WeCom.ToUser == "" || value.WeCom.ChatID != "" {
+				return fmt.Errorf("%w: WeCom app mode requires agent ID and recipient without a chat ID", ErrInvalid)
+			}
+		case config.WeComSendModeAppChat:
+			if value.WeCom.ChatID == "" || value.WeCom.AgentID != 0 || value.WeCom.ToUser != "" {
+				return fmt.Errorf("%w: WeCom appchat mode requires a chat ID without agent ID or recipient", ErrInvalid)
+			}
+		default:
+			return fmt.Errorf("%w: WeCom send mode must be app or appchat", ErrInvalid)
+		}
+	} else if mode := value.WeCom.DeliveryMode(); mode != config.WeComSendModeApp && mode != config.WeComSendModeAppChat {
+		return fmt.Errorf("%w: WeCom send mode must be app or appchat", ErrInvalid)
 	}
 	for _, target := range []config.WorkflowTarget{value.Workflow.Movie, value.Workflow.Series} {
 		if len(target.DestinationID) > 200 || len(target.QMediaSyncTargetPath) > 2048 || len(target.EmbyLibraryID) > 200 {
@@ -370,9 +398,12 @@ func publicView(value Values) View {
 		Emby:       EmbyView{BaseURL: value.Emby.BaseURL, APIKey: SecretStatus{Configured: value.Emby.APIKey != ""}, UserID: value.Emby.UserID},
 		Drive115:   Drive115View{ClientID: value.Drive115.ClientID},
 		TMDB:       TMDBView{BaseURL: value.TMDB.BaseURL, AccessToken: SecretStatus{Configured: value.TMDB.AccessToken != ""}},
-		WeCom:      WeComView{BaseURL: value.WeCom.BaseURL, CorpID: value.WeCom.CorpID, Secret: SecretStatus{Configured: value.WeCom.Secret != ""}, ChatID: value.WeCom.ChatID},
-		Workflow:   workflowFromConfig(value.Workflow),
-		Sources:    sources,
+		WeCom: WeComView{
+			BaseURL: value.WeCom.BaseURL, CorpID: value.WeCom.CorpID, Secret: SecretStatus{Configured: value.WeCom.Secret != ""},
+			SendMode: value.WeCom.DeliveryMode(), AgentID: value.WeCom.AgentID, ToUser: value.WeCom.ToUser, ChatID: value.WeCom.ChatID,
+		},
+		Workflow: workflowFromConfig(value.Workflow),
+		Sources:  sources,
 	}
 }
 

@@ -76,10 +76,13 @@ type SourceUpdate struct {
 }
 
 type WeComUpdate struct {
-	BaseURL string       `json:"baseUrl"`
-	CorpID  string       `json:"corpId"`
-	Secret  SecretUpdate `json:"secret"`
-	ChatID  string       `json:"chatId"`
+	BaseURL  string       `json:"baseUrl"`
+	CorpID   string       `json:"corpId"`
+	Secret   SecretUpdate `json:"secret"`
+	SendMode *string      `json:"sendMode,omitempty"`
+	AgentID  *uint        `json:"agentId,omitempty"`
+	ToUser   *string      `json:"toUser,omitempty"`
+	ChatID   string       `json:"chatId"`
 }
 
 type Update struct {
@@ -126,10 +129,13 @@ type SourceView struct {
 }
 
 type WeComView struct {
-	BaseURL string       `json:"baseUrl"`
-	CorpID  string       `json:"corpId"`
-	Secret  SecretStatus `json:"secret"`
-	ChatID  string       `json:"chatId"`
+	BaseURL  string       `json:"baseUrl"`
+	CorpID   string       `json:"corpId"`
+	Secret   SecretStatus `json:"secret"`
+	SendMode string       `json:"sendMode"`
+	AgentID  uint         `json:"agentId"`
+	ToUser   string       `json:"toUser"`
+	ChatID   string       `json:"chatId"`
 }
 
 type View struct {

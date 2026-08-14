@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.13.0
+  version: 0.13.1
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -272,6 +272,25 @@ paths:
           $ref: '#/components/responses/ProblemResponse'
         '401':
           $ref: '#/components/responses/ProblemResponse'
+  /integrations/wecom/test:
+    post:
+      operationId: testWeComNotification
+      summary: Send one fixed test notification through the current Enterprise WeChat configuration
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+      responses:
+        '200':
+          description: Test notification accepted by Enterprise WeChat
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties: { status: { type: string, enum: [sent] } }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
   /integrations/qmediasync/status:
     get:
       operationId: getQMediaSyncStatus
@@ -1293,11 +1312,14 @@ components:
             accessToken: { $ref: '#/components/schemas/SecretStatus' }
         wecom:
           type: object
-          required: [baseUrl, corpId, secret, chatId]
+          required: [baseUrl, corpId, secret, sendMode, agentId, toUser, chatId]
           properties:
             baseUrl: { type: string, maxLength: 2048 }
             corpId: { type: string, maxLength: 200 }
             secret: { $ref: '#/components/schemas/SecretStatus' }
+            sendMode: { type: string, enum: [app, appchat] }
+            agentId: { type: integer, format: int64, minimum: 0 }
+            toUser: { type: string, maxLength: 200 }
             chatId: { type: string, maxLength: 200 }
         workflow: { $ref: '#/components/schemas/WorkflowSettings' }
         sources:
@@ -1340,6 +1362,9 @@ components:
             baseUrl: { type: string, maxLength: 2048 }
             corpId: { type: string, maxLength: 200 }
             secret: { $ref: '#/components/schemas/SecretUpdate' }
+            sendMode: { type: string, enum: [app, appchat] }
+            agentId: { type: integer, format: int64, minimum: 0 }
+            toUser: { type: string, maxLength: 200 }
             chatId: { type: string, maxLength: 200 }
         workflow: { $ref: '#/components/schemas/WorkflowSettings' }
         sources:

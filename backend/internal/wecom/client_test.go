@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"media-hub/backend/internal/config"
 )
 
 func TestSendRefreshesRejectedAccessToken(t *testing.T) {
@@ -69,10 +71,10 @@ func TestConfigureUpdatesCredentialsAndClearsCachedToken(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.URL, "old-corp", "old-secret", "old-chat", time.Second)
-	if _, err := client.accessToken(context.Background()); err != nil {
+	if _, err := client.accessToken(context.Background(), client.configuration()); err != nil {
 		t.Fatalf("initial token: %v", err)
 	}
-	if _, err := client.accessToken(context.Background()); err != nil {
+	if _, err := client.accessToken(context.Background(), client.configuration()); err != nil {
 		t.Fatalf("cached token: %v", err)
 	}
 	if tokenCalls != 1 {
@@ -83,7 +85,7 @@ func TestConfigureUpdatesCredentialsAndClearsCachedToken(t *testing.T) {
 	if !client.Configured() {
 		t.Fatal("client should remain configured after credential update")
 	}
-	token, err := client.accessToken(context.Background())
+	token, err := client.accessToken(context.Background(), client.configuration())
 	if err != nil {
 		t.Fatalf("token after configure: %v", err)
 	}
@@ -95,5 +97,114 @@ func TestConfigureUpdatesCredentialsAndClearsCachedToken(t *testing.T) {
 	}
 	if seen[0] != [2]string{"old-corp", "old-secret"} || seen[1] != [2]string{"new-corp", "new-secret"} {
 		t.Fatalf("token credentials = %#v", seen)
+	}
+}
+
+func TestSendUsesApplicationMessageContract(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/cgi-bin/gettoken":
+			_, _ = w.Write([]byte(`{"errcode":0,"access_token":"token","expires_in":7200}`))
+		case "/cgi-bin/message/send":
+			var body struct {
+				ToUser  string `json:"touser"`
+				AgentID uint   `json:"agentid"`
+				ChatID  string `json:"chatid"`
+				Text    struct {
+					Content string `json:"content"`
+				} `json:"text"`
+			}
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body.ToUser != "@all" || body.AgentID != 1000005 || body.ChatID != "" || body.Text.Content != "测试" {
+				t.Fatalf("unexpected message body: %+v", body)
+			}
+			_, _ = w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewConfiguredClient(config.WeCom{
+		BaseURL: server.URL, CorpID: "corp", Secret: "secret", SendMode: config.WeComSendModeApp, AgentID: 1000005, ToUser: "@all",
+	}, time.Second)
+	unknown, err := client.Send(context.Background(), "测试")
+	if err != nil || unknown {
+		t.Fatalf("unknown=%v err=%v", unknown, err)
+	}
+}
+
+func TestSendKeepsConfigurationSnapshotAcrossHotUpdate(t *testing.T) {
+	oldTokenStarted := make(chan struct{})
+	releaseOldToken := make(chan struct{})
+	oldSent := make(chan struct{}, 1)
+	oldServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/cgi-bin/gettoken":
+			close(oldTokenStarted)
+			<-releaseOldToken
+			_, _ = w.Write([]byte(`{"errcode":0,"access_token":"old-token","expires_in":7200}`))
+		case "/cgi-bin/message/send":
+			if request.URL.Query().Get("access_token") != "old-token" {
+				t.Errorf("old token mismatch")
+			}
+			oldSent <- struct{}{}
+			_, _ = w.Write([]byte(`{"errcode":0}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer oldServer.Close()
+
+	newTokenCalls := 0
+	newServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/cgi-bin/gettoken":
+			newTokenCalls++
+			_, _ = w.Write([]byte(`{"errcode":0,"access_token":"new-token","expires_in":7200}`))
+		case "/cgi-bin/message/send":
+			if request.URL.Query().Get("access_token") != "new-token" {
+				t.Errorf("new token mismatch")
+			}
+			_, _ = w.Write([]byte(`{"errcode":0}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer newServer.Close()
+
+	client := NewConfiguredClient(config.WeCom{BaseURL: oldServer.URL, CorpID: "old", Secret: "old-secret", SendMode: "app", AgentID: 1, ToUser: "old-user"}, time.Second)
+	result := make(chan error, 1)
+	go func() { _, err := client.Send(context.Background(), "old"); result <- err }()
+	<-oldTokenStarted
+	reconfigured := make(chan struct{})
+	go func() {
+		client.ConfigureDelivery(config.WeCom{BaseURL: newServer.URL, CorpID: "new", Secret: "new-secret", SendMode: "app", AgentID: 2, ToUser: "new-user"})
+		close(reconfigured)
+	}()
+	deadline := time.Now().Add(time.Second)
+	for client.configuration().baseURL != newServer.URL && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if client.configuration().baseURL != newServer.URL {
+		t.Fatal("configuration did not switch")
+	}
+	close(releaseOldToken)
+	<-reconfigured
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-oldSent:
+	default:
+		t.Fatal("old operation did not use its original destination")
+	}
+	if _, err := client.Send(context.Background(), "new"); err != nil {
+		t.Fatal(err)
+	}
+	if newTokenCalls != 1 {
+		t.Fatalf("new token calls = %d", newTokenCalls)
 	}
 }

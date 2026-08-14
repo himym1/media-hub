@@ -205,6 +205,14 @@ func TestMergeWeComSecretPreserveAndClear(t *testing.T) {
 	}
 }
 
+func TestMergeWeComPreservesNewFieldsForOlderClients(t *testing.T) {
+	current := Values{WeCom: config.WeCom{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp", Secret: "secret", SendMode: "app", AgentID: 1000005, ToUser: "@all"}}
+	merged := merge(current, Update{WeCom: &WeComUpdate{BaseURL: current.WeCom.BaseURL, CorpID: current.WeCom.CorpID}})
+	if merged.WeCom != current.WeCom {
+		t.Fatalf("older-client WeCom update changed new fields: %+v", merged.WeCom)
+	}
+}
+
 func TestMergeSourceAccountDistinguishesOmittedAndCleared(t *testing.T) {
 	current := Values{Sources: configSources()}
 	current.Sources[1].Account = "saved-account"
@@ -257,6 +265,14 @@ func TestValidateRejectsPartialWeCom(t *testing.T) {
 	value.WeCom = config.WeCom{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp", Secret: "secret", ChatID: "chat"}
 	if err := validate(value); err != nil {
 		t.Fatalf("complete WeCom rejected: %v", err)
+	}
+	value.WeCom = config.WeCom{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp", Secret: "secret", SendMode: "app", AgentID: 1000005, ToUser: "@all"}
+	if err := validate(value); err != nil {
+		t.Fatalf("complete WeCom application delivery rejected: %v", err)
+	}
+	value.WeCom.SendMode = "invalid"
+	if !errors.Is(validate(value), ErrInvalid) {
+		t.Fatal("invalid WeCom send mode was accepted")
 	}
 }
 

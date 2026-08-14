@@ -71,6 +71,7 @@ internal fun ServicesRoute(
         onToggleSettings = viewModel::toggleSettings,
         onSettingsDraftChange = viewModel::setSettingsDraft,
         onSaveSettings = viewModel::saveSettings,
+        onTestWeCom = viewModel::testWeComNotification,
         onStartDriveAuthorization = viewModel::startDriveAuthorization,
         onCurrentPasswordChange = viewModel::setCurrentPassword,
         onNewPasswordChange = viewModel::setNewPassword,
@@ -94,6 +95,7 @@ private fun ServicesScreen(
     onToggleSettings: () -> Unit,
     onSettingsDraftChange: (com.mediahub.android.core.network.ProviderSettingsUpdate) -> Unit,
     onSaveSettings: () -> Unit,
+    onTestWeCom: () -> Unit,
     onStartDriveAuthorization: () -> Unit,
     onCurrentPasswordChange: (String) -> Unit,
     onNewPasswordChange: (String) -> Unit,
@@ -229,9 +231,12 @@ private fun ServicesScreen(
                     expanded = uiState.settingsExpanded,
                     saving = uiState.savingSettings,
                     saved = uiState.settingsSaved,
+                    testing = uiState.testingWeCom,
+                    tested = uiState.weComTested,
                     onToggle = onToggleSettings,
                     onDraftChange = onSettingsDraftChange,
                     onSave = onSaveSettings,
+                    onTest = onTestWeCom,
                 )
             }
             item(key = "drive-authorization") {

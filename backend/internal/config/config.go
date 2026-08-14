@@ -59,10 +59,28 @@ type TMDB struct {
 }
 
 type WeCom struct {
-	BaseURL string
-	CorpID  string
-	Secret  string
-	ChatID  string
+	BaseURL  string
+	CorpID   string
+	Secret   string
+	SendMode string
+	AgentID  uint
+	ToUser   string
+	ChatID   string
+}
+
+const (
+	WeComSendModeApp     = "app"
+	WeComSendModeAppChat = "appchat"
+)
+
+func (configuration WeCom) DeliveryMode() string {
+	if mode := strings.ToLower(strings.TrimSpace(configuration.SendMode)); mode != "" {
+		return mode
+	}
+	if configuration.ChatID != "" {
+		return WeComSendModeAppChat
+	}
+	return WeComSendModeApp
 }
 
 type Workflow struct {
@@ -171,6 +189,10 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	wecomAgentID, err := uintValue(lookup, "MEDIA_HUB_WECOM_AGENT_ID")
+	if err != nil {
+		return Config{}, err
+	}
 	frameURL, err := baseURLValue(lookup, "MEDIA_HUB_SOURCE_FRAME_URL")
 	if err != nil {
 		return Config{}, err
@@ -196,23 +218,22 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 	}
 	tmdbConfig := TMDB{BaseURL: tmdbURL, AccessToken: tmdbToken}
 	wecomConfig := WeCom{
-		BaseURL: wecomURL,
-		CorpID:  stringValue(lookup, "MEDIA_HUB_WECOM_CORP_ID", ""),
-		Secret:  secretValue(lookup, "MEDIA_HUB_WECOM_SECRET"),
-		ChatID:  stringValue(lookup, "MEDIA_HUB_WECOM_CHAT_ID", ""),
+		BaseURL:  wecomURL,
+		CorpID:   strings.TrimSpace(stringValue(lookup, "MEDIA_HUB_WECOM_CORP_ID", "")),
+		Secret:   secretValue(lookup, "MEDIA_HUB_WECOM_SECRET"),
+		SendMode: strings.ToLower(strings.TrimSpace(stringValue(lookup, "MEDIA_HUB_WECOM_SEND_MODE", ""))),
+		AgentID:  wecomAgentID,
+		ToUser:   strings.TrimSpace(stringValue(lookup, "MEDIA_HUB_WECOM_TO_USER", "")),
+		ChatID:   strings.TrimSpace(stringValue(lookup, "MEDIA_HUB_WECOM_CHAT_ID", "")),
 	}
-	if wecomConfig.BaseURL == "" && (wecomConfig.CorpID != "" || wecomConfig.Secret != "" || wecomConfig.ChatID != "") {
+	if wecomConfig.SendMode == "" {
+		wecomConfig.SendMode = wecomConfig.DeliveryMode()
+	}
+	if wecomConfig.BaseURL == "" && (wecomConfig.CorpID != "" || wecomConfig.Secret != "" || wecomConfig.AgentID != 0 || wecomConfig.ToUser != "" || wecomConfig.ChatID != "") {
 		wecomConfig.BaseURL = "https://qyapi.weixin.qq.com"
 	}
-	wecomFields := []string{wecomConfig.BaseURL, wecomConfig.CorpID, wecomConfig.Secret, wecomConfig.ChatID}
-	configuredWeComFields := 0
-	for _, value := range wecomFields {
-		if value != "" {
-			configuredWeComFields++
-		}
-	}
-	if configuredWeComFields != 0 && configuredWeComFields != len(wecomFields) {
-		return Config{}, fmt.Errorf("WeCom URL, corp ID, secret, and chat ID must be configured together")
+	if err := validateWeCom(wecomConfig); err != nil {
+		return Config{}, err
 	}
 	sources, err := searchSourceConfigurations(lookup, frameURL, gatherURL)
 	if err != nil {
@@ -263,6 +284,34 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 			{ID: "emby", Label: "Emby", BaseURL: emby.BaseURL},
 		},
 	}, nil
+}
+
+func validateWeCom(configuration WeCom) error {
+	mode := configuration.DeliveryMode()
+	if mode != WeComSendModeApp && mode != WeComSendModeAppChat {
+		return fmt.Errorf("MEDIA_HUB_WECOM_SEND_MODE must be app or appchat")
+	}
+	if configuration.AgentID > uint(^uint32(0)) {
+		return fmt.Errorf("MEDIA_HUB_WECOM_AGENT_ID is out of range")
+	}
+	configured := configuration.BaseURL != "" || configuration.CorpID != "" || configuration.Secret != "" || configuration.AgentID != 0 || configuration.ToUser != "" || configuration.ChatID != ""
+	if !configured {
+		return nil
+	}
+	if configuration.BaseURL == "" || configuration.CorpID == "" || configuration.Secret == "" {
+		return fmt.Errorf("WeCom URL, corp ID, and secret must be configured together")
+	}
+	switch mode {
+	case WeComSendModeApp:
+		if configuration.AgentID == 0 || configuration.ToUser == "" || configuration.ChatID != "" {
+			return fmt.Errorf("WeCom app mode requires agent ID and recipient without a chat ID")
+		}
+	case WeComSendModeAppChat:
+		if configuration.ChatID == "" || configuration.AgentID != 0 || configuration.ToUser != "" {
+			return fmt.Errorf("WeCom appchat mode requires a chat ID without agent ID or recipient")
+		}
+	}
+	return nil
 }
 
 func parseLocalUploadRoots(raw string) ([]string, error) {

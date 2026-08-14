@@ -50,9 +50,12 @@ internal fun ProviderSettingsPanel(
     expanded: Boolean,
     saving: Boolean,
     saved: Boolean,
+    testing: Boolean,
+    tested: Boolean,
     onToggle: () -> Unit,
     onDraftChange: (ProviderSettingsUpdate) -> Unit,
     onSave: () -> Unit,
+    onTest: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp),
@@ -90,12 +93,32 @@ internal fun ProviderSettingsPanel(
             }
             LabeledField("Emby 用户 ID", draft.embyUserId) { onDraftChange(draft.copy(embyUserId = it)) }
             MediaHubText("用 115 App 在本页上方扫码授权。不需要开放平台开发者账号。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
+            WeComModePicker(draft.wecom.sendMode) { nextMode ->
+                onDraftChange(draft.copy(wecom = draft.wecom.copy(
+                    sendMode = nextMode, agentId = 0, toUser = if (nextMode == "app") "@all" else "", chatId = "",
+                )))
+            }
             LabeledField("企业微信 API 地址", draft.wecom.baseUrl) { onDraftChange(draft.copy(wecom = draft.wecom.copy(baseUrl = it))) }
             LabeledField("企业微信 Corp ID", draft.wecom.corpId) { onDraftChange(draft.copy(wecom = draft.wecom.copy(corpId = it))) }
             SecretField("企业微信 Secret", settings.wecom.secret, draft.wecom.secret) {
                 onDraftChange(draft.copy(wecom = draft.wecom.copy(secret = it)))
             }
-            LabeledField("企业微信 Chat ID", draft.wecom.chatId) { onDraftChange(draft.copy(wecom = draft.wecom.copy(chatId = it))) }
+            if (draft.wecom.sendMode == "app") {
+                LabeledField("企业微信 Agent ID", draft.wecom.agentId.takeIf { it > 0 }?.toString().orEmpty(), KeyboardType.Number) {
+                    onDraftChange(draft.copy(wecom = draft.wecom.copy(agentId = it.toLongOrNull() ?: 0)))
+                }
+                LabeledField("企业微信接收人", draft.wecom.toUser) { onDraftChange(draft.copy(wecom = draft.wecom.copy(toUser = it))) }
+            } else {
+                LabeledField("企业微信 Chat ID", draft.wecom.chatId) { onDraftChange(draft.copy(wecom = draft.wecom.copy(chatId = it))) }
+            }
+            MediaHubButton(
+                label = if (testing) "正在发送" else "测试已保存配置",
+                icon = Lucide.ServerCog,
+                enabled = settings.wecom.secret.configured && !saving && !testing,
+                onClick = onTest,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (tested) MediaHubText("测试通知已提交", color = MediaHubColors.Source, fontSize = 11.sp)
         }
 
         SettingsSection("工作流目标") {
@@ -170,11 +193,21 @@ private fun SettingsSection(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
+private fun WeComModePicker(value: String, onChange: (String) -> Unit) {
+    ModePicker(value, listOf("app" to "自建应用", "appchat" to "AppChat"), onChange)
+}
+
+@Composable
 private fun AuthModePicker(value: String, onChange: (String) -> Unit) {
+    ModePicker(value, listOf("web" to "网页登录", "developer" to "开发者 API"), onChange)
+}
+
+@Composable
+private fun ModePicker(value: String, options: List<Pair<String, String>>, onChange: (String) -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(7.dp)).background(MediaHubColors.SurfaceInput),
     ) {
-        listOf("web" to "网页登录", "developer" to "开发者 API").forEach { (mode, label) ->
+        options.forEach { (mode, label) ->
             val selected = value == mode
             Box(
                 modifier = Modifier.weight(1f).selectable(selected = selected, role = Role.RadioButton) { onChange(mode) }
