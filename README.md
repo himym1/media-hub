@@ -1,41 +1,41 @@
 # Media Hub
 
-Media Hub is a self-hosted control plane for searching media resources, transferring them to 115, generating STRM entries through QMediaSync, and indexing them in Emby.
+Media Hub 是一套自托管控制面：搜索影视资源、转存到 115、经 QMediaSync 生成 STRM，并在 Emby 中建库索引。
 
-The monorepo contains:
+本仓库包含：
 
-- `backend/`: Go API, SQLite persistence, provider adapters, and the workflow runner.
-- `web/`: React, TypeScript, Vite, and TanStack Query client.
-- `android/`: Native Kotlin, Jetpack Compose, and project-owned `MediaHub*` UI wrappers.
-- `api/`: The OpenAPI contract shared by both clients.
-- `docs/deployment/private-deployment.md`: GHCR, NAS Compose, backup/restore, and Android release procedure.
+- `backend/`：Go API、SQLite 持久化、资源源适配器，以及工作流执行器。
+- `web/`：React、TypeScript、Vite、TanStack Query 客户端。
+- `android/`：原生 Kotlin、Jetpack Compose，以及项目自有的 `MediaHub*` UI 封装。
+- `api/`：Web 与 Android 共用的 OpenAPI 契约。
+- `docs/deployment/private-deployment.md`：GHCR、NAS Compose、备份/恢复，以及 Android 发版流程。
 
-Media Hub never proxies media payloads. Playback remains a direct path from 115 CDN to the player.
+Media Hub 从不代理媒体本体。播放始终走 115 CDN 到播放器的直连路径。
 
-## Implemented Flow
+## 已实现流程
 
 ```text
-Authenticated search
-  -> TMDB identity verification
-  -> encrypted release selection
-  -> idempotent source-adapter transfer to 115
-  -> QMediaSync manual synchronization and record polling
-  -> Emby library refresh and TMDB-aware item matching
-  -> Emby playback-information verification
-  -> Enterprise WeChat application-chat notification
+已认证搜索
+  -> TMDB 身份核验
+  -> 加密的资源版本选择
+  -> 经资源源适配器幂等转存到 115
+  -> QMediaSync 手动同步并轮询记录
+  -> Emby 刷新媒体库，并按 TMDB 匹配条目
+  -> Emby 播放信息核验
+  -> 企业微信应用会话通知
 ```
 
-Transfer jobs and append-only events are persisted before external side effects. Source references, adapter operation IDs, 115 file IDs, and provider paths are stored only inside AES-256-GCM opaque payloads. Safe operations retry with bounded backoff. A QMediaSync submission with an uncertain result moves to `needs_attention` and is never replayed automatically.
+转存任务与只追加事件会在对外产生副作用之前先落库。源引用、适配器操作 ID、115 文件 ID 和提供方路径只保存在 AES-256-GCM 不透明载荷中。安全操作会按有界退避重试。QMediaSync 提交结果不确定时会进入 `needs_attention`，且不会自动重放。
 
-Web and Android expose the same search, transfer status, event history, explicit retry, provider status, and Emby library semantics. Web uses an HttpOnly session cookie plus CSRF protection; Android uses a revocable bearer session stored through Android Keystore.
+Web 与 Android 暴露同一套搜索、转存状态、事件历史、显式重试、提供方状态和 Emby 媒体库语义。Web 使用 HttpOnly 会话 Cookie 加 CSRF 保护；Android 使用可撤销的 Bearer 会话，并通过 Android Keystore 存储。
 
-Native subscriptions persist movie, series, season, and episode progress with source selection, release preferences, durable scheduling, duplicate suppression, manual runs, batch pause/resume, and atomic backup import/export. Native 115 operations add encrypted PKCE authorization, bounded browsing, durable file commands, symlink-rejecting local uploads, and review-first archive plans across Web and Android. The SubX compatibility layer has been removed. Native adapters are built-in Mikan and Sidhub plus other sources through the HTTP adapter contract.
+原生订阅会持久化电影、剧集、季和集的进度，并支持源选择、版本偏好、持久调度、去重抑制、手动运行、批量暂停/恢复，以及原子备份导入/导出。原生 115 操作提供加密 PKCE 授权、有界浏览、持久文件命令、拒绝符号链接的本地上传，以及 Web/Android 上先审后执行的归档计划。SubX 兼容层已移除。原生适配器内置蜜柑与 Sidhub，其他源走 HTTP 适配器契约。
 
-TMDB trends and recommendations are native. 115 supports encrypted PKCE device authorization with automatic refresh plus user-scoped directory browsing and durable file commands. Create-folder, move, rename, and delete requests are persisted with encrypted parameters before provider submission; delete and uncertain retries require explicit command-ID confirmation.
+TMDB 趋势与推荐为原生实现。115 支持加密 PKCE 设备授权与自动刷新，以及按用户隔离的目录浏览和持久文件命令。创建文件夹、移动、重命名和删除会先以加密参数落库，再提交给提供方；删除与结果不确定的重试必须用命令 ID 显式确认。
 
-## Configuration
+## 配置
 
-The backend reads environment variables as a startup baseline and applies embedded SQLite migrations. Authenticated Web and Android settings store encrypted runtime overrides in SQLite and apply them without a restart; secret values are never returned by the settings API. Secrets remain in process memory and must not be placed in logs or committed files.
+后端把环境变量当作启动基线，并执行内嵌的 SQLite 迁移。已认证的 Web 与 Android 设置会把加密后的运行时覆盖写入 SQLite，无需重启即可生效；设置 API 从不回传密钥。密钥只留在进程内存中，不得写入日志或提交到仓库。
 
 ```text
 MEDIA_HUB_ADDR=:8080
@@ -98,16 +98,16 @@ MEDIA_HUB_WECOM_CHAT_ID=
 MEDIA_HUB_WECOM_URL=https://qyapi.weixin.qq.com
 ```
 
-Integration URLs must be absolute HTTP(S) URLs without embedded credentials, query parameters, or fragments. When a TMDB token is set without `MEDIA_HUB_TMDB_URL`, the official API URL is used.
+集成 URL 必须是不带内嵌凭据、查询参数或片段的绝对 HTTP(S) 地址。只配置了 TMDB token、未设置 `MEDIA_HUB_TMDB_URL` 时，使用官方 API 地址。
 
-Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). Mikan and Sidhub are built-in anonymous adapters. FrameHDR and Juying are built-in account adapters whose official URLs may be left empty. FrameHDR `ACCOUNT`/`TOKEN` are username/password. Juying `AUTH_MODE=web` uses username/password, while `AUTH_MODE=developer` uses App ID/API Key; legacy Juying credentials without `AUTH_MODE` remain developer mode. `MEDIA_HUB_SOURCE_PROXY_URL` optionally routes only built-in source HTTP clients through an unauthenticated HTTP(S) proxy; the legacy `MEDIA_HUB_MIKAN_PROXY_URL` remains a fallback. Neither setting affects 115, TMDB, QMediaSync, Emby, WeCom, or contract adapters. Other sources use the HTTP adapter contract. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
+资源适配器实现统一的[搜索与转存契约](docs/integrations/source-adapter.md)。蜜柑与 Sidhub 是内置匿名适配器。FrameHDR 与聚影是内置账号适配器，官方 URL 可留空。FrameHDR 的 `ACCOUNT`/`TOKEN` 是用户名/密码。聚影 `AUTH_MODE=web` 使用用户名/密码，`AUTH_MODE=developer` 使用 App ID/API Key；未设置 `AUTH_MODE` 的历史聚影凭据仍按开发者模式处理。`MEDIA_HUB_SOURCE_PROXY_URL` 可选地只把内置源的 HTTP 客户端走无认证 HTTP(S) 代理；旧的 `MEDIA_HUB_MIKAN_PROXY_URL` 仍可作为回退。这两项都不影响 115、TMDB、QMediaSync、Emby、企业微信或契约适配器。其他源使用 HTTP 适配器契约。夹具搜索数据仅在显式设置 `MEDIA_HUB_ENABLE_FIXTURES=true` 时可用，且从不执行转存。
 
-Enterprise WeChat supports `app` delivery through a normal self-built application's `message/send` API using Agent ID and ToUser, plus legacy `appchat` delivery using Chat ID. Prefer encrypted Provider Settings over environment variables and verify a saved configuration with the fixed test-notification action. Unknown submission results are never retried automatically.
+企业微信支持通过普通自建应用的 `message/send` API，用 Agent ID 和 ToUser 做 `app` 投递；也兼容用 Chat ID 的历史 `appchat` 投递。优先使用加密的提供方设置，而不是环境变量，并用固定的测试通知动作验收已保存配置。提交结果未知时不会自动重试。
 
-## Local Verification
+## 本地验证
 
 ```bash
-# Backend
+# 后端
 go -C backend test ./...
 go -C backend test -race ./...
 go -C backend vet ./...
@@ -123,10 +123,10 @@ cd android
 ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 ```
 
-## Private deployment
+## 私有部署
 
-Release tags publish a multi-architecture private image to `ghcr.io/himym1/media-hub`. The image serves the Web client and `/api/v1` from one origin. See [private deployment](docs/deployment/private-deployment.md) for NAS layout, GHCR login, SQLite backup/restore, TLS, and Android release handling.
+Release tag 会把多架构私有镜像发布到 `ghcr.io/himym1/media-hub`。镜像从同一源提供 Web 客户端和 `/api/v1`。NAS 目录布局、GHCR 登录、SQLite 备份/恢复、TLS 和 Android 发版见[私有部署](docs/deployment/private-deployment.md)。
 
-Do not commit credentials, cookies, API keys, `.env` files, NAS exports, SQLite databases, or generated APKs.
+不要提交凭据、Cookie、API Key、`.env` 文件、NAS 导出、SQLite 数据库或生成的 APK。
 
-See the [roadmap](docs/development/roadmap.md) and [system design](docs/architecture/system-design.md).
+另见[路线图](docs/development/roadmap.md)和[系统设计](docs/architecture/system-design.md)。

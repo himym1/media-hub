@@ -1,32 +1,19 @@
-# React + TypeScript + Vite
+# Web 客户端
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Media Hub 的 Web 客户端。首屏就是可用的搜索工作台，而不是落地页。
 
-Currently, two official plugins are available:
+- React 19、TypeScript、Vite
+- TanStack Query
+- Lucide 图标
+- 原生 DOM 控件，保留键盘与读屏支持
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+客户端与 Android 共用同一套 OpenAPI 语义，覆盖搜索、订阅、转存状态、事件历史、提供方设置、115 操作和 Emby 媒体库。会话使用 HttpOnly Cookie，并配合 CSRF 保护。
 
-## React Compiler
+生产构建会嵌入 Go 服务镜像，与 `/api/v1` 同源提供。本地开发：
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+pnpm --dir web install --frozen-lockfile
+pnpm --dir web test
+pnpm --dir web lint
+pnpm --dir web build
 ```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
