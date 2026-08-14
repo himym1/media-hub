@@ -213,6 +213,11 @@ func matchIdentity(candidate Candidate, identities []Identity) (Identity, bool) 
 		if candidate.Year > 0 && identity.Year > 0 && candidate.Year != identity.Year {
 			continue
 		}
+		if candidate.SourceID == "juying" && (candidate.TMDBID == "" ||
+			(!releaseTitleContainsIdentity(candidate.ReleaseTitle, identity.Title) &&
+				!releaseTitleContainsIdentity(candidate.ReleaseTitle, identity.OriginalTitle))) {
+			continue
+		}
 		if candidate.TMDBID == "" &&
 			!candidateTitleMatchesIdentity(candidate, identity.Title) &&
 			!candidateTitleMatchesIdentity(candidate, identity.OriginalTitle) {
@@ -232,6 +237,18 @@ func candidateTitleMatchesIdentity(candidate Candidate, identityTitle string) bo
 		return true
 	}
 	return candidate.SourceID == "mikan" && titleContainsIdentity(candidate.Title, identityTitle)
+}
+
+func releaseTitleContainsIdentity(releaseTitle, identityTitle string) bool {
+	normalize := func(value string) string {
+		return strings.Join(strings.Fields(strings.Map(func(character rune) rune {
+			if unicode.IsLetter(character) || unicode.IsDigit(character) {
+				return character
+			}
+			return ' '
+		}, value)), " ")
+	}
+	return titleContainsIdentity(normalize(releaseTitle), normalize(identityTitle))
 }
 
 func titleContainsIdentity(candidateTitle, identityTitle string) bool {

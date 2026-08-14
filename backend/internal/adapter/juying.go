@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"media-hub/backend/internal/search"
 )
@@ -43,6 +44,7 @@ type juyingMovie struct {
 	Cover       string          `json:"cover"`
 	ReleaseYear json.RawMessage `json:"release_year"`
 	MovieType   string          `json:"movie_type"`
+	TMDBID      json.RawMessage `json:"tmdb_id"`
 }
 
 type juyingResource struct {
@@ -151,7 +153,7 @@ func (s *Juying) searchDeveloper(ctx context.Context, queryText string) ([]searc
 		wg.Add(1)
 		go func(index int, movie juyingMovie) {
 			defer wg.Done()
-			rows, _ := s.movieCandidates(ctx, queryText, movie)
+			rows, _ := s.movieCandidates(ctx, movie)
 			results <- result{index: index, rows: rows}
 		}(index, movie)
 	}
@@ -173,7 +175,7 @@ func (s *Juying) searchDeveloper(ctx context.Context, queryText string) ([]searc
 	return merged, nil
 }
 
-func (s *Juying) movieCandidates(ctx context.Context, queryText string, movie juyingMovie) ([]search.Candidate, error) {
+func (s *Juying) movieCandidates(ctx context.Context, movie juyingMovie) ([]search.Candidate, error) {
 	movieID := rawJSONText(movie.ID)
 	if movieID == "" || len(movieID) > 100 {
 		return nil, nil
@@ -189,18 +191,17 @@ func (s *Juying) movieCandidates(ctx context.Context, queryText string, movie ju
 	if title == "" {
 		title = strings.TrimSpace(response.Title)
 	}
-	if frameHDRTitleContains(title, queryText) {
-		title = queryText
-	}
 	if title == "" || len([]rune(title)) > 300 {
 		return nil, nil
 	}
 	mediaType := juyingMediaType(movie.MovieType)
 	year, _ := strconv.Atoi(rawJSONText(movie.ReleaseYear))
+	tmdbID, _ := positiveJuyingID(movie.TMDBID)
 	rows := make([]search.Candidate, 0, len(response.Resources))
 	for _, resource := range response.Resources {
 		candidate, ok := juyingCandidate(movieID, title, year, mediaType, resource)
 		if ok {
+			candidate.TMDBID = tmdbID
 			rows = append(rows, candidate)
 		}
 	}
@@ -208,10 +209,7 @@ func (s *Juying) movieCandidates(ctx context.Context, queryText string, movie ju
 }
 
 func juyingCandidate(movieID, title string, year int, mediaType string, resource juyingResource) (search.Candidate, bool) {
-	releaseTitle := strings.TrimSpace(resource.Description)
-	if releaseTitle == "" {
-		releaseTitle = title
-	}
+	releaseTitle := juyingResourceTitle(resource, title)
 	if len([]rune(releaseTitle)) > 300 {
 		return search.Candidate{}, false
 	}
@@ -245,7 +243,7 @@ func juyingCandidate(movieID, title string, year int, mediaType string, resource
 		ID:    "juying-" + movieID + "-" + resourceID,
 		Title: title, Year: year, MediaType: mediaType,
 		Season: season, EpisodeStart: episodeStart, EpisodeEnd: episodeEnd,
-		SourceID: "juying", SourceRef: string(encoded), TransferState: "available",
+		SourceID: "juying", SourceRef: string(encoded), ReleaseTitle: releaseTitle, TransferState: "available",
 		Release: search.ReleaseFacts{
 			Resolution:   mikanNormalizedResolution(releaseTitle),
 			VideoCodec:   mikanNormalizedCodec(releaseTitle),
@@ -292,6 +290,9 @@ func (s *Juying) StartTransfer(ctx context.Context, input search.TransferRequest
 		magnet, err := validateMagnetURI(reference.Magnet)
 		if err != nil {
 			return search.TransferResult{}, search.Failure{Code: "invalid_selection", Message: "资源引用无效", Retryable: false}
+		}
+		if !magnetMatchesJuyingResource(magnet, reference.Title) {
+			return search.TransferResult{}, search.Failure{Code: "source_identity_mismatch", Message: "聚影磁力内容与资源标题不一致", Retryable: false}
 		}
 		if err := s.offline.AddOfflineURLs(ctx, input.DestinationID, []string{magnet}); err != nil {
 			var uncertain interface{ SubmissionUncertain() bool }
@@ -414,6 +415,89 @@ func validateMagnetURI(raw string) (string, error) {
 		return "", errors.New("invalid BTIH")
 	}
 	return magnet, nil
+}
+
+func juyingResourceTitle(resource juyingResource, fallback string) string {
+	return strings.TrimSpace(firstNonEmptyString(resource.Title, resource.Description, resource.ResourceDescription, fallback))
+}
+
+func magnetMatchesJuyingResource(magnet, releaseTitle string) bool {
+	parsed, err := url.Parse(magnet)
+	if err != nil {
+		return false
+	}
+	displayName := strings.TrimSpace(parsed.Query().Get("dn"))
+	if displayName == "" {
+		return false
+	}
+	releaseTokens := juyingIdentityTokens(releaseTitle)
+	for token := range juyingIdentityTokens(displayName) {
+		if _, ok := releaseTokens[token]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func juyingIdentityTokens(value string) map[string]struct{} {
+	tokens := make(map[string]struct{})
+	for _, token := range strings.FieldsFunc(strings.ToLower(value), func(character rune) bool {
+		return !unicode.IsLetter(character) && !unicode.IsDigit(character)
+	}) {
+		if juyingTechnicalToken(token) {
+			continue
+		}
+		runes := []rune(token)
+		ascii := true
+		for _, character := range runes {
+			if character > unicode.MaxASCII {
+				ascii = false
+				break
+			}
+		}
+		if (ascii && len(runes) < 3) || (!ascii && len(runes) < 2) {
+			continue
+		}
+		tokens[token] = struct{}{}
+	}
+	return tokens
+}
+
+func juyingTechnicalToken(token string) bool {
+	if token == "" {
+		return true
+	}
+	digits := true
+	for _, character := range token {
+		if !unicode.IsDigit(character) {
+			digits = false
+			break
+		}
+	}
+	if digits {
+		return true
+	}
+	if strings.HasSuffix(token, "p") {
+		resolution := strings.TrimSuffix(token, "p")
+		if resolution != "" {
+			allDigits := true
+			for _, character := range resolution {
+				if !unicode.IsDigit(character) {
+					allDigits = false
+					break
+				}
+			}
+			if allDigits {
+				return true
+			}
+		}
+	}
+	switch token {
+	case "aac", "atmos", "avc", "bdrip", "bluray", "complete", "ddp", "dolby", "dts", "dv", "flac", "h264", "h265", "hdr", "hdr10", "hevc", "mkv", "movie", "movies", "mp4", "proper", "remux", "repack", "uhd", "web", "webdl", "webrip", "x264", "x265":
+		return true
+	default:
+		return false
+	}
 }
 
 func firstNonEmptyString(values ...string) string {

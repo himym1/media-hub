@@ -58,6 +58,7 @@ type Candidate struct {
 	TransferState    string       `json:"transferState"`
 	SourceID         string       `json:"sourceId"`
 	SourceRef        string       `json:"-"`
+	ReleaseTitle     string       `json:"-"`
 	IdentityVerified bool         `json:"-"`
 	Revision         uint64       `json:"-"`
 }

@@ -71,7 +71,7 @@ func (s *Juying) searchWeb(ctx context.Context, queryText string) ([]search.Cand
 				results <- result{index: index, err: ctx.Err()}
 				return
 			}
-			rows, err := s.webMovieCandidates(ctx, queryText, movie)
+			rows, err := s.webMovieCandidates(ctx, movie)
 			results <- result{index: index, rows: rows, err: err}
 		}(index, movie)
 	}
@@ -100,7 +100,7 @@ func (s *Juying) searchWeb(ctx context.Context, queryText string) ([]search.Cand
 	return merged, nil
 }
 
-func (s *Juying) webMovieCandidates(ctx context.Context, queryText string, movie juyingMovie) ([]search.Candidate, error) {
+func (s *Juying) webMovieCandidates(ctx context.Context, movie juyingMovie) ([]search.Candidate, error) {
 	movieID, ok := positiveJuyingID(movie.ID)
 	if !ok {
 		return nil, nil
@@ -114,18 +114,17 @@ func (s *Juying) webMovieCandidates(ctx context.Context, queryText string, movie
 		return nil, search.Failure{Code: "source_unavailable", Message: "聚影资源列表不可用", Retryable: false}
 	}
 	title := strings.TrimSpace(movie.Title)
-	if frameHDRTitleContains(title, queryText) {
-		title = queryText
-	}
 	if title == "" || len([]rune(title)) > 300 {
 		return nil, nil
 	}
 	mediaType := juyingMediaType(movie.MovieType)
 	year, _ := strconv.Atoi(rawJSONText(movie.ReleaseYear))
+	tmdbID, _ := positiveJuyingID(movie.TMDBID)
 	rows := make([]search.Candidate, 0, len(response.Resources))
 	for _, resource := range response.Resources {
 		candidate, ok := juyingWebCandidate(movieID, title, year, mediaType, resource)
 		if ok {
+			candidate.TMDBID = tmdbID
 			rows = append(rows, candidate)
 		}
 	}
@@ -137,7 +136,7 @@ func juyingWebCandidate(movieID, title string, year int, mediaType string, resou
 	if !ok || !validJuyingWebResource(resourceID, resource) {
 		return search.Candidate{}, false
 	}
-	releaseTitle := strings.TrimSpace(firstNonEmptyString(resource.ResourceDescription, resource.Description, resource.Title, title))
+	releaseTitle := juyingResourceTitle(resource, title)
 	if releaseTitle == "" || len([]rune(releaseTitle)) > 300 {
 		return search.Candidate{}, false
 	}
@@ -155,7 +154,7 @@ func juyingWebCandidate(movieID, title string, year int, mediaType string, resou
 		ID:    "juying-" + movieID + "-" + resourceIDHash,
 		Title: title, Year: year, MediaType: mediaType,
 		Season: season, EpisodeStart: episodeStart, EpisodeEnd: episodeEnd,
-		SourceID: "juying", SourceRef: string(encoded), TransferState: "available",
+		SourceID: "juying", SourceRef: string(encoded), ReleaseTitle: releaseTitle, TransferState: "available",
 		Release: search.ReleaseFacts{
 			Resolution:   firstNonEmptyString(strings.TrimSpace(resourceDescriptionResolution(resource)), mikanNormalizedResolution(releaseTitle)),
 			VideoCodec:   mikanNormalizedCodec(releaseTitle),
@@ -193,6 +192,9 @@ func (s *Juying) resolveWebReference(ctx context.Context, reference juyingRefere
 	resource, err := s.webResource(ctx, movieID, resourceID)
 	if err != nil {
 		return juyingReference{}, err
+	}
+	if juyingResourceTitle(resource, reference.Title) != strings.TrimSpace(reference.Title) {
+		return juyingReference{}, search.Failure{Code: "source_identity_mismatch", Message: "聚影资源身份已变化，请重新搜索", Retryable: false}
 	}
 	var response juyingAccessResponse
 	path := fmt.Sprintf("/api/app/resource/%s/access/", resourceID)

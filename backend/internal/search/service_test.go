@@ -137,6 +137,31 @@ func TestTitleContainsIdentityUsesLatinWordBoundariesAndRejectsShortTitles(t *te
 	}
 }
 
+func TestServiceRequiresJuyingTMDBAndReleaseIdentityEvidence(t *testing.T) {
+	source := transferSearchStub{sourceStub: sourceStub{
+		id: "juying", label: "聚影", candidates: []Candidate{
+			{ID: "valid", Title: "范海辛 Van Helsing", Year: 2004, MediaType: "movie", TMDBID: "7131", ReleaseTitle: "Van.Helsing.2004.2160p", SourceRef: "valid"},
+			{ID: "missing-tmdb", Title: "范海辛", Year: 2004, MediaType: "movie", ReleaseTitle: "Van.Helsing.2004.2160p", SourceRef: "missing"},
+			{ID: "wrong-tmdb", Title: "范海辛", Year: 2004, MediaType: "movie", TMDBID: "999", ReleaseTitle: "Van.Helsing.2004.2160p", SourceRef: "wrong-tmdb"},
+			{ID: "wrong-release", Title: "范海辛", Year: 2004, MediaType: "movie", TMDBID: "7131", ReleaseTitle: "Wrong.Movie.2020.2160p", SourceRef: "wrong-release"},
+		},
+	}}
+	service := NewServiceWithIdentity(identityStub{identities: []Identity{{
+		TMDBID: "7131", Title: "范海辛", OriginalTitle: "Van Helsing", Year: 2004, MediaType: "movie",
+	}}}, source)
+	response := service.Search(context.Background(), "范海辛")
+	states := make(map[string]string, len(response.Results))
+	for _, candidate := range response.Results {
+		states[candidate.ID] = candidate.TransferState
+	}
+	if states["juying:valid"] != "available" ||
+		states["juying:missing-tmdb"] != "identity_required" ||
+		states["juying:wrong-tmdb"] != "identity_required" ||
+		states["juying:wrong-release"] != "identity_required" {
+		t.Fatalf("states = %#v", states)
+	}
+}
+
 func TestServiceDoesNotUseReleaseTitleContainmentForContractSources(t *testing.T) {
 	source := transferSearchStub{sourceStub: sourceStub{
 		id: "framehdr", label: "帧影", candidates: []Candidate{{

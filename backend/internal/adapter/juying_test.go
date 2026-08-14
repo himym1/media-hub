@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,7 +31,7 @@ func (t *juyingTransferTarget) AddOfflineURLs(_ context.Context, _ string, urls 
 }
 
 func TestJuyingSearchAndTransfersSupportedResources(t *testing.T) {
-	const magnet = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"
+	const magnet = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Van.Helsing.2004.1080p"
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-App-ID") != "app-id" || r.Header.Get("X-App-Key") != "app-key" {
 			t.Errorf("credentials headers were not set")
@@ -41,7 +42,7 @@ func TestJuyingSearchAndTransfersSupportedResources(t *testing.T) {
 			if r.URL.Query().Get("q") != "范海辛" || r.URL.Query().Get("page_size") != "50" {
 				t.Errorf("query = %v", r.URL.Query())
 			}
-			_, _ = w.Write([]byte(`{"status":"success","results":[{"id":1,"title":"范海辛 Van Helsing","release_year":"2004","movie_type":"movie"}]}`))
+			_, _ = w.Write([]byte(`{"status":"success","results":[{"id":1,"title":"范海辛 Van Helsing","release_year":"2004","movie_type":"movie","tmdb_id":7131}]}`))
 		case "/api/dev/movie/1/resources/":
 			_, _ = w.Write([]byte(`{"status":"success","title":"范海辛","resources":[` +
 				`{"id":11,"resource_type":"115","share_link":"https://115.com/s/shareABC123","extraction_code":"WENG","description":"Van.Helsing.2004.2160p.HEVC","file_size":"12.5 GB"},` +
@@ -64,7 +65,9 @@ func TestJuyingSearchAndTransfersSupportedResources(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("results = %#v", results)
 	}
-	if results[0].Title != "范海辛" || results[0].Year != 2004 || results[0].MediaType != "movie" || results[0].Release.Resolution != "2160p" || results[0].Release.SizeBytes != 13421772800 {
+	if results[0].Title != "范海辛 Van Helsing" || results[0].Year != 2004 || results[0].MediaType != "movie" ||
+		results[0].TMDBID != "7131" || results[0].ReleaseTitle != "Van.Helsing.2004.2160p.HEVC" ||
+		results[0].Release.Resolution != "2160p" || results[0].Release.SizeBytes != 13421772800 {
 		t.Fatalf("share candidate = %+v", results[0])
 	}
 	if strings.Contains(results[0].SourceRef, "115.com") || strings.Contains(results[0].SourceRef, "app-key") {
@@ -81,6 +84,28 @@ func TestJuyingSearchAndTransfersSupportedResources(t *testing.T) {
 	}
 	if len(target.magnets) != 1 || target.magnets[0] != magnet {
 		t.Fatalf("magnets = %#v", target.magnets)
+	}
+}
+
+func TestJuyingRejectsMagnetIdentityMismatchBeforeOffline(t *testing.T) {
+	target := &juyingTransferTarget{}
+	source := NewJuying("https://www.jying.top", "app-id", "app-key", time.Second, target, target, nil)
+	reference, err := json.Marshal(juyingReference{
+		Kind: "magnet", Title: "Van.Helsing.2004.2160p",
+		Magnet: "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Wrong.Movie.2020.2160p",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = source.StartTransfer(context.Background(), search.TransferRequest{
+		Reference: string(reference), DestinationID: "dest", IdempotencyKey: "op",
+	})
+	var failure search.Failure
+	if !errors.As(err, &failure) || failure.Code != "source_identity_mismatch" || failure.Retryable {
+		t.Fatalf("failure = %#v", err)
+	}
+	if len(target.magnets) != 0 {
+		t.Fatalf("offline target was called: %+v", target)
 	}
 }
 

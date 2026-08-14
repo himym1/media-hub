@@ -43,7 +43,7 @@ func TestJuyingWebSearchDefersAccessUntilTransfer(t *testing.T) {
 			if r.URL.Query().Get("q") != "范海辛" || r.URL.Query().Get("page_size") != "50" {
 				t.Errorf("query = %v", r.URL.Query())
 			}
-			_, _ = w.Write([]byte(`{"status":"success","results":[{"id":20666,"title":"范海辛","release_year":2004,"movie_type":"movie"}]}`))
+			_, _ = w.Write([]byte(`{"status":"success","results":[{"id":20666,"title":"范海辛 Van Helsing","release_year":2004,"movie_type":"movie","tmdb_id":7131}]}`))
 		case "/api/app/movie/20666/resources/":
 			requireJuyingWebToken(t, r, "refreshed-token")
 			mu.Lock()
@@ -84,7 +84,9 @@ func TestJuyingWebSearchDefersAccessUntilTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(results) != 1 || results[0].TransferState != "available" || results[0].Release.Resolution != "2160p" || results[0].Release.SizeBytes != 13421772800 {
+	if len(results) != 1 || results[0].Title != "范海辛 Van Helsing" || results[0].TMDBID != "7131" ||
+		results[0].ReleaseTitle != "Van.Helsing.2004.2160p.HEVC" || results[0].TransferState != "available" ||
+		results[0].Release.Resolution != "2160p" || results[0].Release.SizeBytes != 13421772800 {
 		t.Fatalf("results = %#v", results)
 	}
 	if strings.Contains(results[0].SourceRef, "search-ticket") || strings.Contains(results[0].SourceRef, "115.com") || strings.Contains(results[0].SourceRef, "refreshed-token") || strings.Contains(results[0].SourceRef, "pass") {
@@ -105,6 +107,54 @@ func TestJuyingWebSearchDefersAccessUntilTransfer(t *testing.T) {
 	defer mu.Unlock()
 	if loginCalls != 1 || resourceCalls != 2 || accessCalls != 1 {
 		t.Fatalf("calls login=%d resources=%d access=%d", loginCalls, resourceCalls, accessCalls)
+	}
+}
+
+func TestJuyingWebRejectsChangedResourceIdentityBeforeAccess(t *testing.T) {
+	resourceCalls := 0
+	accessCalls := 0
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/api/csrf/":
+			http.SetCookie(w, &http.Cookie{Name: "csrftoken", Value: "csrf-token", Path: "/"})
+			_, _ = w.Write([]byte(`{}`))
+		case "/api/app/login/":
+			_, _ = w.Write([]byte(`{"token":"user-token"}`))
+		case "/api/app/movies/":
+			_, _ = w.Write([]byte(`{"status":"success","results":[{"id":1,"title":"Van Helsing","release_year":2004,"movie_type":"movie","tmdb_id":7131}]}`))
+		case "/api/app/movie/1/resources/":
+			resourceCalls++
+			title := "Van.Helsing.2004.2160p"
+			if resourceCalls > 1 {
+				title = "Wrong.Movie.2020.2160p"
+			}
+			_, _ = w.Write([]byte(`{"status":"success","has_more":false,"resources":[{"id":2,"resource_type":"magnet","title":"` + title + `","link_exposed":true,"access_ticket":"ticket","access_endpoint":"/api/app/resource/2/access/"}]}`))
+		case "/api/app/resource/2/access/":
+			accessCalls++
+			_, _ = w.Write([]byte(`{"status":"success","target":"magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Wrong.Movie.2020.2160p"}`))
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer server.Close()
+
+	target := &juyingTransferTarget{}
+	source := NewJuyingWithAuthMode(server.URL, "web", "user", "pass", time.Second, target, target, nil)
+	source.client.Transport = server.Client().Transport
+	results, err := source.Search(context.Background(), "Van Helsing")
+	if err != nil || len(results) != 1 {
+		t.Fatalf("results=%#v err=%v", results, err)
+	}
+	_, err = source.StartTransfer(context.Background(), search.TransferRequest{
+		Reference: results[0].SourceRef, DestinationID: "dest", IdempotencyKey: "op",
+	})
+	var failure search.Failure
+	if !errors.As(err, &failure) || failure.Code != "source_identity_mismatch" || failure.Retryable {
+		t.Fatalf("failure = %#v", err)
+	}
+	if accessCalls != 0 || len(target.magnets) != 0 {
+		t.Fatalf("access=%d target=%+v", accessCalls, target)
 	}
 }
 
