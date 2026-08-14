@@ -40,18 +40,21 @@ type Notifier interface {
 	Send(context.Context, string) (bool, error)
 }
 
+type SourcePathResolver func(context.Context, string) (string, error)
+
 type Service struct {
-	store    *store.Store
-	search   *search.Service
-	codec    *selection.Codec
-	qms      *qms.Client
-	emby     *emby.Client
-	notifier Notifier
-	mutex    sync.RWMutex
-	workflow config.Workflow
-	now      func() time.Time
-	wake     chan struct{}
-	done     chan struct{}
+	store             *store.Store
+	search            *search.Service
+	codec             *selection.Codec
+	qms               *qms.Client
+	emby              *emby.Client
+	notifier          Notifier
+	resolveSourcePath SourcePathResolver
+	mutex             sync.RWMutex
+	workflow          config.Workflow
+	now               func() time.Time
+	wake              chan struct{}
+	done              chan struct{}
 }
 
 func NewService(
@@ -62,10 +65,11 @@ func NewService(
 	embyClient *emby.Client,
 	notifier Notifier,
 	workflowConfig config.Workflow,
+	resolveSourcePath SourcePathResolver,
 ) *Service {
 	return &Service{
 		store: dataStore, search: searchService, codec: codec, qms: qmsClient, emby: embyClient,
-		notifier: notifier, workflow: workflowConfig, now: time.Now,
+		notifier: notifier, workflow: workflowConfig, resolveSourcePath: resolveSourcePath, now: time.Now,
 		wake: make(chan struct{}, 1), done: make(chan struct{}),
 	}
 }

@@ -59,6 +59,7 @@ func TestUnknownSourceAccessIsNotAutomaticallyRepeated(t *testing.T) {
 		emby.NewClient("http://emby.local", "emby-key", time.Second),
 		nil,
 		config.Workflow{QMediaSyncAccountID: 1, Movie: config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"}},
+		nil,
 	)
 	token := service.SelectionToken(search.Candidate{
 		ID: "juying:item-1", Title: "Movie", MediaType: "movie", TMDBID: "123", SourceID: "juying",
@@ -151,6 +152,7 @@ func TestUnknownQMediaSyncSubmissionIsNotAutomaticallyRepeated(t *testing.T) {
 			QMediaSyncAccountID: 3,
 			Movie:               config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
 		},
+		nil,
 	)
 	token := service.SelectionToken(search.Candidate{
 		ID: "framehdr:item-1", Title: "Movie", MediaType: "movie", TMDBID: "123", SourceID: "framehdr",
@@ -191,7 +193,7 @@ func TestWorkflowCompletesOnlyAfterEmbyPlaybackIsReady(t *testing.T) {
 		switch request.URL.Path {
 		case "/api/sync/manual":
 			var payload qms.ManualSyncRequest
-			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || payload.PathID != "file-1" || payload.Path != "" || payload.TargetPath != "/strm/movies" || payload.AccountID != 3 {
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || payload.PathID != "file-1" || payload.Path != "Media/Movies" || payload.TargetPath != "/strm/movies" || payload.AccountID != 3 {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -247,6 +249,7 @@ func TestWorkflowCompletesOnlyAfterEmbyPlaybackIsReady(t *testing.T) {
 			QMediaSyncAccountID: 3,
 			Movie:               config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
 		},
+		func(context.Context, string) (string, error) { return "Media/Movies", nil },
 	)
 	token := service.SelectionToken(search.Candidate{
 		ID: "framehdr:item-1", Title: "Movie", Year: 2026, MediaType: "movie", TMDBID: "123", SourceID: "framehdr",

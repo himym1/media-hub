@@ -63,6 +63,7 @@ func TestSelectionTokenAndEnqueueAreIdempotent(t *testing.T) {
 			QMediaSyncAccountID: 3,
 			Movie:               config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
 		},
+		nil,
 	)
 
 	candidate := searchService.Search(ctx, "Movie").Results[0]
@@ -86,7 +87,7 @@ func TestSelectionTokenAndEnqueueAreIdempotent(t *testing.T) {
 }
 
 func TestEnqueueRejectsInvalidSelection(t *testing.T) {
-	service := NewService(nil, search.NewService(), nil, nil, nil, nil, config.Workflow{})
+	service := NewService(nil, search.NewService(), nil, nil, nil, nil, config.Workflow{}, nil)
 	_, _, err := service.Enqueue(context.Background(), 1, "invalid", "request_one")
 	if !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("enqueue error = %v", err)

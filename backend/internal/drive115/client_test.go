@@ -50,6 +50,29 @@ func TestListFilesMapsWebFoldersAndFiles(t *testing.T) {
 	}
 }
 
+func TestFolderPathUsesValidated115Breadcrumbs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Query().Get("cid") {
+		case "20":
+			_, _ = w.Write([]byte(`{"state":true,"path":[{"cid":"0","name":"Root"},{"cid":10,"name":"Media"},{"cid":"20","name":"Movies"}]}`))
+		case "30":
+			_, _ = w.Write([]byte(`{"state":true,"path":[{"cid":"0","name":"Root"},{"cid":"30","name":"bad/name"}]}`))
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+	defer server.Close()
+	client := NewClient("UID=uid; CID=cid; SEID=seid", time.Second)
+	client.filesURL = server.URL
+	path, err := client.FolderPath(context.Background(), "20")
+	if err != nil || path != "Media/Movies" {
+		t.Fatalf("path=%q err=%v", path, err)
+	}
+	if _, err := client.FolderPath(context.Background(), "30"); !errors.Is(err, ErrUpstreamResponse) {
+		t.Fatalf("invalid breadcrumb error=%v", err)
+	}
+}
+
 func TestExecuteRenameUsesWebBatchRenameForm(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/files/batch_rename" || request.Header.Get("Cookie") != "UID=uid; CID=cid; SEID=seid" {

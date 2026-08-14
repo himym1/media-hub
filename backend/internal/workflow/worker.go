@@ -238,6 +238,18 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 	if err != nil || provider.FileID == "" {
 		return s.fail(ctx, &job, "transferred", "provider_state_invalid", "资源转存结果无法解密", false, "")
 	}
+	sourcePath := provider.Path
+	isFile := provider.IsFile
+	if s.resolveSourcePath != nil {
+		sourcePath, err = s.resolveSourcePath(ctx, provider.FileID)
+		if err != nil || sourcePath == "" {
+			return s.fail(ctx, &job, "transferred", "sync_source_path_unavailable", "无法读取 115 同步路径", true, "transferred")
+		}
+		isFile = false
+	}
+	if sourcePath == "" {
+		return s.fail(ctx, &job, "transferred", "provider_state_invalid", "资源转存结果无法解密", false, "")
+	}
 	job.State = "submitting_sync"
 	job.ErrorCode = ""
 	job.ErrorMessage = ""
@@ -247,7 +259,9 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 
 	err = s.qms.SubmitManualSync(ctx, qms.ManualSyncRequest{
 		PathID:     provider.FileID,
+		Path:       sourcePath,
 		TargetPath: target.QMediaSyncTargetPath,
+		IsFile:     isFile,
 		AccountID:  workflowConfiguration.QMediaSyncAccountID,
 	})
 	if err != nil {

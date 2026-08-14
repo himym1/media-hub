@@ -261,6 +261,51 @@ func (c *Client) ListFiles(ctx context.Context, parentID string, limit, offset i
 	return items, payload.Count, nil
 }
 
+func (c *Client) FolderPath(ctx context.Context, folderID string) (string, error) {
+	folderID = strings.TrimSpace(folderID)
+	if !numericIDPattern.MatchString(folderID) || folderID == "0" {
+		return "", ErrUpstreamResponse
+	}
+	cookie := c.session()
+	if cookie == "" {
+		return "", ErrNotConfigured
+	}
+	query := url.Values{
+		"aid": {"1"}, "cid": {folderID}, "offset": {"0"}, "limit": {"1"}, "show_dir": {"1"}, "format": {"json"},
+	}
+	var payload struct {
+		State bool `json:"state"`
+		Path  []struct {
+			Name string          `json:"name"`
+			CID  json.RawMessage `json:"cid"`
+		} `json:"path"`
+	}
+	if err := c.getJSONWithSession(ctx, c.filesURL, query, cookie, &payload); err != nil {
+		return "", err
+	}
+	if !payload.State {
+		return "", ErrUnauthorized
+	}
+	parts := make([]string, 0, len(payload.Path))
+	for _, item := range payload.Path {
+		id := strings.Trim(strings.TrimSpace(string(item.CID)), `"`)
+		if !numericIDPattern.MatchString(id) {
+			return "", ErrUpstreamResponse
+		}
+		if id == "0" {
+			continue
+		}
+		if item.Name == "" || strings.ContainsAny(item.Name, "/\x00") {
+			return "", ErrUpstreamResponse
+		}
+		parts = append(parts, item.Name)
+	}
+	if len(parts) == 0 {
+		return "", ErrUpstreamResponse
+	}
+	return strings.Join(parts, "/"), nil
+}
+
 type WriteError struct {
 	Uncertain bool
 	Code      string

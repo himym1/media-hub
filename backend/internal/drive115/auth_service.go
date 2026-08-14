@@ -407,6 +407,13 @@ func (s *AuthService) ListFiles(ctx context.Context, parentID string, limit, off
 	return s.drive.ListFiles(ctx, parentID, limit, offset)
 }
 
+func (s *AuthService) FolderPath(ctx context.Context, folderID string) (string, error) {
+	if err := s.prepareSession(ctx); err != nil {
+		return "", err
+	}
+	return s.drive.FolderPath(ctx, folderID)
+}
+
 func (s *AuthService) ExecuteFileCommand(ctx context.Context, operation string, input map[string]any) error {
 	if err := s.prepareSession(ctx); err != nil {
 		return err

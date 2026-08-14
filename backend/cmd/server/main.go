@@ -118,6 +118,7 @@ func run(logger *slog.Logger) error {
 	searchService := search.NewServiceWithIdentity(tmdbClient)
 	workflowService := workflow.NewService(
 		dataStore, searchService, selectionCodec, qmsClient, embyClient, wecomClient, configuration.Workflow,
+		drive115AuthService.FolderPath,
 	)
 	settingsService := settings.NewService(
 		dataStore, securePayloadCodec, settings.FromConfig(configuration),
