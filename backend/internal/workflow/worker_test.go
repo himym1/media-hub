@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -189,6 +190,11 @@ func TestWorkflowCompletesOnlyAfterEmbyPlaybackIsReady(t *testing.T) {
 	qmsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		case "/api/sync/manual":
+			var payload qms.ManualSyncRequest
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || payload.PathID != "file-1" || payload.Path != "" || payload.TargetPath != "/strm/movies" || payload.AccountID != 3 {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			_, _ = w.Write([]byte(`{"code":200,"message":"ok"}`))
 		case "/api/sync/records":
 			_, _ = w.Write([]byte(`{"code":200,"data":{"total":1,"records":[{"id":1,"base_cid":"file-1","status":2,"created_at":2000000000,"finish_at":2000000001}]}}`))

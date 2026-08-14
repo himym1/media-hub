@@ -235,7 +235,7 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 		return s.fail(ctx, &job, "transferred", "target_unconfigured", "同步目标未配置", true, "transferred")
 	}
 	provider, err := s.codec.DecodeProvider(job.ProviderToken)
-	if err != nil || provider.FileID == "" || provider.Path == "" {
+	if err != nil || provider.FileID == "" {
 		return s.fail(ctx, &job, "transferred", "provider_state_invalid", "资源转存结果无法解密", false, "")
 	}
 	job.State = "submitting_sync"
@@ -246,9 +246,9 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 	}
 
 	err = s.qms.SubmitManualSync(ctx, qms.ManualSyncRequest{
-		PathID: provider.FileID, Path: provider.Path,
-		TargetPath: target.QMediaSyncTargetPath, IsFile: provider.IsFile,
-		AccountID: workflowConfiguration.QMediaSyncAccountID,
+		PathID:     provider.FileID,
+		TargetPath: target.QMediaSyncTargetPath,
+		AccountID:  workflowConfiguration.QMediaSyncAccountID,
 	})
 	if err != nil {
 		if errors.Is(err, qms.ErrSubmissionUnknown) {
