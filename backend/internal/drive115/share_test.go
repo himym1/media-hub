@@ -38,19 +38,15 @@ func TestReceiveShareSubmitsValidatedForm(t *testing.T) {
 
 func TestReceiveShareTreatsAlreadyReceivedAsSuccess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		switch request.URL.Path {
-		case "/snap":
-			_, _ = w.Write([]byte(`{"state":true,"data":{"count":1,"list":[{"fid":"10","cid":"0","fc":1}]}}`))
-		case "/receive":
-			_, _ = w.Write([]byte(`{"state":false,"errno":4100024}`))
-		default:
-			w.WriteHeader(http.StatusNotFound)
+		if request.FormValue("file_id") != "0" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
 		}
+		_, _ = w.Write([]byte(`{"state":false,"errno":4100024}`))
 	}))
 	defer server.Close()
 	client := NewClient("UID=123_session", time.Second)
-	client.shareSnapURL = server.URL + "/snap"
-	client.shareReceiveURL = server.URL + "/receive"
+	client.shareReceiveURL = server.URL
 	if err := client.ReceiveShare(context.Background(), "0", "abc123", "", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -89,19 +85,15 @@ func TestReceiveShareRejectsInvalidInputBeforeRequest(t *testing.T) {
 
 func TestReceiveShareMarksMalformedResponseUncertain(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		switch request.URL.Path {
-		case "/snap":
-			_, _ = w.Write([]byte(`{"state":true,"data":{"count":1,"list":[{"fid":"10","cid":"0","fc":1}]}}`))
-		case "/receive":
-			_, _ = w.Write([]byte(`not-json`))
-		default:
-			w.WriteHeader(http.StatusNotFound)
+		if request.FormValue("file_id") != "0" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
 		}
+		_, _ = w.Write([]byte(`not-json`))
 	}))
 	defer server.Close()
 	client := NewClient("UID=123_session", time.Second)
-	client.shareSnapURL = server.URL + "/snap"
-	client.shareReceiveURL = server.URL + "/receive"
+	client.shareReceiveURL = server.URL
 	err := client.ReceiveShare(context.Background(), "0", "abc123", "", nil)
 	var writeErr *WriteError
 	if !errors.As(err, &writeErr) || !writeErr.Uncertain || writeErr.Code != "invalid_response" {
@@ -130,67 +122,23 @@ func TestReceiveShareRejectsInvalidCookieUserIDBeforeSubmission(t *testing.T) {
 	}
 }
 
-func TestReceiveShareResolvesAllRootItemsBeforeSubmission(t *testing.T) {
-	snapCalls := 0
-	receiveCalls := 0
+func TestReceiveShareUsesZeroToReceiveEntireShare(t *testing.T) {
+	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		switch request.URL.Path {
-		case "/snap":
-			snapCalls++
-			switch request.URL.Query().Get("offset") {
-			case "0":
-				_, _ = w.Write([]byte(`{"state":true,"data":{"count":"3","list":[{"fid":"10","cid":"0","fc":"1"},{"fid":"0","cid":20,"fc":0}]}}`))
-			case "2":
-				_, _ = w.Write([]byte(`{"state":true,"data":{"count":3,"list":[{"fid":30,"cid":"0","fc":1}]}}`))
-			default:
-				w.WriteHeader(http.StatusBadRequest)
-			}
-		case "/receive":
-			receiveCalls++
-			if request.FormValue("user_id") != "123" || request.FormValue("file_id") != "10,20,30" || request.FormValue("cid") != "456" {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			_, _ = w.Write([]byte(`{"state":true}`))
-		default:
-			w.WriteHeader(http.StatusNotFound)
+		requests++
+		if request.Method != http.MethodPost || request.FormValue("user_id") != "123" || request.FormValue("file_id") != "0" || request.FormValue("cid") != "456" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
 		}
+		_, _ = w.Write([]byte(`{"state":true}`))
 	}))
 	defer server.Close()
 	client := NewClient("UID=123_session", time.Second)
-	client.shareSnapURL = server.URL + "/snap"
-	client.shareReceiveURL = server.URL + "/receive"
+	client.shareReceiveURL = server.URL
 	if err := client.ReceiveShare(context.Background(), "456", "abc123", "xy9z", nil); err != nil {
 		t.Fatal(err)
 	}
-	if snapCalls != 2 || receiveCalls != 1 {
-		t.Fatalf("snap calls = %d receive calls = %d", snapCalls, receiveCalls)
-	}
-}
-
-func TestReceiveShareRejectsIncompleteSnapshotBeforeSubmission(t *testing.T) {
-	receiveCalls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		switch request.URL.Path {
-		case "/snap":
-			if request.URL.Query().Get("offset") == "0" {
-				_, _ = w.Write([]byte(`{"state":true,"data":{"count":2,"list":[{"fid":"10","cid":"0","fc":1}]}}`))
-				return
-			}
-			_, _ = w.Write([]byte(`{"state":true,"data":{"count":2,"list":[]}}`))
-		case "/receive":
-			receiveCalls++
-			_, _ = w.Write([]byte(`{"state":true}`))
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer server.Close()
-	client := NewClient("UID=123_session", time.Second)
-	client.shareSnapURL = server.URL + "/snap"
-	client.shareReceiveURL = server.URL + "/receive"
-	err := client.ReceiveShare(context.Background(), "456", "abc123", "xy9z", nil)
-	if !errors.Is(err, ErrUpstreamResponse) || receiveCalls != 0 {
-		t.Fatalf("error = %#v receive calls = %d", err, receiveCalls)
+	if requests != 1 {
+		t.Fatalf("requests = %d", requests)
 	}
 }

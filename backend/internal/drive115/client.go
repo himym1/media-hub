@@ -27,7 +27,6 @@ const (
 	fileRenameEndpoint   = "https://webapi.115.com/files/batch_rename"
 	fileDeleteEndpoint   = "https://webapi.115.com/rb/delete"
 	offlineAddEndpoint   = "https://lixian.115.com/lixianssp/?ac=add_task_urls"
-	shareSnapEndpoint    = "https://webapi.115.com/share/snap"
 	shareReceiveEndpoint = "https://webapi.115.com/share/receive"
 )
 
@@ -48,7 +47,6 @@ type Client struct {
 	fileRenameURL   string
 	fileDeleteURL   string
 	offlineAddURL   string
-	shareSnapURL    string
 	shareReceiveURL string
 	client          *http.Client
 }
@@ -72,7 +70,6 @@ func NewClient(cookie string, timeout time.Duration) *Client {
 		fileRenameURL:   fileRenameEndpoint,
 		fileDeleteURL:   fileDeleteEndpoint,
 		offlineAddURL:   offlineAddEndpoint,
-		shareSnapURL:    shareSnapEndpoint,
 		shareReceiveURL: shareReceiveEndpoint,
 		client: &http.Client{
 			Timeout: timeout,

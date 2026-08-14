@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -33,6 +32,10 @@ func (c *Client) ReceiveShare(ctx context.Context, destinationID, shareCode, rec
 	if err != nil {
 		return err
 	}
+	fileID := "0"
+	if len(selected) > 0 {
+		fileID = strings.Join(selected, ",")
+	}
 	cookie := c.session()
 	if cookie == "" {
 		return ErrNotConfigured
@@ -41,18 +44,12 @@ func (c *Client) ReceiveShare(ctx context.Context, destinationID, shareCode, rec
 	if userID == "" {
 		return ErrUnauthorized
 	}
-	if len(selected) == 0 {
-		selected, err = c.shareRootItemIDs(ctx, cookie, shareCode, receiveCode)
-		if err != nil {
-			return err
-		}
-	}
 
 	values := url.Values{
 		"user_id":      {userID},
 		"share_code":   {shareCode},
 		"receive_code": {receiveCode},
-		"file_id":      {strings.Join(selected, ",")},
+		"file_id":      {fileID},
 		"cid":          {destinationID},
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.shareReceiveURL, strings.NewReader(values.Encode()))
@@ -88,13 +85,10 @@ func (c *Client) ReceiveShare(ctx context.Context, destinationID, shareCode, rec
 	return &WriteError{Code: "provider_rejected", Err: ErrUpstreamResponse}
 }
 
-const (
-	shareSnapPageSize = 100
-	shareSnapMaxItems = 1000
-)
+const shareMaxSelectedItems = 1000
 
 func normalizeShareFileIDs(fileIDs []string) ([]string, error) {
-	if len(fileIDs) > shareSnapMaxItems {
+	if len(fileIDs) > shareMaxSelectedItems {
 		return nil, &WriteError{Code: "invalid_request", Err: ErrUpstreamResponse}
 	}
 	seen := make(map[string]struct{}, len(fileIDs))
@@ -125,95 +119,6 @@ func shareUserID(cookieHeader string) string {
 		return ""
 	}
 	return userID
-}
-
-func (c *Client) shareRootItemIDs(ctx context.Context, cookie, shareCode, receiveCode string) ([]string, error) {
-	type shareItem struct {
-		FileID json.RawMessage `json:"fid"`
-		DirID  json.RawMessage `json:"cid"`
-		IsFile json.RawMessage `json:"fc"`
-	}
-	seen := make(map[string]struct{})
-	selected := make([]string, 0)
-	expected := -1
-	offset := 0
-	for {
-		query := url.Values{
-			"share_code":   {shareCode},
-			"receive_code": {receiveCode},
-			"cid":          {""},
-			"offset":       {strconv.Itoa(offset)},
-			"limit":        {strconv.Itoa(shareSnapPageSize)},
-		}
-		var payload struct {
-			State bool `json:"state"`
-			Data  struct {
-				Count json.RawMessage `json:"count"`
-				List  []shareItem     `json:"list"`
-			} `json:"data"`
-		}
-		if err := c.getJSONWithSession(ctx, c.shareSnapURL, query, cookie, &payload); err != nil {
-			return nil, err
-		}
-		count, ok := shareInteger(payload.Data.Count)
-		if !payload.State || !ok || count <= 0 || count > shareSnapMaxItems {
-			return nil, ErrUpstreamResponse
-		}
-		if expected < 0 {
-			expected = count
-		} else if count != expected {
-			return nil, ErrUpstreamResponse
-		}
-		if len(payload.Data.List) == 0 || offset+len(payload.Data.List) > expected {
-			return nil, ErrUpstreamResponse
-		}
-		for _, item := range payload.Data.List {
-			isFile, ok := shareInteger(item.IsFile)
-			if !ok || (isFile != 0 && isFile != 1) {
-				return nil, ErrUpstreamResponse
-			}
-			id := shareID(item.DirID)
-			if isFile == 1 {
-				id = shareID(item.FileID)
-			}
-			if id == "" {
-				return nil, ErrUpstreamResponse
-			}
-			if _, exists := seen[id]; exists {
-				return nil, ErrUpstreamResponse
-			}
-			seen[id] = struct{}{}
-			selected = append(selected, id)
-		}
-		offset += len(payload.Data.List)
-		if offset == expected {
-			break
-		}
-	}
-	if len(selected) != expected {
-		return nil, ErrUpstreamResponse
-	}
-	return selected, nil
-}
-
-func shareID(raw json.RawMessage) string {
-	text := strings.Trim(strings.TrimSpace(string(raw)), `"`)
-	if !numericIDPattern.MatchString(text) || text == "0" {
-		return ""
-	}
-	return text
-}
-
-func shareInteger(raw json.RawMessage) (int, bool) {
-	text := strings.Trim(strings.TrimSpace(string(raw)), `"`)
-	if text == "" || len(text) > 10 {
-		return 0, false
-	}
-	value, err := strconv.Atoi(text)
-	if err != nil || value < 0 {
-		return 0, false
-	}
-	return value, true
 }
 
 func (s *AuthService) ReceiveShare(ctx context.Context, destinationID, shareCode, receiveCode string, fileIDs []string) error {
