@@ -37,7 +37,7 @@ func (c *Client) ReceiveShare(ctx context.Context, destinationID, shareCode, rec
 	if cookie == "" {
 		return ErrNotConfigured
 	}
-	userID, err := c.offlineUserID(ctx, cookie)
+	userID, err := c.shareUserID(ctx, cookie)
 	if err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func (c *Client) ReceiveShare(ctx context.Context, destinationID, shareCode, rec
 	}
 
 	values := url.Values{
-		"user_id":      {strconv.FormatInt(userID, 10)},
+		"user_id":      {userID},
 		"share_code":   {shareCode},
 		"receive_code": {receiveCode},
 		"file_id":      {strings.Join(selected, ",")},
@@ -111,6 +111,23 @@ func normalizeShareFileIDs(fileIDs []string) ([]string, error) {
 		selected = append(selected, id)
 	}
 	return selected, nil
+}
+
+func (c *Client) shareUserID(ctx context.Context, cookie string) (string, error) {
+	var payload struct {
+		State bool `json:"state"`
+		Data  struct {
+			UID json.RawMessage `json:"uid"`
+		} `json:"data"`
+	}
+	if err := c.getJSONWithSession(ctx, c.shareUserURL, nil, cookie, &payload); err != nil {
+		return "", err
+	}
+	userID := shareID(payload.Data.UID)
+	if !payload.State || userID == "" {
+		return "", ErrUnauthorized
+	}
+	return userID, nil
 }
 
 func (c *Client) shareRootItemIDs(ctx context.Context, cookie, shareCode, receiveCode string) ([]string, error) {
