@@ -9,6 +9,8 @@ import (
 )
 
 func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
+	providerQueries := 0
+	titleQueries := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("X-Emby-Token") != "test-key" {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -18,6 +20,15 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 		case "/Library/MediaFolders":
 			_, _ = w.Write([]byte(`{"Items":[{"Id":"library-1","Name":"电影","CollectionType":"movies"}],"TotalRecordCount":1}`))
 		case "/Items":
+			if providerID := request.URL.Query().Get("AnyProviderIdEquals"); providerID != "" {
+				providerQueries++
+				if providerID != "Tmdb.7131" {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+			} else {
+				titleQueries++
+			}
 			_, _ = w.Write([]byte(`{"Items":[{"Id":"item-1","Name":"范海辛","Type":"Movie","ProductionYear":2004,"Path":"/private/movie.mkv","ProviderIds":{"Tmdb":"7131"}}],"TotalRecordCount":1}`))
 		case "/Items/library-1/Refresh":
 			if request.Method != http.MethodPost {
@@ -54,9 +65,12 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 		t.Fatalf("unexpected result: %#v", result)
 	}
 
-	item, found, err := client.FindIndexedItem(context.Background(), "范海辛", "movie", 2004, "7131")
+	item, found, err := client.FindIndexedItem(context.Background(), "Van Helsing", "movie", 2004, "7131")
 	if err != nil || !found || item.ID != "item-1" {
 		t.Fatalf("find indexed item: item=%#v found=%v err=%v", item, found, err)
+	}
+	if providerQueries != 1 || titleQueries != 1 {
+		t.Fatalf("provider queries=%d title queries=%d", providerQueries, titleQueries)
 	}
 	if err := client.RefreshLibrary(context.Background(), "library-1"); err != nil {
 		t.Fatalf("refresh library: %v", err)

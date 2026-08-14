@@ -252,20 +252,38 @@ func (c *Client) FindIndexedItem(ctx context.Context, title, mediaType string, y
 }
 
 func (c *Client) findIndexedItem(ctx context.Context, configuration clientConfig, title, mediaType string, year int, tmdbID string) (Item, bool, error) {
-	result, err := c.searchItems(ctx, configuration, title, 50)
-	if err != nil {
-		return Item{}, false, err
-	}
 	expectedType := "Movie"
 	if mediaType == "series" {
 		expectedType = "Series"
 	}
+	if tmdbID != "" {
+		query := url.Values{
+			"AnyProviderIdEquals": {"Tmdb." + tmdbID},
+			"Fields":              {"ProviderIds"},
+			"IncludeItemTypes":    {expectedType},
+			"Limit":               {"10"},
+			"Recursive":           {"true"},
+		}
+		var response itemResponse
+		if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
+			return Item{}, false, err
+		}
+		for _, item := range response.Items {
+			if item.ID != "" && item.Type == expectedType && item.ProviderIDs["Tmdb"] == tmdbID {
+				return Item{
+					ID: item.ID, Name: item.Name, Type: item.Type,
+					Year: item.ProductionYear, ProviderIDs: item.ProviderIDs,
+				}, true, nil
+			}
+		}
+	}
+	result, err := c.searchItems(ctx, configuration, title, 50)
+	if err != nil {
+		return Item{}, false, err
+	}
 	for _, item := range result.Items {
 		if item.Type != expectedType {
 			continue
-		}
-		if tmdbID != "" && item.ProviderIDs["Tmdb"] == tmdbID {
-			return item, true, nil
 		}
 		if !strings.EqualFold(strings.TrimSpace(item.Name), strings.TrimSpace(title)) {
 			continue
