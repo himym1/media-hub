@@ -10,15 +10,13 @@ import (
 )
 
 func TestReceiveShareSubmitsValidatedForm(t *testing.T) {
-	const cookie = "UID=uid; CID=cid; SEID=seid"
+	const cookie = "UID=123_session; CID=cid; SEID=seid"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("Cookie") != cookie || request.Header.Get("User-Agent") != userAgent {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		switch request.URL.Path {
-		case "/profile":
-			_, _ = w.Write([]byte(`{"state":true,"data":{"uid":123}}`))
 		case "/receive":
 			if request.Method != http.MethodPost || request.FormValue("user_id") != "123" || request.FormValue("share_code") != "abc123" || request.FormValue("receive_code") != "xy9z" || request.FormValue("cid") != "456" || request.FormValue("file_id") != "10,20" {
 				w.WriteHeader(http.StatusBadRequest)
@@ -32,7 +30,6 @@ func TestReceiveShareSubmitsValidatedForm(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(cookie, time.Second)
-	client.shareUserURL = server.URL + "/profile"
 	client.shareReceiveURL = server.URL + "/receive"
 	if err := client.ReceiveShare(context.Background(), "456", "abc123", "xy9z", []string{"10", "20", "10"}); err != nil {
 		t.Fatal(err)
@@ -42,8 +39,6 @@ func TestReceiveShareSubmitsValidatedForm(t *testing.T) {
 func TestReceiveShareTreatsAlreadyReceivedAsSuccess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
-		case "/profile":
-			_, _ = w.Write([]byte(`{"state":true,"data":{"uid":123}}`))
 		case "/snap":
 			_, _ = w.Write([]byte(`{"state":true,"data":{"count":1,"list":[{"fid":"10","cid":"0","fc":1}]}}`))
 		case "/receive":
@@ -53,8 +48,7 @@ func TestReceiveShareTreatsAlreadyReceivedAsSuccess(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client := NewClient("UID=uid", time.Second)
-	client.shareUserURL = server.URL + "/profile"
+	client := NewClient("UID=123_session", time.Second)
 	client.shareSnapURL = server.URL + "/snap"
 	client.shareReceiveURL = server.URL + "/receive"
 	if err := client.ReceiveShare(context.Background(), "0", "abc123", "", nil); err != nil {
@@ -96,8 +90,6 @@ func TestReceiveShareRejectsInvalidInputBeforeRequest(t *testing.T) {
 func TestReceiveShareMarksMalformedResponseUncertain(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
-		case "/profile":
-			_, _ = w.Write([]byte(`{"state":true,"data":{"uid":123}}`))
 		case "/snap":
 			_, _ = w.Write([]byte(`{"state":true,"data":{"count":1,"list":[{"fid":"10","cid":"0","fc":1}]}}`))
 		case "/receive":
@@ -107,8 +99,7 @@ func TestReceiveShareMarksMalformedResponseUncertain(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client := NewClient("UID=uid", time.Second)
-	client.shareUserURL = server.URL + "/profile"
+	client := NewClient("UID=123_session", time.Second)
 	client.shareSnapURL = server.URL + "/snap"
 	client.shareReceiveURL = server.URL + "/receive"
 	err := client.ReceiveShare(context.Background(), "0", "abc123", "", nil)
@@ -118,23 +109,24 @@ func TestReceiveShareMarksMalformedResponseUncertain(t *testing.T) {
 	}
 }
 
-func TestReceiveShareRejectsMissingUserIDBeforeSubmission(t *testing.T) {
-	shareCalls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if request.URL.Path == "/profile" {
-			_, _ = w.Write([]byte(`{"state":true,"data":{"uid":0}}`))
-			return
-		}
-		shareCalls++
+func TestReceiveShareRejectsInvalidCookieUserIDBeforeSubmission(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
 		_, _ = w.Write([]byte(`{"state":true}`))
 	}))
 	defer server.Close()
-	client := NewClient("UID=uid", time.Second)
-	client.shareUserURL = server.URL + "/profile"
-	client.shareReceiveURL = server.URL + "/receive"
-	err := client.ReceiveShare(context.Background(), "0", "abc123", "", nil)
-	if !errors.Is(err, ErrUnauthorized) || shareCalls != 0 {
-		t.Fatalf("error = %#v share calls = %d", err, shareCalls)
+
+	for _, cookie := range []string{"CID=cid; SEID=seid", "UID=invalid_session; CID=cid; SEID=seid"} {
+		client := NewClient(cookie, time.Second)
+		client.shareReceiveURL = server.URL + "/receive"
+		err := client.ReceiveShare(context.Background(), "0", "abc123", "", nil)
+		if !errors.Is(err, ErrUnauthorized) {
+			t.Fatalf("cookie = %q error = %#v", cookie, err)
+		}
+	}
+	if requests != 0 {
+		t.Fatalf("requests = %d", requests)
 	}
 }
 
@@ -143,8 +135,6 @@ func TestReceiveShareResolvesAllRootItemsBeforeSubmission(t *testing.T) {
 	receiveCalls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
-		case "/profile":
-			_, _ = w.Write([]byte(`{"state":true,"data":{"uid":123}}`))
 		case "/snap":
 			snapCalls++
 			switch request.URL.Query().Get("offset") {
@@ -167,8 +157,7 @@ func TestReceiveShareResolvesAllRootItemsBeforeSubmission(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client := NewClient("UID=uid", time.Second)
-	client.shareUserURL = server.URL + "/profile"
+	client := NewClient("UID=123_session", time.Second)
 	client.shareSnapURL = server.URL + "/snap"
 	client.shareReceiveURL = server.URL + "/receive"
 	if err := client.ReceiveShare(context.Background(), "456", "abc123", "xy9z", nil); err != nil {
@@ -183,8 +172,6 @@ func TestReceiveShareRejectsIncompleteSnapshotBeforeSubmission(t *testing.T) {
 	receiveCalls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
-		case "/profile":
-			_, _ = w.Write([]byte(`{"state":true,"data":{"uid":123}}`))
 		case "/snap":
 			if request.URL.Query().Get("offset") == "0" {
 				_, _ = w.Write([]byte(`{"state":true,"data":{"count":2,"list":[{"fid":"10","cid":"0","fc":1}]}}`))
@@ -199,8 +186,7 @@ func TestReceiveShareRejectsIncompleteSnapshotBeforeSubmission(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client := NewClient("UID=uid", time.Second)
-	client.shareUserURL = server.URL + "/profile"
+	client := NewClient("UID=123_session", time.Second)
 	client.shareSnapURL = server.URL + "/snap"
 	client.shareReceiveURL = server.URL + "/receive"
 	err := client.ReceiveShare(context.Background(), "456", "abc123", "xy9z", nil)
