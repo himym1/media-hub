@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.12.0
+  version: 0.13.0
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -1246,12 +1246,13 @@ components:
         series: { $ref: '#/components/schemas/WorkflowTargetSettings' }
     SourceSettings:
       type: object
-      required: [id, label, baseUrl, account, token]
+      required: [id, label, baseUrl, account, authMode, token]
       properties:
         id: { type: string, enum: [dian, framehdr, gimy, guanying, hdhive, juying, mikan, sidhub] }
         label: { type: string }
         baseUrl: { type: string, maxLength: 2048 }
         account: { type: string, maxLength: 200 }
+        authMode: { type: string, enum: ['', web, developer], description: 聚影认证模式；其他来源为空字符串 }
         token: { $ref: '#/components/schemas/SecretStatus' }
     SourceSettingsUpdate:
       type: object
@@ -1260,6 +1261,7 @@ components:
         id: { type: string, enum: [dian, framehdr, gimy, guanying, hdhive, juying, mikan, sidhub] }
         baseUrl: { type: string, maxLength: 2048 }
         account: { type: string, maxLength: 200 }
+        authMode: { type: string, enum: ['', web, developer], description: 可选以兼容旧客户端；显式切换会清空原模式凭据 }
         token: { $ref: '#/components/schemas/SecretUpdate' }
     ProviderSettings:
       type: object

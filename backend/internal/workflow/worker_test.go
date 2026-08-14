@@ -17,6 +17,80 @@ import (
 	"media-hub/backend/internal/store"
 )
 
+type accessUnknownSourceStub struct{ calls *int }
+
+func (s accessUnknownSourceStub) ID() string    { return "juying" }
+func (s accessUnknownSourceStub) Label() string { return "聚影" }
+func (s accessUnknownSourceStub) Search(context.Context, string) ([]search.Candidate, error) {
+	return nil, nil
+}
+func (s accessUnknownSourceStub) StartTransfer(context.Context, search.TransferRequest) (search.TransferResult, error) {
+	*s.calls++
+	return search.TransferResult{}, search.Failure{Code: "source_access_unknown", Message: "聚影资源访问结果未知，需要确认后重试", Retryable: true}
+}
+func (s accessUnknownSourceStub) TransferStatus(context.Context, int64, string) (search.TransferResult, error) {
+	return search.TransferResult{}, nil
+}
+
+func TestUnknownSourceAccessIsNotAutomaticallyRepeated(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	searchService := search.NewService(accessUnknownSourceStub{calls: &calls})
+	service := NewService(
+		dataStore, searchService, codec,
+		qms.NewClient("http://qms.local", "qms-key", time.Second),
+		emby.NewClient("http://emby.local", "emby-key", time.Second),
+		nil,
+		config.Workflow{QMediaSyncAccountID: 1, Movie: config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"}},
+	)
+	token := service.SelectionToken(search.Candidate{
+		ID: "juying:item-1", Title: "Movie", MediaType: "movie", TMDBID: "123", SourceID: "juying",
+		SourceRef: `{"kind":"web","movieId":"1","resourceId":"2"}`, TransferState: "available", Revision: searchService.CurrentRevision(),
+	})
+	publicJob, _, err := service.Enqueue(ctx, admin.ID, token, "request_access_unknown")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := service.processJob(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != "needs_attention" || job.ErrorCode != "source_access_unknown" || calls != 1 {
+		t.Fatalf("state=%q code=%q calls=%d", job.State, job.ErrorCode, calls)
+	}
+	if err := service.processJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("uncertain access was repeated %d times", calls)
+	}
+}
+
 func TestUnknownQMediaSyncSubmissionIsNotAutomaticallyRepeated(t *testing.T) {
 	ctx := context.Background()
 	calls := 0

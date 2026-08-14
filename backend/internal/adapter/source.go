@@ -33,7 +33,11 @@ func New(source config.SearchSource, timeout time.Duration, offline Offline, pro
 			return nil
 		}
 		receiver, _ := offline.(ShareReceiver)
-		return NewJuying(source.BaseURL, source.Account, source.Token, timeout, offline, receiver, proxyURL)
+		authMode := juyingSourceAuthMode(source)
+		if authMode != "web" && authMode != "developer" {
+			return nil
+		}
+		return NewJuyingWithAuthMode(source.BaseURL, authMode, source.Account, source.Token, timeout, offline, receiver, proxyURL)
 	}
 	if source.ID == "mikan" && (source.BaseURL == "" || isMikanHost(source.BaseURL)) {
 		return NewMikan(source.BaseURL, source.Token, timeout, offline, proxyURL)
@@ -81,4 +85,14 @@ func isJuyingHost(raw string) bool {
 	}
 	host := strings.ToLower(parsed.Hostname())
 	return host == "jying.top" || host == "www.jying.top"
+}
+
+func juyingSourceAuthMode(source config.SearchSource) string {
+	if mode := strings.ToLower(strings.TrimSpace(source.AuthMode)); mode != "" {
+		return mode
+	}
+	if strings.TrimSpace(source.Account) != "" || strings.TrimSpace(source.Token) != "" {
+		return "developer"
+	}
+	return "web"
 }

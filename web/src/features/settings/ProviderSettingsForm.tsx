@@ -25,7 +25,11 @@ function createDraft(settings: ProviderSettings): Draft {
     tmdb: { baseUrl: settings.tmdb.baseUrl, accessToken: secret() },
     wecom: { baseUrl: settings.wecom.baseUrl, corpId: settings.wecom.corpId, secret: secret(), chatId: settings.wecom.chatId },
     workflow: structuredClone(settings.workflow),
-    sources: settings.sources.map((source) => ({ id: source.id, baseUrl: source.baseUrl, account: source.account, token: secret() })),
+    sources: settings.sources.map((source) => ({
+      id: source.id, baseUrl: source.baseUrl, account: source.account,
+      authMode: source.id === 'juying' ? (source.authMode || (source.account || source.token.configured ? 'developer' : 'web')) : '',
+      token: secret(),
+    })),
   }
 }
 
@@ -99,14 +103,32 @@ export function ProviderSettingsForm({ settings, isSaving, error, saved, onSave,
 
       <fieldset className="source-settings">
         <legend>原生资源源</legend>
-        <p className="settings-note">蜜柑和 Sidhub 使用内置匿名适配器；帧影和聚影可留空地址并填写官方账户凭据。癫影需 VIP OpenAPI 与审批 SDK，当前仍使用合同适配器。</p>
+        <p className="settings-note">蜜柑和 Sidhub 使用内置匿名适配器；帧影使用站点账号；聚影可选择网页登录或开发者 API。癫影当前仍使用合同适配器。</p>
         {settings.sources.map((source, index) => {
           const item = draft.sources[index]
-          const credential = source.id === 'framehdr' ? { account: '用户名', secret: '密码' } : source.id === 'dian' ? { secret: 'OpenAPI Key' } : source.id === 'juying' ? { account: 'App ID', secret: 'API Key' } : source.id === 'mikan' || source.id === 'sidhub' ? null : { secret: 'Bearer Token' }
-          return <div className="source-setting-row" key={source.id}><strong>{source.label}</strong>
+          const authMode = source.id === 'juying' ? (item.authMode || 'web') : ''
+          const modeChanged = source.id === 'juying' && authMode !== source.authMode
+          const credential = source.id === 'framehdr'
+            ? { account: '用户名', secret: '密码' }
+            : source.id === 'dian'
+              ? { secret: 'Bearer Token' }
+              : source.id === 'juying'
+                ? authMode === 'web' ? { account: '用户名', secret: '密码' } : { account: 'App ID', secret: 'API Key' }
+                : source.id === 'mikan' || source.id === 'sidhub'
+                  ? null
+                  : { secret: 'Bearer Token' }
+          const setJuyingMode = (nextMode: 'web' | 'developer') => {
+            if (authMode === nextMode)
+              return
+            onDirty()
+            setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, authMode: nextMode, account: '', token: { value: '', clear: source.token.configured } } : value) }))
+          }
+          return <div className="source-setting-row" key={source.id}><div className="source-setting-heading"><strong>{source.label}</strong>
+            {source.id === 'juying' ? <div aria-label="聚影认证方式" className="source-auth-mode" role="group"><button aria-pressed={authMode === 'web'} onClick={() => setJuyingMode('web')} type="button">网页登录</button><button aria-pressed={authMode === 'developer'} onClick={() => setJuyingMode('developer')} type="button">开发者 API</button></div> : null}
+            </div>
             <label><span>适配器地址</span><input onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, baseUrl: event.target.value } : value) }))} type="url" value={item.baseUrl} /></label>
-            {credential?.account ? <label><span>{credential.account}</span><input autoComplete="username" onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, account: event.target.value } : value) }))} value={item.account} /></label> : null}
-            {credential ? <label><span>{credential.secret} · {secretHint(source.token.configured)}</span><input autoComplete="new-password" onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, token: { ...value.token, value: event.target.value } } : value) }))} type="password" value={item.token.value} /></label> : null}
+            {credential?.account ? <label><span>{credential.account}</span><input autoComplete="off" onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, account: event.target.value } : value) }))} value={item.account} /></label> : null}
+            {credential ? <label><span>{credential.secret} · {modeChanged ? '切换模式后需重新填写' : secretHint(source.token.configured)}</span><input autoComplete="new-password" onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, token: { value: event.target.value, clear: false } } : value) }))} type="password" value={item.token.value} /></label> : null}
             {credential && source.token.configured ? <label className="inline-check"><input checked={item.token.clear} onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, token: { value: '', clear: event.target.checked } } : value) }))} type="checkbox" />清除已保存 {credential.secret}</label> : <span />}
           </div>
         })}

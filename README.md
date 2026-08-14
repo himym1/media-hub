@@ -81,7 +81,8 @@ MEDIA_HUB_SOURCE_GUANYING_TOKEN=<adapter-token>
 MEDIA_HUB_SOURCE_HDHIVE_URL=<adapter-base-url>
 MEDIA_HUB_SOURCE_HDHIVE_TOKEN=<adapter-token>
 MEDIA_HUB_SOURCE_JUYING_URL=<optional-official-base-url>
-MEDIA_HUB_SOURCE_JUYING_ACCOUNT=<app-id>
+MEDIA_HUB_SOURCE_JUYING_AUTH_MODE=<web-or-developer>
+MEDIA_HUB_SOURCE_JUYING_ACCOUNT=<username-or-app-id>
 MEDIA_HUB_SOURCE_JUYING_TOKEN=[REDACTED:Generic Password Field]
 MEDIA_HUB_SOURCE_MIKAN_URL=<adapter-base-url>
 MEDIA_HUB_SOURCE_MIKAN_TOKEN=<adapter-token>
@@ -96,7 +97,7 @@ MEDIA_HUB_WECOM_URL=https://qyapi.weixin.qq.com
 
 Integration URLs must be absolute HTTP(S) URLs without embedded credentials, query parameters, or fragments. When a TMDB token is set without `MEDIA_HUB_TMDB_URL`, the official API URL is used.
 
-Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). Mikan and Sidhub are built-in anonymous adapters. FrameHDR and Juying are built-in account adapters: their URLs may be left empty to use the official sites, while `ACCOUNT`/`TOKEN` mean username/password and App ID/API Key respectively. `MEDIA_HUB_SOURCE_PROXY_URL` optionally routes only built-in source HTTP clients through an unauthenticated HTTP(S) proxy; the legacy `MEDIA_HUB_MIKAN_PROXY_URL` remains a fallback. Neither setting affects 115, TMDB, QMediaSync, Emby, WeCom, or contract adapters. Other sources use the HTTP adapter contract. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
+Resource adapters implement the normalized [search and transfer contract](docs/integrations/source-adapter.md). Mikan and Sidhub are built-in anonymous adapters. FrameHDR and Juying are built-in account adapters whose official URLs may be left empty. FrameHDR `ACCOUNT`/`TOKEN` are username/password. Juying `AUTH_MODE=web` uses username/password, while `AUTH_MODE=developer` uses App ID/API Key; legacy Juying credentials without `AUTH_MODE` remain developer mode. `MEDIA_HUB_SOURCE_PROXY_URL` optionally routes only built-in source HTTP clients through an unauthenticated HTTP(S) proxy; the legacy `MEDIA_HUB_MIKAN_PROXY_URL` remains a fallback. Neither setting affects 115, TMDB, QMediaSync, Emby, WeCom, or contract adapters. Other sources use the HTTP adapter contract. Fixture search data is available only with explicit `MEDIA_HUB_ENABLE_FIXTURES=true` and never performs transfers.
 
 ## Local Verification
 

@@ -221,6 +221,34 @@ func TestMergeSourceAccountDistinguishesOmittedAndCleared(t *testing.T) {
 	}
 }
 
+func TestMergeSourceAuthModeDistinguishesOmittedAndExplicit(t *testing.T) {
+	current := Values{Sources: configSources()}
+	current.Sources[5].AuthMode = "web"
+	current.Sources[5].Account = "user"
+	current.Sources[5].Token = "password"
+	omittedMode := merge(current, Update{Sources: sourceUpdates("", "")})
+	if omittedMode.Sources[5].AuthMode != "web" || omittedMode.Sources[5].Account != "user" || omittedMode.Sources[5].Token != "password" {
+		t.Fatalf("omitted auth mode or credentials were not preserved: %+v", omittedMode.Sources[5])
+	}
+	developer := "developer"
+	modeUpdates := sourceUpdates("", "")
+	modeUpdates[5].AuthMode = &developer
+	changedMode := merge(current, Update{Sources: modeUpdates})
+	if changedMode.Sources[5].AuthMode != "developer" || changedMode.Sources[5].Account != "" || changedMode.Sources[5].Token != "" {
+		t.Fatalf("mode switch did not clear incompatible credentials: %+v", changedMode.Sources[5])
+	}
+	blank := publicView(Values{Sources: configSources()})
+	if blank.Sources[5].AuthMode != "web" {
+		t.Fatalf("blank Juying auth mode = %q", blank.Sources[5].AuthMode)
+	}
+	legacy := Values{Sources: configSources()}
+	legacy.Sources[5].Account = "app-id"
+	legacy.Sources[5].Token = "api-key"
+	if got := publicView(legacy).Sources[5].AuthMode; got != "developer" {
+		t.Fatalf("legacy Juying auth mode = %q", got)
+	}
+}
+
 func TestValidateRejectsPartialWeCom(t *testing.T) {
 	value := Values{WeCom: config.WeCom{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp"}, Sources: configSources()}
 	if !errors.Is(validate(value), ErrInvalid) {
@@ -269,6 +297,25 @@ func TestValidateRequiresCompleteOfficialJuyingCredentials(t *testing.T) {
 	value.Sources[5].Account = ""
 	if err := validate(value); err != nil {
 		t.Fatalf("contract Juying token rejected: %v", err)
+	}
+}
+
+func TestValidateJuyingAuthMode(t *testing.T) {
+	value := Values{Sources: configSources()}
+	value.Sources[5].Account = "user"
+	value.Sources[5].Token = "pass"
+	value.Sources[5].AuthMode = "web"
+	if err := validate(value); err != nil {
+		t.Fatalf("complete Juying web credentials rejected: %v", err)
+	}
+	value.Sources[5].AuthMode = "invalid"
+	if !errors.Is(validate(value), ErrInvalid) {
+		t.Fatal("invalid Juying auth mode was accepted")
+	}
+	value.Sources[5].AuthMode = "web"
+	view := publicView(value)
+	if view.Sources[5].AuthMode != "web" {
+		t.Fatalf("public auth mode = %q", view.Sources[5].AuthMode)
 	}
 }
 

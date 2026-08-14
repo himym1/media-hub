@@ -634,10 +634,19 @@ class MediaHubApi(baseUrl: String) {
                 chatId = wecom.getString("chatId"),
             ),
             workflow = parseWorkflowSettings(workflow),
-            sources = item.getJSONArray("sources").objects { source -> ProviderSourceSettings(
-                id = source.getString("id"), label = source.getString("label"), baseUrl = source.getString("baseUrl"),
-                account = source.optString("account"), token = SecretStatus(source.getJSONObject("token").getBoolean("configured")),
-            ) },
+            sources = item.getJSONArray("sources").objects { source ->
+                val id = source.getString("id")
+                val account = source.optString("account")
+                val tokenConfigured = source.getJSONObject("token").getBoolean("configured")
+                val fallbackMode = if (id == "juying") {
+					if (account.isNotBlank() || tokenConfigured) "developer" else "web"
+				} else ""
+                ProviderSourceSettings(
+                    id = id, label = source.getString("label"), baseUrl = source.getString("baseUrl"),
+					account = account, authMode = source.optString("authMode", fallbackMode),
+					token = SecretStatus(tokenConfigured),
+				)
+			},
         )
     }
 
@@ -664,7 +673,7 @@ class MediaHubApi(baseUrl: String) {
             .put("secret", secretBody(input.wecom.secret))
             .put("chatId", input.wecom.chatId))
         .put("workflow", JSONObject().put("qMediaSyncAccountId", input.workflow.qMediaSyncAccountId).put("movie", workflowTargetBody(input.workflow.movie)).put("series", workflowTargetBody(input.workflow.series)))
-        .put("sources", JSONArray().apply { input.sources.forEach { source -> put(JSONObject().put("id", source.id).put("baseUrl", source.baseUrl).put("account", source.account).put("token", secretBody(source.token))) } })
+        .put("sources", JSONArray().apply { input.sources.forEach { source -> put(JSONObject().put("id", source.id).put("baseUrl", source.baseUrl).put("account", source.account).put("authMode", source.authMode).put("token", secretBody(source.token))) } })
 
     private fun secretBody(value: SecretUpdate) = JSONObject().put("value", value.value).put("clear", value.clear)
     private fun workflowTargetBody(value: WorkflowTargetSettings) = JSONObject()

@@ -145,4 +145,15 @@ func TestNewUsesNativeJuyingOnlyWithCompleteOfficialCredentials(t *testing.T) {
 			t.Fatalf("source for %q = %#v", raw, got)
 		}
 	}
+	web := New(config.SearchSource{ID: "juying", AuthMode: "web", Account: "user", Token: "pass"}, time.Second, nil, nil)
+	if native, ok := web.(*Juying); !ok || native.authMode != "web" {
+		t.Fatalf("web source = %#v", web)
+	}
+	legacy := New(config.SearchSource{ID: "juying", Account: "app-id", Token: "api-key"}, time.Second, nil, nil)
+	if native, ok := legacy.(*Juying); !ok || native.authMode != "developer" {
+		t.Fatalf("legacy source = %#v", legacy)
+	}
+	if got := New(config.SearchSource{ID: "juying", AuthMode: "invalid", Account: "user", Token: "pass"}, time.Second, nil, nil); got != nil {
+		t.Fatalf("invalid mode source = %#v", got)
+	}
 }

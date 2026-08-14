@@ -193,6 +193,26 @@ func TestLoadConfiguresAccountSourceWithoutURL(t *testing.T) {
 	}
 }
 
+func TestLoadValidatesSourceAuthMode(t *testing.T) {
+	loaded, err := load(testLookup(map[string]string{
+		"MEDIA_HUB_SOURCE_JUYING_ACCOUNT":   "user",
+		"MEDIA_HUB_SOURCE_JUYING_TOKEN":     "pass",
+		"MEDIA_HUB_SOURCE_JUYING_AUTH_MODE": "WEB",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Sources) != 1 || loaded.Sources[0].AuthMode != "web" {
+		t.Fatalf("sources = %#v", loaded.Sources)
+	}
+	if _, err := load(testLookup(map[string]string{"MEDIA_HUB_SOURCE_JUYING_AUTH_MODE": "invalid"})); err == nil {
+		t.Fatal("invalid Juying auth mode was accepted")
+	}
+	if _, err := load(testLookup(map[string]string{"MEDIA_HUB_SOURCE_FRAMEHDR_AUTH_MODE": "web"})); err == nil {
+		t.Fatal("auth mode was accepted for a non-Juying source")
+	}
+}
+
 func TestAndroidReleaseDirectoryRequiresAbsolutePath(t *testing.T) {
 	if _, err := load(testLookup(map[string]string{"MEDIA_HUB_ANDROID_RELEASE_DIR": "relative/releases"})); err == nil {
 		t.Fatal("expected relative Android release directory to fail")

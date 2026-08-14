@@ -68,10 +68,11 @@ type TMDBUpdate struct {
 }
 
 type SourceUpdate struct {
-	ID      string       `json:"id"`
-	BaseURL string       `json:"baseUrl"`
-	Account *string      `json:"account,omitempty"`
-	Token   SecretUpdate `json:"token"`
+	ID       string       `json:"id"`
+	BaseURL  string       `json:"baseUrl"`
+	Account  *string      `json:"account,omitempty"`
+	AuthMode *string      `json:"authMode,omitempty"`
+	Token    SecretUpdate `json:"token"`
 }
 
 type WeComUpdate struct {
@@ -116,11 +117,12 @@ type TMDBView struct {
 }
 
 type SourceView struct {
-	ID      string       `json:"id"`
-	Label   string       `json:"label"`
-	BaseURL string       `json:"baseUrl"`
-	Account string       `json:"account"`
-	Token   SecretStatus `json:"token"`
+	ID       string       `json:"id"`
+	Label    string       `json:"label"`
+	BaseURL  string       `json:"baseUrl"`
+	Account  string       `json:"account"`
+	AuthMode string       `json:"authMode"`
+	Token    SecretStatus `json:"token"`
 }
 
 type WeComView struct {

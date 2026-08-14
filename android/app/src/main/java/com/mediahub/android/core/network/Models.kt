@@ -24,7 +24,7 @@ data class WorkflowSettings(
     val movie: WorkflowTargetSettings,
     val series: WorkflowTargetSettings,
  )
-data class ProviderSourceSettings(val id: String, val label: String, val baseUrl: String, val account: String, val token: SecretStatus)
+data class ProviderSourceSettings(val id: String, val label: String, val baseUrl: String, val account: String, val authMode: String, val token: SecretStatus)
 data class WeComSettings(
     val baseUrl: String,
     val corpId: String,
@@ -50,7 +50,7 @@ data class ProviderSettings(
     val workflow: WorkflowSettings,
     val sources: List<ProviderSourceSettings>,
  )
-data class ProviderSourceSettingsUpdate(val id: String, val baseUrl: String, val account: String, val token: SecretUpdate = SecretUpdate())
+data class ProviderSourceSettingsUpdate(val id: String, val baseUrl: String, val account: String, val authMode: String, val token: SecretUpdate = SecretUpdate())
 data class ProviderSettingsUpdate(
     val qmediaSyncBaseUrl: String,
     val qmediaSyncApiKey: SecretUpdate,

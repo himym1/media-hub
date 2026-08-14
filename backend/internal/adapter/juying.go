@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strconv"
 	"strings"
@@ -25,11 +26,15 @@ const (
 
 type Juying struct {
 	baseURL  string
-	appID    string
-	appKey   string
+	authMode string
+	account  string
+	secret   string
 	client   *http.Client
 	offline  Offline
 	receiver ShareReceiver
+
+	sessionMu sync.Mutex
+	userToken string
 }
 
 type juyingMovie struct {
@@ -41,12 +46,18 @@ type juyingMovie struct {
 }
 
 type juyingResource struct {
-	ID             json.RawMessage `json:"id"`
-	ResourceType   string          `json:"resource_type"`
-	ShareLink      string          `json:"share_link"`
-	Description    string          `json:"description"`
-	FileSize       string          `json:"file_size"`
-	ExtractionCode string          `json:"extraction_code"`
+	ID                  json.RawMessage `json:"id"`
+	ResourceType        string          `json:"resource_type"`
+	ShareLink           string          `json:"share_link"`
+	Description         string          `json:"description"`
+	ResourceDescription string          `json:"resource_description"`
+	Title               string          `json:"title"`
+	FileSize            string          `json:"file_size"`
+	ExtractionCode      string          `json:"extraction_code"`
+	LinkExposed         bool            `json:"link_exposed"`
+	AccessTicket        string          `json:"access_ticket"`
+	AccessEndpoint      string          `json:"access_endpoint"`
+	AccessMode          string          `json:"access_mode"`
 }
 
 type juyingMoviesResponse struct {
@@ -59,18 +70,25 @@ type juyingResourcesResponse struct {
 	Status    string           `json:"status"`
 	Message   string           `json:"message"`
 	Title     string           `json:"title"`
+	HasMore   bool             `json:"has_more"`
 	Resources []juyingResource `json:"resources"`
 }
 
 type juyingReference struct {
 	Kind        string `json:"kind"`
 	Title       string `json:"title"`
+	MovieID     string `json:"movieId,omitempty"`
+	ResourceID  string `json:"resourceId,omitempty"`
 	ShareCode   string `json:"shareCode,omitempty"`
 	ReceiveCode string `json:"receiveCode,omitempty"`
 	Magnet      string `json:"magnet,omitempty"`
 }
 
 func NewJuying(baseURL, appID, appKey string, timeout time.Duration, offline Offline, receiver ShareReceiver, proxyURL *url.URL) *Juying {
+	return NewJuyingWithAuthMode(baseURL, "developer", appID, appKey, timeout, offline, receiver, proxyURL)
+}
+
+func NewJuyingWithAuthMode(baseURL, authMode, account, secret string, timeout time.Duration, offline Offline, receiver ShareReceiver, proxyURL *url.URL) *Juying {
 	if strings.TrimSpace(baseURL) == "" {
 		baseURL = defaultJuyingURL
 	}
@@ -81,15 +99,16 @@ func NewJuying(baseURL, appID, appKey string, timeout time.Duration, offline Off
 	if proxyURL != nil {
 		transport.Proxy = http.ProxyURL(proxyURL)
 	}
+	jar, _ := cookiejar.New(nil)
+	mode := strings.ToLower(strings.TrimSpace(authMode))
+	if mode == "" {
+		mode = "developer"
+	}
 	return &Juying{
-		baseURL:  strings.TrimRight(strings.TrimSpace(baseURL), "/"),
-		appID:    strings.TrimSpace(appID),
-		appKey:   strings.TrimSpace(appKey),
-		offline:  offline,
-		receiver: receiver,
+		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"), authMode: mode,
+		account: strings.TrimSpace(account), secret: strings.TrimSpace(secret), offline: offline, receiver: receiver,
 		client: &http.Client{
-			Timeout:       timeout,
-			Transport:     transport,
+			Timeout: timeout, Transport: transport, Jar: jar,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 	}
@@ -99,6 +118,13 @@ func (s *Juying) ID() string    { return "juying" }
 func (s *Juying) Label() string { return "聚影" }
 
 func (s *Juying) Search(ctx context.Context, queryText string) ([]search.Candidate, error) {
+	if s.authMode == "web" {
+		return s.searchWeb(ctx, queryText)
+	}
+	return s.searchDeveloper(ctx, queryText)
+}
+
+func (s *Juying) searchDeveloper(ctx context.Context, queryText string) ([]search.Candidate, error) {
 	queryText = strings.TrimSpace(queryText)
 	if queryText == "" {
 		return nil, search.Failure{Code: "invalid_query", Message: "搜索词不能为空", Retryable: false}
@@ -237,6 +263,13 @@ func (s *Juying) StartTransfer(ctx context.Context, input search.TransferRequest
 	if err := json.Unmarshal([]byte(input.Reference), &reference); err != nil || strings.TrimSpace(reference.Title) == "" {
 		return search.TransferResult{}, search.Failure{Code: "invalid_selection", Message: "资源引用无效", Retryable: false}
 	}
+	if reference.Kind == "web" {
+		resolved, err := s.resolveWebReference(ctx, reference)
+		if err != nil {
+			return search.TransferResult{}, err
+		}
+		reference = resolved
+	}
 	switch reference.Kind {
 	case "share":
 		if !frameHDRShareCode.MatchString(reference.ShareCode) || !frameHDRAccessCode.MatchString(reference.ReceiveCode) {
@@ -284,8 +317,8 @@ func (s *Juying) getJSON(ctx context.Context, rawURL string, target any) error {
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "MediaHub/1.0")
-	request.Header.Set("X-App-ID", s.appID)
-	request.Header.Set("X-App-Key", s.appKey)
+	request.Header.Set("X-App-ID", s.account)
+	request.Header.Set("X-App-Key", s.secret)
 	response, err := s.client.Do(request)
 	if err != nil {
 		return search.Failure{Code: "source_unavailable", Message: "聚影暂时不可用", Retryable: true}

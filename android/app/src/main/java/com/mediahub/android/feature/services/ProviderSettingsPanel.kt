@@ -1,14 +1,17 @@
 package com.mediahub.android.feature.services
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -107,19 +111,26 @@ internal fun ProviderSettingsPanel(
         }
 
         SettingsSection("原生资源源") {
-            MediaHubText("蜜柑和 Sidhub 使用内置匿名适配器；帧影和聚影可留空地址并填写官方账户凭据。癫影需 VIP OpenAPI 与审批 SDK，当前仍使用合同适配器。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
+            MediaHubText("蜜柑和 Sidhub 使用内置匿名适配器；帧影使用站点账号；聚影可选择网页登录或开发者 API。癫影当前仍使用合同适配器。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
             settings.sources.forEachIndexed { index, source ->
                 val item = draft.sources[index]
-                val accountLabel = when (source.id) { "framehdr" -> "用户名"; "juying" -> "App ID"; else -> null }
-                val secretLabel = when (source.id) { "framehdr" -> "密码"; "dian" -> "OpenAPI Key"; "juying" -> "API Key"; "mikan", "sidhub" -> null; else -> "Bearer Token" }
+                val authMode = if (source.id == "juying") item.authMode.ifBlank { "web" } else ""
+                val modeChanged = source.id == "juying" && authMode != source.authMode
+                val accountLabel = when (source.id) { "framehdr" -> "用户名"; "juying" -> if (authMode == "web") "用户名" else "App ID"; else -> null }
+                val secretLabel = when (source.id) { "framehdr" -> "密码"; "dian" -> "OpenAPI Key"; "juying" -> if (authMode == "web") "密码" else "API Key"; "mikan", "sidhub" -> null; else -> "Bearer Token" }
                 MediaHubText(source.label, color = MediaHubColors.TextStrong, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                if (source.id == "juying") AuthModePicker(authMode) { nextMode ->
+                    onDraftChange(draft.copy(sources = draft.sources.mapIndexed { itemIndex, current ->
+                        if (itemIndex == index) current.copy(authMode = nextMode, account = "", token = SecretUpdate(clear = source.token.configured)) else current
+                    }))
+                }
                 LabeledField("${source.label} 适配器地址", item.baseUrl) { value ->
                     onDraftChange(draft.copy(sources = draft.sources.mapIndexed { itemIndex, current -> if (itemIndex == index) current.copy(baseUrl = value) else current }))
                 }
                 if (accountLabel != null) LabeledField("${source.label} $accountLabel", item.account) { value ->
                     onDraftChange(draft.copy(sources = draft.sources.mapIndexed { itemIndex, current -> if (itemIndex == index) current.copy(account = value.take(200)) else current }))
                 }
-                if (secretLabel != null) SecretField("${source.label} $secretLabel", source.token, item.token) { value ->
+                if (secretLabel != null) SecretField("${source.label} $secretLabel", source.token, item.token, resetRequired = modeChanged) { value ->
                     onDraftChange(draft.copy(sources = draft.sources.mapIndexed { itemIndex, current -> if (itemIndex == index) current.copy(token = value) else current }))
                 }
             }
@@ -159,6 +170,24 @@ private fun SettingsSection(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
+private fun AuthModePicker(value: String, onChange: (String) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(7.dp)).background(MediaHubColors.SurfaceInput),
+    ) {
+        listOf("web" to "网页登录", "developer" to "开发者 API").forEach { (mode, label) ->
+            val selected = value == mode
+            Box(
+                modifier = Modifier.weight(1f).selectable(selected = selected, role = Role.RadioButton) { onChange(mode) }
+                    .background(if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.SurfaceInput).padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                MediaHubText(label, color = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted, fontSize = 10.sp)
+            }
+        }
+    }
+}
+
+@Composable
 private fun LabeledField(
     label: String,
     value: String,
@@ -173,13 +202,13 @@ private fun LabeledField(
 }
 
 @Composable
-private fun SecretField(label: String, status: SecretStatus, value: SecretUpdate, onChange: (SecretUpdate) -> Unit) {
+private fun SecretField(label: String, status: SecretStatus, value: SecretUpdate, resetRequired: Boolean = false, onChange: (SecretUpdate) -> Unit) {
     LabeledField(
-        label = "$label · ${if (status.configured) "已保存，留空保持" else "尚未保存"}",
+        label = "$label · ${if (resetRequired) "切换模式后需重新填写" else if (status.configured) "已保存，留空保持" else "尚未保存"}",
         value = value.value,
         keyboardType = KeyboardType.Password,
         password = true,
-    ) { onChange(value.copy(value = it.take(4096))) }
+    ) { onChange(value.copy(value = it.take(4096), clear = false)) }
     if (status.configured) {
         Row(
             modifier = Modifier.fillMaxWidth().toggleable(value.clear, role = Role.Checkbox) { onChange(SecretUpdate(clear = it)) }

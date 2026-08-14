@@ -206,14 +206,18 @@ func (s *Service) handleSourceFailure(ctx context.Context, job *store.TransferJo
 	if !errors.As(err, &failure) {
 		failure = search.Failure{Code: "source_unavailable", Message: "资源源连接失败", Retryable: true}
 	}
-	if failure.Code == "source_submission_unknown" {
+	if failure.Code == "source_submission_unknown" || failure.Code == "source_access_unknown" {
 		job.State = "needs_attention"
 		job.ResumeState = "transferring"
 		job.ErrorCode = failure.Code
 		job.ErrorMessage = failure.Message
 		job.Retryable = true
 		job.NextAttemptAt = 0
-		return s.save(ctx, job, "transferring", "转存结果需要人工确认")
+		eventMessage := "转存结果需要人工确认"
+		if failure.Code == "source_access_unknown" {
+			eventMessage = "资源访问结果需要人工确认"
+		}
+		return s.save(ctx, job, "transferring", eventMessage)
 	}
 	if failure.Retryable && job.Attempts < maxAutomaticTries {
 		job.ErrorCode = failure.Code

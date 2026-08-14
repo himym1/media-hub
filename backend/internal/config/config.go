@@ -94,11 +94,12 @@ func (w Workflow) Target(mediaType string) (WorkflowTarget, bool) {
 }
 
 type SearchSource struct {
-	ID      string
-	Label   string
-	BaseURL string
-	Account string
-	Token   string
+	ID       string
+	Label    string
+	BaseURL  string
+	Account  string
+	Token    string
+	AuthMode string
 }
 
 type Integration struct {
@@ -345,8 +346,12 @@ func searchSourceConfigurations(
 			token = firstNonEmpty(token, secretValue(lookup, "MEDIA_HUB_SOURCE_GATHER_TOKEN"))
 		}
 		account := stringValue(lookup, "MEDIA_HUB_SOURCE_"+specification.env+"_ACCOUNT", "")
-		if baseURL != "" || account != "" || token != "" {
-			result = append(result, SearchSource{ID: specification.id, Label: specification.label, BaseURL: baseURL, Account: account, Token: token})
+		authMode := strings.ToLower(strings.TrimSpace(stringValue(lookup, "MEDIA_HUB_SOURCE_"+specification.env+"_AUTH_MODE", "")))
+		if authMode != "" && (specification.id != "juying" || (authMode != "web" && authMode != "developer")) {
+			return nil, fmt.Errorf("MEDIA_HUB_SOURCE_%s_AUTH_MODE must be web or developer", specification.env)
+		}
+		if baseURL != "" || account != "" || token != "" || authMode != "" {
+			result = append(result, SearchSource{ID: specification.id, Label: specification.label, BaseURL: baseURL, Account: account, Token: token, AuthMode: authMode})
 		}
 	}
 	return result, nil

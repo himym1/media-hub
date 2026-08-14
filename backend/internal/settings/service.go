@@ -173,12 +173,24 @@ func merge(current Values, input Update) Values {
 		seen[id] = struct{}{}
 		previous := byID[id]
 		account := previous.Account
+		token := previous.Token
+		authMode := previous.AuthMode
+		if source.AuthMode != nil {
+			authMode = strings.ToLower(strings.TrimSpace(*source.AuthMode))
+			if id == "juying" && authMode == "" {
+				authMode = "web"
+			}
+			if id == "juying" && authMode != juyingAuthMode(previous) {
+				account = ""
+				token = ""
+			}
+		}
 		if source.Account != nil {
 			account = strings.TrimSpace(*source.Account)
 		}
 		updated = append(updated, config.SearchSource{
 			ID: id, Label: sourceLabels[id], BaseURL: strings.TrimSpace(source.BaseURL), Account: account,
-			Token: mergeSecret(previous.Token, source.Token),
+			Token: mergeSecret(token, source.Token), AuthMode: authMode,
 		})
 	}
 	current.Sources = updated
@@ -261,17 +273,24 @@ func validate(value Values) error {
 		}
 		if source.ID == "juying" {
 			native := source.BaseURL == "" || isOfficialSourceRoot(source.BaseURL, "jying.top")
-			if native && (source.Account == "") != (source.Token == "") {
-				return fmt.Errorf("%w: Juying App ID and API Key must be configured together", ErrInvalid)
+			mode := juyingAuthMode(source)
+			if native && mode != "web" && mode != "developer" {
+				return fmt.Errorf("%w: Juying auth mode must be web or developer", ErrInvalid)
 			}
-			if !native && source.Account != "" {
-				return fmt.Errorf("%w: Juying app credentials require the official source URL", ErrInvalid)
+			if native && (source.Account == "") != (source.Token == "") {
+				return fmt.Errorf("%w: Juying account and secret must be configured together", ErrInvalid)
+			}
+			if !native && (source.Account != "" || source.AuthMode != "") {
+				return fmt.Errorf("%w: Juying account credentials require the official source URL", ErrInvalid)
 			}
 		}
 		if source.Account != "" && source.ID != "framehdr" && source.ID != "juying" {
 			return fmt.Errorf("%w: source account is not supported", ErrInvalid)
 		}
-		if len(source.BaseURL) > 2048 || len(source.Account) > 200 || len(source.Token) > 4096 {
+		if source.AuthMode != "" && source.ID != "juying" {
+			return fmt.Errorf("%w: source auth mode is not supported", ErrInvalid)
+		}
+		if len(source.BaseURL) > 2048 || len(source.Account) > 200 || len(source.Token) > 4096 || len(source.AuthMode) > 20 {
 			return fmt.Errorf("%w: source setting is too long", ErrInvalid)
 		}
 	}
@@ -304,12 +323,23 @@ func sourceReady(source config.SearchSource) bool {
 		return source.BaseURL != ""
 	case "juying":
 		if source.BaseURL == "" || isOfficialSourceRoot(source.BaseURL, "jying.top") {
-			return source.Account != "" && source.Token != ""
+			mode := juyingAuthMode(source)
+			return (mode == "web" || mode == "developer") && source.Account != "" && source.Token != ""
 		}
 		return source.BaseURL != ""
 	default:
 		return source.BaseURL != ""
 	}
+}
+
+func juyingAuthMode(source config.SearchSource) string {
+	if mode := strings.ToLower(strings.TrimSpace(source.AuthMode)); mode != "" {
+		return mode
+	}
+	if source.Account != "" || source.Token != "" {
+		return "developer"
+	}
+	return "web"
 }
 
 func isOfficialSourceRoot(raw, host string) bool {
@@ -329,7 +359,11 @@ func publicView(value Values) View {
 	}
 	for _, id := range []string{"dian", "framehdr", "gimy", "guanying", "hdhive", "juying", "mikan", "sidhub"} {
 		source := byID[id]
-		sources = append(sources, SourceView{ID: id, Label: sourceLabels[id], BaseURL: source.BaseURL, Account: source.Account, Token: SecretStatus{Configured: source.Token != ""}})
+		authMode := ""
+		if id == "juying" {
+			authMode = juyingAuthMode(source)
+		}
+		sources = append(sources, SourceView{ID: id, Label: sourceLabels[id], BaseURL: source.BaseURL, Account: source.Account, AuthMode: authMode, Token: SecretStatus{Configured: source.Token != ""}})
 	}
 	return View{
 		QMediaSync: QMediaSyncView{BaseURL: value.QMediaSync.BaseURL, APIKey: SecretStatus{Configured: value.QMediaSync.APIKey != ""}},
