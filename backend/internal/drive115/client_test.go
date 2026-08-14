@@ -2,14 +2,11 @@ package drive115
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/SheltonZhu/115driver/pkg/crypto/m115"
 )
 
 func TestStatusReadsNonIdentifyingAccountMetadata(t *testing.T) {
@@ -73,23 +70,9 @@ func TestExecuteRenameUsesWebBatchRenameForm(t *testing.T) {
 	}
 }
 
-func TestOfflineRequestPayloadIncludesRequiredEncryptedFields(t *testing.T) {
-	payload, err := offlineRequestPayload(123, "456", []string{"magnet:?xt=urn:btih:one", "https://example.test/file"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var values map[string]string
-	if err := json.Unmarshal(payload, &values); err != nil {
-		t.Fatal(err)
-	}
-	if values["ac"] != "add_task_urls" || values["uid"] != "123" || values["wp_path_id"] != "456" || values["app_ver"] != offlineAppVersion || values["url[0]"] != "magnet:?xt=urn:btih:one" || values["url[1]"] != "https://example.test/file" {
-		t.Fatalf("unexpected payload: %#v", values)
-	}
-}
-
-func TestAddOfflineURLsUsesOneCookieSnapshotAndRejectsMalformedEncryptedResponse(t *testing.T) {
+func TestAddOfflineURLsUsesSignedWebJSONEndpoint(t *testing.T) {
 	const cookie = "UID=uid; CID=cid; SEID=seid"
-	profileCalls := 0
+	infoCalls := 0
 	offlineCalls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("Cookie") != cookie {
@@ -97,36 +80,66 @@ func TestAddOfflineURLsUsesOneCookieSnapshotAndRejectsMalformedEncryptedResponse
 			return
 		}
 		switch request.URL.Path {
-		case "/profile":
-			profileCalls++
-			_, _ = w.Write([]byte(`{"state":true,"data":{"user_id":123}}`))
+		case "/info":
+			infoCalls++
+			_, _ = w.Write([]byte(`{"sign":"signature","time":123}`))
 		case "/offline":
 			offlineCalls++
-			if request.Method != http.MethodPost || request.FormValue("data") == "" || request.URL.Query().Get("t") == "" {
+			if request.Method != http.MethodPost || request.URL.Query().Get("ct") != "lixian" || request.URL.Query().Get("ac") != "add_task_urls" || request.FormValue("wp_path_id") != "456" || request.FormValue("sign") != "signature" || request.FormValue("time") != "123" || request.FormValue("url[0]") != "magnet:?xt=urn:btih:one" {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			_, _ = w.Write([]byte(`{"state":true,"data":"not-base64"}`))
+			_, _ = w.Write([]byte(`{"state":true,"result":[{"info_hash":"one"}]}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	defer server.Close()
 	client := NewClient(cookie, time.Second)
-	client.userProfileURL = server.URL + "/profile"
-	client.offlineAddURL = server.URL + "/offline?ac=add_task_urls"
+	client.offlineInfoURL = server.URL + "/info"
+	client.offlineAddURL = server.URL + "/offline?ct=lixian&ac=add_task_urls"
+	if err := client.AddOfflineURLs(context.Background(), "456", []string{"magnet:?xt=urn:btih:one"}); err != nil {
+		t.Fatal(err)
+	}
+	if infoCalls != 1 || offlineCalls != 1 {
+		t.Fatalf("infoCalls=%d offlineCalls=%d", infoCalls, offlineCalls)
+	}
+}
+
+func TestAddOfflineURLsMarksMalformedJSONResponseUncertain(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/info" {
+			_, _ = w.Write([]byte(`{"sign":"signature","time":"123"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`not-json`))
+	}))
+	defer server.Close()
+	client := NewClient("UID=uid; CID=cid; SEID=seid", time.Second)
+	client.offlineInfoURL = server.URL + "/info"
+	client.offlineAddURL = server.URL + "/offline"
 	err := client.AddOfflineURLs(context.Background(), "456", []string{"magnet:?xt=urn:btih:one"})
 	var writeErr *WriteError
 	if !errors.As(err, &writeErr) || !writeErr.Uncertain || writeErr.Code != "invalid_response" {
 		t.Fatalf("error = %#v, want uncertain invalid_response", err)
 	}
-	if profileCalls != 1 || offlineCalls != 1 {
-		t.Fatalf("profileCalls=%d offlineCalls=%d", profileCalls, offlineCalls)
-	}
 }
 
-func TestDecodeOfflineResponseRejectsMalformedInputWithoutPanic(t *testing.T) {
-	if _, err := decodeOfflineResponse("not-base64", m115.Key{}); !errors.Is(err, ErrUpstreamResponse) {
-		t.Fatalf("error = %v, want ErrUpstreamResponse", err)
+func TestAddOfflineURLsMarksPartialResultUncertain(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/info" {
+			_, _ = w.Write([]byte(`{"sign":"signature","time":123}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"state":true,"result":[]}`))
+	}))
+	defer server.Close()
+	client := NewClient("UID=uid; CID=cid; SEID=seid", time.Second)
+	client.offlineInfoURL = server.URL + "/info"
+	client.offlineAddURL = server.URL + "/offline"
+	err := client.AddOfflineURLs(context.Background(), "456", []string{"magnet:?xt=urn:btih:one"})
+	var writeErr *WriteError
+	if !errors.As(err, &writeErr) || !writeErr.Uncertain || writeErr.Code != "partial_result" {
+		t.Fatalf("error = %#v, want uncertain partial_result", err)
 	}
 }

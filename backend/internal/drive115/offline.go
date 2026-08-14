@@ -7,14 +7,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
+	"regexp"
 	"strings"
-	"time"
-
-	"github.com/SheltonZhu/115driver/pkg/crypto/m115"
 )
 
-const offlineAppVersion = "27.0.5.7"
+var offlineTimePattern = regexp.MustCompile(`^[0-9]{1,20}$`)
 
 func (c *Client) AddOfflineURLs(ctx context.Context, destinationID string, urls []string) error {
 	if len(urls) == 0 {
@@ -33,25 +30,19 @@ func (c *Client) AddOfflineURLs(ctx context.Context, destinationID string, urls 
 		return ErrNotConfigured
 	}
 
-	userID, err := c.offlineUserID(ctx, cookie)
+	sign, timestamp, err := c.offlineSignature(ctx, cookie)
 	if err != nil {
 		return err
 	}
-	payload, err := offlineRequestPayload(userID, destinationID, urls)
-	if err != nil {
-		return &WriteError{Code: "invalid_request", Err: err}
+	form := url.Values{
+		"wp_path_id": {destinationID},
+		"sign":       {sign},
+		"time":       {timestamp},
 	}
-	key := m115.GenerateKey()
-	form := url.Values{"data": {m115.Encode(payload, key)}}
-	endpoint, err := url.Parse(c.offlineAddURL)
-	if err != nil {
-		return &WriteError{Code: "invalid_request", Err: err}
+	for index, item := range urls {
+		form[fmt.Sprintf("url[%d]", index)] = []string{item}
 	}
-	query := endpoint.Query()
-	query.Set("t", strconv.FormatInt(time.Now().Unix(), 10))
-	endpoint.RawQuery = query.Encode()
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), strings.NewReader(form.Encode()))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.offlineAddURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return &WriteError{Code: "invalid_request", Err: err}
 	}
@@ -68,79 +59,43 @@ func (c *Client) AddOfflineURLs(ctx context.Context, destinationID string, urls 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return &WriteError{Code: "provider_rejected", Err: ErrUpstreamResponse}
 	}
-	var envelope struct {
-		State bool   `json:"state"`
-		Data  string `json:"data"`
-	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&envelope); err != nil {
-		return &WriteError{Uncertain: true, Code: "invalid_response", Err: err}
-	}
-	if !envelope.State {
-		return &WriteError{Code: "provider_rejected", Err: ErrUpstreamResponse}
-	}
-	decoded, err := decodeOfflineResponse(envelope.Data, key)
-	if err != nil {
-		return &WriteError{Uncertain: true, Code: "invalid_response", Err: err}
-	}
-	var result struct {
+	var payload struct {
 		State  bool `json:"state"`
 		Result []struct {
 			InfoHash string `json:"info_hash"`
 		} `json:"result"`
 	}
-	if err := json.Unmarshal(decoded, &result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&payload); err != nil {
 		return &WriteError{Uncertain: true, Code: "invalid_response", Err: err}
 	}
-	if !result.State {
+	if !payload.State {
 		return &WriteError{Code: "provider_rejected", Err: ErrUpstreamResponse}
 	}
-	if len(result.Result) != len(urls) {
+	if len(payload.Result) != len(urls) {
 		return &WriteError{Uncertain: true, Code: "partial_result", Err: ErrUpstreamResponse}
+	}
+	for _, item := range payload.Result {
+		if strings.TrimSpace(item.InfoHash) == "" {
+			return &WriteError{Uncertain: true, Code: "partial_result", Err: ErrUpstreamResponse}
+		}
 	}
 	return nil
 }
 
-func (c *Client) offlineUserID(ctx context.Context, cookie string) (int64, error) {
+func (c *Client) offlineSignature(ctx context.Context, cookie string) (string, string, error) {
 	var payload struct {
-		State bool `json:"state"`
-		Data  struct {
-			UserID int64 `json:"user_id"`
-		} `json:"data"`
+		Sign string          `json:"sign"`
+		Time json.RawMessage `json:"time"`
 	}
-	if err := c.getJSONWithSession(ctx, c.userProfileURL, nil, cookie, &payload); err != nil {
-		return 0, err
+	if err := c.getJSONWithSession(ctx, c.offlineInfoURL, nil, cookie, &payload); err != nil {
+		return "", "", err
 	}
-	if !payload.State || payload.Data.UserID <= 0 {
-		return 0, ErrUnauthorized
+	sign := strings.TrimSpace(payload.Sign)
+	timestamp := strings.Trim(strings.TrimSpace(string(payload.Time)), `"`)
+	if sign == "" || len(sign) > 4096 || !offlineTimePattern.MatchString(timestamp) {
+		return "", "", ErrUpstreamResponse
 	}
-	return payload.Data.UserID, nil
-}
-
-func offlineRequestPayload(userID int64, destinationID string, urls []string) ([]byte, error) {
-	params := map[string]string{
-		"ac":         "add_task_urls",
-		"wp_path_id": destinationID,
-		"app_ver":    offlineAppVersion,
-		"uid":        strconv.FormatInt(userID, 10),
-	}
-	for index, item := range urls {
-		params["url["+strconv.Itoa(index)+"]"] = item
-	}
-	return json.Marshal(params)
-}
-
-func decodeOfflineResponse(input string, key m115.Key) (output []byte, err error) {
-	defer func() {
-		if recover() != nil {
-			output = nil
-			err = ErrUpstreamResponse
-		}
-	}()
-	output, err = m115.Decode(input, key)
-	if err != nil || len(output) == 0 {
-		return nil, ErrUpstreamResponse
-	}
-	return output, nil
+	return sign, timestamp, nil
 }
 
 func (s *AuthService) AddOfflineURLs(ctx context.Context, destinationID string, urls []string) error {
