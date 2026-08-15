@@ -7,10 +7,12 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
 ```text
 /volume1/docker/media-hub/
   compose.yaml
+  compose.mikan-egress.yaml
   .env                 # mode 0600, never commit
   data/media-hub.db
   releases/latest.json
   releases/media-hub-<versionCode>.apk
+  tunnel/id_ed25519    # mode 0600, never commit
   backups/
 ```
 
@@ -41,11 +43,13 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
 
    ```text
    COMPOSE_FILE=compose.yaml:compose.mikan-egress.yaml
-   MEDIA_HUB_SOURCE_PROXY_URL=http://source-egress:17898
-   MEDIA_HUB_MIKAN_EGRESS_NETWORK=existing-egress-network
+   MEDIA_HUB_SOURCE_PROXY_URL=http://mikan-egress:17898
+   MEDIA_HUB_MIKAN_EGRESS_SSH_HOST=<egress-ssh-host>
+   MEDIA_HUB_MIKAN_EGRESS_SSH_PORT=2222
+   MEDIA_HUB_MIKAN_EGRESS_SSH_USER=root
    ```
 
-   `install-layout.sh` 会安装覆盖文件。`COMPOSE_FILE` 让发布、备份、恢复和重启都保留外部网络连接。代理必须是无凭据的 HTTP(S) URL；旧的 `MEDIA_HUB_MIKAN_PROXY_URL` 仍可作为兼容回退。不要把全局 `HTTP_PROXY` / `HTTPS_PROXY` 注入 Media Hub。
+   `install-layout.sh` 会安装覆盖文件并创建 mode `0700` 的 `tunnel/`。把专用 SSH 私钥安装为 `tunnel/id_ed25519`、mode `0600`，不要输出或提交它。覆盖文件在 Media Hub 默认网络中运行 `mikan-egress`，并等待隧道健康后启动 Media Hub，因此不依赖其他 Compose 项目或外部网络。代理必须是无凭据的 HTTP(S) URL；不要把全局 `HTTP_PROXY` / `HTTPS_PROXY` 注入 Media Hub。
 
    聚影官方源支持两种认证模式：`web` 使用站点用户名/密码并在服务端维护短期 Cookie/token 会话；`developer` 使用 App ID/API Key。建议通过加密 Provider Settings 配置。若使用 `.env` 启动基线，则设置 `MEDIA_HUB_SOURCE_JUYING_AUTH_MODE=web|developer`、`..._ACCOUNT` 和 `..._TOKEN`；历史凭据未设置 mode 时继续按 `developer` 解释。显式切换 mode 会清空旧模式凭据，防止密码与 API Key 互相复用。
 

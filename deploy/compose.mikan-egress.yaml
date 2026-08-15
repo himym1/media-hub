@@ -1,12 +1,42 @@
 services:
   media-hub:
     environment:
-      MEDIA_HUB_SOURCE_PROXY_URL: ${MEDIA_HUB_SOURCE_PROXY_URL:-${MEDIA_HUB_MIKAN_PROXY_URL:-http://subx-dian-egress:17898}}
-    networks:
-      - default
-      - mikan-egress
+      MEDIA_HUB_SOURCE_PROXY_URL: ${MEDIA_HUB_SOURCE_PROXY_URL:-http://mikan-egress:17898}
+    depends_on:
+      mikan-egress:
+        condition: service_healthy
 
-networks:
   mikan-egress:
-    external: true
-    name: ${MEDIA_HUB_MIKAN_EGRESS_NETWORK:-subx_default}
+    image: alpine:3.20
+    restart: unless-stopped
+    environment:
+      MIKAN_EGRESS_SSH_HOST: ${MEDIA_HUB_MIKAN_EGRESS_SSH_HOST:?set MEDIA_HUB_MIKAN_EGRESS_SSH_HOST}
+      MIKAN_EGRESS_SSH_PORT: ${MEDIA_HUB_MIKAN_EGRESS_SSH_PORT:-2222}
+      MIKAN_EGRESS_SSH_USER: ${MEDIA_HUB_MIKAN_EGRESS_SSH_USER:-root}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        apk add --no-cache openssh-client
+        exec ssh -NT \
+          -o BatchMode=yes \
+          -o ExitOnForwardFailure=yes \
+          -o ServerAliveInterval=30 \
+          -o ServerAliveCountMax=3 \
+          -o TCPKeepAlive=yes \
+          -o StrictHostKeyChecking=accept-new \
+          -o UserKnownHostsFile=/root/.ssh/known_hosts \
+          -o LogLevel=ERROR \
+          -i /run/secrets/mikan_egress_key \
+          -L 0.0.0.0:17898:127.0.0.1:17898 \
+          -p "$${MIKAN_EGRESS_SSH_PORT}" \
+          "$${MIKAN_EGRESS_SSH_USER}@$${MIKAN_EGRESS_SSH_HOST}"
+    volumes:
+      - ./tunnel/id_ed25519:/run/secrets/mikan_egress_key:ro
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z -w 3 127.0.0.1 17898"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    stop_grace_period: 10s

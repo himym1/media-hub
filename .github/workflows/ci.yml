@@ -97,3 +97,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ruby scripts/check-openapi.rb api/openapi.yaml
+      - run: ruby scripts/check-deploy-compose.rb

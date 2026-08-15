@@ -2,8 +2,8 @@
 set -eu
 
 root=${1:-/volume1/docker/media-hub}
-mkdir -p "$root/data" "$root/releases" "$root/backups"
-chmod 700 "$root/data" "$root/releases" "$root/backups"
+mkdir -p "$root/data" "$root/releases" "$root/backups" "$root/tunnel"
+chmod 700 "$root/data" "$root/releases" "$root/backups" "$root/tunnel"
 
 uid=${MEDIA_HUB_UID:-65532}
 gid=${MEDIA_HUB_GID:-65532}
