@@ -20,6 +20,11 @@ type ShareReceiver interface {
 	ReceiveShare(ctx context.Context, destinationID, shareCode, receiveCode string, fileIDs []string) error
 }
 
+// ShareInspector lists media names from a share without importing it.
+type ShareInspector interface {
+	ShareVideoNames(ctx context.Context, shareCode, receiveCode string) ([]string, error)
+}
+
 func New(source config.SearchSource, timeout time.Duration, offline Offline, proxyURL *url.URL) search.TransferSource {
 	if source.ID == "framehdr" && (source.BaseURL == "" || isFrameHDRHost(source.BaseURL)) {
 		if strings.TrimSpace(source.Account) == "" || strings.TrimSpace(source.Token) == "" {

@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -85,7 +87,12 @@ func (c *Client) ReceiveShare(ctx context.Context, destinationID, shareCode, rec
 	return &WriteError{Code: "provider_rejected", Err: ErrUpstreamResponse}
 }
 
-const shareMaxSelectedItems = 1000
+const (
+	shareMaxSelectedItems = 1000
+	shareSnapPageSize     = 100
+	shareSnapMaxEntries   = 1000
+	shareSnapMaxDepth     = 8
+)
 
 func normalizeShareFileIDs(fileIDs []string) ([]string, error) {
 	if len(fileIDs) > shareMaxSelectedItems {
@@ -107,6 +114,154 @@ func normalizeShareFileIDs(fileIDs []string) ([]string, error) {
 	return selected, nil
 }
 
+type shareDirectory struct {
+	id    string
+	depth int
+}
+
+func (c *Client) ShareVideoNames(ctx context.Context, shareCode, receiveCode string) ([]string, error) {
+	shareCode = strings.TrimSpace(shareCode)
+	receiveCode = strings.TrimSpace(receiveCode)
+	if !shareCodePattern.MatchString(shareCode) || !receiveCodePattern.MatchString(receiveCode) {
+		return nil, ErrUpstreamResponse
+	}
+	cookie := c.session()
+	if cookie == "" {
+		return nil, ErrNotConfigured
+	}
+
+	type shareItem struct {
+		FileID json.RawMessage `json:"fid"`
+		DirID  json.RawMessage `json:"cid"`
+		IsFile json.RawMessage `json:"fc"`
+		Name   string          `json:"n"`
+	}
+	directories := []shareDirectory{{}}
+	visited := map[string]struct{}{"__root__": {}}
+	names := make([]string, 0)
+	totalEntries := 0
+	for len(directories) > 0 {
+		current := directories[0]
+		directories = directories[1:]
+		offset := 0
+		expected := -1
+		directoryBaseEntries := totalEntries
+		for {
+			query := url.Values{
+				"share_code":   {shareCode},
+				"receive_code": {receiveCode},
+				"cid":          {current.id},
+				"offset":       {strconv.Itoa(offset)},
+				"limit":        {strconv.Itoa(shareSnapPageSize)},
+			}
+			var payload struct {
+				State bool `json:"state"`
+				Data  struct {
+					Count json.RawMessage `json:"count"`
+					List  []shareItem     `json:"list"`
+				} `json:"data"`
+			}
+			if err := c.getJSONWithSession(ctx, c.shareSnapURL, query, cookie, &payload); err != nil {
+				return nil, err
+			}
+			if !payload.State {
+				return nil, ErrUpstreamResponse
+			}
+			if count, ok := shareInteger(payload.Data.Count); ok {
+				if count > shareSnapMaxEntries-directoryBaseEntries {
+					return nil, ErrUpstreamResponse
+				}
+				if expected < 0 {
+					expected = count
+				} else if count != expected {
+					return nil, ErrUpstreamResponse
+				}
+			} else if len(payload.Data.Count) != 0 && string(payload.Data.Count) != "null" {
+				return nil, ErrUpstreamResponse
+			}
+			if len(payload.Data.List) == 0 {
+				if expected >= 0 && offset != expected {
+					return nil, ErrUpstreamResponse
+				}
+				break
+			}
+			if expected >= 0 && offset+len(payload.Data.List) > expected {
+				return nil, ErrUpstreamResponse
+			}
+			for _, item := range payload.Data.List {
+				totalEntries++
+				if totalEntries > shareSnapMaxEntries {
+					return nil, ErrUpstreamResponse
+				}
+				isFile, ok := shareInteger(item.IsFile)
+				name := strings.TrimSpace(item.Name)
+				if !ok || (isFile != 0 && isFile != 1) || name == "" || len([]rune(name)) > 500 || strings.ContainsAny(name, "/\\\r\n\x00") {
+					return nil, ErrUpstreamResponse
+				}
+				if isFile == 1 {
+					if shareID(item.FileID) == "" {
+						return nil, ErrUpstreamResponse
+					}
+					if shareVideoName(name) {
+						names = append(names, name)
+					}
+					continue
+				}
+				directoryID := shareID(item.DirID)
+				if directoryID == "" || current.depth >= shareSnapMaxDepth {
+					return nil, ErrUpstreamResponse
+				}
+				if _, exists := visited[directoryID]; exists {
+					return nil, ErrUpstreamResponse
+				}
+				visited[directoryID] = struct{}{}
+				directories = append(directories, shareDirectory{id: directoryID, depth: current.depth + 1})
+			}
+			offset += len(payload.Data.List)
+			if expected >= 0 {
+				if offset == expected {
+					break
+				}
+			} else if len(payload.Data.List) < shareSnapPageSize {
+				break
+			}
+		}
+	}
+	if len(names) == 0 {
+		return nil, ErrUpstreamResponse
+	}
+	return names, nil
+}
+
+func shareVideoName(name string) bool {
+	switch strings.ToLower(path.Ext(name)) {
+	case ".3gp", ".avi", ".flv", ".iso", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".ts", ".webm", ".wmv":
+		return true
+	default:
+		return false
+	}
+}
+
+func shareID(raw json.RawMessage) string {
+	text := strings.Trim(strings.TrimSpace(string(raw)), `"`)
+	if !numericIDPattern.MatchString(text) || text == "0" {
+		return ""
+	}
+	return text
+}
+
+func shareInteger(raw json.RawMessage) (int, bool) {
+	text := strings.Trim(strings.TrimSpace(string(raw)), `"`)
+	if text == "" || len(text) > 10 {
+		return 0, false
+	}
+	value, err := strconv.Atoi(text)
+	if err != nil || value < 0 {
+		return 0, false
+	}
+	return value, true
+}
+
 func shareUserID(cookieHeader string) string {
 	request := http.Request{Header: make(http.Header)}
 	request.Header.Set("Cookie", cookieHeader)
@@ -126,4 +281,11 @@ func (s *AuthService) ReceiveShare(ctx context.Context, destinationID, shareCode
 		return err
 	}
 	return s.drive.ReceiveShare(ctx, destinationID, shareCode, receiveCode, fileIDs)
+}
+
+func (s *AuthService) ShareVideoNames(ctx context.Context, shareCode, receiveCode string) ([]string, error) {
+	if err := s.prepareSession(ctx); err != nil {
+		return nil, err
+	}
+	return s.drive.ShareVideoNames(ctx, shareCode, receiveCode)
 }

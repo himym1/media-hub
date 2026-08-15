@@ -145,6 +145,12 @@ func juyingWebCandidate(movieID, title string, year int, mediaType string, resou
 	if err != nil {
 		return search.Candidate{}, false
 	}
+	sourceRef := string(encoded)
+	transferState := "available"
+	if strings.ToLower(strings.TrimSpace(resource.ResourceType)) != "115" {
+		sourceRef = ""
+		transferState = "unavailable"
+	}
 	season, episodeStart, episodeEnd := sidhubEpisodeRange(releaseTitle)
 	if mediaType != "series" {
 		season, episodeStart, episodeEnd = 0, 0, 0
@@ -154,7 +160,7 @@ func juyingWebCandidate(movieID, title string, year int, mediaType string, resou
 		ID:    "juying-" + movieID + "-" + resourceIDHash,
 		Title: title, Year: year, MediaType: mediaType,
 		Season: season, EpisodeStart: episodeStart, EpisodeEnd: episodeEnd,
-		SourceID: "juying", SourceRef: string(encoded), ReleaseTitle: releaseTitle, TransferState: "available",
+		SourceID: "juying", SourceRef: sourceRef, ReleaseTitle: releaseTitle, TransferState: transferState,
 		Release: search.ReleaseFacts{
 			Resolution:   firstNonEmptyString(strings.TrimSpace(resourceDescriptionResolution(resource)), mikanNormalizedResolution(releaseTitle)),
 			VideoCodec:   mikanNormalizedCodec(releaseTitle),

@@ -14,15 +14,29 @@ import (
 )
 
 type juyingTransferTarget struct {
-	shareCode   string
-	receiveCode string
-	magnets     []string
+	shareCode       string
+	receiveCode     string
+	magnets         []string
+	shareVideoNames []string
+	inspectErr      error
+	inspectCalls    int
 }
 
 func (t *juyingTransferTarget) ReceiveShare(_ context.Context, _ string, shareCode, receiveCode string, _ []string) error {
 	t.shareCode = shareCode
 	t.receiveCode = receiveCode
 	return nil
+}
+
+func (t *juyingTransferTarget) ShareVideoNames(_ context.Context, _, _ string) ([]string, error) {
+	t.inspectCalls++
+	if t.inspectErr != nil {
+		return nil, t.inspectErr
+	}
+	if t.shareVideoNames == nil {
+		return []string{"Van.Helsing.2004.2160p.mkv"}, nil
+	}
+	return append([]string(nil), t.shareVideoNames...), nil
 }
 
 func (t *juyingTransferTarget) AddOfflineURLs(_ context.Context, _ string, urls []string) error {
@@ -79,20 +93,20 @@ func TestJuyingSearchAndTransfersSupportedResources(t *testing.T) {
 	if target.shareCode != "shareABC123" || target.receiveCode != "WENG" {
 		t.Fatalf("share = %q/%q", target.shareCode, target.receiveCode)
 	}
-	if _, err := source.StartTransfer(context.Background(), search.TransferRequest{Reference: results[1].SourceRef, DestinationID: "dest", IdempotencyKey: "magnet-op"}); err != nil {
-		t.Fatal(err)
+	if results[1].SourceRef != "" || results[1].TransferState != "unavailable" {
+		t.Fatalf("magnet candidate remained transferable: %+v", results[1])
 	}
-	if len(target.magnets) != 1 || target.magnets[0] != magnet {
+	if len(target.magnets) != 0 {
 		t.Fatalf("magnets = %#v", target.magnets)
 	}
 }
 
-func TestJuyingRejectsMagnetIdentityMismatchBeforeOffline(t *testing.T) {
+func TestJuyingRejectsUnverifiableMagnetBeforeOffline(t *testing.T) {
 	target := &juyingTransferTarget{}
 	source := NewJuying("https://www.jying.top", "app-id", "app-key", time.Second, target, target, nil)
 	reference, err := json.Marshal(juyingReference{
 		Kind: "magnet", Title: "Van.Helsing.2004.2160p",
-		Magnet: "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Wrong.Movie.2020.2160p",
+		Magnet: "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Van.Helsing.2004.2160p",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -106,6 +120,23 @@ func TestJuyingRejectsMagnetIdentityMismatchBeforeOffline(t *testing.T) {
 	}
 	if len(target.magnets) != 0 {
 		t.Fatalf("offline target was called: %+v", target)
+	}
+}
+
+func TestJuyingRejectsShareIdentityMismatchBeforeReceive(t *testing.T) {
+	target := &juyingTransferTarget{shareVideoNames: []string{"Wrong.Movie.2020.2160p.mkv"}}
+	source := NewJuying("https://www.jying.top", "app-id", "app-key", time.Second, target, target, nil)
+	reference, err := json.Marshal(juyingReference{Kind: "share", Title: "Van.Helsing.2004.2160p", ShareCode: "shareABC123", ReceiveCode: "WENG"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = source.StartTransfer(context.Background(), search.TransferRequest{Reference: string(reference), DestinationID: "dest", IdempotencyKey: "op"})
+	var failure search.Failure
+	if !errors.As(err, &failure) || failure.Code != "source_identity_mismatch" || failure.Retryable {
+		t.Fatalf("failure = %#v", err)
+	}
+	if target.inspectCalls != 1 || target.shareCode != "" {
+		t.Fatalf("target = %+v", target)
 	}
 }
 

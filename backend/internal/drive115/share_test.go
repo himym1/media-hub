@@ -142,3 +142,49 @@ func TestReceiveShareUsesZeroToReceiveEntireShare(t *testing.T) {
 		t.Fatalf("requests = %d", requests)
 	}
 }
+
+func TestShareVideoNamesListsNestedMediaWithoutReceiving(t *testing.T) {
+	const cookie = "UID=123_session; CID=cid; SEID=seid"
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		requests++
+		if request.Method != http.MethodGet || request.Header.Get("Cookie") != cookie || request.URL.Query().Get("share_code") != "abc123" || request.URL.Query().Get("receive_code") != "xy9z" || request.URL.Query().Get("offset") != "0" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch request.URL.Query().Get("cid") {
+		case "":
+			_, _ = w.Write([]byte(`{"state":true,"data":{"count":2,"list":[{"cid":"10","fc":0,"n":"Movie"},{"fid":"11","fc":1,"n":"README.txt"}]}}`))
+		case "10":
+			_, _ = w.Write([]byte(`{"state":true,"data":{"list":[{"fid":"20","fc":1,"n":"Van.Helsing.2004.2160p.mkv"},{"fid":"21","fc":1,"n":"poster.jpg"}]}}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(cookie, time.Second)
+	client.shareSnapURL = server.URL
+	names, err := client.ShareVideoNames(context.Background(), "abc123", "xy9z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != 1 || names[0] != "Van.Helsing.2004.2160p.mkv" || requests != 2 {
+		t.Fatalf("names=%#v requests=%d", names, requests)
+	}
+}
+
+func TestShareVideoNamesRejectsInvalidInputBeforeRequest(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { requests++ }))
+	defer server.Close()
+	client := NewClient("UID=123_session", time.Second)
+	client.shareSnapURL = server.URL
+	if _, err := client.ShareVideoNames(context.Background(), "bad/code", ""); !errors.Is(err, ErrUpstreamResponse) {
+		t.Fatalf("error = %#v", err)
+	}
+	if requests != 0 {
+		t.Fatalf("requests = %d", requests)
+	}
+}

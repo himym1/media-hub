@@ -129,7 +129,7 @@ func TestJuyingWebRejectsChangedResourceIdentityBeforeAccess(t *testing.T) {
 			if resourceCalls > 1 {
 				title = "Wrong.Movie.2020.2160p"
 			}
-			_, _ = w.Write([]byte(`{"status":"success","has_more":false,"resources":[{"id":2,"resource_type":"magnet","title":"` + title + `","link_exposed":true,"access_ticket":"ticket","access_endpoint":"/api/app/resource/2/access/"}]}`))
+			_, _ = w.Write([]byte(`{"status":"success","has_more":false,"resources":[{"id":2,"resource_type":"115","title":"` + title + `","link_exposed":true,"access_ticket":"ticket","access_endpoint":"/api/app/resource/2/access/"}]}`))
 		case "/api/app/resource/2/access/":
 			accessCalls++
 			_, _ = w.Write([]byte(`{"status":"success","target":"magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Wrong.Movie.2020.2160p"}`))
@@ -155,6 +155,19 @@ func TestJuyingWebRejectsChangedResourceIdentityBeforeAccess(t *testing.T) {
 	}
 	if accessCalls != 0 || len(target.magnets) != 0 {
 		t.Fatalf("access=%d target=%+v", accessCalls, target)
+	}
+}
+
+func TestJuyingWebMagnetCandidateIsNotTransferable(t *testing.T) {
+	candidate, ok := juyingWebCandidate("1", "Van Helsing", 2004, "movie", juyingResource{
+		ID: json.RawMessage("2"), ResourceType: "magnet", Title: "Van.Helsing.2004.2160p",
+		LinkExposed: true, AccessTicket: "ticket", AccessEndpoint: "/api/app/resource/2/access/",
+	})
+	if !ok {
+		t.Fatal("candidate was rejected")
+	}
+	if candidate.SourceRef != "" || candidate.TransferState != "unavailable" {
+		t.Fatalf("candidate remained transferable: %+v", candidate)
 	}
 }
 

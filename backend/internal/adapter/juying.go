@@ -31,7 +31,6 @@ type Juying struct {
 	account  string
 	secret   string
 	client   *http.Client
-	offline  Offline
 	receiver ShareReceiver
 
 	sessionMu sync.Mutex
@@ -90,7 +89,7 @@ func NewJuying(baseURL, appID, appKey string, timeout time.Duration, offline Off
 	return NewJuyingWithAuthMode(baseURL, "developer", appID, appKey, timeout, offline, receiver, proxyURL)
 }
 
-func NewJuyingWithAuthMode(baseURL, authMode, account, secret string, timeout time.Duration, offline Offline, receiver ShareReceiver, proxyURL *url.URL) *Juying {
+func NewJuyingWithAuthMode(baseURL, authMode, account, secret string, timeout time.Duration, _ Offline, receiver ShareReceiver, proxyURL *url.URL) *Juying {
 	if strings.TrimSpace(baseURL) == "" {
 		baseURL = defaultJuyingURL
 	}
@@ -108,7 +107,7 @@ func NewJuyingWithAuthMode(baseURL, authMode, account, secret string, timeout ti
 	}
 	return &Juying{
 		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"), authMode: mode,
-		account: strings.TrimSpace(account), secret: strings.TrimSpace(secret), offline: offline, receiver: receiver,
+		account: strings.TrimSpace(account), secret: strings.TrimSpace(secret), receiver: receiver,
 		client: &http.Client{
 			Timeout: timeout, Transport: transport, Jar: jar,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
@@ -234,6 +233,12 @@ func juyingCandidate(movieID, title string, year int, mediaType string, resource
 	if err != nil {
 		return search.Candidate{}, false
 	}
+	sourceRef := string(encoded)
+	transferState := "available"
+	if reference.Kind == "magnet" {
+		sourceRef = ""
+		transferState = "unavailable"
+	}
 	season, episodeStart, episodeEnd := sidhubEpisodeRange(releaseTitle)
 	if mediaType != "series" {
 		season, episodeStart, episodeEnd = 0, 0, 0
@@ -243,7 +248,7 @@ func juyingCandidate(movieID, title string, year int, mediaType string, resource
 		ID:    "juying-" + movieID + "-" + resourceID,
 		Title: title, Year: year, MediaType: mediaType,
 		Season: season, EpisodeStart: episodeStart, EpisodeEnd: episodeEnd,
-		SourceID: "juying", SourceRef: string(encoded), ReleaseTitle: releaseTitle, TransferState: "available",
+		SourceID: "juying", SourceRef: sourceRef, ReleaseTitle: releaseTitle, TransferState: transferState,
 		Release: search.ReleaseFacts{
 			Resolution:   mikanNormalizedResolution(releaseTitle),
 			VideoCodec:   mikanNormalizedCodec(releaseTitle),
@@ -276,6 +281,17 @@ func (s *Juying) StartTransfer(ctx context.Context, input search.TransferRequest
 		if s.receiver == nil {
 			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "115 分享接收器不可用", Retryable: false}
 		}
+		inspector, ok := s.receiver.(ShareInspector)
+		if !ok {
+			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "115 分享内容校验不可用", Retryable: false}
+		}
+		videoNames, err := inspector.ShareVideoNames(ctx, reference.ShareCode, reference.ReceiveCode)
+		if err != nil {
+			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "无法校验 115 分享内容", Retryable: true}
+		}
+		if !juyingShareMatchesResource(videoNames, reference.Title) {
+			return search.TransferResult{}, search.Failure{Code: "source_identity_mismatch", Message: "115 分享文件与聚影资源标题不一致", Retryable: false}
+		}
 		if err := s.receiver.ReceiveShare(ctx, input.DestinationID, reference.ShareCode, reference.ReceiveCode, nil); err != nil {
 			var uncertain interface{ SubmissionUncertain() bool }
 			if errors.As(err, &uncertain) && uncertain.SubmissionUncertain() {
@@ -284,23 +300,10 @@ func (s *Juying) StartTransfer(ctx context.Context, input search.TransferRequest
 			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "聚影资源接收到 115 失败", Retryable: true}
 		}
 	case "magnet":
-		if s.offline == nil {
-			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "115 离线下载不可用", Retryable: false}
-		}
-		magnet, err := validateMagnetURI(reference.Magnet)
-		if err != nil {
+		if _, err := validateMagnetURI(reference.Magnet); err != nil {
 			return search.TransferResult{}, search.Failure{Code: "invalid_selection", Message: "资源引用无效", Retryable: false}
 		}
-		if !magnetMatchesJuyingResource(magnet, reference.Title) {
-			return search.TransferResult{}, search.Failure{Code: "source_identity_mismatch", Message: "聚影磁力内容与资源标题不一致", Retryable: false}
-		}
-		if err := s.offline.AddOfflineURLs(ctx, input.DestinationID, []string{magnet}); err != nil {
-			var uncertain interface{ SubmissionUncertain() bool }
-			if errors.As(err, &uncertain) && uncertain.SubmissionUncertain() {
-				return search.TransferResult{}, search.Failure{Code: "source_submission_unknown", Message: "115 离线转存结果未知，需要人工确认", Retryable: true}
-			}
-			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "聚影资源提交到 115 失败", Retryable: true}
-		}
+		return search.TransferResult{}, search.Failure{Code: "source_identity_mismatch", Message: "聚影磁力无法验证内部文件身份", Retryable: false}
 	default:
 		return search.TransferResult{}, search.Failure{Code: "invalid_selection", Message: "资源引用无效", Retryable: false}
 	}
@@ -421,18 +424,19 @@ func juyingResourceTitle(resource juyingResource, fallback string) string {
 	return strings.TrimSpace(firstNonEmptyString(resource.Title, resource.Description, resource.ResourceDescription, fallback))
 }
 
-func magnetMatchesJuyingResource(magnet, releaseTitle string) bool {
-	parsed, err := url.Parse(magnet)
-	if err != nil {
-		return false
+func juyingShareMatchesResource(videoNames []string, releaseTitle string) bool {
+	for _, name := range videoNames {
+		if juyingTextIdentityMatch(name, releaseTitle) {
+			return true
+		}
 	}
-	displayName := strings.TrimSpace(parsed.Query().Get("dn"))
-	if displayName == "" {
-		return false
-	}
-	releaseTokens := juyingIdentityTokens(releaseTitle)
-	for token := range juyingIdentityTokens(displayName) {
-		if _, ok := releaseTokens[token]; ok {
+	return false
+}
+
+func juyingTextIdentityMatch(actual, expected string) bool {
+	expectedTokens := juyingIdentityTokens(expected)
+	for token := range juyingIdentityTokens(actual) {
+		if _, ok := expectedTokens[token]; ok {
 			return true
 		}
 	}
