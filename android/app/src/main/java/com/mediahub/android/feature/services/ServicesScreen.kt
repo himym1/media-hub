@@ -53,6 +53,12 @@ import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.OperationalStatistics
 
+internal val serviceSectionOptions = listOf(
+    "overview" to "概览",
+    "providers" to "Provider",
+    "account" to "账户",
+)
+
 @Composable
 internal fun ServicesRoute(
     viewModel: ServicesViewModel,
@@ -114,7 +120,7 @@ private fun ServicesScreen(
             .padding(horizontal = 16.dp),
     ) {
         MediaHubSegmentedControl(
-            options = listOf("overview" to "概览", "providers" to "Provider", "account" to "账户"),
+            options = serviceSectionOptions,
             selected = section.value,
             onSelected = { section.value = it },
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp),

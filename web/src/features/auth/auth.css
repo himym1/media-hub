@@ -37,8 +37,8 @@
 
 .auth-brand small {
   margin-top: 4px;
-  color: #777b7a;
-  font-size: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
   letter-spacing: 0;
 }
 
@@ -64,8 +64,8 @@
 
 .auth-eyebrow {
   margin: 0 0 9px;
-  color: #787d7c;
-  font-size: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
   letter-spacing: 0;
 }
 
@@ -162,9 +162,9 @@
 .auth-footer {
   display: flex;
   justify-content: space-between;
-  color: #555c59;
+  color: var(--text-muted);
   font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0;
 }
 

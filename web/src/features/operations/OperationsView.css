@@ -7,7 +7,7 @@
   border-bottom: 1px solid #2a2d30;
 }
 
-.view-heading h2 {
+.view-heading h1 {
   color: #f2f1eb;
   font-size: 30px;
   font-weight: 550;
@@ -18,7 +18,7 @@
   color: #858b88;
   border: 1px solid #404645;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .service-state.healthy {
@@ -33,7 +33,7 @@
 
 .form-field > span {
   color: #858b88;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .form-field input,
@@ -62,7 +62,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 15px;
   color: #101214;
   background: #d7f36a;
@@ -90,7 +90,7 @@
 }
 
 .operation-groups button {
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 11px;
   color: #858b88;
   background: transparent;
@@ -132,7 +132,7 @@
   display: flex;
   gap: 9px;
   align-items: center;
-  min-height: 38px;
+  min-height: 44px;
   color: #f2bf67;
 }
 
@@ -241,12 +241,12 @@
 .drive-files button:disabled { cursor: default; opacity: .78; }
 .drive-files button span, .drive-command-list > div > span:first-child { min-width: 0; display: grid; gap: 3px; }
 .drive-files strong, .drive-command-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.drive-files small, .drive-command-list small { color: #777e7b; font-size: 10px; overflow-wrap: anywhere; }
+.drive-files small, .drive-command-list small { color: #777e7b; font-size: 12px; overflow-wrap: anywhere; }
 .drive-command-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: end; margin-top: 14px; }
-.drive-command-form button { min-height: 38px; }
+.drive-command-form button { min-height: 44px; }
 .drive-command-list { display: grid; margin-top: 14px; border-top: 1px solid #2a2d30; }
 .drive-command-list > div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; min-height: 50px; border-bottom: 1px solid #25282a; }
-.danger-button { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 12px; color: #f2b4ab; background: #341d1b; border: 1px solid #71403b; border-radius: 4px; }
+.danger-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 12px; color: #f2b4ab; background: #341d1b; border: 1px solid #71403b; border-radius: 4px; }
 .danger-button:disabled { opacity: .5; }
 .task-state.awaiting_confirmation { color: #e4bd78; border-color: #705d38; }
 @media (max-width: 900px) { .drive-files { grid-template-columns: repeat(2, minmax(0, 1fr)); } .drive-command-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -255,16 +255,16 @@
 .local-upload-workspace { margin: 0 0 28px; padding: 18px 0; border-bottom: 1px solid #2a2d30; }
 .local-upload-workspace .section-heading h3 { display: flex; align-items: center; gap: 8px; }
 .local-upload-controls { display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; gap: 10px; align-items: end; margin: 12px 0; }
-.local-upload-controls .secondary-command { min-height: 38px; }
+.local-upload-controls .secondary-command { min-height: 44px; }
 .local-files { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; max-height: 300px; overflow: auto; background: #2b2e30; border: 1px solid #2b2e30; }
 .local-files button { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 10px; text-align: left; color: #d7d9d4; background: #181a1b; border: 0; }
 .local-files button.active { color: #d8e58d; background: #292d21; }
 .local-files button span, .local-upload-jobs > div > span:first-child { display: grid; min-width: 0; gap: 3px; }
 .local-files strong, .local-upload-jobs strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.local-files small, .local-upload-jobs small { color: #777e7b; font-size: 10px; }
+.local-files small, .local-upload-jobs small { color: #777e7b; font-size: 12px; }
 .local-upload-submit { display: grid; grid-template-columns: minmax(0, 1fr) 190px auto; gap: 10px; align-items: center; margin-top: 12px; }
-.local-upload-submit > span { overflow: hidden; color: #a4aaa7; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.local-upload-submit input { min-height: 38px; padding: 0 10px; color: #dedfd8; background: #131516; border: 1px solid #3b403e; border-radius: 4px; }
+.local-upload-submit > span { overflow: hidden; color: #a4aaa7; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.local-upload-submit input { min-height: 44px; padding: 0 10px; color: #dedfd8; background: #131516; border: 1px solid #3b403e; border-radius: 4px; }
 .local-upload-jobs { display: grid; margin-top: 14px; border-top: 1px solid #2a2d30; }
 .local-upload-jobs > div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; min-height: 50px; border-bottom: 1px solid #25282a; }
 @media (max-width: 900px) { .local-files { grid-template-columns: repeat(2, minmax(0, 1fr)); } .local-upload-submit { grid-template-columns: 1fr 180px; } .local-upload-submit .primary-button { grid-column: 1 / -1; } }
@@ -285,16 +285,17 @@
 
 /* Unified quiet system palette */
 .view-heading { border-color: var(--border); }
-.view-heading h2, .command-row { color: var(--text); }
-.view-heading h2 { font-size: 28px; letter-spacing: 0; }
-.service-state { color: var(--muted); border-color: var(--border-strong); font-size: 12px; }
+.view-heading h1, .command-row { color: var(--text); }
+.view-heading h1 { font-size: 28px; letter-spacing: 0; }
+.service-state { color: var(--text-muted); border-color: var(--border-strong); font-size: 12px; }
 .service-state.healthy { color: var(--success); border-color: color-mix(in srgb, var(--success) 40%, var(--border)); }
-.form-field > span, .command-row small, .command-events li, .json-result { color: var(--muted); font-size: 12px; }
+.form-field > span, .command-row small, .command-events li, .json-result { color: var(--text-muted); font-size: 12px; }
 .form-field input, .form-field select, .form-field textarea { color: var(--text); background: var(--surface-input); border-color: var(--border-strong); }
+.form-field input, .form-field select, .drive-files button, .local-files button { min-height: 44px; }
 .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
 .primary-button { color: var(--bg); background: var(--accent); }
 .operation-groups { border-color: var(--border); }
-.operation-groups button { color: var(--muted); font-size: 13px; }
+.operation-groups button { color: var(--text-muted); font-size: 13px; }
 .operation-groups button.active { color: var(--text); border-bottom-color: var(--accent); }
 .operation-console, .operation-history { background: var(--surface); border-color: var(--border); border-radius: 7px; }
 .command-row, .drive-command-list, .local-upload-jobs, .archive-suggestion, .migration-command-list { border-color: var(--border); }
@@ -303,4 +304,4 @@
 .drive-files, .local-files { background: var(--border); border-color: var(--border); }
 .drive-files button, .local-files button { color: var(--text-secondary); background: var(--surface); }
 .drive-files button:not(:disabled):hover, .local-files button.active { color: var(--text); background: var(--surface-selected); }
-.drive-files small, .drive-command-list small, .local-files small, .local-upload-jobs small, .local-upload-submit > span, .archive-suggestion small, .migration-command-list small { color: var(--muted); font-size: 12px; }
+.drive-files small, .drive-command-list small, .local-files small, .local-upload-jobs small, .local-upload-submit > span, .archive-suggestion small, .migration-command-list small { color: var(--text-muted); font-size: 12px; }

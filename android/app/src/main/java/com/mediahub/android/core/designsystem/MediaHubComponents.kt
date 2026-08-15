@@ -6,11 +6,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -84,7 +86,7 @@ fun MediaHubButton(
     icon: ImageVector? = null,
 ) {
     MiuixButton(
-        modifier = modifier,
+        modifier = modifier.heightIn(min = 48.dp),
         enabled = enabled,
         onClick = onClick,
     ) {
@@ -138,10 +140,12 @@ fun MediaHubSegmentedControl(
     selected: String,
     onSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
+    role: Role = Role.Tab,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .selectableGroup()
             .background(MediaHubColors.SurfaceInput, RoundedCornerShape(8.dp))
             .padding(3.dp),
     ) {
@@ -150,8 +154,9 @@ fun MediaHubSegmentedControl(
             Box(
                 modifier = Modifier
                     .weight(1f)
+                    .heightIn(min = 48.dp)
                     .background(if (active) MediaHubColors.SurfaceSelected else Color.Transparent, RoundedCornerShape(6.dp))
-                    .selectable(selected = active, role = Role.Tab, onClick = { onSelected(value) })
+                    .selectable(selected = active, role = role, onClick = { onSelected(value) })
                     .padding(vertical = 11.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -239,6 +244,7 @@ fun MediaHubTextField(
         decorationBox = { innerTextField ->
             Box(
                 modifier = Modifier
+                    .heightIn(min = 48.dp)
                     .background(MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp))
                     .padding(horizontal = 12.dp, vertical = 12.dp),
             ) {

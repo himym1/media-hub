@@ -32,7 +32,7 @@ export function OperationsView() {
       <header className="view-heading">
         <div>
           <span className="eyebrow">OPERATIONS</span>
-          <h2>运营工具</h2>
+          <h1>运营工具</h1>
         </div>
         <span className="service-state unconfigured">原生模式</span>
       </header>

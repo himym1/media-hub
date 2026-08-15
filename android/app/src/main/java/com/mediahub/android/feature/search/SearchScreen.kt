@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -227,7 +228,8 @@ private fun TrendingItem(item: DiscoveryItem, onClick: () -> Unit) {
         modifier = Modifier
             .width(150.dp)
             .background(MediaHubColors.Surface, RoundedCornerShape(7.dp))
-            .clickable(onClick = onClick)
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -309,6 +311,7 @@ private fun ReleaseRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .background(background, RoundedCornerShape(8.dp))
             .selectable(
                 selected = selected,

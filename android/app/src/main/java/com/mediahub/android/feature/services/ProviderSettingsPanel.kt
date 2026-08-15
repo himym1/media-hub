@@ -1,17 +1,15 @@
 package com.mediahub.android.feature.services
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,7 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -36,6 +33,7 @@ import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubText
+import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubTextField
 import com.mediahub.android.core.network.ProviderSettings
 import com.mediahub.android.core.network.ProviderSettingsUpdate
@@ -194,30 +192,22 @@ private fun SettingsSection(title: String, content: @Composable () -> Unit) {
 
 @Composable
 private fun WeComModePicker(value: String, onChange: (String) -> Unit) {
-    ModePicker(value, listOf("app" to "自建应用", "appchat" to "AppChat"), onChange)
+    MediaHubSegmentedControl(
+        options = listOf("app" to "自建应用", "appchat" to "AppChat"),
+        selected = value,
+        onSelected = onChange,
+        role = Role.RadioButton,
+    )
 }
 
 @Composable
 private fun AuthModePicker(value: String, onChange: (String) -> Unit) {
-    ModePicker(value, listOf("web" to "网页登录", "developer" to "开发者 API"), onChange)
-}
-
-@Composable
-private fun ModePicker(value: String, options: List<Pair<String, String>>, onChange: (String) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(7.dp)).background(MediaHubColors.SurfaceInput),
-    ) {
-        options.forEach { (mode, label) ->
-            val selected = value == mode
-            Box(
-                modifier = Modifier.weight(1f).selectable(selected = selected, role = Role.RadioButton) { onChange(mode) }
-                    .background(if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.SurfaceInput).padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                MediaHubText(label, color = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted, fontSize = 12.sp)
-            }
-        }
-    }
+    MediaHubSegmentedControl(
+        options = listOf("web" to "网页登录", "developer" to "开发者 API"),
+        selected = value,
+        onSelected = onChange,
+        role = Role.RadioButton,
+    )
 }
 
 @Composable
@@ -244,8 +234,12 @@ private fun SecretField(label: String, status: SecretStatus, value: SecretUpdate
     ) { onChange(value.copy(value = it.take(4096), clear = false)) }
     if (status.configured) {
         Row(
-            modifier = Modifier.fillMaxWidth().toggleable(value.clear, role = Role.Checkbox) { onChange(SecretUpdate(clear = it)) }
-                .background(MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp)).padding(11.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .toggleable(value.clear, role = Role.Checkbox) { onChange(SecretUpdate(clear = it)) }
+                .background(MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp))
+                .padding(11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             MediaHubText(if (value.clear) "将清除已保存密钥" else "保留已保存密钥", color = if (value.clear) MediaHubColors.Error else MediaHubColors.TextMuted, fontSize = 12.sp)

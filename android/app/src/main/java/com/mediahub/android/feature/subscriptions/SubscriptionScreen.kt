@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -174,6 +175,7 @@ private fun SubscriptionListScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(min = 48.dp)
                         .clickable(role = Role.Button) { onSelect(item.id) }
                         .padding(vertical = 15.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -376,6 +378,7 @@ private fun OptionGroup(
                 Row(
                     modifier = Modifier
                         .weight(1f)
+                        .heightIn(min = 48.dp)
                         .background(if (selected == value) MediaHubColors.SurfaceSelected else MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp))
                         .selectable(selected = selected == value, enabled = enabled, role = Role.RadioButton) { onSelected(value) }
                         .padding(12.dp),
@@ -393,6 +396,7 @@ private fun BooleanOption(label: String, checked: Boolean, onChanged: (Boolean) 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .toggleable(value = checked, role = Role.Checkbox) { onChanged(it) }
             .background(MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp))
             .padding(12.dp),

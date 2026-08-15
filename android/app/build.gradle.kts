@@ -38,6 +38,7 @@ android {
         versionCode = releaseVersionCode
         versionName = releaseVersionName
         buildConfigField("String", "API_BASE_URL", "\"$mediaHubApiBaseUrl\"")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -89,6 +90,10 @@ dependencies {
     implementation(libs.androidx.navigation3.ui)
 
     testImplementation(libs.junit4)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

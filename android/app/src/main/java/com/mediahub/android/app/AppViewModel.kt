@@ -10,14 +10,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-enum class MainDestination {
-    Search,
-    Subscriptions,
-    Transfers,
-    Library,
-    Operations,
-    Services,
+enum class MainDestination(val title: String) {
+    Search("发现"),
+    Subscriptions("订阅"),
+    Transfers("任务"),
+    Library("媒体库"),
+    Operations("运维"),
+    Services("服务与设置"),
 }
+
+val primaryDestinations = listOf(
+    MainDestination.Search,
+    MainDestination.Transfers,
+    MainDestination.Subscriptions,
+    MainDestination.Library,
+)
 
 sealed interface AppState {
     data object Loading : AppState

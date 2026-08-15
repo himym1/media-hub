@@ -53,7 +53,7 @@ export function LoginScreen({ onAuthenticated, serviceError }: LoginScreenProps)
           <div className="password-field">
             <input
               autoComplete="current-password"
-              autoFocus
+              name="admin-password"
               disabled={unavailable}
               id="admin-password"
               onChange={(event) => setPassword(event.target.value)}

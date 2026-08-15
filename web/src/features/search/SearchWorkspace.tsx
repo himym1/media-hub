@@ -1,7 +1,8 @@
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Film, LayoutGrid, LibraryBig, ListPlus, ListTodo, LogOut, Settings2, TerminalSquare } from 'lucide-react'
 import { getSystemOverview, listTransfers, type Candidate } from '../../shared/api/mediaHub'
+import { commitUrl } from '../../shared/navigation/urlState'
 import { LibraryView } from '../library/LibraryView'
 import { OperationsView } from '../operations/OperationsView'
 import { SettingsView } from '../settings/SettingsView'
@@ -47,12 +48,28 @@ function viewFromLocation(): WorkspaceView {
 export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
   const [activeView, setActiveView] = useState<WorkspaceView>(viewFromLocation)
   const [draftSubscription, setDraftSubscription] = useState<Candidate | null>(null)
+  const [providerSettingsDirty, setProviderSettingsDirty] = useState(false)
+  const providerDirtyUrl = useRef<string | null>(null)
+  const updateProviderDirty = useCallback((dirty: boolean) => {
+    if (dirty && providerDirtyUrl.current === null) providerDirtyUrl.current = window.location.href
+    if (!dirty) providerDirtyUrl.current = null
+    setProviderSettingsDirty(dirty)
+  }, [])
 
   useEffect(() => {
-    const onPopState = () => setActiveView(viewFromLocation())
-    window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
-  }, [])
+    const onPopState = () => {
+      if (providerSettingsDirty && providerDirtyUrl.current && window.location.href !== providerDirtyUrl.current) {
+        if (!window.confirm('Provider 设置尚未保存。确定离开并放弃修改吗？')) {
+          window.history.pushState({}, '', providerDirtyUrl.current)
+          return
+        }
+        updateProviderDirty(false)
+      }
+      setActiveView(viewFromLocation())
+    }
+    window.addEventListener('popstate', onPopState, { capture: true })
+    return () => window.removeEventListener('popstate', onPopState, { capture: true })
+  }, [providerSettingsDirty, updateProviderDirty])
 
   const overview = useQuery({
     queryKey: ['system-overview'],
@@ -78,12 +95,25 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
   const systemActive = activeView === '运维' || activeView === '服务'
 
   const navigate = (next: WorkspaceView) => {
-    if (next === activeView) return
-    const url = new URL(window.location.href)
-    url.searchParams.set('view', viewSlugs[next])
-    window.history.pushState({}, '', url)
+    if (next === activeView) return true
+    if (activeView === '服务' && providerSettingsDirty) {
+      if (!window.confirm('Provider 设置尚未保存。确定离开并放弃修改吗？')) return false
+      updateProviderDirty(false)
+    }
+    commitUrl({
+      view: viewSlugs[next],
+      q: next === '发现' ? new URLSearchParams(window.location.search).get('q') : null,
+      task: next === '任务' ? new URLSearchParams(window.location.search).get('task') : null,
+      settings: next === '服务' ? new URLSearchParams(window.location.search).get('settings') : null,
+    })
     setActiveView(next)
     window.scrollTo({ top: 0 })
+    return true
+  }
+  const guardedLogout = () => {
+    if (activeView === '服务' && providerSettingsDirty && !window.confirm('Provider 设置尚未保存。确定退出并放弃修改吗？')) return
+    updateProviderDirty(false)
+    onLogout()
   }
   const handleNav = (event: MouseEvent<HTMLAnchorElement>, next: WorkspaceView) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
@@ -107,6 +137,7 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">跳到主要内容</a>
       <aside className="sidebar">
         <div className="brand-lockup">
           <div className="brand-mark"><Film size={19} strokeWidth={2.2} /></div>
@@ -120,7 +151,7 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
 
         <div className="sidebar-bottom">
           <div className={`connection-summary ${connectionState}`}><span className="connection-pulse" /><span>{connectionLabel}</span></div>
-          <button className="profile-row" disabled={isLoggingOut} onClick={onLogout} type="button">
+          <button className="profile-row" disabled={isLoggingOut} onClick={guardedLogout} type="button">
             <span className="avatar">W</span>
             <span className="profile-copy"><strong>管理员</strong><small>{isLoggingOut ? '正在退出' : '本地账户'}</small></span>
             <LogOut aria-hidden="true" size={15} />
@@ -128,7 +159,7 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
         </div>
       </aside>
 
-      <main className="main-content">
+      <main className="main-content" id="main-content" tabIndex={-1}>
         <header className="topbar">
           <div className="topbar-title"><span>Media Hub</span><strong>{activeView === '服务' ? '系统设置' : activeView}</strong></div>
           <div className={`system-dot ${connectionState}`}><span />{connectionLabel}</div>
@@ -162,7 +193,7 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
           {activeView === '订阅' ? <SubscriptionView draftCandidate={draftSubscription} onDraftConsumed={() => setDraftSubscription(null)} /> : null}
           {activeView === '媒体库' ? <LibraryView /> : null}
           {activeView === '运维' ? <OperationsView /> : null}
-          {activeView === '服务' ? <SettingsView integrations={integrations} onLogout={onLogout} onRefresh={() => void overview.refetch()} /> : null}
+          {activeView === '服务' ? <SettingsView integrations={integrations} onDirtyChange={updateProviderDirty} onLogout={guardedLogout} onRefresh={() => void overview.refetch()} /> : null}
         </div>
       </main>
 

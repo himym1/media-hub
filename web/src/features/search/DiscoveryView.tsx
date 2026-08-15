@@ -9,12 +9,17 @@ import {
   type Candidate,
   type Integration,
 } from '../../shared/api/mediaHub'
+import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
 
 function formatSize(bytes: number) {
   if (bytes <= 0) return '大小未知'
   const gib = bytes / 1024 / 1024 / 1024
   return gib >= 1024 ? `${(gib / 1024).toFixed(1)} TB` : `${gib.toFixed(1)} GB`
+}
+
+function searchQueryFromLocation() {
+  return new URLSearchParams(window.location.search).get('q')?.trim().slice(0, 120) ?? ''
 }
 
 type DiscoveryViewProps = {
@@ -34,8 +39,8 @@ export function DiscoveryView({
 }: DiscoveryViewProps) {
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [query, setQuery] = useState('')
-  const [submittedQuery, setSubmittedQuery] = useState('')
+  const [query, setQuery] = useState(searchQueryFromLocation)
+  const [submittedQuery, setSubmittedQuery] = useState(searchQueryFromLocation)
   const [selected, setSelected] = useState<Candidate | null>(null)
   const sourceIntegration = integrations.find((item) => item.id === 'sources')
   const healthyCount = integrations.filter((item) => item.status === 'healthy').length
@@ -68,6 +73,17 @@ export function DiscoveryView({
     return () => window.removeEventListener('keydown', focusSearch)
   }, [])
 
+  useEffect(() => {
+    const restoreSearch = () => {
+      const restored = searchQueryFromLocation()
+      setQuery(restored)
+      setSubmittedQuery(restored)
+      setSelected(null)
+    }
+    window.addEventListener('popstate', restoreSearch)
+    return () => window.removeEventListener('popstate', restoreSearch)
+  }, [])
+
   const recommendations = useQuery({
     queryKey: ['tmdb-recommendations', selected?.mediaType, selected?.tmdbId],
     queryFn: () => getRecommendations(selected!.mediaType, selected!.tmdbId!, 6),
@@ -81,11 +97,13 @@ export function DiscoveryView({
     if (!next) return
     setSubmittedQuery(next)
     setSelected(null)
+    commitUrl({ q: next })
   }
   const searchDiscoveryItem = (title: string) => {
     setQuery(title)
     setSubmittedQuery(title)
     setSelected(null)
+    commitUrl({ q: title })
   }
   const handleTransfer = (candidate: Candidate) => {
     setSelected(candidate)
@@ -96,7 +114,7 @@ export function DiscoveryView({
     <section className="discovery-view">
       <header className="view-header discovery-header">
         <div><p className="eyebrow">DISCOVER</p><h1>发现</h1><p>搜索资源、核对版本并加入自动转存流程。</p></div>
-        <button className="health-summary" disabled={integrationsLoading} onClick={onRefreshIntegrations} type="button"><span className={healthyCount > 0 ? 'healthy' : ''} /><strong>{integrationsLoading ? '检查中…' : `${healthyCount}/${integrations.length} 服务在线`}</strong><RefreshCw size={15} /></button>
+        <button aria-label={integrationsLoading ? '正在检查服务状态' : `刷新服务状态，${healthyCount}/${integrations.length} 个服务在线`} className="health-summary" disabled={integrationsLoading} onClick={onRefreshIntegrations} type="button"><span className={healthyCount > 0 ? 'healthy' : ''} /><strong>{integrationsLoading ? '检查中…' : `${healthyCount}/${integrations.length} 服务在线`}</strong><RefreshCw aria-hidden="true" size={15} /></button>
       </header>
 
       <section className="search-stage" aria-label="搜索媒体资源">

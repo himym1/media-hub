@@ -11,6 +11,7 @@ import {
   type TransferNotification,
   type TransferState,
 } from '../../shared/api/mediaHub'
+import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
 
 const stateLabel: Record<TransferState, string> = {
@@ -30,21 +31,39 @@ const stateLabel: Record<TransferState, string> = {
 const runningStates = new Set<TransferState>(['queued', 'transferring', 'retry_wait', 'transferred', 'submitting_sync', 'syncing', 'refreshing_emby', 'indexing_emby', 'verifying_playback'])
 const timeFormatter = new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 
+function taskIdFromLocation() {
+  return new URLSearchParams(window.location.search).get('task')
+}
+
 type TransferQueueProps = {
   query: UseQueryResult<{ transfers: TransferJob[] }, Error>
 }
 
 export function TransferQueue({ query }: TransferQueueProps) {
   const queryClient = useQueryClient()
-  const [selectedID, setSelectedID] = useState<string | null>(null)
+  const [selectedID, setSelectedID] = useState<string | null>(taskIdFromLocation)
   const jobs = useMemo(() => query.data?.transfers ?? [], [query.data?.transfers])
   const activeJobs = jobs.filter((job) => runningStates.has(job.state) || job.state === 'needs_attention')
   const historyJobs = jobs.filter((job) => !activeJobs.includes(job))
 
   useEffect(() => {
-    if (!selectedID && jobs[0]) setSelectedID(jobs[0].id)
-    if (selectedID && !jobs.some((job) => job.id === selectedID)) setSelectedID(jobs[0]?.id ?? null)
-  }, [jobs, selectedID])
+    const restoreTask = () => setSelectedID(taskIdFromLocation())
+    window.addEventListener('popstate', restoreTask)
+    return () => window.removeEventListener('popstate', restoreTask)
+  }, [])
+
+  useEffect(() => {
+    if (!query.data) return
+    if (selectedID && jobs.some((job) => job.id === selectedID)) return
+    const fallback = jobs[0]?.id ?? null
+    setSelectedID(fallback)
+    commitUrl({ task: fallback }, 'replace')
+  }, [jobs, query.data, selectedID])
+
+  const selectTask = (id: string) => {
+    setSelectedID(id)
+    commitUrl({ task: id })
+  }
 
   const detail = useQuery({
     queryKey: ['transfer', selectedID],
@@ -91,9 +110,9 @@ export function TransferQueue({ query }: TransferQueueProps) {
 
       {jobs.length > 0 ? (
         <div className="task-layout">
-          <div className="task-list" role="list">
-            <TaskGroup label="进行中" jobs={activeJobs} selectedID={selectedID} onSelect={setSelectedID} />
-            <TaskGroup label="历史记录" jobs={historyJobs} selectedID={selectedID} onSelect={setSelectedID} />
+          <div className="task-list">
+            <TaskGroup label="进行中" jobs={activeJobs} selectedID={selectedID} onSelect={selectTask} />
+            <TaskGroup label="历史记录" jobs={historyJobs} selectedID={selectedID} onSelect={selectTask} />
           </div>
 
           <aside className="task-detail" aria-label="任务详情">

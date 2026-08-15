@@ -39,6 +39,7 @@ import com.composables.icons.lucide.SquareTerminal
 import com.mediahub.android.app.AppState
 import com.mediahub.android.app.AppViewModel
 import com.mediahub.android.app.MainDestination
+import com.mediahub.android.app.primaryDestinations
 import com.mediahub.android.app.MediaHubViewModelFactory
 import com.mediahub.android.core.auth.SecureSessionStore
 import com.mediahub.android.core.config.ServerUrlStore
@@ -205,7 +206,7 @@ private fun WorkspaceTopBar(destination: MainDestination, onSystemSelected: () -
             modifier = Modifier.size(22.dp),
         )
         Column(modifier = Modifier.weight(1f).padding(start = 11.dp)) {
-            MediaHubText(text = destinationTitle(destination), fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+            MediaHubText(text = destination.title, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
             MediaHubText(text = if (destination == MainDestination.Operations || destination == MainDestination.Services) "系统管理" else "Media Hub", color = MediaHubColors.TextMuted, fontSize = 12.sp)
         }
         MediaHubIconButton(
@@ -216,13 +217,13 @@ private fun WorkspaceTopBar(destination: MainDestination, onSystemSelected: () -
     }
 }
 
-private fun destinationTitle(destination: MainDestination) = when (destination) {
-    MainDestination.Search -> "发现"
-    MainDestination.Transfers -> "任务"
-    MainDestination.Subscriptions -> "订阅"
-    MainDestination.Library -> "媒体库"
-    MainDestination.Operations -> "运维"
-    MainDestination.Services -> "服务与设置"
+private fun destinationIcon(destination: MainDestination) = when (destination) {
+    MainDestination.Search -> Lucide.Search
+    MainDestination.Transfers -> Lucide.ListTodo
+    MainDestination.Subscriptions -> Lucide.ListPlus
+    MainDestination.Library -> Lucide.LibraryBig
+    MainDestination.Operations -> Lucide.SquareTerminal
+    MainDestination.Services -> Lucide.Settings2
 }
 
 @Composable
@@ -235,10 +236,15 @@ private fun MainNavigationBar(selected: MainDestination, onSelected: (MainDestin
             .navigationBarsPadding()
             .height(66.dp),
     ) {
-        NavigationItem("发现", Lucide.Search, selected == MainDestination.Search, { onSelected(MainDestination.Search) }, Modifier.weight(1f))
-        NavigationItem("任务", Lucide.ListTodo, selected == MainDestination.Transfers, { onSelected(MainDestination.Transfers) }, Modifier.weight(1f))
-        NavigationItem("订阅", Lucide.ListPlus, selected == MainDestination.Subscriptions, { onSelected(MainDestination.Subscriptions) }, Modifier.weight(1f))
-        NavigationItem("媒体库", Lucide.LibraryBig, selected == MainDestination.Library, { onSelected(MainDestination.Library) }, Modifier.weight(1f))
+        primaryDestinations.forEach { destination ->
+            NavigationItem(
+                label = destination.title,
+                icon = destinationIcon(destination),
+                selected = selected == destination,
+                onClick = { onSelected(destination) },
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 

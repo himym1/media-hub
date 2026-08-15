@@ -17,7 +17,7 @@ object MediaHubColors {
     val TextStrong = Color(0xFFDDE3E0)
     val TextSecondary = Color(0xFFB7BFBC)
     val TextMuted = Color(0xFF8D9793)
-    val TextFaint = Color(0xFF707A76)
+    val TextFaint = Color(0xFF7A8580)
     val Source = Color(0xFF7EB6D8)
     val Success = Color(0xFF75BEA0)
     val Error = Color(0xFFE07B75)

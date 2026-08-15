@@ -11,15 +11,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -161,7 +164,14 @@ private fun Drive115Section(
         }
         MediaHubTextField(value = state.driveParentId, onValueChange = onParentChanged, placeholder = "当前目录 ID", modifier = Modifier.fillMaxWidth(), keyboardType = KeyboardType.Number)
         state.driveFiles.take(50).forEach { file ->
-            Row(modifier = Modifier.fillMaxWidth().clickable(enabled = file.kind == "folder") { if (file.kind == "folder") onParentChanged(file.id) }.padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clickable(enabled = file.kind == "folder", role = Role.Button) { onParentChanged(file.id) }
+                    .padding(vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 com.mediahub.android.core.designsystem.MediaHubIcon(imageVector = Lucide.FolderOpen, contentDescription = null, tint = if (file.kind == "folder") MediaHubColors.Accent else MediaHubColors.TextMuted)
                 Spacer(Modifier.padding(horizontal = 5.dp))
                 Column(Modifier.weight(1f)) {
@@ -203,29 +213,104 @@ private fun LocalUploadSection(
             Spacer(Modifier.padding(horizontal = 4.dp))
             MediaHubText(text = "本地上传", color = MediaHubColors.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         }
-        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { state.localRoots.forEach { root -> ChoiceChip(root.id,root.id==state.localRootId){onRootChanged(root.id)} } }
-        MediaHubTextField(value=state.localPath,onValueChange=onPathChanged,placeholder="相对目录",modifier=Modifier.fillMaxWidth())
-        if(state.localPath.isNotEmpty()) MediaHubButton(label="返回上级",onClick={onPathChanged(state.localPath.substringBeforeLast('/',""))})
-        state.localEntries.take(50).forEach { entry ->
-            Row(modifier=Modifier.fillMaxWidth().clickable{onEntrySelected(entry)}.background(if(state.localSelectedFile==entry.path)MediaHubColors.SurfaceSelected else MediaHubColors.Canvas).padding(vertical=9.dp),verticalAlignment=Alignment.CenterVertically){
-                com.mediahub.android.core.designsystem.MediaHubIcon(imageVector=Lucide.FolderOpen,contentDescription=null,tint=if(entry.directory)MediaHubColors.Accent else MediaHubColors.TextMuted)
-                Spacer(Modifier.padding(horizontal=5.dp));Column(Modifier.weight(1f)){MediaHubText(entry.name,fontSize=12.sp);MediaHubText(if(entry.directory)"目录" else formatBytes(entry.size),color=MediaHubColors.TextMuted,fontSize=9.sp)}
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            state.localRoots.forEach { root ->
+                ChoiceChip(root.id, root.id == state.localRootId) { onRootChanged(root.id) }
             }
         }
-        MediaHubText(text=state.localSelectedFile.ifBlank{"请选择一个文件"},color=MediaHubColors.TextMuted,fontSize=10.sp)
-        MediaHubTextField(value=state.localDestinationId,onValueChange=onDestinationChanged,placeholder="115 目标目录 ID",modifier=Modifier.fillMaxWidth(),keyboardType=KeyboardType.Number)
-        MediaHubButton(label=if(state.localInvoking)"正在创建" else "创建上传任务",icon=Lucide.Upload,onClick=onCreate,enabled=!state.localInvoking&&state.localSelectedFile.isNotBlank()&&state.localDestinationId.isNotBlank(),modifier=Modifier.fillMaxWidth())
+        MediaHubTextField(
+            value = state.localPath,
+            onValueChange = onPathChanged,
+            placeholder = "相对目录",
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (state.localPath.isNotEmpty()) {
+            MediaHubButton(
+                label = "返回上级",
+                onClick = { onPathChanged(state.localPath.substringBeforeLast('/', "")) },
+            )
+        }
+        state.localEntries.take(50).forEach { entry ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clickable(role = Role.Button) { onEntrySelected(entry) }
+                    .background(if (state.localSelectedFile == entry.path) MediaHubColors.SurfaceSelected else MediaHubColors.Canvas)
+                    .padding(vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                com.mediahub.android.core.designsystem.MediaHubIcon(
+                    imageVector = Lucide.FolderOpen,
+                    contentDescription = null,
+                    tint = if (entry.directory) MediaHubColors.Accent else MediaHubColors.TextMuted,
+                )
+                Spacer(Modifier.padding(horizontal = 5.dp))
+                Column(Modifier.weight(1f)) {
+                    MediaHubText(entry.name, fontSize = 12.sp)
+                    MediaHubText(
+                        if (entry.directory) "目录" else formatBytes(entry.size),
+                        color = MediaHubColors.TextMuted,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+        MediaHubText(
+            text = state.localSelectedFile.ifBlank { "请选择一个文件" },
+            color = MediaHubColors.TextMuted,
+            fontSize = 12.sp,
+        )
+        MediaHubTextField(
+            value = state.localDestinationId,
+            onValueChange = onDestinationChanged,
+            placeholder = "115 目标目录 ID",
+            modifier = Modifier.fillMaxWidth(),
+            keyboardType = KeyboardType.Number,
+        )
+        MediaHubButton(
+            label = if (state.localInvoking) "正在创建" else "创建上传任务",
+            icon = Lucide.Upload,
+            onClick = onCreate,
+            enabled = !state.localInvoking && state.localSelectedFile.isNotBlank() && state.localDestinationId.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        )
         state.localUploads.take(8).forEach { upload ->
-            Row(modifier=Modifier.fillMaxWidth().padding(vertical=7.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically){
-                Column(Modifier.weight(1f)){MediaHubText(upload.path,fontSize=12.sp);MediaHubText(if(upload.bytesTotal>0)"${upload.bytesDone*100/upload.bytesTotal}% · ${formatBytes(upload.bytesTotal)}" else upload.id,color=MediaHubColors.TextMuted,fontSize=9.sp)}
-                MediaHubText(localUploadState(upload.state),color=commandStateColor(upload.state),fontSize=10.sp)
-                if(upload.state=="failed"||upload.state=="needs_attention")MediaHubButton(label="确认重试",onClick={onRetry(upload)})
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    MediaHubText(upload.path, fontSize = 12.sp)
+                    MediaHubText(
+                        if (upload.bytesTotal > 0) "${upload.bytesDone * 100 / upload.bytesTotal}% · ${formatBytes(upload.bytesTotal)}" else upload.id,
+                        color = MediaHubColors.TextMuted,
+                        fontSize = 12.sp,
+                    )
+                }
+                MediaHubText(localUploadState(upload.state), color = commandStateColor(upload.state), fontSize = 12.sp)
+                if (upload.state == "failed" || upload.state == "needs_attention") {
+                    MediaHubButton(label = "确认重试", onClick = { onRetry(upload) })
+                }
             }
         }
     }
 }
 
-private fun localUploadState(state:String)=when(state){"queued"->"等待中";"hashing"->"校验中";"submitting_init"->"初始化";"uploading"->"上传中";"completed"->"已完成";"failed"->"失败";"needs_attention"->"待核对";else->state}
+private fun localUploadState(state: String) = when (state) {
+    "queued" -> "等待中"
+    "hashing" -> "校验中"
+    "submitting_init" -> "初始化"
+    "uploading" -> "上传中"
+    "completed" -> "已完成"
+    "failed" -> "失败"
+    "needs_attention" -> "待核对"
+    else -> state
+}
 
 private fun formatBytes(value: Long): String = when {
     value < 1024 -> "$value B"
@@ -242,8 +327,9 @@ private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
         fontSize = 12.sp,
         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
         modifier = Modifier
+            .heightIn(min = 48.dp)
             .background(if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface)
-            .clickable(onClick = onClick)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 9.dp),
     )
 }
@@ -315,12 +401,29 @@ private fun ArchiveSection(
             MediaHubTextField(state.archiveNames[item.fileId] ?: item.suggestedName, { onNameChanged(item.fileId,it) }, "新名称")
         }
     }
-    if(state.archiveSuggestions.isNotEmpty()){Spacer(Modifier.height(10.dp));MediaHubButton("保存待确认计划", onClick=onCreate, enabled=state.archiveSelected.isNotEmpty())}
-    if(state.archivePlans.isNotEmpty()){Spacer(Modifier.height(16.dp));MediaHubText("归档计划",fontSize=15.sp,fontWeight=FontWeight.Bold)}
+    if (state.archiveSuggestions.isNotEmpty()) {
+        Spacer(Modifier.height(10.dp))
+        MediaHubButton("保存待确认计划", onClick = onCreate, enabled = state.archiveSelected.isNotEmpty())
+    }
+    if (state.archivePlans.isNotEmpty()) {
+        Spacer(Modifier.height(16.dp))
+        MediaHubText("归档计划", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+    }
     state.archivePlans.forEach { plan ->
-        Row(Modifier.fillMaxWidth().padding(vertical=8.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically){
-            Column(Modifier.weight(1f)){MediaHubText(plan.state,color=commandStateColor(plan.state),fontSize=12.sp,fontWeight=FontWeight.Bold);MediaHubText("${plan.stepIndex} / ${plan.stepTotal} 步 · ${plan.id}",color=MediaHubColors.TextSecondary,fontSize=10.sp);if(plan.errorMessage.isNotBlank())MediaHubText(plan.errorMessage,color=MediaHubColors.Error,fontSize=11.sp)}
-            when(plan.state){"awaiting_confirmation"->MediaHubButton("确认计划 ID",onClick={onConfirm(plan)});"failed","needs_attention"->MediaHubButton("核对后继续",onClick={onRetry(plan)});else->{}}
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                MediaHubText(plan.state, color = commandStateColor(plan.state), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                MediaHubText("${plan.stepIndex} / ${plan.stepTotal} 步 · ${plan.id}", color = MediaHubColors.TextSecondary, fontSize = 12.sp)
+                if (plan.errorMessage.isNotBlank()) MediaHubText(plan.errorMessage, color = MediaHubColors.Error, fontSize = 12.sp)
+            }
+            when (plan.state) {
+                "awaiting_confirmation" -> MediaHubButton("确认计划 ID", onClick = { onConfirm(plan) })
+                "failed", "needs_attention" -> MediaHubButton("核对后继续", onClick = { onRetry(plan) })
+            }
         }
     }
 }

@@ -180,7 +180,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
       <header className="view-header">
         <div><p className="eyebrow">AUTOMATION</p><h1>订阅</h1><p>按身份和版本规则持续查找，符合条件后进入同一条可恢复工作流。</p></div>
         <div className="view-header-actions">
-          <input ref={importInput} className="sr-only" type="file" accept="application/json,.json" onChange={(event) => void readBackup(event)} />
+          <input ref={importInput} aria-label="选择订阅备份文件" className="sr-only" type="file" accept="application/json,.json" onChange={(event) => void readBackup(event)} />
           <IconButton label="导入订阅备份" onClick={() => importInput.current?.click()}><Upload size={16} /></IconButton>
           <IconButton label="导出订阅备份" onClick={() => void downloadBackup()}><Download size={16} /></IconButton>
           <button className="secondary-command" disabled={!subscriptions.data?.subscriptions.length || batch.isPending} onClick={() => batch.mutate(false)} type="button"><Pause size={16} />全部暂停</button>
