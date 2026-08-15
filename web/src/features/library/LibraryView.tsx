@@ -9,6 +9,7 @@ import {
   refreshEmbyLibrary,
   searchEmbyItems,
   type EmbyItem,
+  type EmbyItemDetail,
 } from '../../shared/api/mediaHub'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
@@ -125,7 +126,7 @@ export function LibraryView() {
   return (
     <section className="library-page">
       <header className="view-header compact-view-header">
-        <div><p className="eyebrow">EMBY</p><h1>媒体库</h1><p>浏览已入库内容，查看媒体身份并按需请求 Emby 刷新。</p></div>
+        <div><h1>媒体库</h1><p>浏览已入库内容，查看媒体信息并按需刷新元数据。</p></div>
         <IconButton label="刷新媒体库列表" onClick={() => void libraries.refetch()} subtle><RefreshCw size={17} /></IconButton>
       </header>
 
@@ -170,37 +171,108 @@ export function LibraryView() {
 
         <aside className="library-detail" aria-label="媒体详情">
           {itemId ? <div className="library-detail-back"><IconButton label="返回媒体列表" onClick={closeItem} subtle><ChevronLeft size={17} /></IconButton><span>返回媒体列表</span></div> : null}
-          {!itemId ? <div className="library-detail-empty"><Film size={28} /><strong>选择一个媒体</strong><span>查看身份、简介和 Emby 状态。</span></div> : null}
+          {!itemId ? <div className="library-detail-empty"><Film size={28} /><strong>选择一个媒体</strong><span>查看简介、年份和播放信息。</span></div> : null}
           {detail.isLoading ? <div className="status-loading">正在读取媒体详情…</div> : null}
           {detail.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>详情读取失败</strong><span>{detail.error.message}</span></div><button onClick={() => void detail.refetch()} type="button">重试</button></div> : null}
-          {detail.data ? <>
-            <div className="library-detail-heading"><div><p className="eyebrow">DETAIL</p><h2>{detail.data.name}</h2>{detail.data.originalTitle ? <span>{detail.data.originalTitle}</span> : null}</div><span className="media-type-chip">{detail.data.type === 'Movie' ? '电影' : '剧集'}</span></div>
-            <dl className="library-facts">
-              <div><dt>年份</dt><dd>{detail.data.year || '未知'}</dd></div>
-              <div><dt>TMDB</dt><dd>{detail.data.providerIds?.Tmdb || '未绑定'}</dd></div>
-              <div><dt>时长</dt><dd>{detail.data.runtimeMinutes ? `${detail.data.runtimeMinutes} 分钟` : '未提供'}</dd></div>
-              <div><dt>评分</dt><dd>{detail.data.communityRating ? detail.data.communityRating.toFixed(1) : '未提供'}</dd></div>
-            </dl>
-            {detail.data.genres?.length ? <div className="library-genres">{detail.data.genres.map((genre) => <span key={genre}>{genre}</span>)}</div> : null}
-            <p className="library-overview">{detail.data.overview || 'Emby 暂未提供简介。'}</p>
-            <div className="library-media-state"><strong>{detail.data.type === 'Series' ? '剧集播放由分集媒体源提供' : `已关联 ${detail.data.mediaSourceCount} 个媒体源`}</strong><span>Media Hub 不代理或删除媒体文件。</span></div>
-            <div className="library-detail-actions">
-              <button className="secondary-command" disabled={refreshItem.isPending} onClick={() => refreshItem.mutate(detail.data.id)} type="button"><RefreshCw size={16} />{refreshItem.isPending ? '已提交…' : '刷新元数据'}</button>
-              <a className="primary-action compact" href={detail.data.externalUrl} rel="noreferrer" target="_blank"><ExternalLink size={16} />在 Emby 中打开</a>
-            </div>
-          </> : null}
+          {detail.data ? <LibraryItemDetail item={detail.data} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} /> : null}
         </aside>
       </div>
     </section>
   )
 }
 
+function LibraryItemDetail({ item, onRefresh, refreshing }: { item: EmbyItemDetail; onRefresh: (id: string) => void; refreshing: boolean }) {
+  const originalTitle = visibleOriginalTitle(item)
+  const genres = localizedGenres(item.genres ?? [])
+
+  return <>
+    <div className="library-detail-heading"><div><h2>{item.name}</h2></div><span className="media-type-chip">{mediaTypeLabel(item.type)}</span></div>
+    <dl className="library-facts">
+      <div><dt>年份</dt><dd>{item.year || '未知'}</dd></div>
+      <div><dt>时长</dt><dd>{item.runtimeMinutes ? `${item.runtimeMinutes} 分钟` : '未提供'}</dd></div>
+      <div><dt>评分</dt><dd>{item.communityRating ? item.communityRating.toFixed(1) : '未提供'}</dd></div>
+    </dl>
+    {genres.length ? <div className="library-genres">{genres.map((genre) => <span key={genre}>{genre}</span>)}</div> : null}
+    <p className="library-overview">{item.overview || '暂未提供简介。'}</p>
+    <details className="library-more">
+      <summary>更多信息</summary>
+      <dl>
+        {originalTitle ? <div><dt>原名</dt><dd>{originalTitle}</dd></div> : null}
+        <div><dt>TMDB 编号</dt><dd>{item.providerIds?.Tmdb || '未绑定'}</dd></div>
+        <div><dt>媒体源</dt><dd>{item.type === 'Series' ? '由分集提供' : `${item.mediaSourceCount} 个`}</dd></div>
+      </dl>
+    </details>
+    <div className="library-detail-actions">
+      <button className="secondary-command" disabled={refreshing} onClick={() => onRefresh(item.id)} type="button"><RefreshCw size={16} />{refreshing ? '已提交…' : '刷新元数据'}</button>
+      <a className="primary-action compact" href={item.externalUrl} rel="noreferrer" target="_blank"><ExternalLink size={16} />在 Emby 中打开</a>
+    </div>
+  </>
+}
+
 function LibraryItemButton({ item, selected, onSelect }: { item: EmbyItem; selected: boolean; onSelect: (id: string) => void }) {
-  return <button aria-pressed={selected} className={selected ? 'library-item selected' : 'library-item'} onClick={() => onSelect(item.id)} type="button"><span className="library-item-icon"><Film size={18} /></span><span><strong>{item.name}</strong><small>{item.type === 'Movie' ? '电影' : '剧集'}{item.year ? ` · ${item.year}` : ''}{item.providerIds?.Tmdb ? ` · TMDB ${item.providerIds.Tmdb}` : ''}</small></span><ChevronRight size={17} /></button>
+  return <button aria-pressed={selected} className={selected ? 'library-item selected' : 'library-item'} onClick={() => onSelect(item.id)} type="button"><span className="library-item-icon"><Film size={18} /></span><span><strong>{item.name}</strong><small>{mediaTypeLabel(item.type)}{item.year ? ` · ${item.year}` : ''}</small></span><ChevronRight size={17} /></button>
 }
 
 function libraryCollectionLabel(type?: string) {
   if (type === 'movies') return '电影'
   if (type === 'tvshows') return '剧集'
   return '媒体库'
+}
+
+function mediaTypeLabel(type: string) {
+  if (type === 'Movie') return '电影'
+  if (type === 'Series') return '剧集'
+  return '媒体'
+}
+
+function visibleOriginalTitle(item: EmbyItemDetail) {
+  const originalTitle = item.originalTitle?.trim()
+  if (!originalTitle || normalizeTitle(originalTitle) === normalizeTitle(item.name)) return null
+  return originalTitle
+}
+
+function normalizeTitle(value: string) {
+  return value.normalize('NFKC').trim().toLocaleLowerCase()
+}
+
+const genreLabels: Record<string, string> = {
+  action: '动作',
+  'action & adventure': '动作冒险',
+  adventure: '冒险',
+  animation: '动画',
+  biography: '传记',
+  comedy: '喜剧',
+  crime: '犯罪',
+  documentary: '纪录片',
+  drama: '剧情',
+  family: '家庭',
+  fantasy: '奇幻',
+  'film-noir': '黑色电影',
+  history: '历史',
+  horror: '恐怖',
+  kids: '儿童',
+  music: '音乐',
+  musical: '音乐剧',
+  mystery: '悬疑',
+  news: '新闻',
+  reality: '真人秀',
+  romance: '爱情',
+  'sci-fi & fantasy': '科幻奇幻',
+  'science fiction': '科幻',
+  short: '短片',
+  soap: '肥皂剧',
+  sport: '体育',
+  talk: '脱口秀',
+  thriller: '惊悚',
+  'tv movie': '电视电影',
+  war: '战争',
+  'war & politics': '战争政治',
+  western: '西部',
+}
+
+function localizedGenres(genres: string[]) {
+  return [...new Set(genres.map((genre) => {
+    const value = genre.trim()
+    return genreLabels[value.toLocaleLowerCase()] ?? value
+  }).filter(Boolean))]
 }
