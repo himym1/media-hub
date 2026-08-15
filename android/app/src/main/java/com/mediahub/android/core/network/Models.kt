@@ -194,6 +194,7 @@ data class TransferJob(
     val errorCode: String?,
     val errorMessage: String?,
     val retryable: Boolean,
+    val archived: Boolean,
     val createdAt: String,
     val updatedAt: String,
     val events: List<TransferEvent> = emptyList(),
@@ -292,6 +293,22 @@ data class EmbyItem(
     val type: String,
     val year: Int?,
     val tmdbId: String?,
+)
+
+data class EmbyItemPage(
+    val items: List<EmbyItem>,
+    val total: Int,
+)
+
+data class EmbyItemDetail(
+    val item: EmbyItem,
+    val originalTitle: String?,
+    val overview: String?,
+    val communityRating: Double?,
+    val runtimeMinutes: Int?,
+    val genres: List<String>,
+    val mediaSourceCount: Int,
+    val externalUrl: String,
 )
 
 

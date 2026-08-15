@@ -16,6 +16,7 @@ type Job struct {
 	ErrorCode    string    `json:"errorCode,omitempty"`
 	ErrorMessage string    `json:"errorMessage,omitempty"`
 	Retryable    bool      `json:"retryable"`
+	Archived     bool      `json:"archived"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
 }

@@ -210,8 +210,8 @@ func (s *Service) Get(ctx context.Context, userID int64, jobID string) (JobDetai
 	return JobDetail{Job: publicJob(job), Events: publicEvents}, nil
 }
 
-func (s *Service) List(ctx context.Context, userID int64, limit int) ([]Job, error) {
-	jobs, err := s.store.ListTransferJobs(ctx, userID, limit)
+func (s *Service) List(ctx context.Context, userID int64, limit int, archived bool) ([]Job, error) {
+	jobs, err := s.store.ListTransferJobs(ctx, userID, limit, archived)
 	if err != nil {
 		return nil, err
 	}
@@ -220,6 +220,14 @@ func (s *Service) List(ctx context.Context, userID int64, limit int) ([]Job, err
 		result = append(result, publicJob(job))
 	}
 	return result, nil
+}
+
+func (s *Service) SetArchived(ctx context.Context, userID int64, jobID string, archived bool) (Job, error) {
+	job, err := s.store.SetTransferArchived(ctx, userID, jobID, archived, s.now())
+	if err != nil {
+		return Job{}, err
+	}
+	return publicJob(job), nil
 }
 
 func (s *Service) Retry(ctx context.Context, userID int64, jobID string) (Job, error) {
@@ -280,7 +288,7 @@ func publicJob(job store.TransferJob) Job {
 		EpisodeStart: job.EpisodeStart, EpisodeEnd: job.EpisodeEnd,
 		MediaType: job.MediaType, TMDBID: job.TMDBID, Source: job.SourceID,
 		State: job.State, ErrorCode: job.ErrorCode, ErrorMessage: job.ErrorMessage,
-		Retryable: job.Retryable, CreatedAt: time.Unix(job.CreatedAt, 0).UTC(),
+		Retryable: job.Retryable, Archived: job.ArchivedAt > 0, CreatedAt: time.Unix(job.CreatedAt, 0).UTC(),
 		UpdatedAt: time.Unix(job.UpdatedAt, 0).UTC(),
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -11,6 +12,8 @@ import (
 	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/qms"
 )
+
+var embyIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
 func (h *handler) getQMediaSyncStatus(w http.ResponseWriter, r *http.Request) {
 	if h.dependencies.QMediaSync == nil {
@@ -73,6 +76,106 @@ func (h *handler) searchEmbyItems(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *handler) browseEmbyLibraryItems(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Emby == nil {
+		writeIntegrationUnavailable(w)
+		return
+	}
+	libraryID := r.PathValue("id")
+	if !embyIDPattern.MatchString(libraryID) {
+		writeInvalidEmbyID(w)
+		return
+	}
+	offset, limit, ok := readEmbyPage(w, r)
+	if !ok {
+		return
+	}
+	result, err := h.dependencies.Emby.BrowseItems(r.Context(), libraryID, offset, limit)
+	if err != nil {
+		writeIntegrationProblem(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *handler) getEmbyItem(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Emby == nil {
+		writeIntegrationUnavailable(w)
+		return
+	}
+	itemID := r.PathValue("id")
+	if !embyIDPattern.MatchString(itemID) {
+		writeInvalidEmbyID(w)
+		return
+	}
+	item, err := h.dependencies.Emby.ItemDetails(r.Context(), itemID)
+	if err != nil {
+		writeIntegrationProblem(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *handler) refreshEmbyLibrary(w http.ResponseWriter, r *http.Request) {
+	h.refreshEmbyObject(w, r, true)
+}
+
+func (h *handler) refreshEmbyItem(w http.ResponseWriter, r *http.Request) {
+	h.refreshEmbyObject(w, r, false)
+}
+
+func (h *handler) refreshEmbyObject(w http.ResponseWriter, r *http.Request, library bool) {
+	if h.dependencies.Emby == nil {
+		writeIntegrationUnavailable(w)
+		return
+	}
+	id := r.PathValue("id")
+	if !embyIDPattern.MatchString(id) {
+		writeInvalidEmbyID(w)
+		return
+	}
+	var err error
+	if library {
+		err = h.dependencies.Emby.RefreshLibrary(r.Context(), id)
+	} else {
+		err = h.dependencies.Emby.RefreshItem(r.Context(), id)
+	}
+	if err != nil {
+		writeIntegrationProblem(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+}
+
+func readEmbyPage(w http.ResponseWriter, r *http.Request) (int, int, bool) {
+	offset := 0
+	limit := 50
+	if raw := strings.TrimSpace(r.URL.Query().Get("offset")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 || parsed > 1_000_000 {
+			writeProblem(w, problem{Type: "https://media-hub.local/problems/invalid-offset", Title: "媒体库偏移量无效", Status: http.StatusBadRequest, Code: "invalid_offset"})
+			return 0, 0, false
+		}
+		offset = parsed
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 100 {
+			writeProblem(w, problem{Type: "https://media-hub.local/problems/invalid-limit", Title: "媒体库结果数量无效", Status: http.StatusBadRequest, Code: "invalid_limit"})
+			return 0, 0, false
+		}
+		limit = parsed
+	}
+	return offset, limit, true
+}
+
+func writeInvalidEmbyID(w http.ResponseWriter) {
+	writeProblem(w, problem{
+		Type: "https://media-hub.local/problems/invalid-emby-id", Title: "Emby 对象标识无效",
+		Status: http.StatusBadRequest, Code: "invalid_emby_id",
+	})
+}
+
 func (h *handler) getDrive115Status(w http.ResponseWriter, r *http.Request) {
 	if h.dependencies.Drive115 == nil {
 		writeIntegrationUnavailable(w)
@@ -88,6 +191,11 @@ func (h *handler) getDrive115Status(w http.ResponseWriter, r *http.Request) {
 
 func writeIntegrationProblem(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, emby.ErrItemNotFound):
+		writeProblem(w, problem{
+			Type:  "https://media-hub.local/problems/emby-item-not-found",
+			Title: "Emby 媒体不存在", Status: http.StatusNotFound, Code: "emby_item_not_found",
+		})
 	case errors.Is(err, context.DeadlineExceeded):
 		writeProblem(w, problem{
 			Type:  "https://media-hub.local/problems/integration-timeout",

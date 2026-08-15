@@ -60,6 +60,10 @@ type QMediaSyncReader interface {
 type EmbyReader interface {
 	Libraries(context.Context) ([]emby.Library, error)
 	SearchItems(context.Context, string, int) (emby.SearchResult, error)
+	BrowseItems(context.Context, string, int, int) (emby.SearchResult, error)
+	ItemDetails(context.Context, string) (emby.ItemDetail, error)
+	RefreshLibrary(context.Context, string) error
+	RefreshItem(context.Context, string) error
 }
 
 type Drive115Reader interface {
@@ -102,7 +106,8 @@ type TransferWorkflow interface {
 	SelectionToken(search.Candidate) string
 	Enqueue(context.Context, int64, string, string) (workflow.Job, bool, error)
 	Get(context.Context, int64, string) (workflow.JobDetail, error)
-	List(context.Context, int64, int) ([]workflow.Job, error)
+	List(context.Context, int64, int, bool) ([]workflow.Job, error)
+	SetArchived(context.Context, int64, string, bool) (workflow.Job, error)
 	Retry(context.Context, int64, string) (workflow.Job, error)
 	ListNotifications(context.Context, int64, int) ([]workflow.Notification, error)
 	RetryNotification(context.Context, int64, string, string, string) (workflow.Notification, error)
@@ -192,6 +197,10 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/integrations/qmediasync/status", h.protected(h.getQMediaSyncStatus))
 	mux.Handle("GET /api/v1/integrations/emby/libraries", h.protected(h.getEmbyLibraries))
 	mux.Handle("GET /api/v1/integrations/emby/items", h.protected(h.searchEmbyItems))
+	mux.Handle("GET /api/v1/integrations/emby/libraries/{id}/items", h.protected(h.browseEmbyLibraryItems))
+	mux.Handle("POST /api/v1/integrations/emby/libraries/{id}/refresh", h.protected(h.refreshEmbyLibrary))
+	mux.Handle("GET /api/v1/integrations/emby/items/{id}", h.protected(h.getEmbyItem))
+	mux.Handle("POST /api/v1/integrations/emby/items/{id}/refresh", h.protected(h.refreshEmbyItem))
 	mux.Handle("POST /api/v1/integrations/wecom/test", h.protected(h.testWeComNotification))
 	mux.Handle("GET /api/v1/integrations/115/status", h.protected(h.getDrive115Status))
 	mux.Handle("POST /api/v1/integrations/115/auth/device", h.protected(h.startDrive115Authorization))
@@ -230,6 +239,7 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("POST /api/v1/transfers", h.protected(h.createTransfer))
 	mux.Handle("GET /api/v1/transfers/{id}", h.protected(h.getTransfer))
 	mux.Handle("POST /api/v1/transfers/{id}/retry", h.protected(h.retryTransfer))
+	mux.Handle("PATCH /api/v1/transfers/{id}/archived", h.protected(h.setTransferArchived))
 	mux.Handle("GET /api/v1/notifications", h.protected(h.listNotifications))
 	mux.Handle("POST /api/v1/notifications/{jobId}/{eventType}/retry", h.protected(h.retryNotification))
 	if dependencies.AndroidReleases != nil {

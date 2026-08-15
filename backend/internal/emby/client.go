@@ -22,6 +22,7 @@ var (
 	ErrNotConfigured    = errors.New("Emby is not configured")
 	ErrMissingAPIKey    = errors.New("Emby API key is missing")
 	ErrUnauthorized     = errors.New("Emby rejected authentication")
+	ErrItemNotFound     = errors.New("Emby item was not found")
 	ErrUpstreamResponse = errors.New("Emby returned an invalid response")
 )
 
@@ -59,6 +60,17 @@ type Item struct {
 	Episode     int               `json:"episode,omitempty"`
 }
 
+type ItemDetail struct {
+	Item
+	OriginalTitle    string   `json:"originalTitle,omitempty"`
+	Overview         string   `json:"overview,omitempty"`
+	CommunityRating  float64  `json:"communityRating,omitempty"`
+	RuntimeMinutes   int      `json:"runtimeMinutes,omitempty"`
+	Genres           []string `json:"genres,omitempty"`
+	MediaSourceCount int      `json:"mediaSourceCount"`
+	ExternalURL      string   `json:"externalUrl"`
+}
+
 type SearchResult struct {
 	Items []Item `json:"items"`
 	Total int    `json:"total"`
@@ -82,12 +94,17 @@ type itemResponse struct {
 type baseItem struct {
 	ID                string            `json:"Id"`
 	Name              string            `json:"Name"`
+	OriginalTitle     string            `json:"OriginalTitle"`
+	Overview          string            `json:"Overview"`
 	Type              string            `json:"Type"`
 	CollectionType    string            `json:"CollectionType"`
 	ProductionYear    int               `json:"ProductionYear"`
 	ProviderIDs       map[string]string `json:"ProviderIds"`
 	ParentIndexNumber int               `json:"ParentIndexNumber"`
 	IndexNumber       int               `json:"IndexNumber"`
+	CommunityRating   float64           `json:"CommunityRating"`
+	RunTimeTicks      int64             `json:"RunTimeTicks"`
+	Genres            []string          `json:"Genres"`
 	MediaSources      []mediaSource     `json:"MediaSources"`
 }
 
@@ -236,18 +253,80 @@ func (c *Client) searchItems(ctx context.Context, configuration clientConfig, qu
 	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
 		return SearchResult{}, err
 	}
+	return publicItems(response), nil
+}
 
-	items := make([]Item, 0, len(response.Items))
-	for _, item := range response.Items {
-		if item.ID == "" || item.Name == "" {
-			continue
-		}
-		items = append(items, Item{
-			ID: item.ID, Name: item.Name, Type: item.Type,
-			Year: item.ProductionYear, ProviderIDs: item.ProviderIDs,
-		})
+func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limit int) (SearchResult, error) {
+	configuration := c.configuration()
+	if err := validateAuthenticated(configuration); err != nil {
+		return SearchResult{}, err
 	}
-	return SearchResult{Items: items, Total: response.TotalRecordCount}, nil
+	libraryID = strings.TrimSpace(libraryID)
+	if libraryID == "" {
+		return SearchResult{}, ErrUpstreamResponse
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+	query := url.Values{
+		"Fields":           {"ProviderIds"},
+		"IncludeItemTypes": {"Movie,Series"},
+		"Limit":            {strconv.Itoa(limit)},
+		"ParentId":         {libraryID},
+		"Recursive":        {"true"},
+		"SortBy":           {"SortName"},
+		"SortOrder":        {"Ascending"},
+		"StartIndex":       {strconv.Itoa(offset)},
+	}
+	if configuration.userID != "" {
+		query.Set("UserId", configuration.userID)
+	}
+	var response itemResponse
+	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
+		return SearchResult{}, err
+	}
+	return publicItems(response), nil
+}
+
+func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, error) {
+	configuration := c.configuration()
+	if err := validateAuthenticated(configuration); err != nil {
+		return ItemDetail{}, err
+	}
+	itemID = strings.TrimSpace(itemID)
+	if itemID == "" {
+		return ItemDetail{}, ErrUpstreamResponse
+	}
+	query := url.Values{
+		"Fields":    {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,ProviderIds,RunTimeTicks"},
+		"Ids":       {itemID},
+		"Limit":     {"1"},
+		"Recursive": {"true"},
+	}
+	if configuration.userID != "" {
+		query.Set("UserId", configuration.userID)
+	}
+	var response itemResponse
+	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
+		return ItemDetail{}, err
+	}
+	if len(response.Items) != 1 || response.Items[0].ID != itemID || response.Items[0].Name == "" {
+		return ItemDetail{}, ErrItemNotFound
+	}
+	item := response.Items[0]
+	externalURL, err := itemWebURL(configuration.baseURL, itemID)
+	if err != nil {
+		return ItemDetail{}, err
+	}
+	return ItemDetail{
+		Item: publicItem(item), OriginalTitle: boundedText(item.OriginalTitle, 300),
+		Overview: boundedText(item.Overview, 4000), CommunityRating: item.CommunityRating,
+		RuntimeMinutes: int(item.RunTimeTicks / 600_000_000), Genres: boundedStrings(item.Genres, 32, 100),
+		MediaSourceCount: len(item.MediaSources), ExternalURL: externalURL,
+	}, nil
 }
 
 func (c *Client) FindIndexedItem(ctx context.Context, title, mediaType string, year int, tmdbID string) (Item, bool, error) {
@@ -358,14 +437,22 @@ func (c *Client) FindPlayableItem(ctx context.Context, title, mediaType string, 
 }
 
 func (c *Client) RefreshLibrary(ctx context.Context, libraryID string) error {
+	return c.refreshItem(ctx, libraryID)
+}
+
+func (c *Client) RefreshItem(ctx context.Context, itemID string) error {
+	return c.refreshItem(ctx, itemID)
+}
+
+func (c *Client) refreshItem(ctx context.Context, itemID string) error {
 	configuration := c.configuration()
 	if err := validateAuthenticated(configuration); err != nil {
 		return err
 	}
-	if strings.TrimSpace(libraryID) == "" {
+	if strings.TrimSpace(itemID) == "" {
 		return ErrUpstreamResponse
 	}
-	return c.postJSON(ctx, configuration, path.Join("Items", libraryID, "Refresh"), nil, nil)
+	return c.postJSON(ctx, configuration, path.Join("Items", itemID, "Refresh"), nil, nil)
 }
 
 func (c *Client) PlaybackReady(ctx context.Context, itemID string) (bool, error) {
@@ -399,6 +486,57 @@ func (c *Client) readServerInfo(ctx context.Context, configuration clientConfig,
 		return ServerInfo{}, ErrUpstreamResponse
 	}
 	return ServerInfo{ID: response.ID, Name: response.ServerName, Version: response.Version}, nil
+}
+
+func publicItems(response itemResponse) SearchResult {
+	items := make([]Item, 0, len(response.Items))
+	for _, item := range response.Items {
+		if item.ID == "" || item.Name == "" {
+			continue
+		}
+		items = append(items, publicItem(item))
+	}
+	return SearchResult{Items: items, Total: response.TotalRecordCount}
+}
+
+func publicItem(item baseItem) Item {
+	return Item{
+		ID: item.ID, Name: item.Name, Type: item.Type, Year: item.ProductionYear,
+		ProviderIDs: item.ProviderIDs, Season: item.ParentIndexNumber, Episode: item.IndexNumber,
+	}
+}
+
+func itemWebURL(baseURL, itemID string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return "", ErrUpstreamResponse
+	}
+	parsed.Path = path.Join(parsed.Path, "web/index.html")
+	parsed.RawQuery = ""
+	parsed.Fragment = "!/item?id=" + url.QueryEscape(itemID)
+	return parsed.String(), nil
+}
+
+func boundedText(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	runes := []rune(value)
+	if len(runes) > limit {
+		return string(runes[:limit])
+	}
+	return value
+}
+
+func boundedStrings(values []string, countLimit, lengthLimit int) []string {
+	if len(values) > countLimit {
+		values = values[:countLimit]
+	}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = boundedText(value, lengthLimit); value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func validateAuthenticated(configuration clientConfig) error {

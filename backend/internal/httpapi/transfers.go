@@ -18,6 +18,10 @@ type transferListResponse struct {
 	Transfers []workflow.Job `json:"transfers"`
 }
 
+type setTransferArchivedRequest struct {
+	Archived *bool `json:"archived"`
+}
+
 func (h *handler) createTransfer(w http.ResponseWriter, r *http.Request) {
 	if h.dependencies.Workflow == nil {
 		writeTransferProblem(w, workflow.ErrUnavailable)
@@ -65,8 +69,20 @@ func (h *handler) listTransfers(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = parsed
 	}
+	archived := false
+	if rawArchived := strings.TrimSpace(r.URL.Query().Get("archived")); rawArchived != "" {
+		parsed, err := strconv.ParseBool(rawArchived)
+		if err != nil {
+			writeProblem(w, problem{
+				Type: "https://media-hub.local/problems/invalid-archive-filter", Title: "归档筛选无效",
+				Status: http.StatusBadRequest, Code: "invalid_archive_filter",
+			})
+			return
+		}
+		archived = parsed
+	}
 	principal := principalFromContext(r.Context())
-	jobs, err := h.dependencies.Workflow.List(r.Context(), principal.UserID, limit)
+	jobs, err := h.dependencies.Workflow.List(r.Context(), principal.UserID, limit, archived)
 	if err != nil {
 		writeTransferProblem(w, err)
 		return
@@ -100,6 +116,31 @@ func (h *handler) retryTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, job)
+}
+
+func (h *handler) setTransferArchived(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Workflow == nil {
+		writeTransferProblem(w, workflow.ErrUnavailable)
+		return
+	}
+	var request setTransferArchivedRequest
+	if err := decodeJSON(w, r, &request, 4<<10); err != nil {
+		return
+	}
+	if request.Archived == nil {
+		writeProblem(w, problem{
+			Type: "https://media-hub.local/problems/invalid-transfer-archive", Title: "任务归档请求无效",
+			Status: http.StatusBadRequest, Code: "invalid_transfer_archive",
+		})
+		return
+	}
+	principal := principalFromContext(r.Context())
+	job, err := h.dependencies.Workflow.SetArchived(r.Context(), principal.UserID, r.PathValue("id"), *request.Archived)
+	if err != nil {
+		writeTransferProblem(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
 }
 
 func writeTransferProblem(w http.ResponseWriter, err error) {
@@ -141,6 +182,11 @@ func writeTransferProblem(w http.ResponseWriter, err error) {
 		value.Title = "当前任务不能重试"
 		value.Status = http.StatusConflict
 		value.Code = "transfer_not_retryable"
+	case errors.Is(err, store.ErrTransferNotArchivable):
+		value.Type = "https://media-hub.local/problems/transfer-not-archivable"
+		value.Title = "当前任务不能归档"
+		value.Status = http.StatusConflict
+		value.Code = "transfer_not_archivable"
 	}
 	writeProblem(w, value)
 }

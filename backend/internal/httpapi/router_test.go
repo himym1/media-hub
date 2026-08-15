@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"media-hub/backend/internal/auth"
+	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/integration"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/settings"
@@ -63,6 +64,8 @@ func (stub searchStub) Search(context.Context, string) search.Response { return 
 
 type workflowStub struct {
 	idempotencyKey string
+	archivedList   bool
+	archivedSet    *bool
 }
 
 func (*workflowStub) SelectionToken(search.Candidate) string { return "selection" }
@@ -73,8 +76,13 @@ func (stub *workflowStub) Enqueue(_ context.Context, _ int64, _ string, key stri
 func (*workflowStub) Get(context.Context, int64, string) (workflow.JobDetail, error) {
 	return workflow.JobDetail{}, nil
 }
-func (*workflowStub) List(context.Context, int64, int) ([]workflow.Job, error) {
+func (stub *workflowStub) List(_ context.Context, _ int64, _ int, archived bool) ([]workflow.Job, error) {
+	stub.archivedList = archived
 	return []workflow.Job{}, nil
+}
+func (stub *workflowStub) SetArchived(_ context.Context, _ int64, _ string, archived bool) (workflow.Job, error) {
+	stub.archivedSet = &archived
+	return workflow.Job{ID: "job-1", State: "failed", Archived: archived}, nil
 }
 func (*workflowStub) Retry(context.Context, int64, string) (workflow.Job, error) {
 	return workflow.Job{}, nil
@@ -84,6 +92,32 @@ func (*workflowStub) ListNotifications(context.Context, int64, int) ([]workflow.
 }
 func (*workflowStub) RetryNotification(context.Context, int64, string, string, string) (workflow.Notification, error) {
 	return workflow.Notification{}, nil
+}
+
+type embyStub struct {
+	refreshedLibrary string
+	refreshedItem    string
+}
+
+func (*embyStub) Libraries(context.Context) ([]emby.Library, error) {
+	return []emby.Library{{ID: "library-1", Name: "Movies", CollectionType: "movies"}}, nil
+}
+func (*embyStub) SearchItems(context.Context, string, int) (emby.SearchResult, error) {
+	return emby.SearchResult{}, nil
+}
+func (*embyStub) BrowseItems(_ context.Context, libraryID string, offset, limit int) (emby.SearchResult, error) {
+	return emby.SearchResult{Items: []emby.Item{{ID: libraryID + "-item", Name: "Movie", Type: "Movie"}}, Total: offset + limit + 1}, nil
+}
+func (*embyStub) ItemDetails(_ context.Context, itemID string) (emby.ItemDetail, error) {
+	return emby.ItemDetail{Item: emby.Item{ID: itemID, Name: "Movie", Type: "Movie"}, ExternalURL: "https://emby.example/web/index.html#!/item?id=" + itemID}, nil
+}
+func (stub *embyStub) RefreshLibrary(_ context.Context, id string) error {
+	stub.refreshedLibrary = id
+	return nil
+}
+func (stub *embyStub) RefreshItem(_ context.Context, id string) error {
+	stub.refreshedItem = id
+	return nil
 }
 
 type settingsStub struct {
@@ -298,6 +332,83 @@ func TestCreateTransferRequiresCSRFForWebCookie(t *testing.T) {
 
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
+func TestTransferArchiveFilterAndMutationUseWorkflowBoundary(t *testing.T) {
+	provider := &workflowStub{}
+	listRecorder := httptest.NewRecorder()
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Workflow: provider}).ServeHTTP(
+		listRecorder, authenticatedRequest(http.MethodGet, "/api/v1/transfers?archived=true"),
+	)
+	if listRecorder.Code != http.StatusOK || !provider.archivedList {
+		t.Fatalf("archive list status=%d archived=%v", listRecorder.Code, provider.archivedList)
+	}
+
+	archiveRecorder := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodPatch, "/api/v1/transfers/job-1/archived")
+	request.Body = io.NopCloser(strings.NewReader(`{"archived":true}`))
+	request.Header.Set("Content-Type", "application/json")
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Workflow: provider}).ServeHTTP(archiveRecorder, request)
+	if archiveRecorder.Code != http.StatusOK || provider.archivedSet == nil || !*provider.archivedSet {
+		t.Fatalf("archive status=%d archived=%v", archiveRecorder.Code, provider.archivedSet)
+	}
+}
+
+func TestTransferArchiveRequiresExplicitBoolean(t *testing.T) {
+	provider := &workflowStub{}
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodPatch, "/api/v1/transfers/job-1/archived")
+	request.Body = io.NopCloser(strings.NewReader(`{}`))
+	request.Header.Set("Content-Type", "application/json")
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Workflow: provider}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest || provider.archivedSet != nil {
+		t.Fatalf("archive status=%d archived=%v", recorder.Code, provider.archivedSet)
+	}
+}
+
+func TestEmbyBrowseDetailAndRefreshRoutes(t *testing.T) {
+	provider := &embyStub{}
+	router := NewRouter("test-version", Dependencies{Auth: authStub{}, Emby: provider})
+
+	browseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(browseRecorder, authenticatedRequest(http.MethodGet, "/api/v1/integrations/emby/libraries/library-1/items?offset=20&limit=10"))
+	if browseRecorder.Code != http.StatusOK || !strings.Contains(browseRecorder.Body.String(), "library-1-item") {
+		t.Fatalf("browse status=%d body=%s", browseRecorder.Code, browseRecorder.Body.String())
+	}
+	detailRecorder := httptest.NewRecorder()
+	router.ServeHTTP(detailRecorder, authenticatedRequest(http.MethodGet, "/api/v1/integrations/emby/items/item-1"))
+	if detailRecorder.Code != http.StatusOK || !strings.Contains(detailRecorder.Body.String(), "externalUrl") {
+		t.Fatalf("detail status=%d body=%s", detailRecorder.Code, detailRecorder.Body.String())
+	}
+	for _, target := range []string{
+		"/api/v1/integrations/emby/libraries/library-1/refresh",
+		"/api/v1/integrations/emby/items/item-1/refresh",
+	} {
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, authenticatedRequest(http.MethodPost, target))
+		if recorder.Code != http.StatusAccepted {
+			t.Fatalf("refresh %s status=%d", target, recorder.Code)
+		}
+	}
+	if provider.refreshedLibrary != "library-1" || provider.refreshedItem != "item-1" {
+		t.Fatalf("refresh library=%q item=%q", provider.refreshedLibrary, provider.refreshedItem)
+	}
+}
+
+func TestEmbyManagementRoutesRejectInvalidIdentifiersAndPages(t *testing.T) {
+	provider := &embyStub{}
+	router := NewRouter("test-version", Dependencies{Auth: authStub{}, Emby: provider})
+	for _, target := range []string{
+		"/api/v1/integrations/emby/items/bad.id",
+		"/api/v1/integrations/emby/libraries/library-1/items?offset=-1",
+		"/api/v1/integrations/emby/libraries/library-1/items?limit=101",
+	} {
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, authenticatedRequest(http.MethodGet, target))
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("target=%s status=%d", target, recorder.Code)
+		}
 	}
 }
 

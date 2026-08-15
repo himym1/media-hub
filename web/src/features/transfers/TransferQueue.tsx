@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
-import { CheckCircle2, CircleAlert, Clock3, ListTodo, RefreshCw, RotateCcw } from 'lucide-react'
+import { Archive, ArchiveRestore, CheckCircle2, CircleAlert, Clock3, ListTodo, RefreshCw, RotateCcw } from 'lucide-react'
 import {
   getTransfer,
   listTransferNotifications,
+  listTransfers,
   retryTransfer,
   retryTransferNotification,
+  setTransferArchived,
   type TransferEvent,
   type TransferJob,
   type TransferNotification,
@@ -35,6 +37,10 @@ function taskIdFromLocation() {
   return new URLSearchParams(window.location.search).get('task')
 }
 
+function archivedFromLocation() {
+  return new URLSearchParams(window.location.search).get('archive') === '1'
+}
+
 type TransferQueueProps = {
   query: UseQueryResult<{ transfers: TransferJob[] }, Error>
 }
@@ -42,27 +48,43 @@ type TransferQueueProps = {
 export function TransferQueue({ query }: TransferQueueProps) {
   const queryClient = useQueryClient()
   const [selectedID, setSelectedID] = useState<string | null>(taskIdFromLocation)
-  const jobs = useMemo(() => query.data?.transfers ?? [], [query.data?.transfers])
+  const [showArchived, setShowArchived] = useState(archivedFromLocation)
+  const archivedQuery = useQuery({
+    queryKey: ['transfers', 'archived'],
+    queryFn: () => listTransfers(100, true),
+    enabled: showArchived,
+  })
+  const currentQuery = showArchived ? archivedQuery : query
+  const jobs = useMemo(() => currentQuery.data?.transfers ?? [], [currentQuery.data?.transfers])
   const activeJobs = jobs.filter((job) => runningStates.has(job.state) || job.state === 'needs_attention')
   const historyJobs = jobs.filter((job) => !activeJobs.includes(job))
 
   useEffect(() => {
-    const restoreTask = () => setSelectedID(taskIdFromLocation())
+    const restoreTask = () => {
+      setSelectedID(taskIdFromLocation())
+      setShowArchived(archivedFromLocation())
+    }
     window.addEventListener('popstate', restoreTask)
     return () => window.removeEventListener('popstate', restoreTask)
   }, [])
 
   useEffect(() => {
-    if (!query.data) return
+    if (!currentQuery.data) return
     if (selectedID && jobs.some((job) => job.id === selectedID)) return
     const fallback = jobs[0]?.id ?? null
     setSelectedID(fallback)
     commitUrl({ task: fallback }, 'replace')
-  }, [jobs, query.data, selectedID])
+  }, [currentQuery.data, jobs, selectedID])
 
   const selectTask = (id: string) => {
     setSelectedID(id)
     commitUrl({ task: id })
+  }
+
+  const selectScope = (archived: boolean) => {
+    setShowArchived(archived)
+    setSelectedID(null)
+    commitUrl({ archive: archived ? '1' : null, task: null })
   }
 
   const detail = useQuery({
@@ -80,12 +102,22 @@ export function TransferQueue({ query }: TransferQueueProps) {
       ])
     },
   })
+  const archive = useMutation({
+    mutationFn: ({ id, archived }: { id: string; archived: boolean }) => setTransferArchived(id, archived),
+    onSuccess: async (job) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['transfers'] }),
+        queryClient.invalidateQueries({ queryKey: ['transfer', job.id] }),
+      ])
+    },
+  })
   const notifications = useQuery({
     queryKey: ['transfer-notifications'],
     queryFn: () => listTransferNotifications(),
+    enabled: !showArchived,
     refetchInterval: (state) => state.state.data?.notifications.some((item) => item.state === 'pending' || item.state === 'submitting') ? 4_000 : false,
   })
-  const selectedNotification = notifications.data?.notifications.find((item) => item.jobId === selectedID && item.state === 'needs_attention')
+  const selectedNotification = showArchived ? undefined : notifications.data?.notifications.find((item) => item.jobId === selectedID && item.state === 'needs_attention')
   const retryNotification = useMutation({
     mutationFn: (item: TransferNotification) => retryTransferNotification(item),
     onSuccess: async (item) => {
@@ -101,18 +133,26 @@ export function TransferQueue({ query }: TransferQueueProps) {
     <section className="workspace-view">
       <header className="view-header compact-view-header">
         <div><p className="eyebrow">WORKFLOW</p><h1>任务</h1><p>查看当前进度，失败恢复和技术事件按需展开。</p></div>
-        <IconButton label="刷新任务" onClick={() => void query.refetch()} subtle><RefreshCw size={17} /></IconButton>
+        <div className="view-header-actions">
+          <div className="task-scope-toggle" aria-label="任务范围" role="group">
+            <button aria-pressed={!showArchived} onClick={() => selectScope(false)} type="button">当前</button>
+            <button aria-pressed={showArchived} onClick={() => selectScope(true)} type="button">已归档</button>
+          </div>
+          <IconButton label="刷新任务" onClick={() => void currentQuery.refetch()} subtle><RefreshCw size={17} /></IconButton>
+        </div>
       </header>
 
-      {query.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>任务读取失败</strong><span>{query.error.message}</span></div><button onClick={() => void query.refetch()} type="button">重试</button></div> : null}
-      {query.isLoading ? <div className="result-loading"><div /><div /><div /></div> : null}
-      {!query.isLoading && jobs.length === 0 ? <div className="empty-state"><ListTodo size={28} /><span>还没有转存任务</span></div> : null}
+      {currentQuery.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>任务读取失败</strong><span>{currentQuery.error.message}</span></div><button onClick={() => void currentQuery.refetch()} type="button">重试</button></div> : null}
+      {currentQuery.isLoading ? <div className="result-loading"><div /><div /><div /></div> : null}
+      {!currentQuery.isLoading && jobs.length === 0 ? <div className="empty-state"><ListTodo size={28} /><span>{showArchived ? '还没有归档任务' : '还没有转存任务'}</span></div> : null}
 
       {jobs.length > 0 ? (
         <div className="task-layout">
           <div className="task-list">
-            <TaskGroup label="进行中" jobs={activeJobs} selectedID={selectedID} onSelect={selectTask} />
-            <TaskGroup label="历史记录" jobs={historyJobs} selectedID={selectedID} onSelect={selectTask} />
+            {showArchived ? <TaskGroup label="已归档" jobs={jobs} selectedID={selectedID} onSelect={selectTask} /> : <>
+              <TaskGroup label="进行中" jobs={activeJobs} selectedID={selectedID} onSelect={selectTask} />
+              <TaskGroup label="历史记录" jobs={historyJobs} selectedID={selectedID} onSelect={selectTask} />
+            </>}
           </div>
 
           <aside className="task-detail" aria-label="任务详情">
@@ -126,6 +166,8 @@ export function TransferQueue({ query }: TransferQueueProps) {
               {detail.data.events.length > recentEvents.length ? <details className="event-history"><summary>查看全部技术记录</summary>{renderEvents(detail.data.events)}</details> : null}
               {selectedNotification ? <div className="notification-recovery"><CircleAlert size={17} /><div><strong>企业微信通知结果未知</strong><span>再次发送可能产生重复消息。</span></div><button disabled={retryNotification.isPending} onClick={() => retryNotification.mutate(selectedNotification)} type="button"><RotateCcw size={15} />{retryNotification.isPending ? '正在提交…' : '确认并重发'}</button></div> : null}
               {detail.data.retryable ? <button className="secondary-action" disabled={retry.isPending} onClick={() => retry.mutate(detail.data.id)} type="button"><RotateCcw size={16} />{retry.isPending ? '正在重试…' : '重试任务'}</button> : null}
+              {archive.error ? <div className="task-error" role="alert"><CircleAlert size={17} /><span>{archive.error.message}</span></div> : null}
+              {(detail.data.state === 'completed' || (detail.data.state === 'failed' && !detail.data.retryable)) ? <button className="secondary-action" disabled={archive.isPending} onClick={() => archive.mutate({ id: detail.data.id, archived: !showArchived })} type="button">{showArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}{archive.isPending ? '正在处理…' : showArchived ? '恢复到任务列表' : '归档任务'}</button> : null}
             </> : null}
           </aside>
         </div>

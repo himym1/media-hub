@@ -41,6 +41,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.ChevronDown
+import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.Clock3
@@ -55,6 +57,7 @@ import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextField
 import com.mediahub.android.core.network.SearchCandidate
@@ -230,7 +233,7 @@ private fun SubscriptionListScreen(
 }
 
 @Composable
-private fun SubscriptionEditorScreen(
+internal fun SubscriptionEditorScreen(
     state: SubscriptionUiState,
     onEditorChanged: (SubscriptionEditorState) -> Unit,
     onBack: () -> Unit,
@@ -242,6 +245,8 @@ private fun SubscriptionEditorScreen(
     val editor = state.editor
     val existing = state.selectedId != null
     var confirmingDelete by remember(state.selectedId) { mutableStateOf(false) }
+    var sourcesExpanded by remember(state.selectedId) { mutableStateOf(false) }
+    var advancedExpanded by remember(state.selectedId) { mutableStateOf(false) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 18.dp),
@@ -261,9 +266,7 @@ private fun SubscriptionEditorScreen(
             state.errorMessage?.let { ErrorLine(it) }
         }
         item { LabeledField("标题", editor.title, { onEditorChanged(editor.copy(title = it.take(300))) }, "媒体标题") }
-        item { LabeledField("原始标题", editor.originalTitle, { onEditorChanged(editor.copy(originalTitle = it.take(300))) }, "可选") }
         item { LabeledField("TMDB ID", editor.tmdbId, { onEditorChanged(editor.copy(tmdbId = it.take(20))) }, "数字 ID", KeyboardType.Number, enabled = !existing) }
-        item { LabeledField("年份", editor.year, { onEditorChanged(editor.copy(year = it.take(4))) }, "0 表示未知", KeyboardType.Number) }
         item {
             OptionGroup("类型", listOf("movie" to "电影", "series" to "剧集"), editor.mediaType, enabled = !existing) {
                 onEditorChanged(editor.copy(mediaType = it, season = if (it == "movie") "0" else editor.season))
@@ -273,26 +276,78 @@ private fun SubscriptionEditorScreen(
             item { LabeledField("季号", editor.season, { onEditorChanged(editor.copy(season = it.take(3))) }, "0 表示整部剧", KeyboardType.Number, enabled = !existing) }
         }
         item {
-            OptionGroup("更新策略", listOf("once" to "首次入库", "upgrade" to "允许升级"), editor.policy) {
+            OptionGroup("更新策略", listOf("once" to "首次入库", "upgrade" to "持续升级"), editor.policy) {
                 onEditorChanged(editor.copy(policy = it))
             }
         }
-        item { LabeledField("轮询间隔（分钟）", editor.intervalMinutes, { onEditorChanged(editor.copy(intervalMinutes = it.take(5))) }, "15 - 10080", KeyboardType.Number) }
-        item { LabeledField("限定来源 ID", editor.sourceIds, { onEditorChanged(editor.copy(sourceIds = it)) }, "逗号分隔，留空为全部") }
-        item { LabeledField("偏好来源顺序", editor.preferredSources, { onEditorChanged(editor.copy(preferredSources = it)) }, "framehdr, juying") }
-        item { LabeledField("分辨率", editor.resolutions, { onEditorChanged(editor.copy(resolutions = it)) }, "2160p, 1080p") }
-        item { LabeledField("视频编码", editor.videoCodecs, { onEditorChanged(editor.copy(videoCodecs = it)) }, "HEVC, AVC") }
-        item { LabeledField("动态范围", editor.dynamicRanges, { onEditorChanged(editor.copy(dynamicRanges = it)) }, "Dolby Vision, HDR10") }
-        item { LabeledField("必须包含的音轨", editor.audioContains, { onEditorChanged(editor.copy(audioContains = it)) }, "Atmos, TrueHD") }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(1f)) { LabeledField("最小体积 GiB", editor.minSizeGiB, { onEditorChanged(editor.copy(minSizeGiB = it)) }, "0", KeyboardType.Decimal) }
-                Column(Modifier.weight(1f)) { LabeledField("最大体积 GiB", editor.maxSizeGiB, { onEditorChanged(editor.copy(maxSizeGiB = it)) }, "0", KeyboardType.Decimal) }
+            Column {
+                MediaHubText(text = "质量预设", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+                MediaHubSegmentedControl(
+                    options = listOf("standard" to "标准", "space" to "省空间", "balanced" to "均衡", "quality" to "高质量", "custom" to "自定义"),
+                    selected = editor.qualityPreset,
+                    onSelected = { onEditorChanged(applyQualityPreset(editor, it)) },
+                    modifier = Modifier.padding(top = 7.dp),
+                    role = Role.RadioButton,
+                )
+                if (editor.qualityPreset != "custom") {
+                    MediaHubText(text = qualityPresetSummary(editor.qualityPreset), modifier = Modifier.padding(top = 7.dp), color = MediaHubColors.TextMuted, fontSize = 12.sp)
+                }
+            }
+        }
+        item {
+            OptionGroup("检查频率", intervalOptions(editor.intervalMinutes), editor.intervalMinutes) {
+                onEditorChanged(editor.copy(intervalMinutes = it))
+            }
+        }
+        item {
+            CollapsibleHeader(
+                label = "资源来源",
+                summary = if (editor.sourceIds.isEmpty()) "全部可用来源" else "已选择 ${editor.sourceIds.size} 个",
+                expanded = sourcesExpanded,
+                onClick = { sourcesExpanded = !sourcesExpanded },
+            )
+        }
+        if (sourcesExpanded) {
+            if (state.availableSources.isEmpty()) {
+                item { MediaHubText(text = "来源清单暂不可用；不选择时会搜索全部来源。", color = MediaHubColors.TextMuted, fontSize = 12.sp) }
+            } else {
+                items(state.availableSources, key = { "source-${it.id}" }) { source ->
+                    BooleanOption(source.label, editor.sourceIds.contains(source.id)) { checked ->
+                        val sources = if (checked) (editor.sourceIds + source.id).distinct() else editor.sourceIds - source.id
+                        onEditorChanged(editor.copy(sourceIds = sources))
+                    }
+                }
             }
         }
         item { BooleanOption("启用自动运行", editor.enabled) { onEditorChanged(editor.copy(enabled = it)) } }
-        item { BooleanOption("允许未知体积", editor.allowUnknownSize) { onEditorChanged(editor.copy(allowUnknownSize = it)) } }
-        item { BooleanOption("同分时优先较小版本", editor.preferSmaller) { onEditorChanged(editor.copy(preferSmaller = it)) } }
+        item {
+            CollapsibleHeader(
+                label = "高级规则与媒体身份",
+                summary = "原始标题、年份与自定义筛选",
+                expanded = advancedExpanded,
+                onClick = { advancedExpanded = !advancedExpanded },
+            )
+        }
+        if (advancedExpanded) {
+            item { LabeledField("原始标题", editor.originalTitle, { onEditorChanged(editor.copy(originalTitle = it.take(300))) }, "可选") }
+            item { LabeledField("年份", editor.year, { onEditorChanged(editor.copy(year = it.take(4))) }, "0 表示未知", KeyboardType.Number) }
+            if (editor.qualityPreset == "custom") {
+                item { LabeledField("偏好来源顺序", editor.preferredSources, { onEditorChanged(editor.copy(preferredSources = it)) }, "framehdr, juying") }
+                item { LabeledField("分辨率", editor.resolutions, { onEditorChanged(editor.copy(resolutions = it)) }, "2160p, 1080p") }
+                item { LabeledField("视频编码", editor.videoCodecs, { onEditorChanged(editor.copy(videoCodecs = it)) }, "HEVC, AVC") }
+                item { LabeledField("动态范围", editor.dynamicRanges, { onEditorChanged(editor.copy(dynamicRanges = it)) }, "Dolby Vision, HDR10") }
+                item { LabeledField("必须包含的音轨", editor.audioContains, { onEditorChanged(editor.copy(audioContains = it)) }, "Atmos, TrueHD") }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(1f)) { LabeledField("最小体积 GiB", editor.minSizeGiB, { onEditorChanged(editor.copy(minSizeGiB = it)) }, "0", KeyboardType.Decimal) }
+                        Column(Modifier.weight(1f)) { LabeledField("最大体积 GiB", editor.maxSizeGiB, { onEditorChanged(editor.copy(maxSizeGiB = it)) }, "0", KeyboardType.Decimal) }
+                    }
+                }
+                item { BooleanOption("设定体积范围时允许未知体积", editor.allowUnknownSize) { onEditorChanged(editor.copy(allowUnknownSize = it)) } }
+                item { BooleanOption("同分时优先较小版本", editor.preferSmaller) { onEditorChanged(editor.copy(preferSmaller = it)) } }
+            }
+        }
         item {
             MediaHubButton(
                 label = if (state.saving) "保存中" else "保存订阅",
@@ -339,6 +394,39 @@ private fun SubscriptionEditorScreen(
         }
     }
 }
+
+@Composable
+private fun CollapsibleHeader(label: String, summary: String, expanded: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .background(MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp))
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            MediaHubText(text = label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            MediaHubText(text = summary, color = MediaHubColors.TextMuted, fontSize = 12.sp)
+        }
+        MediaHubIcon(if (expanded) Lucide.ChevronUp else Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(17.dp))
+    }
+}
+
+private fun intervalOptions(current: String): List<Pair<String, String>> {
+    val options = mutableListOf("30" to "30 分", "60" to "1 小时", "360" to "6 小时", "1440" to "每天")
+    if (current.isNotBlank() && options.none { it.first == current }) options += current to "$current 分"
+    return options
+}
+
+private fun qualityPresetSummary(preset: String) = when (preset) {
+    "space" -> "1080p HEVC，最大 20 GiB；同等质量优先较小版本。"
+    "balanced" -> "优先 2160p / HEVC，允许 1080p 与 AVC，最大 40 GiB。"
+    "quality" -> "仅选择 2160p Dolby Vision / HDR10，最小 15 GiB。"
+    else -> "不限制清晰度、编码和体积；体积未知的资源也可参与选择。"
+}
+
 
 
 @Composable

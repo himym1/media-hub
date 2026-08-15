@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestOperationalStatisticsAreScopedToUser(t *testing.T) {
@@ -34,5 +35,15 @@ func TestOperationalStatisticsAreScopedToUser(t *testing.T) {
 	}
 	if value.TransfersTotal != 2 || value.TransfersActive != 1 || value.TransfersCompleted != 1 {
 		t.Fatalf("statistics = %#v", value)
+	}
+	if _, err := dataStore.SetTransferArchived(ctx, admin.ID, "done", true, time.Unix(3, 0)); err != nil {
+		t.Fatal(err)
+	}
+	value, err = dataStore.OperationalStatistics(ctx, admin.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.TransfersTotal != 1 || value.TransfersActive != 1 || value.TransfersCompleted != 0 {
+		t.Fatalf("statistics after archive = %#v", value)
 	}
 }

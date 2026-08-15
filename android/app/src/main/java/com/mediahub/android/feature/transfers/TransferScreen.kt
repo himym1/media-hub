@@ -27,6 +27,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.Archive
+import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Clock3
 import com.composables.icons.lucide.ListTodo
@@ -37,6 +39,7 @@ import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.network.TransferJob
 import com.mediahub.android.core.network.TransferNotification
@@ -61,6 +64,8 @@ internal fun TransferRoute(viewModel: TransferViewModel) {
         onRefresh = viewModel::refresh,
         onRetry = viewModel::retry,
         onRetryNotification = viewModel::retryNotification,
+        onShowArchived = viewModel::showArchived,
+        onSetArchived = viewModel::setSelectedArchived,
     )
 }
 
@@ -71,6 +76,8 @@ private fun TransferScreen(
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onRetryNotification: (TransferNotification) -> Unit,
+    onShowArchived: (Boolean) -> Unit,
+    onSetArchived: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -95,6 +102,12 @@ private fun TransferScreen(
                 enabled = !uiState.refreshing,
             )
         }
+        MediaHubSegmentedControl(
+            options = listOf("current" to "当前", "archived" to "已归档"),
+            selected = if (uiState.archived) "archived" else "current",
+            onSelected = { onShowArchived(it == "archived") },
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
 
         uiState.errorMessage?.let { message ->
             Row(
@@ -120,7 +133,7 @@ private fun TransferScreen(
             ) {
                 MediaHubIcon(imageVector = Lucide.ListTodo, contentDescription = null, modifier = Modifier.size(30.dp))
                 MediaHubText(
-                    text = "还没有转存任务",
+                    text = if (uiState.archived) "还没有归档任务" else "还没有转存任务",
                     modifier = Modifier.padding(top = 12.dp),
                     color = MediaHubColors.TextMuted,
                     fontSize = 13.sp,
@@ -148,6 +161,9 @@ private fun TransferScreen(
                             notificationRetrying = uiState.notificationRetrying,
                             onRetry = onRetry,
                             onRetryNotification = onRetryNotification,
+                            archived = uiState.archived,
+                            archiving = uiState.archiving,
+                            onSetArchived = onSetArchived,
                         )
                     }
                 }
@@ -195,6 +211,9 @@ private fun TransferDetail(
     notificationRetrying: Boolean,
     onRetry: () -> Unit,
     onRetryNotification: (TransferNotification) -> Unit,
+    archived: Boolean,
+    archiving: Boolean,
+    onSetArchived: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
@@ -249,6 +268,15 @@ private fun TransferDetail(
                 icon = Lucide.RotateCcw,
                 enabled = !retrying,
                 onClick = onRetry,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (canArchiveTransfer(job)) {
+            MediaHubButton(
+                label = if (archiving) "正在处理" else if (archived) "恢复到任务列表" else "归档任务",
+                icon = if (archived) Lucide.ArchiveRestore else Lucide.Archive,
+                enabled = !archiving,
+                onClick = onSetArchived,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

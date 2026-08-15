@@ -6,6 +6,7 @@ import {
   deleteSubscription,
   exportSubscriptions,
   importSubscriptions,
+  getProviderSettings,
   listSubscriptionRuns,
   listSubscriptions,
   runSubscription,
@@ -32,6 +33,16 @@ const emptyPreferences: SubscriptionPreferences = {
   preferSmaller: false,
 }
 
+type QualityPreset = 'standard' | 'space' | 'balanced' | 'quality' | 'custom'
+
+const qualityPresetLabels: Record<QualityPreset, string> = {
+  standard: '标准 · 不限制清晰度',
+  space: '省空间 · 1080p HEVC',
+  balanced: '均衡 · 优先 4K / HEVC',
+  quality: '高质量 · 4K HDR',
+  custom: '自定义规则',
+}
+
 const runLabels: Record<SubscriptionRunState, string> = {
   queued: '等待执行',
   searching: '正在搜索',
@@ -54,7 +65,8 @@ type EditorState = {
   policy: 'once' | 'upgrade'
   enabled: boolean
   intervalMinutes: string
-  sourceIds: string
+  sourceIds: string[]
+  qualityPreset: QualityPreset
   resolutions: string
   videoCodecs: string
   dynamicRanges: string
@@ -81,6 +93,11 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
     queryFn: listSubscriptions,
     refetchInterval: 15_000,
   })
+  const providerSettings = useQuery({
+    queryKey: ['provider-settings'],
+    queryFn: getProviderSettings,
+    staleTime: 60_000,
+  })
   const selected = subscriptions.data?.subscriptions.find((item) => item.id === selectedId) ?? null
   const runs = useQuery({
     queryKey: ['subscription-runs', selectedId],
@@ -97,8 +114,12 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
   }, [draftCandidate, onDraftConsumed])
 
   useEffect(() => {
-    if (selected) setEditor(editorFromSubscription(selected))
-  }, [selected])
+    if (!selectedId || !subscriptions.data) return
+    if (subscriptions.data.subscriptions.some((item) => item.id === selectedId)) return
+    setSelectedId(null)
+    setEditor(emptyEditor())
+  }, [selectedId, subscriptions.data])
+
 
   const refresh = async () => {
     await Promise.all([
@@ -121,12 +142,16 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
       : createSubscription(input),
     onSuccess: async (item) => {
       setSelectedId(item.id)
+      setEditor(editorFromSubscription(item))
       await refresh()
     },
   })
   const toggle = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => setSubscriptionEnabled(id, enabled),
-    onSuccess: refresh,
+    onSuccess: async (item) => {
+      if (item.id === selectedId) setEditor(editorFromSubscription(item))
+      await refresh()
+    },
   })
   const runNow = useMutation({ mutationFn: runSubscription, onSuccess: refresh })
   const remove = useMutation({
@@ -196,7 +221,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
           {subscriptions.isLoading ? <div className="status-loading">正在读取订阅…</div> : null}
           {subscriptions.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>订阅读取失败</strong><span>{subscriptions.error.message}</span></div><button onClick={() => void subscriptions.refetch()} type="button">重试</button></div> : null}
           {subscriptions.data?.subscriptions.map((item) => (
-            <button className={item.id === selectedId ? 'subscription-row selected' : 'subscription-row'} key={item.id} onClick={() => setSelectedId(item.id)} type="button">
+            <button className={item.id === selectedId ? 'subscription-row selected' : 'subscription-row'} key={item.id} onClick={() => { setSelectedId(item.id); setEditor(editorFromSubscription(item)) }} type="button">
               <span className={item.enabled ? 'subscription-state enabled' : 'subscription-state'} />
               <span><strong>{item.title}{item.season ? ` · S${item.season}` : ''}</strong><small>{item.mediaType === 'movie' ? '电影' : '剧集'} · TMDB {item.tmdbId}{item.lastEpisode ? ` · 已入库至 E${item.lastEpisode}` : ''}</small></span>
               <span className="subscription-next">{item.enabled ? formatNextRun(item.nextRunAt) : '已暂停'}</span>
@@ -208,25 +233,42 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
         <div className="subscription-editor">
           <form onSubmit={submit}>
             <div className="editor-heading"><div><p className="eyebrow">RULES</p><h2>{selected ? '编辑订阅' : '新建订阅'}</h2></div>{selected ? <span>{selected.enabled ? '运行中' : '已暂停'}</span> : null}</div>
-            <div className="form-grid">
+            <div className="form-grid subscription-common-fields">
               <label><span>标题</span><input maxLength={300} required value={editor.title} onChange={(event) => setField(setEditor, 'title', event.target.value)} /></label>
-              <label><span>原始标题</span><input maxLength={300} value={editor.originalTitle} onChange={(event) => setField(setEditor, 'originalTitle', event.target.value)} /></label>
               <label><span>TMDB ID</span><input disabled={Boolean(selected)} inputMode="numeric" required value={editor.tmdbId} onChange={(event) => setField(setEditor, 'tmdbId', event.target.value)} /></label>
-              <label><span>年份</span><input max="2100" min="0" type="number" value={editor.year} onChange={(event) => setField(setEditor, 'year', event.target.value)} /></label>
               <label><span>类型</span><select disabled={Boolean(selected)} value={editor.mediaType} onChange={(event) => setField(setEditor, 'mediaType', event.target.value as 'movie' | 'series')}><option value="movie">电影</option><option value="series">剧集</option></select></label>
-              <label><span>季号</span><input disabled={Boolean(selected) || editor.mediaType === 'movie'} max="100" min="0" type="number" value={editor.season} onChange={(event) => setField(setEditor, 'season', event.target.value)} /></label>
-              <label><span>更新策略</span><select value={editor.policy} onChange={(event) => setField(setEditor, 'policy', event.target.value as 'once' | 'upgrade')}><option value="once">入库后停止重复转存</option><option value="upgrade">允许新的资源版本</option></select></label>
-              <label><span>轮询间隔（分钟）</span><input max="10080" min="15" required type="number" value={editor.intervalMinutes} onChange={(event) => setField(setEditor, 'intervalMinutes', event.target.value)} /></label>
-              <label className="span-two"><span>限定来源 ID（逗号分隔，留空为全部）</span><input value={editor.sourceIds} onChange={(event) => setField(setEditor, 'sourceIds', event.target.value)} /></label>
-              <label><span>偏好来源顺序</span><input placeholder="framehdr, juying" value={editor.preferredSources} onChange={(event) => setField(setEditor, 'preferredSources', event.target.value)} /></label>
-              <label><span>分辨率（优先顺序）</span><input placeholder="2160p, 1080p" value={editor.resolutions} onChange={(event) => setField(setEditor, 'resolutions', event.target.value)} /></label>
-              <label><span>视频编码</span><input placeholder="HEVC, AVC" value={editor.videoCodecs} onChange={(event) => setField(setEditor, 'videoCodecs', event.target.value)} /></label>
-              <label><span>动态范围</span><input placeholder="Dolby Vision, HDR10" value={editor.dynamicRanges} onChange={(event) => setField(setEditor, 'dynamicRanges', event.target.value)} /></label>
-              <label><span>必须包含的音轨</span><input placeholder="Atmos, TrueHD" value={editor.audioContains} onChange={(event) => setField(setEditor, 'audioContains', event.target.value)} /></label>
-              <label><span>最小体积（GiB）</span><input min="0" step="0.1" type="number" value={editor.minSizeGiB} onChange={(event) => setField(setEditor, 'minSizeGiB', event.target.value)} /></label>
-              <label><span>最大体积（GiB）</span><input min="0" step="0.1" type="number" value={editor.maxSizeGiB} onChange={(event) => setField(setEditor, 'maxSizeGiB', event.target.value)} /></label>
+              {editor.mediaType === 'series' ? <label><span>季号</span><input disabled={Boolean(selected)} max="100" min="0" type="number" value={editor.season} onChange={(event) => setField(setEditor, 'season', event.target.value)} /></label> : null}
+              <label><span>更新策略</span><select value={editor.policy} onChange={(event) => setField(setEditor, 'policy', event.target.value as 'once' | 'upgrade')}><option value="once">首次入库后停止</option><option value="upgrade">持续寻找更好版本</option></select></label>
+              <label><span>质量预设</span><select value={editor.qualityPreset} onChange={(event) => setEditor((current) => applyQualityPreset(current, event.target.value as QualityPreset))}>{Object.entries(qualityPresetLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+              <label><span>检查频率</span><select value={editor.intervalMinutes} onChange={(event) => setField(setEditor, 'intervalMinutes', event.target.value)}>{intervalOptions(editor.intervalMinutes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             </div>
-            <div className="check-row"><label><input checked={editor.enabled} onChange={(event) => setField(setEditor, 'enabled', event.target.checked)} type="checkbox" />启用自动运行</label><label><input checked={editor.allowUnknownSize} onChange={(event) => setField(setEditor, 'allowUnknownSize', event.target.checked)} type="checkbox" />允许未知体积</label><label><input checked={editor.preferSmaller} onChange={(event) => setField(setEditor, 'preferSmaller', event.target.checked)} type="checkbox" />同分时优先较小版本</label></div>
+            <details className="subscription-sources">
+              <summary><span>资源来源</span><small>{editor.sourceIds.length ? `已选择 ${editor.sourceIds.length} 个` : '全部可用来源'}</small></summary>
+              <fieldset className="subscription-source-picker">
+                <legend className="sr-only">选择资源来源</legend>
+                <p>不勾选时搜索全部可用来源；暂不可用的来源会自动跳过。</p>
+                <div>{subscriptionSources(providerSettings.data?.sources ?? [], editor.sourceIds).map((source) => <label key={source.id}><input checked={editor.sourceIds.includes(source.id)} onChange={() => setEditor((current) => ({ ...current, sourceIds: toggleValue(current.sourceIds, source.id) }))} type="checkbox" /><span>{source.label}</span></label>)}</div>
+                {providerSettings.isError ? <small>来源清单暂不可用；保存为空仍会搜索全部来源。</small> : null}
+              </fieldset>
+            </details>
+            <div className="check-row primary-subscription-check"><label><input checked={editor.enabled} onChange={(event) => setField(setEditor, 'enabled', event.target.checked)} type="checkbox" />启用自动运行</label></div>
+            <details className="subscription-advanced">
+              <summary>高级规则与媒体身份</summary>
+              <div className="form-grid">
+                <label><span>原始标题</span><input maxLength={300} value={editor.originalTitle} onChange={(event) => setField(setEditor, 'originalTitle', event.target.value)} /></label>
+                <label><span>年份</span><input max="2100" min="0" type="number" value={editor.year} onChange={(event) => setField(setEditor, 'year', event.target.value)} /></label>
+                {editor.qualityPreset === 'custom' ? <>
+                  <label><span>偏好来源顺序</span><input placeholder="framehdr, juying" value={editor.preferredSources} onChange={(event) => setField(setEditor, 'preferredSources', event.target.value)} /></label>
+                  <label><span>分辨率优先顺序</span><input placeholder="2160p, 1080p" value={editor.resolutions} onChange={(event) => setField(setEditor, 'resolutions', event.target.value)} /></label>
+                  <label><span>视频编码</span><input placeholder="HEVC, AVC" value={editor.videoCodecs} onChange={(event) => setField(setEditor, 'videoCodecs', event.target.value)} /></label>
+                  <label><span>动态范围</span><input placeholder="Dolby Vision, HDR10" value={editor.dynamicRanges} onChange={(event) => setField(setEditor, 'dynamicRanges', event.target.value)} /></label>
+                  <label><span>必须包含的音轨</span><input placeholder="Atmos, TrueHD" value={editor.audioContains} onChange={(event) => setField(setEditor, 'audioContains', event.target.value)} /></label>
+                  <label><span>最小体积（GiB）</span><input min="0" step="0.1" type="number" value={editor.minSizeGiB} onChange={(event) => setField(setEditor, 'minSizeGiB', event.target.value)} /></label>
+                  <label><span>最大体积（GiB）</span><input min="0" step="0.1" type="number" value={editor.maxSizeGiB} onChange={(event) => setField(setEditor, 'maxSizeGiB', event.target.value)} /></label>
+                </> : null}
+              </div>
+              {editor.qualityPreset === 'custom' ? <div className="check-row"><label><input checked={editor.allowUnknownSize} onChange={(event) => setField(setEditor, 'allowUnknownSize', event.target.checked)} type="checkbox" />设定体积范围时允许未知体积</label><label><input checked={editor.preferSmaller} onChange={(event) => setField(setEditor, 'preferSmaller', event.target.checked)} type="checkbox" />同分时优先较小版本</label></div> : <p className="preset-summary">{qualityPresetSummary(editor.qualityPreset)}</p>}
+            </details>
             <div className="editor-actions">
               {selected ? <><IconButton label={selected.enabled ? '暂停订阅' : '恢复订阅'} onClick={() => toggle.mutate({ id: selected.id, enabled: !selected.enabled })}>{selected.enabled ? <Pause size={16} /> : <Play size={16} />}</IconButton><IconButton label="立即运行" onClick={() => runNow.mutate(selected.id)}><RefreshCw size={16} /></IconButton><IconButton label="删除订阅" onClick={() => window.confirm('删除此订阅及运行历史？') && remove.mutate(selected.id)}><Trash2 size={16} /></IconButton></> : null}
               <button className="primary-action compact" disabled={save.isPending || !editor.tmdbId.trim() || !editor.title.trim()} type="submit"><Save size={16} />{save.isPending ? '保存中' : '保存订阅'}</button>
@@ -243,27 +285,28 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
 function emptyEditor(): EditorState {
   return {
     tmdbId: '', title: '', originalTitle: '', year: '', mediaType: 'movie', season: '0',
-    policy: 'once', enabled: true, intervalMinutes: '60', sourceIds: '', resolutions: '',
+    policy: 'once', enabled: true, intervalMinutes: '60', sourceIds: [], qualityPreset: 'standard', resolutions: '',
     videoCodecs: '', dynamicRanges: '', audioContains: '', preferredSources: '',
     minSizeGiB: '', maxSizeGiB: '', allowUnknownSize: false, preferSmaller: false,
   }
 }
 
 function editorFromCandidate(candidate: Candidate): EditorState {
-  return { ...emptyEditor(), tmdbId: candidate.tmdbId ?? '', title: candidate.title, year: String(candidate.year || ''), mediaType: candidate.mediaType, season: String(candidate.season ?? 0), sourceIds: candidate.sourceId }
+  return { ...emptyEditor(), tmdbId: candidate.tmdbId ?? '', title: candidate.title, year: String(candidate.year || ''), mediaType: candidate.mediaType, season: String(candidate.season ?? 0), sourceIds: [candidate.sourceId] }
 }
 
 function editorFromSubscription(item: Subscription): EditorState {
-  return {
+  const editor: EditorState = {
     tmdbId: item.tmdbId, title: item.title, originalTitle: item.originalTitle, year: String(item.year || ''),
     mediaType: item.mediaType, season: String(item.season), policy: item.policy, enabled: item.enabled,
-    intervalMinutes: String(item.intervalMinutes), sourceIds: item.sourceIds.join(', '),
+    intervalMinutes: String(item.intervalMinutes), sourceIds: item.sourceIds, qualityPreset: 'custom',
     resolutions: item.preferences.resolutions.join(', '), videoCodecs: item.preferences.videoCodecs.join(', '),
     dynamicRanges: item.preferences.dynamicRanges.join(', '), audioContains: item.preferences.audioContains.join(', '),
     preferredSources: item.preferences.preferredSources.join(', '),
     minSizeGiB: bytesToGiB(item.preferences.minSizeBytes), maxSizeGiB: bytesToGiB(item.preferences.maxSizeBytes),
     allowUnknownSize: item.preferences.allowUnknownSize, preferSmaller: item.preferences.preferSmaller,
   }
+  return { ...editor, qualityPreset: inferQualityPreset(editor) }
 }
 
 function inputFromEditor(editor: EditorState): SubscriptionInput | null {
@@ -276,7 +319,7 @@ function inputFromEditor(editor: EditorState): SubscriptionInput | null {
   return {
     tmdbId, title, originalTitle: editor.originalTitle.trim(), year, mediaType: editor.mediaType,
     season, policy: editor.policy, enabled: editor.enabled, intervalMinutes,
-    sourceIds: splitValues(editor.sourceIds),
+    sourceIds: editor.sourceIds,
     preferences: {
       ...emptyPreferences,
       resolutions: splitValues(editor.resolutions), videoCodecs: splitValues(editor.videoCodecs),
@@ -287,6 +330,53 @@ function inputFromEditor(editor: EditorState): SubscriptionInput | null {
     },
   }
 }
+
+function applyQualityPreset(editor: EditorState, preset: QualityPreset): EditorState {
+  if (preset === 'custom') return { ...editor, qualityPreset: preset }
+  const next: EditorState = {
+    ...editor, qualityPreset: preset, resolutions: '', videoCodecs: '', dynamicRanges: '', audioContains: '',
+    preferredSources: '', minSizeGiB: '', maxSizeGiB: '', allowUnknownSize: false, preferSmaller: false,
+  }
+  if (preset === 'space') return { ...next, resolutions: '1080p', videoCodecs: 'HEVC', maxSizeGiB: '20', preferSmaller: true }
+  if (preset === 'balanced') return { ...next, resolutions: '2160p, 1080p', videoCodecs: 'HEVC, AVC', maxSizeGiB: '40', preferSmaller: true }
+  if (preset === 'quality') return { ...next, resolutions: '2160p', dynamicRanges: 'Dolby Vision, HDR10', minSizeGiB: '15' }
+  return next
+}
+
+function inferQualityPreset(editor: EditorState): QualityPreset {
+  const fields: (keyof EditorState)[] = ['resolutions', 'videoCodecs', 'dynamicRanges', 'audioContains', 'preferredSources', 'minSizeGiB', 'maxSizeGiB', 'allowUnknownSize', 'preferSmaller']
+  for (const preset of ['standard', 'space', 'balanced', 'quality'] as const) {
+    const expected = applyQualityPreset(editor, preset)
+    if (fields.every((field) => expected[field] === editor[field])) return preset
+  }
+  return 'custom'
+}
+
+function qualityPresetSummary(preset: QualityPreset) {
+  if (preset === 'space') return '仅选择 1080p HEVC，最大 20 GiB；同等质量优先较小版本。'
+  if (preset === 'balanced') return '优先 2160p / HEVC，允许 1080p 与 AVC，最大 40 GiB。'
+  if (preset === 'quality') return '仅选择 2160p Dolby Vision / HDR10，最小 15 GiB。'
+  return '不限制分辨率、编码和体积；体积未知的资源也可参与选择。'
+}
+
+function intervalOptions(current: string): [string, string][] {
+  const options: [string, string][] = [['30', '每 30 分钟'], ['60', '每小时'], ['180', '每 3 小时'], ['360', '每 6 小时'], ['720', '每 12 小时'], ['1440', '每天']]
+  if (current && !options.some(([value]) => value === current)) options.push([current, `每 ${current} 分钟（自定义）`])
+  return options
+}
+
+function subscriptionSources(sources: { id: string; label: string }[], selected: string[]) {
+  const result = sources.map(({ id, label }) => ({ id, label }))
+  for (const id of selected) {
+    if (!result.some((source) => source.id === id)) result.push({ id, label: id })
+  }
+  return result
+}
+
+function toggleValue(values: string[], value: string) {
+  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
+}
+
 
 function splitValues(value: string) {
   return [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))]

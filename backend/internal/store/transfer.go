@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	ErrIdempotencyConflict  = errors.New("idempotency key was already used for another request")
-	ErrTransferNotFound     = errors.New("transfer job not found")
-	ErrTransferNotRetryable = errors.New("transfer job is not retryable")
+	ErrIdempotencyConflict   = errors.New("idempotency key was already used for another request")
+	ErrTransferNotFound      = errors.New("transfer job not found")
+	ErrTransferNotRetryable  = errors.New("transfer job is not retryable")
+	ErrTransferNotArchivable = errors.New("transfer job is not archivable")
 )
 
 type TransferJob struct {
@@ -41,6 +42,7 @@ type TransferJob struct {
 	NextAttemptAt  int64
 	CreatedAt      int64
 	UpdatedAt      int64
+	ArchivedAt     int64
 }
 
 type TransferEvent struct {
@@ -55,7 +57,7 @@ const transferColumns = `
 	source_id, candidate_id, title, year, season, episode_start, episode_end, media_type, tmdb_id, state, resume_state,
 	provider_token, emby_item_id,
 	attempts, error_code, error_message, retryable, next_attempt_at,
-	created_at, updated_at`
+	created_at, updated_at, archived_at`
 
 func (s *Store) CreateTransferJob(ctx context.Context, job TransferJob) (TransferJob, bool, error) {
 	tx, err := s.database.BeginTx(ctx, nil)
@@ -116,9 +118,13 @@ func (s *Store) TransferJob(ctx context.Context, userID int64, jobID string) (Tr
 	return job, err
 }
 
-func (s *Store) ListTransferJobs(ctx context.Context, userID int64, limit int) ([]TransferJob, error) {
+func (s *Store) ListTransferJobs(ctx context.Context, userID int64, limit int, archived bool) ([]TransferJob, error) {
+	archiveFilter := "archived_at = 0"
+	if archived {
+		archiveFilter = "archived_at > 0"
+	}
 	rows, err := s.database.QueryContext(ctx, `SELECT `+transferColumns+`
-		FROM transfer_jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?`, userID, limit)
+		FROM transfer_jobs WHERE user_id = ? AND `+archiveFilter+` ORDER BY created_at DESC LIMIT ?`, userID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list transfer jobs: %w", err)
 	}
@@ -135,6 +141,60 @@ func (s *Store) ListTransferJobs(ctx context.Context, userID int64, limit int) (
 		return nil, fmt.Errorf("iterate transfer jobs: %w", err)
 	}
 	return jobs, nil
+}
+
+func (s *Store) SetTransferArchived(ctx context.Context, userID int64, jobID string, archived bool, now time.Time) (TransferJob, error) {
+	job, err := s.TransferJob(ctx, userID, jobID)
+	if err != nil {
+		return TransferJob{}, err
+	}
+	if archived == (job.ArchivedAt > 0) {
+		return job, nil
+	}
+	if archived && job.State != "completed" && (job.State != "failed" || job.Retryable) {
+		return TransferJob{}, ErrTransferNotArchivable
+	}
+
+	tx, err := s.database.BeginTx(ctx, nil)
+	if err != nil {
+		return TransferJob{}, fmt.Errorf("begin transfer archive update: %w", err)
+	}
+	defer tx.Rollback()
+
+	timestamp := now.UTC().Unix()
+	archivedAt := int64(0)
+	message := "任务已恢复到当前列表"
+	query := `UPDATE transfer_jobs SET archived_at = 0 WHERE id = ? AND user_id = ? AND archived_at > 0`
+	arguments := []any{jobID, userID}
+	if archived {
+		archivedAt = timestamp
+		message = "任务已归档"
+		query = `UPDATE transfer_jobs SET archived_at = ?
+			WHERE id = ? AND user_id = ? AND archived_at = 0
+			AND (state = 'completed' OR (state = 'failed' AND retryable = 0))`
+		arguments = []any{archivedAt, jobID, userID}
+	}
+	result, err := tx.ExecContext(ctx, query, arguments...)
+	if err != nil {
+		return TransferJob{}, fmt.Errorf("update transfer archive: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return TransferJob{}, fmt.Errorf("read transfer archive result: %w", err)
+	}
+	if count == 0 {
+		return TransferJob{}, ErrTransferNotArchivable
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO transfer_job_events (job_id, state, message, created_at)
+		VALUES (?, ?, ?, ?)`, job.ID, job.State, message, timestamp); err != nil {
+		return TransferJob{}, fmt.Errorf("record transfer archive event: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return TransferJob{}, fmt.Errorf("commit transfer archive update: %w", err)
+	}
+	job.ArchivedAt = archivedAt
+	return job, nil
 }
 
 func (s *Store) TransferEvents(ctx context.Context, userID int64, jobID string) ([]TransferEvent, error) {
@@ -328,7 +388,7 @@ func scanTransfer(scanner transferScanner) (TransferJob, error) {
 		&job.SourceID, &job.CandidateID, &job.Title, &job.Year, &job.Season, &job.EpisodeStart, &job.EpisodeEnd,
 		&job.MediaType, &job.TMDBID, &job.State, &job.ResumeState, &job.ProviderToken, &job.EmbyItemID,
 		&job.Attempts, &job.ErrorCode, &job.ErrorMessage, &retryable, &job.NextAttemptAt,
-		&job.CreatedAt, &job.UpdatedAt,
+		&job.CreatedAt, &job.UpdatedAt, &job.ArchivedAt,
 	); err != nil {
 		return TransferJob{}, err
 	}

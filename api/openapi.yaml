@@ -374,6 +374,85 @@ paths:
           $ref: '#/components/responses/ProblemResponse'
         '504':
           $ref: '#/components/responses/ProblemResponse'
+  /integrations/emby/libraries/{id}/items:
+    get:
+      operationId: browseEmbyLibraryItems
+      summary: Browse movies and series in one Emby library
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 1000000, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200':
+          description: Emby library items
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmbyItemSearchResponse' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+        '504': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/emby/libraries/{id}/refresh:
+    post:
+      operationId: refreshEmbyLibrary
+      summary: Ask Emby to refresh one media library
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
+        - { $ref: '#/components/parameters/CSRFToken' }
+      responses:
+        '202':
+          description: Emby refresh accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmbyRefreshResponse' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+        '504': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/emby/items/{id}:
+    get:
+      operationId: getEmbyItem
+      summary: Read safe metadata for one Emby item
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
+      responses:
+        '200':
+          description: Emby item metadata without file paths or credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmbyItemDetail' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+        '504': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/emby/items/{id}/refresh:
+    post:
+      operationId: refreshEmbyItem
+      summary: Ask Emby to refresh one media item
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
+        - { $ref: '#/components/parameters/CSRFToken' }
+      responses:
+        '202':
+          description: Emby refresh accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmbyRefreshResponse' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+        '504': { $ref: '#/components/responses/ProblemResponse' }
   /integrations/115/status:
     get:
       operationId: getDrive115Status
@@ -900,6 +979,12 @@ paths:
             minimum: 1
             maximum: 100
             default: 50
+        - name: archived
+          in: query
+          description: Return archived jobs instead of active history
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: Transfer jobs ordered newest first
@@ -998,6 +1083,30 @@ paths:
           $ref: '#/components/responses/ProblemResponse'
         '409':
           $ref: '#/components/responses/ProblemResponse'
+  /transfers/{transferId}/archived:
+    patch:
+      operationId: setTransferArchived
+      summary: Archive or restore a terminal transfer record without deleting external media
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: transferId, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/CSRFToken' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetTransferArchivedRequest' }
+      responses:
+        '200':
+          description: Updated local transfer record
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransferJob' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '409': { $ref: '#/components/responses/ProblemResponse' }
   /subscriptions/backup:
     get:
       operationId: exportSubscriptions
@@ -1560,6 +1669,25 @@ components:
           type: object
           additionalProperties:
             type: string
+    EmbyItemDetail:
+      allOf:
+        - $ref: '#/components/schemas/EmbyItem'
+        - type: object
+          required: [mediaSourceCount, externalUrl]
+          properties:
+            originalTitle: { type: string }
+            overview: { type: string, maxLength: 4000 }
+            communityRating: { type: number, format: double }
+            runtimeMinutes: { type: integer, minimum: 0 }
+            genres: { type: array, maxItems: 32, items: { type: string, maxLength: 100 } }
+            mediaSourceCount: { type: integer, minimum: 0 }
+            externalUrl: { type: string, format: uri }
+    EmbyRefreshResponse:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [accepted] }
     Drive115DeviceAuthorization:
       type: object
       required: [id, state, expiresAt]
@@ -1812,6 +1940,12 @@ components:
           type: string
           minLength: 1
           maxLength: 32768
+    SetTransferArchivedRequest:
+      type: object
+      required: [archived]
+      additionalProperties: false
+      properties:
+        archived: { type: boolean }
     TransferListResponse:
       type: object
       required: [transfers]
@@ -1822,7 +1956,7 @@ components:
             $ref: '#/components/schemas/TransferJob'
     TransferJob:
       type: object
-      required: [id, title, year, mediaType, tmdbId, source, state, retryable, createdAt, updatedAt]
+      required: [id, title, year, mediaType, tmdbId, source, state, retryable, archived, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1851,6 +1985,8 @@ components:
         errorMessage:
           type: string
         retryable:
+          type: boolean
+        archived:
           type: boolean
         createdAt:
           type: string

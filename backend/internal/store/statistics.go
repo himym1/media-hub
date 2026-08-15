@@ -24,11 +24,11 @@ func (s *Store) OperationalStatistics(ctx context.Context, userID int64) (Operat
 	var value OperationalStatistics
 	err := s.database.QueryRowContext(ctx, `
 		SELECT
-			(SELECT count(*) FROM transfer_jobs WHERE user_id = ?),
-			(SELECT count(*) FROM transfer_jobs WHERE user_id = ? AND state IN ('queued','transferring','retry_wait','transferred','submitting_sync','syncing','refreshing_emby','indexing_emby','verifying_playback')),
-			(SELECT count(*) FROM transfer_jobs WHERE user_id = ? AND state = 'completed'),
-			(SELECT count(*) FROM transfer_jobs WHERE user_id = ? AND state = 'failed'),
-			(SELECT count(*) FROM transfer_jobs WHERE user_id = ? AND state = 'needs_attention'),
+			(SELECT count(*) FROM transfer_jobs WHERE user_id = ? AND archived_at = 0),
+			(SELECT count(*) FROM transfer_jobs WHERE user_id = ? AND archived_at = 0 AND state IN ('queued','transferring','retry_wait','transferred','submitting_sync','syncing','refreshing_emby','indexing_emby','verifying_playback')),
+			(SELECT count(*) FROM transfer_jobs WHERE user_id = ? AND archived_at = 0 AND state = 'completed'),
+			(SELECT count(*) FROM transfer_jobs WHERE user_id = ? AND archived_at = 0 AND state = 'failed'),
+			(SELECT count(*) FROM transfer_jobs WHERE user_id = ? AND archived_at = 0 AND state = 'needs_attention'),
 			(SELECT count(*) FROM subscriptions WHERE user_id = ?),
 			(SELECT count(*) FROM subscriptions WHERE user_id = ? AND enabled = 1),
 			(SELECT count(*) FROM subscription_runs r JOIN subscriptions s ON s.id = r.subscription_id WHERE s.user_id = ?),
@@ -41,7 +41,7 @@ func (s *Store) OperationalStatistics(ctx context.Context, userID int64) (Operat
 			 (SELECT count(*) FROM drive115_command_jobs WHERE user_id = ? AND state = 'needs_attention') +
 			 (SELECT count(*) FROM local_upload_jobs WHERE user_id = ? AND state = 'needs_attention') +
 			 (SELECT count(*) FROM archive_plans WHERE user_id = ? AND state = 'needs_attention')),
-			(SELECT count(*) FROM transfer_notifications n JOIN transfer_jobs j ON j.id = n.job_id WHERE j.user_id = ? AND n.state = 'needs_attention')
+			(SELECT count(*) FROM transfer_notifications n JOIN transfer_jobs j ON j.id = n.job_id WHERE j.user_id = ? AND j.archived_at = 0 AND n.state = 'needs_attention')
 	`, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID).Scan(
 		&value.TransfersTotal,
 		&value.TransfersActive,

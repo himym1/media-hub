@@ -114,6 +114,7 @@ export type TransferJob = {
   errorCode?: string
   errorMessage?: string
   retryable: boolean
+  archived: boolean
   createdAt: string
   updatedAt: string
 }
@@ -237,9 +238,27 @@ export type EmbyLibrary = {
   collectionType?: string
 }
 
+export type EmbyItem = {
+  id: string
+  name: string
+  type: string
+  year?: number
+  providerIds?: Record<string, string>
+}
+
 export type EmbyItemSearch = {
-  items: { id: string; name: string; type: string; year?: number; providerIds?: Record<string, string> }[]
+  items: EmbyItem[]
   total: number
+}
+
+export type EmbyItemDetail = EmbyItem & {
+  originalTitle?: string
+  overview?: string
+  communityRating?: number
+  runtimeMinutes?: number
+  genres?: string[]
+  mediaSourceCount: number
+  externalUrl: string
 }
 
 export type Drive115Status = {
@@ -425,6 +444,28 @@ export function searchEmbyItems(query: string, limit = 20) {
   )
 }
 
+export function getEmbyLibraryItems(libraryId: string, offset = 0, limit = 50) {
+  return requestJSON<EmbyItemSearch>(
+    `/api/v1/integrations/emby/libraries/${encodeURIComponent(libraryId)}/items?offset=${offset}&limit=${limit}`,
+  )
+}
+
+export function getEmbyItem(id: string) {
+  return requestJSON<EmbyItemDetail>(`/api/v1/integrations/emby/items/${encodeURIComponent(id)}`)
+}
+
+export function refreshEmbyLibrary(id: string) {
+  return requestJSON<{ status: 'accepted' }>(`/api/v1/integrations/emby/libraries/${encodeURIComponent(id)}/refresh`, {
+    method: 'POST', headers: writeHeaders(false),
+  })
+}
+
+export function refreshEmbyItem(id: string) {
+  return requestJSON<{ status: 'accepted' }>(`/api/v1/integrations/emby/items/${encodeURIComponent(id)}/refresh`, {
+    method: 'POST', headers: writeHeaders(false),
+  })
+}
+
 export function getDrive115Status() {
   return requestJSON<Drive115Status>('/api/v1/integrations/115/status')
 }
@@ -512,8 +553,8 @@ export function createTransfer(transferToken: string, idempotencyKey: string) {
   })
 }
 
-export function listTransfers(limit = 50) {
-  return requestJSON<{ transfers: TransferJob[] }>(`/api/v1/transfers?limit=${limit}`)
+export function listTransfers(limit = 50, archived = false) {
+  return requestJSON<{ transfers: TransferJob[] }>(`/api/v1/transfers?limit=${limit}&archived=${archived}`)
 }
 
 export function getTransfer(id: string) {
@@ -524,6 +565,14 @@ export function retryTransfer(id: string) {
   return requestJSON<TransferJob>(`/api/v1/transfers/${encodeURIComponent(id)}/retry`, {
     method: 'POST',
     headers: { 'X-CSRF-Token': readCookie('media_hub_csrf') ?? '' },
+  })
+}
+
+export function setTransferArchived(id: string, archived: boolean) {
+  return requestJSON<TransferJob>(`/api/v1/transfers/${encodeURIComponent(id)}/archived`, {
+    method: 'PATCH',
+    headers: writeHeaders(),
+    body: JSON.stringify({ archived }),
   })
 }
 

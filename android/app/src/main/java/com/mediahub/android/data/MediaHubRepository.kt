@@ -12,6 +12,8 @@ import com.mediahub.android.core.network.Drive115Command
 import com.mediahub.android.core.network.Drive115File
 import com.mediahub.android.core.network.DiscoveryItem
 import com.mediahub.android.core.network.EmbyItem
+import com.mediahub.android.core.network.EmbyItemDetail
+import com.mediahub.android.core.network.EmbyItemPage
 import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.MediaHubApi
 import com.mediahub.android.core.network.LocalUploadEntry
@@ -143,11 +145,14 @@ class MediaHubRepository(
 
     suspend fun deleteSubscription(id: String) = authenticated { token -> api.deleteSubscription(token, id) }
 
-    suspend fun transfers(): List<TransferJob> = authenticated { token -> api.transfers(token) }
+    suspend fun transfers(archived: Boolean = false): List<TransferJob> = authenticated { token -> api.transfers(token, archived = archived) }
 
     suspend fun transfer(id: String): TransferJob = authenticated { token -> api.transfer(token, id) }
 
     suspend fun retryTransfer(id: String): TransferJob = authenticated { token -> api.retryTransfer(token, id) }
+
+    suspend fun setTransferArchived(id: String, archived: Boolean): TransferJob =
+        authenticated { token -> api.setTransferArchived(token, id, archived) }
 
     suspend fun transferNotifications(): List<TransferNotification> = authenticated(api::transferNotifications)
 
@@ -157,6 +162,15 @@ class MediaHubRepository(
     suspend fun libraries(): List<MediaLibrary> = authenticated { token -> api.libraries(token) }
 
     suspend fun items(query: String): List<EmbyItem> = authenticated { token -> api.items(token, query) }
+
+    suspend fun libraryItems(libraryId: String, offset: Int, limit: Int): EmbyItemPage =
+        authenticated { token -> api.libraryItems(token, libraryId, offset, limit) }
+
+    suspend fun itemDetails(itemId: String): EmbyItemDetail = authenticated { token -> api.itemDetails(token, itemId) }
+
+    suspend fun refreshLibrary(libraryId: String) = authenticated { token -> api.refreshLibrary(token, libraryId) }
+
+    suspend fun refreshItem(itemId: String) = authenticated { token -> api.refreshItem(token, itemId) }
 
     suspend fun providerSettings(): ProviderSettings = authenticated(api::providerSettings)
     suspend fun updateProviderSettings(input: ProviderSettingsUpdate): ProviderSettings = authenticated { api.updateProviderSettings(it, input) }

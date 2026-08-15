@@ -18,10 +18,12 @@ data class TransferUiState(
     val selectedId: String? = null,
     val selected: TransferJob? = null,
     val notifications: List<TransferNotification> = emptyList(),
+    val archived: Boolean = false,
     val loading: Boolean = false,
     val refreshing: Boolean = false,
     val retrying: Boolean = false,
     val notificationRetrying: Boolean = false,
+    val archiving: Boolean = false,
     val errorMessage: String? = null,
 )
 
@@ -58,6 +60,33 @@ class TransferViewModel(
         _uiState.value = _uiState.value.copy(selectedId = id, selected = null)
         viewModelScope.launch { loadDetail(id) }
     }
+
+    fun showArchived(archived: Boolean) {
+        if (_uiState.value.archived == archived) return
+        _uiState.value = _uiState.value.copy(
+            archived = archived, jobs = emptyList(), selectedId = null, selected = null, loading = true, errorMessage = null,
+        )
+        viewModelScope.launch { load(true) }
+    }
+
+    fun setSelectedArchived() {
+        val selected = _uiState.value.selected ?: return
+        val allowed = canArchiveTransfer(selected)
+        if (!allowed || _uiState.value.archiving) return
+        val archived = !_uiState.value.archived
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(archiving = true, errorMessage = null)
+            try {
+                repository.setTransferArchived(selected.id, archived)
+                load(false)
+            } catch (error: ApiException) {
+                _uiState.value = _uiState.value.copy(archiving = false, errorMessage = error.message ?: "任务归档失败")
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(archiving = false, errorMessage = "无法更新任务归档状态")
+            }
+        }
+    }
+
 
     fun retry() {
         val id = _uiState.value.selectedId ?: return
@@ -100,40 +129,48 @@ class TransferViewModel(
     }
 
     private suspend fun load(initial: Boolean) {
+        val archived = _uiState.value.archived
         _uiState.value = _uiState.value.copy(
             loading = initial && _uiState.value.jobs.isEmpty(),
             refreshing = !initial,
         )
         try {
-            val jobs = repository.transfers()
-            val notifications = repository.transferNotifications()
+            val jobs = repository.transfers(archived)
+            val notifications = if (archived) emptyList() else repository.transferNotifications()
+            if (_uiState.value.archived != archived) return
             val selectedId = _uiState.value.selectedId?.takeIf { id -> jobs.any { it.id == id } }
                 ?: jobs.firstOrNull()?.id
             _uiState.value = _uiState.value.copy(
                 jobs = jobs,
                 notifications = notifications,
                 selectedId = selectedId,
+                selected = _uiState.value.selected.takeIf { it?.id == selectedId },
                 loading = false,
                 refreshing = false,
                 retrying = false,
                 notificationRetrying = false,
+                archiving = false,
                 errorMessage = null,
             )
             if (selectedId != null) loadDetail(selectedId)
         } catch (error: ApiException) {
+            if (_uiState.value.archived != archived) return
             _uiState.value = _uiState.value.copy(
                 loading = false,
                 refreshing = false,
                 retrying = false,
                 notificationRetrying = false,
+                archiving = false,
                 errorMessage = error.message ?: "任务读取失败",
             )
         } catch (_: Exception) {
+            if (_uiState.value.archived != archived) return
             _uiState.value = _uiState.value.copy(
                 loading = false,
                 refreshing = false,
                 retrying = false,
                 notificationRetrying = false,
+                archiving = false,
                 errorMessage = "无法读取转存任务",
             )
         }
@@ -150,3 +187,6 @@ class TransferViewModel(
         }
     }
 }
+
+internal fun canArchiveTransfer(job: TransferJob): Boolean =
+    job.state == "completed" || (job.state == "failed" && !job.retryable)

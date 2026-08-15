@@ -76,6 +76,82 @@ test('task deep link survives initial list loading', async ({ page }) => {
   await expect(page.getByLabel('任务详情')).toBeVisible()
 })
 
+test('terminal task can be archived and restored without deletion', async ({ page }) => {
+  await installApiFixtures(page)
+  await page.goto('/?view=transfers&task=task-1')
+  await page.getByRole('button', { name: '归档任务' }).click()
+  await expect(page.getByText('还没有转存任务')).toBeVisible()
+
+  await page.getByRole('button', { name: '已归档' }).click()
+  await expect(page).toHaveURL(/archive=1/)
+  await page.getByRole('link', { name: '媒体库', exact: true }).click()
+  await expect(page).not.toHaveURL(/archive=1/)
+  await page.goBack()
+  await expect(page.getByRole('button', { name: '已归档' })).toHaveAttribute('aria-pressed', 'true')
+  await page.reload()
+  await expect(page.getByRole('button', { name: '已归档' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: /验收影片/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: '恢复到任务列表' })).toBeVisible()
+  await page.getByRole('button', { name: '恢复到任务列表' }).click()
+  await expect(page.getByText('还没有归档任务')).toBeVisible()
+
+  await page.getByRole('button', { name: '当前', exact: true }).click()
+  await expect(page).not.toHaveURL(/archive=1/)
+  await expect(page.getByRole('button', { name: /验收影片/ })).toBeVisible()
+})
+
+test('library supports browsing item details and safe Emby actions', async ({ page }, testInfo) => {
+  await installApiFixtures(page)
+  await page.goto('/?view=library')
+  await expect(page.getByRole('button', { name: /电影.*movies/ })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: /验收影片.*TMDB 100/ }).click()
+  await expect(page.getByRole('heading', { name: '验收影片', level: 2 })).toBeVisible()
+  await expect(page.getByText('用于验证媒体库详情。')).toBeVisible()
+  await expect(page.getByRole('link', { name: '在 Emby 中打开' })).toHaveAttribute('href', /emby\.example/)
+  await expect(page.getByRole('button', { name: /删除/ })).toHaveCount(0)
+  await page.getByRole('button', { name: '刷新元数据' }).click()
+  await expectNoSeriousAccessibilityViolations(page)
+  await attachScreenshot(page, testInfo, 'library-detail')
+  await page.getByRole('link', { name: '任务', exact: true }).click()
+  await expect(page).not.toHaveURL(/media=item-1/)
+  await page.goBack()
+  await expect(page.getByRole('heading', { name: '验收影片', level: 2 })).toBeVisible()
+  if (testInfo.project.name === 'mobile') {
+    await expect(page.getByRole('button', { name: '返回媒体列表' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '验收影片', level: 2 })).toBeInViewport()
+    await expect(page.getByRole('button', { name: /验收影片.*TMDB 100/ })).toBeHidden()
+    await page.getByRole('button', { name: '返回媒体列表' }).click()
+    await expect(page.getByRole('button', { name: /验收影片.*TMDB 100/ })).toBeVisible()
+  }
+})
+
+test('subscription editor keeps advanced rules collapsed behind useful presets', async ({ page }, testInfo) => {
+  await installApiFixtures(page)
+  await page.goto('/?view=subscriptions')
+  await expect(page.getByRole('combobox', { name: '质量预设' })).toHaveValue('standard')
+  await expect(page.getByText('视频编码', { exact: true })).toBeHidden()
+  await expect(page.getByLabel('juying')).toBeHidden()
+  await page.getByText('资源来源', { exact: true }).click()
+  await expect(page.getByLabel('juying')).toBeVisible()
+  await page.getByText('高级规则与媒体身份').click()
+  await page.getByRole('combobox', { name: '质量预设' }).selectOption('custom')
+  await expect(page.getByText('视频编码', { exact: true })).toBeVisible()
+  await attachScreenshot(page, testInfo, 'subscription-editor')
+})
+
+test('subscription polling does not overwrite an in-progress edit', async ({ page }) => {
+  await installApiFixtures(page, { withSubscription: true })
+  await page.goto('/?view=subscriptions')
+  await page.getByRole('button', { name: /验收影片.*TMDB 100/ }).click()
+  await page.getByLabel('标题', { exact: true }).fill('尚未保存的标题')
+
+  const refreshed = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/subscriptions')
+  await page.getByRole('button', { name: '立即运行' }).click()
+  await refreshed
+  await expect(page.getByLabel('标题', { exact: true })).toHaveValue('尚未保存的标题')
+})
+
+
 test('settings tabs support arrow keys and protect unsaved provider changes', async ({ page }, testInfo) => {
   await installApiFixtures(page)
   await page.goto('/?view=settings&settings=overview')

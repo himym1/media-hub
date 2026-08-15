@@ -201,3 +201,75 @@ func TestInterruptedNotificationIsNotAutomaticallyReplayed(t *testing.T) {
 		t.Fatalf("explicitly retried notification runnable=%v err=%v", found, err)
 	}
 }
+
+func TestTransferArchiveOnlyHidesTerminalNonRetryableJobs(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	create := func(id, state string, retryable bool, createdAt int64) {
+		t.Helper()
+		job := TransferJob{
+			ID: id, UserID: admin.ID, IdempotencyKey: "archive_" + id, RequestHash: []byte("hash"),
+			SelectionToken: "token", SourceID: "frame", CandidateID: id, Title: id, MediaType: "movie",
+			State: "queued", CreatedAt: createdAt, UpdatedAt: createdAt,
+		}
+		if _, _, err := dataStore.CreateTransferJob(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+		if state != "queued" || retryable {
+			job.State = state
+			job.Retryable = retryable
+			job.UpdatedAt++
+			if updated, err := dataStore.UpdateTransferJob(ctx, job, "queued", "prepare archive case"); err != nil || !updated {
+				t.Fatalf("prepare archive case: updated=%v err=%v", updated, err)
+			}
+		}
+	}
+	create("completed", "completed", false, 100)
+	create("failed", "failed", false, 101)
+	create("running", "queued", false, 102)
+	create("retryable", "failed", true, 103)
+
+	archived, err := dataStore.SetTransferArchived(ctx, admin.ID, "failed", true, time.Unix(200, 0))
+	if err != nil || archived.ArchivedAt != 200 {
+		t.Fatalf("archive failed job: job=%#v err=%v", archived, err)
+	}
+	if _, err := dataStore.SetTransferArchived(ctx, admin.ID, "running", true, time.Unix(201, 0)); !errors.Is(err, ErrTransferNotArchivable) {
+		t.Fatalf("running archive error = %v", err)
+	}
+	if _, err := dataStore.SetTransferArchived(ctx, admin.ID, "retryable", true, time.Unix(201, 0)); !errors.Is(err, ErrTransferNotArchivable) {
+		t.Fatalf("retryable archive error = %v", err)
+	}
+
+	active, err := dataStore.ListTransferJobs(ctx, admin.ID, 10, false)
+	if err != nil || len(active) != 3 {
+		t.Fatalf("active jobs=%#v err=%v", active, err)
+	}
+	archives, err := dataStore.ListTransferJobs(ctx, admin.ID, 10, true)
+	if err != nil || len(archives) != 1 || archives[0].ID != "failed" {
+		t.Fatalf("archived jobs=%#v err=%v", archives, err)
+	}
+	restored, err := dataStore.SetTransferArchived(ctx, admin.ID, "failed", false, time.Unix(202, 0))
+	if err != nil || restored.ArchivedAt != 0 {
+		t.Fatalf("restore job=%#v err=%v", restored, err)
+	}
+	events, err := dataStore.TransferEvents(ctx, admin.ID, "failed")
+	if err != nil || len(events) < 2 || events[len(events)-2].Message != "任务已归档" || events[len(events)-1].Message != "任务已恢复到当前列表" {
+		t.Fatalf("archive events=%#v err=%v", events, err)
+	}
+	active, err = dataStore.ListTransferJobs(ctx, admin.ID, 10, false)
+	if err != nil || len(active) != 4 {
+		t.Fatalf("restored active jobs=%#v err=%v", active, err)
+	}
+}

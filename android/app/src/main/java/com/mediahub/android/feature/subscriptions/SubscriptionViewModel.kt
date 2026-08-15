@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mediahub.android.core.network.ApiException
 import com.mediahub.android.core.network.MediaSubscription
+import com.mediahub.android.core.network.ProviderSourceSettings
 import com.mediahub.android.core.network.SearchCandidate
 import com.mediahub.android.core.network.SubscriptionInput
 import com.mediahub.android.core.network.SubscriptionPreferences
@@ -27,7 +28,8 @@ internal data class SubscriptionEditorState(
     val policy: String = "once",
     val enabled: Boolean = true,
     val intervalMinutes: String = "60",
-    val sourceIds: String = "",
+    val sourceIds: List<String> = emptyList(),
+    val qualityPreset: String = "standard",
     val resolutions: String = "",
     val videoCodecs: String = "",
     val dynamicRanges: String = "",
@@ -44,6 +46,7 @@ internal data class SubscriptionUiState(
     val selectedId: String? = null,
     val editor: SubscriptionEditorState = SubscriptionEditorState(),
     val runs: List<SubscriptionRun> = emptyList(),
+    val availableSources: List<ProviderSourceSettings> = emptyList(),
     val editing: Boolean = false,
     val loading: Boolean = false,
     val saving: Boolean = false,
@@ -86,7 +89,7 @@ class SubscriptionViewModel(
                 year = candidate.year.takeIf { it > 0 }?.toString() ?: "",
                 mediaType = candidate.mediaType,
                 season = candidate.season.toString(),
-                sourceIds = candidate.sourceId,
+                sourceIds = listOf(candidate.sourceId),
             ),
             runs = emptyList(),
             editing = true,
@@ -240,11 +243,22 @@ class SubscriptionViewModel(
     private suspend fun load(initial: Boolean) {
         if (initial) _uiState.value = _uiState.value.copy(loading = true)
         try {
+            val previousSelectedId = _uiState.value.selectedId
             val subscriptions = repository.subscriptions()
             val selectedId = _uiState.value.selectedId?.takeIf { id -> subscriptions.any { it.id == id } }
+            val selectionRemoved = previousSelectedId != null && selectedId == null
+            val sources = if (_uiState.value.availableSources.isEmpty()) {
+                runCatching { repository.providerSettings().sources }.getOrDefault(emptyList())
+            } else {
+                _uiState.value.availableSources
+            }
             _uiState.value = _uiState.value.copy(
                 subscriptions = subscriptions,
                 selectedId = selectedId,
+                editor = if (selectionRemoved) SubscriptionEditorState() else _uiState.value.editor,
+                runs = if (selectionRemoved) emptyList() else _uiState.value.runs,
+                editing = if (selectionRemoved) false else _uiState.value.editing,
+                availableSources = sources,
                 loading = false,
                 errorMessage = null,
             )
@@ -263,27 +277,31 @@ class SubscriptionViewModel(
     }
 }
 
-private fun editorFrom(item: MediaSubscription) = SubscriptionEditorState(
-    tmdbId = item.tmdbId,
-    title = item.title,
-    originalTitle = item.originalTitle,
-    year = item.year.takeIf { it > 0 }?.toString() ?: "",
-    mediaType = item.mediaType,
-    season = item.season.toString(),
-    policy = item.policy,
-    enabled = item.enabled,
-    intervalMinutes = item.intervalMinutes.toString(),
-    sourceIds = item.sourceIds.joinToString(", "),
-    resolutions = item.preferences.resolutions.joinToString(", "),
-    videoCodecs = item.preferences.videoCodecs.joinToString(", "),
-    dynamicRanges = item.preferences.dynamicRanges.joinToString(", "),
-    audioContains = item.preferences.audioContains.joinToString(", "),
-    preferredSources = item.preferences.preferredSources.joinToString(", "),
-    minSizeGiB = bytesToGiB(item.preferences.minSizeBytes),
-    maxSizeGiB = bytesToGiB(item.preferences.maxSizeBytes),
-    allowUnknownSize = item.preferences.allowUnknownSize,
-    preferSmaller = item.preferences.preferSmaller,
-)
+private fun editorFrom(item: MediaSubscription): SubscriptionEditorState {
+    val editor = SubscriptionEditorState(
+        tmdbId = item.tmdbId,
+        title = item.title,
+        originalTitle = item.originalTitle,
+        year = item.year.takeIf { it > 0 }?.toString() ?: "",
+        mediaType = item.mediaType,
+        season = item.season.toString(),
+        policy = item.policy,
+        enabled = item.enabled,
+        intervalMinutes = item.intervalMinutes.toString(),
+        sourceIds = item.sourceIds,
+        qualityPreset = "custom",
+        resolutions = item.preferences.resolutions.joinToString(", "),
+        videoCodecs = item.preferences.videoCodecs.joinToString(", "),
+        dynamicRanges = item.preferences.dynamicRanges.joinToString(", "),
+        audioContains = item.preferences.audioContains.joinToString(", "),
+        preferredSources = item.preferences.preferredSources.joinToString(", "),
+        minSizeGiB = bytesToGiB(item.preferences.minSizeBytes),
+        maxSizeGiB = bytesToGiB(item.preferences.maxSizeBytes),
+        allowUnknownSize = item.preferences.allowUnknownSize,
+        preferSmaller = item.preferences.preferSmaller,
+    )
+    return editor.copy(qualityPreset = inferQualityPreset(editor))
+}
 
 private fun inputFrom(editor: SubscriptionEditorState): SubscriptionInput? {
     val tmdbId = editor.tmdbId.trim()
@@ -302,7 +320,7 @@ private fun inputFrom(editor: SubscriptionEditorState): SubscriptionInput? {
         policy = editor.policy,
         enabled = editor.enabled,
         intervalMinutes = interval,
-        sourceIds = splitValues(editor.sourceIds),
+        sourceIds = editor.sourceIds,
         preferences = SubscriptionPreferences(
             resolutions = splitValues(editor.resolutions),
             videoCodecs = splitValues(editor.videoCodecs),
@@ -316,6 +334,31 @@ private fun inputFrom(editor: SubscriptionEditorState): SubscriptionInput? {
         ),
     )
 }
+
+internal fun applyQualityPreset(editor: SubscriptionEditorState, preset: String): SubscriptionEditorState {
+    if (preset == "custom") return editor.copy(qualityPreset = preset)
+    val next = editor.copy(
+        qualityPreset = preset,
+        resolutions = "", videoCodecs = "", dynamicRanges = "", audioContains = "", preferredSources = "",
+        minSizeGiB = "", maxSizeGiB = "", allowUnknownSize = false, preferSmaller = false,
+    )
+    return when (preset) {
+        "space" -> next.copy(resolutions = "1080p", videoCodecs = "HEVC", maxSizeGiB = "20", preferSmaller = true)
+        "balanced" -> next.copy(resolutions = "2160p, 1080p", videoCodecs = "HEVC, AVC", maxSizeGiB = "40", preferSmaller = true)
+        "quality" -> next.copy(resolutions = "2160p", dynamicRanges = "Dolby Vision, HDR10", minSizeGiB = "15")
+        else -> next.copy(qualityPreset = "standard")
+    }
+}
+
+internal fun inferQualityPreset(editor: SubscriptionEditorState): String {
+    val fields: (SubscriptionEditorState) -> List<Any> = { value -> listOf(
+        value.resolutions, value.videoCodecs, value.dynamicRanges, value.audioContains, value.preferredSources,
+        value.minSizeGiB, value.maxSizeGiB, value.allowUnknownSize, value.preferSmaller,
+    ) }
+    return listOf("standard", "space", "balanced", "quality")
+        .firstOrNull { fields(applyQualityPreset(editor, it)) == fields(editor) } ?: "custom"
+}
+
 
 private fun splitValues(value: String) = value.split(',').map(String::trim).filter(String::isNotEmpty).distinct()
 

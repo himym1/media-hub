@@ -263,22 +263,35 @@ class MediaHubApi(baseUrl: String) {
 
     suspend fun items(token: String, query: String): List<EmbyItem> {
         val encodedQuery = URLEncoder.encode(query, Charsets.UTF_8.name())
-        val payload = JSONObject(request("/api/v1/integrations/emby/items?query=$encodedQuery&limit=50", token = token))
-        val items = payload.getJSONArray("items")
-        return buildList(items.length()) {
-            for (index in 0 until items.length()) {
-                val item = items.getJSONObject(index)
-                add(
-                    EmbyItem(
-                        id = item.getString("id"),
-                        name = item.getString("name"),
-                        type = item.getString("type"),
-                        year = if (item.has("year")) item.getInt("year") else null,
-                        tmdbId = item.optJSONObject("providerIds")?.optionalString("Tmdb"),
-                    ),
-                )
-            }
-        }
+        return parseEmbyPage(JSONObject(request("/api/v1/integrations/emby/items?query=$encodedQuery&limit=50", token = token))).items
+    }
+
+    suspend fun libraryItems(token: String, libraryId: String, offset: Int, limit: Int): EmbyItemPage =
+        parseEmbyPage(JSONObject(request(
+            "/api/v1/integrations/emby/libraries/${encode(libraryId)}/items?offset=$offset&limit=$limit",
+            token = token,
+        )))
+
+    suspend fun itemDetails(token: String, itemId: String): EmbyItemDetail {
+        val payload = JSONObject(request("/api/v1/integrations/emby/items/${encode(itemId)}", token = token))
+        return EmbyItemDetail(
+            item = parseEmbyItem(payload),
+            originalTitle = payload.optionalString("originalTitle"),
+            overview = payload.optionalString("overview"),
+            communityRating = if (payload.has("communityRating")) payload.getDouble("communityRating") else null,
+            runtimeMinutes = if (payload.has("runtimeMinutes")) payload.getInt("runtimeMinutes") else null,
+            genres = payload.optJSONArray("genres")?.strings().orEmpty(),
+            mediaSourceCount = payload.getInt("mediaSourceCount"),
+            externalUrl = payload.getString("externalUrl"),
+        )
+    }
+
+    suspend fun refreshLibrary(token: String, libraryId: String) {
+        request("/api/v1/integrations/emby/libraries/${encode(libraryId)}/refresh", method = "POST", token = token)
+    }
+
+    suspend fun refreshItem(token: String, itemId: String) {
+        request("/api/v1/integrations/emby/items/${encode(itemId)}/refresh", method = "POST", token = token)
     }
 
 
@@ -334,8 +347,8 @@ class MediaHubApi(baseUrl: String) {
         return parseTransferJob(JSONObject(response))
     }
 
-    suspend fun transfers(token: String, limit: Int = 50): List<TransferJob> {
-        val payload = JSONObject(request("/api/v1/transfers?limit=$limit", token = token))
+    suspend fun transfers(token: String, limit: Int = 50, archived: Boolean = false): List<TransferJob> {
+        val payload = JSONObject(request("/api/v1/transfers?limit=$limit&archived=$archived", token = token))
         val items = payload.getJSONArray("transfers")
         return buildList(items.length()) {
             for (index in 0 until items.length()) add(parseTransferJob(items.getJSONObject(index)))
@@ -348,6 +361,13 @@ class MediaHubApi(baseUrl: String) {
 
     suspend fun retryTransfer(token: String, id: String): TransferJob {
         return parseTransferJob(JSONObject(request("/api/v1/transfers/$id/retry", method = "POST", token = token)))
+    }
+
+    suspend fun setTransferArchived(token: String, id: String, archived: Boolean): TransferJob {
+        val body = JSONObject().put("archived", archived).toString()
+        return parseTransferJob(JSONObject(request(
+            "/api/v1/transfers/${encode(id)}/archived", method = "PATCH", body = body, token = token,
+        )))
     }
 
     suspend fun transferNotifications(token: String): List<TransferNotification> {
@@ -504,6 +524,25 @@ class MediaHubApi(baseUrl: String) {
         )
     }
 
+    private fun parseEmbyPage(payload: JSONObject): EmbyItemPage {
+        val items = payload.getJSONArray("items")
+        return EmbyItemPage(
+            items = buildList(items.length()) {
+                for (index in 0 until items.length()) add(parseEmbyItem(items.getJSONObject(index)))
+            },
+            total = payload.getInt("total"),
+        )
+    }
+
+    private fun parseEmbyItem(item: JSONObject) = EmbyItem(
+        id = item.getString("id"),
+        name = item.getString("name"),
+        type = item.getString("type"),
+        year = if (item.has("year")) item.getInt("year") else null,
+        tmdbId = item.optJSONObject("providerIds")?.optionalString("Tmdb"),
+    )
+
+
     private fun parseTransferJob(item: JSONObject): TransferJob {
         val events = item.optJSONArray("events")
         return TransferJob(
@@ -520,6 +559,7 @@ class MediaHubApi(baseUrl: String) {
             errorCode = item.optionalString("errorCode"),
             errorMessage = item.optionalString("errorMessage"),
             retryable = item.getBoolean("retryable"),
+            archived = item.optBoolean("archived", false),
             createdAt = item.getString("createdAt"),
             updatedAt = item.getString("updatedAt"),
             events = if (events == null) emptyList() else buildList(events.length()) {

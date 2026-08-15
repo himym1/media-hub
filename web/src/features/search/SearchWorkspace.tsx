@@ -100,11 +100,15 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
       if (!window.confirm('Provider 设置尚未保存。确定离开并放弃修改吗？')) return false
       updateProviderDirty(false)
     }
+    const current = new URLSearchParams(window.location.search)
     commitUrl({
       view: viewSlugs[next],
-      q: next === '发现' ? new URLSearchParams(window.location.search).get('q') : null,
-      task: next === '任务' ? new URLSearchParams(window.location.search).get('task') : null,
-      settings: next === '服务' ? new URLSearchParams(window.location.search).get('settings') : null,
+      q: next === '发现' ? current.get('q') : null,
+      task: next === '任务' ? current.get('task') : null,
+      archive: next === '任务' ? current.get('archive') : null,
+      library: next === '媒体库' ? current.get('library') : null,
+      media: next === '媒体库' ? current.get('media') : null,
+      settings: next === '服务' ? current.get('settings') : null,
     })
     setActiveView(next)
     window.scrollTo({ top: 0 })
