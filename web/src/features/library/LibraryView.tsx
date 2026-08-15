@@ -133,11 +133,14 @@ export function LibraryView() {
       {mutationError ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{mutationError.message}</span></div> : null}
 
       <nav className="library-selector" aria-label="Emby 媒体库">
-        {libraries.data?.libraries.map((library) => (
-          <button aria-pressed={library.id === libraryId} className={library.id === libraryId ? 'library-button selected' : 'library-button'} key={library.id} onClick={() => selectLibrary(library.id)} type="button">
-            <FolderOpen size={18} /><span><strong>{library.name}</strong><small>{library.collectionType || '媒体库'}</small></span>
-          </button>
-        ))}
+        {libraries.data?.libraries.map((library) => {
+          const typeLabel = libraryCollectionLabel(library.collectionType)
+          return (
+            <button aria-pressed={library.id === libraryId} className={library.id === libraryId ? 'library-button selected' : 'library-button'} key={library.id} onClick={() => selectLibrary(library.id)} type="button">
+              <FolderOpen size={18} /><span><strong>{library.name}</strong>{typeLabel.toLocaleLowerCase() !== library.name.trim().toLocaleLowerCase() ? <small>{typeLabel}</small> : null}</span>
+            </button>
+          )
+        })}
       </nav>
 
       <div className="library-toolbar">
@@ -194,4 +197,10 @@ export function LibraryView() {
 
 function LibraryItemButton({ item, selected, onSelect }: { item: EmbyItem; selected: boolean; onSelect: (id: string) => void }) {
   return <button aria-pressed={selected} className={selected ? 'library-item selected' : 'library-item'} onClick={() => onSelect(item.id)} type="button"><span className="library-item-icon"><Film size={18} /></span><span><strong>{item.name}</strong><small>{item.type === 'Movie' ? '电影' : '剧集'}{item.year ? ` · ${item.year}` : ''}{item.providerIds?.Tmdb ? ` · TMDB ${item.providerIds.Tmdb}` : ''}</small></span><ChevronRight size={17} /></button>
+}
+
+function libraryCollectionLabel(type?: string) {
+  if (type === 'movies') return '电影'
+  if (type === 'tvshows') return '剧集'
+  return '媒体库'
 }

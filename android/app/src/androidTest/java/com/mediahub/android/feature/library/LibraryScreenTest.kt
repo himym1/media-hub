@@ -3,6 +3,8 @@ package com.mediahub.android.feature.library
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -46,7 +48,8 @@ class LibraryScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("电影").assertIsSelected().assertHasClickAction().assertHeightIsAtLeast(48.dp)
+        composeRule.onNode(hasText("电影") and isSelectable())
+            .assertIsSelected().assertHasClickAction().assertHeightIsAtLeast(48.dp)
         composeRule.onNodeWithText("验收影片").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
         composeRule.onNodeWithContentDescription("刷新当前媒体库").assertHasClickAction().assertHeightIsAtLeast(48.dp)
         composeRule.runOnIdle { assertEquals("item-1", selectedItem) }

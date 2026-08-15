@@ -46,9 +46,10 @@ class SubscriptionEditorScreenTest {
         composeRule.onAllNodesWithText("原始标题").assertCountEquals(0)
 
         composeRule.onNodeWithText("资源来源").performScrollTo().assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
-        composeRule.onNodeWithText("不勾选时搜索全部已配置来源；暂不可用来源会自动跳过。").assertIsDisplayed()
+        composeRule.onNodeWithText("不勾选时搜索全部已配置来源；暂不可用来源会自动跳过。")
+            .performScrollTo().assertIsDisplayed()
 
         composeRule.onNodeWithText("高级规则与媒体身份").performScrollTo().performClick()
-        composeRule.onNodeWithText("原始标题").assertIsDisplayed()
+        composeRule.onNodeWithText("原始标题").performScrollTo().assertIsDisplayed()
     }
 }

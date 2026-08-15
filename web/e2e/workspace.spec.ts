@@ -103,7 +103,7 @@ test('terminal task can be archived and restored without deletion', async ({ pag
 test('library supports browsing item details and safe Emby actions', async ({ page }, testInfo) => {
   await installApiFixtures(page)
   await page.goto('/?view=library')
-  await expect(page.getByRole('button', { name: /电影.*movies/ })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: '电影', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('button', { name: /验收影片.*TMDB 100/ }).click()
   await expect(page.getByRole('heading', { name: '验收影片', level: 2 })).toBeVisible()
   await expect(page.getByText('用于验证媒体库详情。')).toBeVisible()

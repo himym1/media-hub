@@ -120,6 +120,7 @@ internal fun LibraryScreen(
             ) {
                 items(uiState.libraries, key = { it.id }) { library ->
                     val selected = library.id == uiState.selectedLibraryId
+                    val collection = collectionLabel(library.collectionType)
                     Row(
                         modifier = Modifier
                             .heightIn(min = 48.dp)
@@ -132,7 +133,9 @@ internal fun LibraryScreen(
                         Spacer(Modifier.width(8.dp))
                         Column {
                             MediaHubText(text = library.name, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            MediaHubText(text = collectionLabel(library.collectionType), color = MediaHubColors.TextMuted, fontSize = 12.sp)
+                            if (!library.name.equals(collection, ignoreCase = true)) {
+                                MediaHubText(text = collection, color = MediaHubColors.TextMuted, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
