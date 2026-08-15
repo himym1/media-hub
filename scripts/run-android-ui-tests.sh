@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-./android/gradlew -p android :app:connectedDebugAndroidTest
+./android/gradlew -p android :app:connectedDebugAndroidTest \
+    -Pandroid.testInstrumentationRunnerArguments.additionalTestOutputDir=/sdcard/Android/media/com.mediahub.android/additional_test_output
 
-report_dir="android/app/build/reports/androidTests/connected/screenshots"
-mkdir -p "$report_dir"
-adb pull /sdcard/Android/data/com.mediahub.android/files/mediahub-segmented-control.png "$report_dir/mediahub-segmented-control.png"
-adb pull /sdcard/Android/data/com.mediahub.android/files/mediahub-large-font.png "$report_dir/mediahub-large-font.png"
+output_dir="android/app/build/outputs/connected_android_test_additional_output"
+shopt -s globstar nullglob
+for screenshot in mediahub-segmented-control.png mediahub-large-font.png; do
+    matches=("$output_dir"/**/"$screenshot")
+    if (( ${#matches[@]} == 0 )) || [[ ! -s "${matches[0]}" ]]; then
+        echo "Missing Android UI evidence: $screenshot" >&2
+        exit 1
+    fi
+done

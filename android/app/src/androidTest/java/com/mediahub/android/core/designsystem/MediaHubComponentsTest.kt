@@ -1,6 +1,5 @@
 package com.mediahub.android.core.designsystem
 
-import android.graphics.Bitmap
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,12 +21,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.core.graphics.writeToTestStorage
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class MediaHubComponentsTest {
@@ -77,14 +75,7 @@ class MediaHubComponentsTest {
     }
     private fun saveScreenshot(image: ImageBitmap, name: String) {
         assertTrue(image.width > 0 && image.height > 0)
-        val screenshot = File(
-            checkNotNull(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)),
-            name,
-        )
-        screenshot.outputStream().use { output ->
-            assertTrue(image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, output))
-        }
-        assertTrue(screenshot.length() > 0)
+        image.asAndroidBitmap().writeToTestStorage(name.removeSuffix(".png"))
     }
 
 }
