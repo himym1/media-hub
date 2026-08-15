@@ -81,12 +81,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: |
-            cd android
-            ./gradlew :app:connectedDebugAndroidTest
-            mkdir -p app/build/reports/androidTests/connected/screenshots
-            adb pull /sdcard/Android/data/com.mediahub.android/files/mediahub-segmented-control.png app/build/reports/androidTests/connected/screenshots/mediahub-segmented-control.png
-            adb pull /sdcard/Android/data/com.mediahub.android/files/mediahub-large-font.png app/build/reports/androidTests/connected/screenshots/mediahub-large-font.png
+          script: bash scripts/run-android-ui-tests.sh
       - if: always()
         uses: actions/upload-artifact@v4
         with:

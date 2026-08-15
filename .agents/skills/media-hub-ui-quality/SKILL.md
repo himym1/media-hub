@@ -35,7 +35,7 @@ The Playwright suite must run both `desktop` and `mobile` projects. It must keep
 Run instrumented Compose tests on an API 35 emulator when one is available:
 
 ```bash
-./android/gradlew -p android :app:connectedDebugAndroidTest
+bash scripts/run-android-ui-tests.sh
 ```
 
 4. Inspect current Web screenshots at `1440x900` and `390x844` with the visual-hierarchy rubric: entry point, eye flow, weight distribution, and emphasis. Check Android screenshots at normal and 200% font scale when an emulator is available.
