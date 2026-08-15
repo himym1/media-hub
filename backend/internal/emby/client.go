@@ -301,22 +301,19 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 		return ItemDetail{}, ErrUpstreamResponse
 	}
 	query := url.Values{
-		"Fields":    {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,ProviderIds,RunTimeTicks"},
-		"Ids":       {itemID},
-		"Limit":     {"1"},
-		"Recursive": {"true"},
+		"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,ProviderIds,RunTimeTicks"},
 	}
+	endpointPath := path.Join("Items", itemID)
 	if configuration.userID != "" {
-		query.Set("UserId", configuration.userID)
+		endpointPath = path.Join("Users", configuration.userID, "Items", itemID)
 	}
-	var response itemResponse
-	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
+	var item baseItem
+	if err := c.getJSONWithNotFound(ctx, configuration, endpointPath, query, true, &item); err != nil {
 		return ItemDetail{}, err
 	}
-	if len(response.Items) != 1 || response.Items[0].ID != itemID || response.Items[0].Name == "" {
+	if item.ID != itemID || item.Name == "" {
 		return ItemDetail{}, ErrItemNotFound
 	}
-	item := response.Items[0]
 	externalURL, err := itemWebURL(configuration.baseURL, itemID)
 	if err != nil {
 		return ItemDetail{}, err
@@ -557,6 +554,29 @@ func (c *Client) getJSON(
 	authenticated bool,
 	target any,
 ) error {
+	return c.getJSONResponse(ctx, configuration, endpointPath, query, authenticated, false, target)
+}
+
+func (c *Client) getJSONWithNotFound(
+	ctx context.Context,
+	configuration clientConfig,
+	endpointPath string,
+	query url.Values,
+	authenticated bool,
+	target any,
+) error {
+	return c.getJSONResponse(ctx, configuration, endpointPath, query, authenticated, true, target)
+}
+
+func (c *Client) getJSONResponse(
+	ctx context.Context,
+	configuration clientConfig,
+	endpointPath string,
+	query url.Values,
+	authenticated bool,
+	mapNotFound bool,
+	target any,
+) error {
 	endpoint, err := endpointURL(configuration.baseURL, endpointPath, query)
 	if err != nil {
 		return err
@@ -578,6 +598,9 @@ func (c *Client) getJSON(
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 		return ErrUnauthorized
+	}
+	if mapNotFound && response.StatusCode == http.StatusNotFound {
+		return ErrItemNotFound
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return ErrUpstreamResponse

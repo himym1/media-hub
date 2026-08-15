@@ -21,6 +21,13 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 		switch request.URL.Path {
 		case "/Library/MediaFolders":
 			_, _ = w.Write([]byte(`{"Items":[{"Id":"library-1","Name":"电影","CollectionType":"movies"}],"TotalRecordCount":1}`))
+		case "/Users/user-1/Items/item-1":
+			query := request.URL.Query()
+			if query.Get("UserId") != "" || !strings.Contains(query.Get("Fields"), "Overview") {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"范海辛","OriginalTitle":"Van Helsing","Overview":"Monster hunter","Type":"Movie","ProductionYear":2004,"Path":"/private/movie.mkv","ProviderIds":{"Tmdb":"7131"},"CommunityRating":7.2,"RunTimeTicks":79200000000,"Genres":["Action"],"MediaSources":[{"Id":"source-1","Path":"/private/movie.mkv"}]}`))
 		case "/Items":
 			if request.URL.Query().Get("UserId") != "user-1" {
 				w.WriteHeader(http.StatusBadRequest)
@@ -28,12 +35,6 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 			}
 			query := request.URL.Query()
 			switch {
-			case query.Get("Ids") != "":
-				if query.Get("Ids") != "item-1" || !strings.Contains(query.Get("Fields"), "Overview") {
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-				_, _ = w.Write([]byte(`{"Items":[{"Id":"item-1","Name":"范海辛","OriginalTitle":"Van Helsing","Overview":"Monster hunter","Type":"Movie","ProductionYear":2004,"Path":"/private/movie.mkv","ProviderIds":{"Tmdb":"7131"},"CommunityRating":7.2,"RunTimeTicks":79200000000,"Genres":["Action"],"MediaSources":[{"Id":"source-1","Path":"/private/movie.mkv"}]}],"TotalRecordCount":1}`))
 			case query.Get("ParentId") != "":
 				if query.Get("ParentId") != "library-1" || query.Get("StartIndex") != "20" || query.Get("Limit") != "10" {
 					w.WriteHeader(http.StatusBadRequest)
@@ -113,6 +114,42 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 	ready, err := client.PlaybackReady(context.Background(), "item-1")
 	if err != nil || !ready {
 		t.Fatalf("playback ready=%v err=%v", ready, err)
+	}
+}
+
+func TestItemDetailsWithoutUserUsesDirectEndpointAndMapsOnlyNotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("X-Emby-Token") != "test-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch request.URL.Path {
+		case "/Items/item-1":
+			if request.URL.Query().Get("UserId") != "" || !strings.Contains(request.URL.Query().Get("Fields"), "MediaSources") {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","MediaSources":[]}`))
+		case "/Items/missing":
+			w.WriteHeader(http.StatusNotFound)
+		case "/Items/failure":
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusTeapot)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key", time.Second)
+	detail, err := client.ItemDetails(context.Background(), "item-1")
+	if err != nil || detail.ID != "item-1" {
+		t.Fatalf("item details: detail=%#v err=%v", detail, err)
+	}
+	if _, err := client.ItemDetails(context.Background(), "missing"); !errors.Is(err, ErrItemNotFound) {
+		t.Fatalf("missing item error=%v", err)
+	}
+	if _, err := client.ItemDetails(context.Background(), "failure"); !errors.Is(err, ErrUpstreamResponse) {
+		t.Fatalf("upstream failure error=%v", err)
 	}
 }
 
