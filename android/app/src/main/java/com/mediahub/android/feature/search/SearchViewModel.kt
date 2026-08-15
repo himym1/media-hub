@@ -17,8 +17,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class SearchUiState(
-    val query: String = "范海辛",
-    val submittedQuery: String = "范海辛",
+    val query: String = "",
+    val submittedQuery: String = "",
     val results: List<SearchCandidate> = emptyList(),
     val trending: List<DiscoveryItem> = emptyList(),
     val recommendations: List<DiscoveryItem> = emptyList(),
@@ -57,7 +57,6 @@ class SearchViewModel(
 
     fun refreshAll() {
         refreshOverview()
-        submitSearch()
         refreshTrending()
     }
 

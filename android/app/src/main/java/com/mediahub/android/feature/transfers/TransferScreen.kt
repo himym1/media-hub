@@ -9,10 +9,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,7 +29,6 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Clock3
 import com.composables.icons.lucide.ListTodo
-import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.RotateCcw
@@ -51,10 +48,7 @@ private val timeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.CH
     .withZone(ZoneId.systemDefault())
 
 @Composable
-internal fun TransferRoute(
-    viewModel: TransferViewModel,
-    onLogout: () -> Unit,
-) {
+internal fun TransferRoute(viewModel: TransferViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     DisposableEffect(viewModel) {
         viewModel.startPolling()
@@ -66,7 +60,6 @@ internal fun TransferRoute(
         onRefresh = viewModel::refresh,
         onRetry = viewModel::retry,
         onRetryNotification = viewModel::retryNotification,
-        onLogout = onLogout,
     )
 }
 
@@ -77,48 +70,29 @@ private fun TransferScreen(
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onRetryNotification: (TransferNotification) -> Unit,
-    onLogout: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MediaHubColors.Canvas)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 64.dp),
+            .padding(horizontal = 16.dp),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 22.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                MediaHubIcon(
-                    imageVector = Lucide.ListTodo,
-                    contentDescription = null,
-                    tint = MediaHubColors.Canvas,
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(MediaHubColors.Accent, RoundedCornerShape(8.dp))
-                        .padding(6.dp),
-                )
-                Spacer(Modifier.width(10.dp))
-                MediaHubText(text = "转存任务", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-            }
-            Row {
-                MediaHubIconButton(
-                    imageVector = Lucide.RefreshCw,
-                    contentDescription = "刷新任务",
-                    onClick = onRefresh,
-                    enabled = !uiState.refreshing,
-                )
-                MediaHubIconButton(
-                    imageVector = Lucide.LogOut,
-                    contentDescription = "退出登录",
-                    onClick = onLogout,
-                )
-            }
+            MediaHubText(
+                text = if (uiState.loading) "正在读取任务…" else "${uiState.jobs.size} 个任务",
+                modifier = Modifier.weight(1f),
+                color = MediaHubColors.TextMuted,
+                fontSize = 13.sp,
+            )
+            MediaHubIconButton(
+                imageVector = Lucide.RefreshCw,
+                contentDescription = "刷新任务",
+                onClick = onRefresh,
+                enabled = !uiState.refreshing,
+            )
         }
 
         uiState.errorMessage?.let { message ->
@@ -204,10 +178,10 @@ private fun TransferRow(job: TransferJob, selected: Boolean, onClick: () -> Unit
                 text = "${job.source} · ${formatTime(job.updatedAt)}",
                 modifier = Modifier.padding(top = 5.dp),
                 color = MediaHubColors.TextMuted,
-                fontSize = 10.sp,
+                fontSize = 12.sp,
             )
         }
-        MediaHubText(text = stateLabel(job.state), color = stateColor(job.state), fontSize = 10.sp)
+        MediaHubText(text = stateLabel(job.state), color = stateColor(job.state), fontSize = 12.sp)
     }
 }
 
@@ -225,7 +199,7 @@ private fun TransferDetail(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         MediaHubText(text = "状态记录", color = MediaHubColors.TextStrong, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-        job.errorMessage?.let { MediaHubText(text = it, color = MediaHubColors.Error, fontSize = 11.sp) }
+        job.errorMessage?.let { MediaHubText(text = it, color = MediaHubColors.Error, fontSize = 12.sp) }
         job.events.forEach { event ->
             Row(verticalAlignment = Alignment.Top) {
                 MediaHubIcon(
@@ -236,12 +210,12 @@ private fun TransferDetail(
                 )
                 Spacer(Modifier.width(9.dp))
                 Column {
-                    MediaHubText(text = stateLabel(event.state), color = MediaHubColors.TextStrong, fontSize = 11.sp)
+                    MediaHubText(text = stateLabel(event.state), color = MediaHubColors.TextStrong, fontSize = 12.sp)
                     MediaHubText(
                         text = "${event.message.ifEmpty { "状态已更新" }} · ${formatTime(event.createdAt)}",
                         modifier = Modifier.padding(top = 3.dp),
                         color = MediaHubColors.TextMuted,
-                        fontSize = 10.sp,
+                        fontSize = 12.sp,
                     )
                 }
             }
@@ -257,7 +231,7 @@ private fun TransferDetail(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
-                MediaHubText(text = "再次发送可能产生重复消息。", color = MediaHubColors.TextMuted, fontSize = 11.sp)
+                MediaHubText(text = "再次发送可能产生重复消息。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
                 MediaHubButton(
                     label = if (notificationRetrying) "正在提交" else "确认并重发通知",
                     icon = Lucide.RotateCcw,

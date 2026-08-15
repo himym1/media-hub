@@ -74,7 +74,7 @@ internal fun ProviderSettingsPanel(
         )
         if (!expanded) return@Column
         if (settings == null || draft == null) {
-            MediaHubText("正在读取加密设置", color = MediaHubColors.TextMuted, fontSize = 11.sp)
+            MediaHubText("正在读取加密设置", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             return@Column
         }
 
@@ -92,7 +92,7 @@ internal fun ProviderSettingsPanel(
                 onDraftChange(draft.copy(embyApiKey = it))
             }
             LabeledField("Emby 用户 ID", draft.embyUserId) { onDraftChange(draft.copy(embyUserId = it)) }
-            MediaHubText("用 115 App 在本页上方扫码授权。不需要开放平台开发者账号。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
+            MediaHubText("用 115 App 在本页上方扫码授权。不需要开放平台开发者账号。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             WeComModePicker(draft.wecom.sendMode) { nextMode ->
                 onDraftChange(draft.copy(wecom = draft.wecom.copy(
                     sendMode = nextMode, agentId = 0, toUser = if (nextMode == "app") "@all" else "", chatId = "",
@@ -118,7 +118,7 @@ internal fun ProviderSettingsPanel(
                 onClick = onTest,
                 modifier = Modifier.fillMaxWidth(),
             )
-            if (tested) MediaHubText("测试通知已提交", color = MediaHubColors.Source, fontSize = 11.sp)
+            if (tested) MediaHubText("测试通知已提交", color = MediaHubColors.Source, fontSize = 12.sp)
         }
 
         SettingsSection("工作流目标") {
@@ -134,7 +134,7 @@ internal fun ProviderSettingsPanel(
         }
 
         SettingsSection("原生资源源") {
-            MediaHubText("蜜柑和 Sidhub 使用内置匿名适配器；帧影使用站点账号；聚影可选择网页登录或开发者 API。癫影当前仍使用合同适配器。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
+            MediaHubText("蜜柑和 Sidhub 使用内置匿名适配器；帧影使用站点账号；聚影可选择网页登录或开发者 API。癫影当前仍使用合同适配器。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             settings.sources.forEachIndexed { index, source ->
                 val item = draft.sources[index]
                 val authMode = if (source.id == "juying") item.authMode.ifBlank { "web" } else ""
@@ -159,7 +159,7 @@ internal fun ProviderSettingsPanel(
             }
         }
 
-        if (saved) MediaHubText("设置已加密保存并立即应用", color = MediaHubColors.Source, fontSize = 11.sp)
+        if (saved) MediaHubText("设置已加密保存并立即应用", color = MediaHubColors.Source, fontSize = 12.sp)
         MediaHubButton(
             label = if (saving) "正在保存" else "保存服务设置",
             icon = Lucide.Save,
@@ -170,7 +170,7 @@ internal fun ProviderSettingsPanel(
         Row(verticalAlignment = Alignment.CenterVertically) {
             MediaHubIcon(imageVector = Lucide.KeyRound, contentDescription = null, tint = MediaHubColors.TextMuted)
             Spacer(Modifier.width(7.dp))
-            MediaHubText("密钥不回显；留空保持，显式选择后才清除。", color = MediaHubColors.TextMuted, fontSize = 10.sp)
+            MediaHubText("密钥不回显；留空保持，显式选择后才清除。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
         }
     }
 }
@@ -214,7 +214,7 @@ private fun ModePicker(value: String, options: List<Pair<String, String>>, onCha
                     .background(if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.SurfaceInput).padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                MediaHubText(label, color = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted, fontSize = 10.sp)
+                MediaHubText(label, color = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted, fontSize = 12.sp)
             }
         }
     }
@@ -229,7 +229,7 @@ private fun LabeledField(
     onChange: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        MediaHubText(label, color = MediaHubColors.TextMuted, fontSize = 10.sp)
+        MediaHubText(label, color = MediaHubColors.TextMuted, fontSize = 12.sp)
         MediaHubTextField(value, onChange, label, Modifier.fillMaxWidth(), keyboardType = keyboardType, password = password)
     }
 }
@@ -248,7 +248,7 @@ private fun SecretField(label: String, status: SecretStatus, value: SecretUpdate
                 .background(MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp)).padding(11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MediaHubText(if (value.clear) "将清除已保存密钥" else "保留已保存密钥", color = if (value.clear) MediaHubColors.Error else MediaHubColors.TextMuted, fontSize = 11.sp)
+            MediaHubText(if (value.clear) "将清除已保存密钥" else "保留已保存密钥", color = if (value.clear) MediaHubColors.Error else MediaHubColors.TextMuted, fontSize = 12.sp)
         }
     }
 }

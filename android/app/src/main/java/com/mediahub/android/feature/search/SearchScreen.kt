@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -35,7 +33,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.BellPlus
 import com.composables.icons.lucide.Film
-import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Wifi
@@ -53,15 +50,12 @@ import java.util.Locale
 @Composable
 internal fun SearchRoute(
     viewModel: SearchViewModel,
-    onLogout: () -> Unit,
     onTransferCreated: () -> Unit,
     onSubscriptionRequested: (SearchCandidate) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    LaunchedEffect(viewModel) {
-        viewModel.refreshAll()
-    }
+    LaunchedEffect(viewModel) { viewModel.refreshAll() }
     LaunchedEffect(viewModel, onTransferCreated) {
         viewModel.events.collect { event ->
             when (event) {
@@ -70,8 +64,6 @@ internal fun SearchRoute(
             }
         }
     }
-
-
     SearchScreen(
         uiState = uiState,
         onQueryChanged = viewModel::onQueryChanged,
@@ -82,7 +74,6 @@ internal fun SearchRoute(
         onRecommendationSelected = viewModel::searchRecommendation,
         onTransfer = viewModel::createTransfer,
         onSubscribe = viewModel::requestSubscription,
-        onLogout = onLogout,
     )
 }
 
@@ -97,32 +88,20 @@ private fun SearchScreen(
     onRecommendationSelected: (DiscoveryItem) -> Unit,
     onTransfer: (String) -> Unit,
     onSubscribe: (String) -> Unit,
-    onLogout: () -> Unit,
 ) {
     val selectedCandidate = uiState.selectedCandidate
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MediaHubColors.Canvas)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 64.dp),
+            .padding(horizontal = 16.dp),
     ) {
-        AppHeader(onLogout = onLogout)
         MediaHubText(
-            text = "找一部，",
-            fontSize = 38.sp,
-            fontWeight = FontWeight.SemiBold,
+            text = "搜索资源并加入自动转存流程",
+            modifier = Modifier.padding(top = 14.dp, bottom = 10.dp),
+            color = MediaHubColors.TextMuted,
+            fontSize = 13.sp,
         )
-        MediaHubText(
-            text = "看一部。",
-            color = MediaHubColors.Accent,
-            fontSize = 38.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(24.dp))
         MediaHubSearchField(
             value = uiState.query,
             onValueChange = onQueryChanged,
@@ -135,12 +114,12 @@ private fun SearchScreen(
             refreshing = uiState.refreshingOverview,
             onRefresh = onRefreshOverview,
         )
-        if (uiState.trending.isNotEmpty()) {
+        if (uiState.submittedQuery.isBlank() && uiState.trending.isNotEmpty()) {
             MediaHubText(
                 text = "本周热门",
-                modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+                modifier = Modifier.padding(top = 18.dp, bottom = 8.dp),
                 color = MediaHubColors.TextStrong,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
             )
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -149,22 +128,20 @@ private fun SearchScreen(
                 }
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 22.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MediaHubText(
-                text = if (uiState.searching) "正在搜索" else "搜索结果",
-                color = MediaHubColors.TextStrong,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Medium,
-            )
-            MediaHubText(
-                text = if (uiState.searching) "..." else "${uiState.results.size}",
-                color = MediaHubColors.Source,
-                fontSize = 12.sp,
-            )
+        if (uiState.submittedQuery.isNotBlank() || uiState.searching) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MediaHubText(
+                    text = if (uiState.searching) "正在搜索…" else "搜索结果",
+                    color = MediaHubColors.TextStrong,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                MediaHubText(text = if (uiState.searching) "" else "${uiState.results.size}", color = MediaHubColors.Source, fontSize = 13.sp)
+            }
         }
         uiState.errorMessage?.let { message ->
             StatusMessage(message, MediaHubColors.Error)
@@ -205,7 +182,7 @@ private fun SearchScreen(
                     }
                 }
             }
-            if (!uiState.searching && uiState.results.isEmpty() && uiState.errorMessage == null) {
+            if (!uiState.searching && uiState.submittedQuery.isNotBlank() && uiState.results.isEmpty() && uiState.errorMessage == null) {
                 item {
                     MediaHubText(
                         text = "没有找到匹配资源",
@@ -216,30 +193,30 @@ private fun SearchScreen(
                 }
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            MediaHubButton(
-                label = "订阅",
-                icon = Lucide.BellPlus,
-                enabled = selectedCandidate?.tmdbId != null && selectedCandidate.transferState != "identity_required",
-                modifier = Modifier.weight(0.35f),
-                onClick = { selectedCandidate?.let { onSubscribe(it.id) } },
-            )
-            MediaHubButton(
-                label = selectedCandidate?.let { candidate ->
-                    when {
-                        uiState.transferringCandidateId == candidate.id -> "正在创建任务"
-                        candidate.transferState == "identity_required" -> "身份待确认"
-                        candidate.transferToken == null -> "工作流不可用"
+        if (selectedCandidate != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                MediaHubButton(
+                    label = "订阅",
+                    icon = Lucide.BellPlus,
+                    enabled = selectedCandidate.tmdbId != null && selectedCandidate.transferState != "identity_required",
+                    modifier = Modifier.weight(0.35f),
+                    onClick = { onSubscribe(selectedCandidate.id) },
+                )
+                MediaHubButton(
+                    label = when {
+                        uiState.transferringCandidateId == selectedCandidate.id -> "正在创建…"
+                        selectedCandidate.transferState == "identity_required" -> "身份待确认"
+                        selectedCandidate.transferToken == null -> "不可转存"
                         else -> "开始转存"
-                    }
-                } ?: "选择版本",
-                enabled = selectedCandidate?.transferToken != null && uiState.transferringCandidateId == null,
-                modifier = Modifier.weight(0.65f),
-                onClick = { selectedCandidate?.let { onTransfer(it.id) } },
-            )
+                    },
+                    enabled = selectedCandidate.transferToken != null && uiState.transferringCandidateId == null,
+                    modifier = Modifier.weight(0.65f),
+                    onClick = { onTransfer(selectedCandidate.id) },
+                )
+            }
         }
     }
 }
@@ -262,46 +239,16 @@ private fun TrendingItem(item: DiscoveryItem, onClick: () -> Unit) {
         )
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            MediaHubText(text = item.title, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            MediaHubText(text = item.title, fontSize = 12.sp, fontWeight = FontWeight.Medium)
             MediaHubText(
                 text = "${item.year.takeIf { it > 0 } ?: "年份未知"} · ${if (item.mediaType == "movie") "电影" else "剧集"}",
                 color = MediaHubColors.TextMuted,
-                fontSize = 9.sp,
+                fontSize = 12.sp,
             )
         }
     }
 }
 
-@Composable
-private fun AppHeader(onLogout: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 28.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            MediaHubIcon(
-                imageVector = Lucide.Film,
-                contentDescription = null,
-                tint = MediaHubColors.Canvas,
-                modifier = Modifier
-                    .size(28.dp)
-                    .background(MediaHubColors.Accent, RoundedCornerShape(8.dp))
-                    .padding(6.dp),
-            )
-            Spacer(Modifier.width(9.dp))
-            Column {
-                MediaHubText(text = "MEDIA HUB", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                MediaHubText(text = "HOME MEDIA CONTROL", color = MediaHubColors.TextMuted, fontSize = 8.sp)
-            }
-        }
-        MediaHubIconButton(
-            imageVector = Lucide.LogOut,
-            contentDescription = "退出登录",
-            onClick = onLogout,
-        )
-    }
-}
 
 @Composable
 private fun StatusLine(
@@ -327,7 +274,7 @@ private fun StatusLine(
                     ?.joinToString(" · ") { "${it.label} ${statusLabel(it.status)}" }
                     ?: "尚未读取",
                 color = MediaHubColors.TextMuted,
-                fontSize = 10.sp,
+                fontSize = 12.sp,
             )
         }
         MediaHubIconButton(
@@ -347,7 +294,7 @@ private fun StatusMessage(message: String, color: androidx.compose.ui.graphics.C
             .padding(top = 10.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },
         color = color,
-        fontSize = 11.sp,
+        fontSize = 12.sp,
     )
 }
 
@@ -383,7 +330,7 @@ private fun ReleaseRow(
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
             )
-            MediaHubText(text = candidate.provider ?: candidate.source, color = MediaHubColors.Source, fontSize = 10.sp)
+            MediaHubText(text = candidate.provider ?: candidate.source, color = MediaHubColors.Source, fontSize = 12.sp)
         }
         MediaHubText(
             text = buildString {
@@ -394,12 +341,12 @@ private fun ReleaseRow(
                 candidate.release.audio?.let { append(" · ").append(it) }
             },
             color = MediaHubColors.TextSecondary,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
         )
         MediaHubText(
             text = formatBytes(candidate.release.sizeBytes),
             color = MediaHubColors.TextFaint,
-            fontSize = 10.sp,
+            fontSize = 12.sp,
         )
     }
 }

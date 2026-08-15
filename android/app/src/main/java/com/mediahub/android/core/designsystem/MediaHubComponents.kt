@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -96,7 +97,7 @@ fun MediaHubButton(
             )
             Box(Modifier.width(7.dp))
         }
-        MiuixText(label, fontSize = 12.sp)
+        MiuixText(label, fontSize = 13.sp)
     }
 }
 
@@ -128,6 +129,40 @@ fun MediaHubIconButton(
             contentDescription = contentDescription,
             modifier = Modifier.size(20.dp),
         )
+    }
+}
+
+@Composable
+fun MediaHubSegmentedControl(
+    options: List<Pair<String, String>>,
+    selected: String,
+    onSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MediaHubColors.SurfaceInput, RoundedCornerShape(8.dp))
+            .padding(3.dp),
+    ) {
+        options.forEach { (value, label) ->
+            val active = value == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(if (active) MediaHubColors.SurfaceSelected else Color.Transparent, RoundedCornerShape(6.dp))
+                    .selectable(selected = active, role = Role.Tab, onClick = { onSelected(value) })
+                    .padding(vertical = 11.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                MediaHubText(
+                    text = label,
+                    color = if (active) MediaHubColors.TextPrimary else MediaHubColors.TextMuted,
+                    fontSize = 13.sp,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
+        }
     }
 }
 
@@ -199,7 +234,7 @@ fun MediaHubTextField(
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-        textStyle = TextStyle(color = MediaHubColors.TextPrimary, fontSize = 13.sp),
+        textStyle = TextStyle(color = MediaHubColors.TextPrimary, fontSize = 14.sp),
         cursorBrush = SolidColor(MediaHubColors.Accent),
         decorationBox = { innerTextField ->
             Box(
@@ -208,7 +243,7 @@ fun MediaHubTextField(
                     .padding(horizontal = 12.dp, vertical = 12.dp),
             ) {
                 if (value.isEmpty()) {
-                    MediaHubText(text = placeholder, color = MediaHubColors.TextMuted, fontSize = 12.sp)
+                    MediaHubText(text = placeholder, color = MediaHubColors.TextMuted, fontSize = 13.sp)
                 }
                 innerTextField()
             }

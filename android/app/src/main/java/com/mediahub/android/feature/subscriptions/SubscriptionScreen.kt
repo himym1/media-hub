@@ -14,10 +14,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -45,7 +43,6 @@ import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.Clock3
-import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pause
 import com.composables.icons.lucide.Play
@@ -69,7 +66,6 @@ internal fun SubscriptionRoute(
     viewModel: SubscriptionViewModel,
     draft: SearchCandidate?,
     onDraftConsumed: () -> Unit,
-    onLogout: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
     DisposableEffect(viewModel) {
@@ -103,7 +99,6 @@ internal fun SubscriptionRoute(
             onExportConsumed = viewModel::consumeExport,
             onImport = viewModel::importBackup,
             onFileError = viewModel::reportFileError,
-            onLogout = onLogout,
         )
     }
 }
@@ -118,7 +113,6 @@ private fun SubscriptionListScreen(
     onExportConsumed: () -> Unit,
     onImport: (String) -> Unit,
     onFileError: (String) -> Unit,
-    onLogout: () -> Unit,
 ) {
     val context = LocalContext.current
     val createDocument = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -152,15 +146,17 @@ private fun SubscriptionListScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MediaHubColors.Canvas)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 64.dp),
+            .padding(horizontal = 16.dp),
     ) {
-        ScreenHeader(title = "订阅", onCreate = onCreate, onLogout = onLogout)
-        MediaHubText(text = "自动查找与转存", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MediaHubText(text = "${state.subscriptions.size} 个订阅", modifier = Modifier.weight(1f), color = MediaHubColors.TextMuted, fontSize = 13.sp)
+            MediaHubIconButton(Lucide.Plus, "新建订阅", onCreate)
+        }
         state.errorMessage?.let { ErrorLine(it) }
-        state.actionMessage?.let { MediaHubText(text = it, color = MediaHubColors.Source, fontSize = 11.sp) }
+        state.actionMessage?.let { MediaHubText(text = it, color = MediaHubColors.Source, fontSize = 12.sp) }
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -201,13 +197,13 @@ private fun SubscriptionListScreen(
                                 if (item.lastEpisode > 0) " · 已入库至 E${item.lastEpisode}" else "",
                             modifier = Modifier.padding(top = 5.dp),
                             color = MediaHubColors.TextMuted,
-                            fontSize = 10.sp,
+                            fontSize = 12.sp,
                         )
                     }
                     MediaHubText(
                         text = if (item.enabled) "运行中" else "已暂停",
                         color = if (item.enabled) MediaHubColors.Accent else MediaHubColors.TextMuted,
-                        fontSize = 10.sp,
+                        fontSize = 12.sp,
                     )
                 }
             }
@@ -245,12 +241,8 @@ private fun SubscriptionEditorScreen(
     val existing = state.selectedId != null
     var confirmingDelete by remember(state.selectedId) { mutableStateOf(false) }
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MediaHubColors.Canvas)
-            .statusBarsPadding()
-            .navigationBarsPadding(),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 92.dp),
+        modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
@@ -261,7 +253,7 @@ private fun SubscriptionEditorScreen(
                 MediaHubIconButton(Lucide.ArrowLeft, "返回订阅列表", onBack)
                 Column(Modifier.weight(1f)) {
                     MediaHubText(text = if (existing) "编辑订阅" else "新建订阅", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
-                    MediaHubText(text = "身份、版本偏好与调度", color = MediaHubColors.TextMuted, fontSize = 10.sp)
+                    MediaHubText(text = "身份、版本偏好与调度", color = MediaHubColors.TextMuted, fontSize = 12.sp)
                 }
             }
             state.errorMessage?.let { ErrorLine(it) }
@@ -341,22 +333,11 @@ private fun SubscriptionEditorScreen(
                 MediaHubText(text = "运行历史", modifier = Modifier.padding(top = 18.dp), fontSize = 17.sp, fontWeight = FontWeight.Medium)
             }
             items(state.runs, key = { it.id }) { run -> RunRow(run) }
-            if (state.runs.isEmpty()) item { MediaHubText(text = "还没有运行记录", color = MediaHubColors.TextMuted, fontSize = 11.sp) }
+            if (state.runs.isEmpty()) item { MediaHubText(text = "还没有运行记录", color = MediaHubColors.TextMuted, fontSize = 12.sp) }
         }
     }
 }
 
-@Composable
-private fun ScreenHeader(title: String, onCreate: () -> Unit, onLogout: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 24.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MediaHubText(text = title, modifier = Modifier.weight(1f), fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-        MediaHubIconButton(Lucide.Plus, "新建订阅", onCreate)
-        MediaHubIconButton(Lucide.LogOut, "退出登录", onLogout)
-    }
-}
 
 @Composable
 private fun LabeledField(
@@ -368,7 +349,7 @@ private fun LabeledField(
     enabled: Boolean = true,
 ) {
     Column {
-        MediaHubText(text = label, color = MediaHubColors.TextMuted, fontSize = 10.sp)
+        MediaHubText(text = label, color = MediaHubColors.TextMuted, fontSize = 12.sp)
         MediaHubTextField(
             value = value,
             onValueChange = onValueChange,
@@ -389,7 +370,7 @@ private fun OptionGroup(
     onSelected: (String) -> Unit,
 ) {
     Column {
-        MediaHubText(text = label, color = MediaHubColors.TextMuted, fontSize = 10.sp)
+        MediaHubText(text = label, color = MediaHubColors.TextMuted, fontSize = 12.sp)
         Row(Modifier.fillMaxWidth().padding(top = 7.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             values.forEach { (value, display) ->
                 Row(
@@ -400,7 +381,7 @@ private fun OptionGroup(
                         .padding(12.dp),
                     horizontalArrangement = Arrangement.Center,
                 ) {
-                    MediaHubText(text = display, color = if (selected == value) MediaHubColors.Accent else MediaHubColors.TextSecondary, fontSize = 11.sp)
+                    MediaHubText(text = display, color = if (selected == value) MediaHubColors.Accent else MediaHubColors.TextSecondary, fontSize = 12.sp)
                 }
             }
         }
@@ -419,7 +400,7 @@ private fun BooleanOption(label: String, checked: Boolean, onChanged: (Boolean) 
     ) {
         Spacer(Modifier.size(16.dp).background(if (checked) MediaHubColors.Accent else MediaHubColors.Border, RoundedCornerShape(4.dp)))
         Spacer(Modifier.width(10.dp))
-        MediaHubText(text = label, fontSize = 11.sp)
+        MediaHubText(text = label, fontSize = 12.sp)
     }
 }
 
@@ -437,8 +418,8 @@ private fun RunRow(run: SubscriptionRun) {
             ),
         )
         Column(Modifier.padding(start = 11.dp)) {
-            MediaHubText(text = runStateLabel(run.state), fontSize = 11.sp, fontWeight = FontWeight.Medium)
-            MediaHubText(text = run.message ?: "无补充信息", color = MediaHubColors.TextMuted, fontSize = 9.sp)
+            MediaHubText(text = runStateLabel(run.state), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            MediaHubText(text = run.message ?: "无补充信息", color = MediaHubColors.TextMuted, fontSize = 12.sp)
         }
     }
 }
@@ -450,7 +431,7 @@ private fun ErrorLine(message: String) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         MediaHubIcon(Lucide.CircleAlert, contentDescription = null, tint = MediaHubColors.Error, modifier = Modifier.size(16.dp))
-        MediaHubText(text = message, modifier = Modifier.padding(start = 8.dp), color = MediaHubColors.Error, fontSize = 11.sp)
+        MediaHubText(text = message, modifier = Modifier.padding(start = 8.dp), color = MediaHubColors.Error, fontSize = 12.sp)
     }
 }
 

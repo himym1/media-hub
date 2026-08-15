@@ -11,9 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -26,7 +24,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.FolderOpen
 import com.composables.icons.lucide.HardDrive
 import com.composables.icons.lucide.Lucide
@@ -42,7 +39,6 @@ import com.mediahub.android.core.designsystem.MediaHubTextField
 @Composable
 internal fun OperationsRoute(
     viewModel: OperationsViewModel,
-    onLogout: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
     OperationsScreen(
@@ -69,7 +65,6 @@ internal fun OperationsRoute(
         onCreateArchivePlan = viewModel::createArchivePlan,
         onConfirmArchive = viewModel::confirmArchive,
         onRetryArchive = viewModel::retryArchive,
-        onLogout = onLogout,
     )
 }
 
@@ -98,36 +93,27 @@ private fun OperationsScreen(
     onCreateArchivePlan: () -> Unit,
     onConfirmArchive: (com.mediahub.android.core.network.ArchivePlan) -> Unit,
     onRetryArchive: (com.mediahub.android.core.network.ArchivePlan) -> Unit,
-    onLogout: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .background(MediaHubColors.Canvas)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 20.dp),
-        contentPadding = PaddingValues(bottom = 84.dp),
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column {
-                    MediaHubText(text = "运维", color = MediaHubColors.TextPrimary, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
-                    MediaHubText(
-                        text = "原生运营模式",
-                        color = MediaHubColors.TextMuted,
-                        fontSize = 11.sp,
-                    )
-                }
-                Row {
-                    MediaHubIconButton(imageVector = Lucide.RefreshCw, contentDescription = "刷新", onClick = onRefresh)
-                    MediaHubIconButton(imageVector = Lucide.LogOut, contentDescription = "退出登录", onClick = onLogout)
-                }
+                MediaHubText(
+                    text = "115 文件操作、上传与归档",
+                    modifier = Modifier.weight(1f),
+                    color = MediaHubColors.TextMuted,
+                    fontSize = 13.sp,
+                )
+                MediaHubIconButton(imageVector = Lucide.RefreshCw, contentDescription = "刷新", onClick = onRefresh)
             }
         }
         state.error?.let { message ->
@@ -166,7 +152,7 @@ private fun Drive115Section(
     onNameChanged: (String) -> Unit,
     onCreate: () -> Unit,
     onConfirm: (com.mediahub.android.core.network.Drive115Command) -> Unit,
- ) {
+) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             com.mediahub.android.core.designsystem.MediaHubIcon(imageVector = Lucide.HardDrive, contentDescription = null, tint = MediaHubColors.Accent)
@@ -180,7 +166,7 @@ private fun Drive115Section(
                 Spacer(Modifier.padding(horizontal = 5.dp))
                 Column(Modifier.weight(1f)) {
                     MediaHubText(text = file.name, color = MediaHubColors.TextStrong, fontSize = 12.sp)
-                    MediaHubText(text = if (file.kind == "folder") "目录 ${file.id}" else "${formatBytes(file.size)} · ${file.id}", color = MediaHubColors.TextMuted, fontSize = 9.sp)
+                    MediaHubText(text = if (file.kind == "folder") "目录 ${file.id}" else "${formatBytes(file.size)} · ${file.id}", color = MediaHubColors.TextMuted, fontSize = 12.sp)
                 }
             }
         }
@@ -193,8 +179,8 @@ private fun Drive115Section(
         MediaHubButton(label = if (state.driveInvoking) "正在持久化" else if (state.driveOperation == "delete") "创建待确认删除命令" else "创建命令", onClick = onCreate, enabled = !state.driveInvoking, modifier = Modifier.fillMaxWidth())
         state.driveCommands.take(8).forEach { command ->
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) { MediaHubText(text = command.operation, color = MediaHubColors.TextStrong, fontSize = 12.sp); MediaHubText(text = command.id, color = MediaHubColors.TextMuted, fontSize = 9.sp) }
-                MediaHubText(text = commandStateLabel(command.state), color = commandStateColor(command.state), fontSize = 10.sp)
+                Column(Modifier.weight(1f)) { MediaHubText(text = command.operation, color = MediaHubColors.TextStrong, fontSize = 12.sp); MediaHubText(text = command.id, color = MediaHubColors.TextMuted, fontSize = 12.sp) }
+                MediaHubText(text = commandStateLabel(command.state), color = commandStateColor(command.state), fontSize = 12.sp)
                 if (command.state in setOf("awaiting_confirmation", "failed", "needs_attention")) MediaHubButton(label = if (command.state == "awaiting_confirmation") "确认删除" else "确认重试", onClick = { onConfirm(command) })
             }
         }
@@ -210,7 +196,7 @@ private fun LocalUploadSection(
     onDestinationChanged: (String) -> Unit,
     onCreate: () -> Unit,
     onRetry: (com.mediahub.android.core.network.LocalUploadJob) -> Unit,
- ) {
+) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             com.mediahub.android.core.designsystem.MediaHubIcon(imageVector = Lucide.Upload, contentDescription = null, tint = MediaHubColors.Accent)
@@ -267,7 +253,7 @@ private fun JsonResult(value: String) {
     MediaHubText(
         text = value,
         color = MediaHubColors.TextSecondary,
-        fontSize = 11.sp,
+        fontSize = 12.sp,
         modifier = Modifier.fillMaxWidth().background(MediaHubColors.SurfaceInput).padding(12.dp),
     )
 }
@@ -296,7 +282,7 @@ private fun ArchiveSection(
     onPreview: () -> Unit, onToggle: (String) -> Unit, onNameChanged: (String, String) -> Unit,
     onCreate: () -> Unit, onConfirm: (com.mediahub.android.core.network.ArchivePlan) -> Unit,
     onRetry: (com.mediahub.android.core.network.ArchivePlan) -> Unit,
- ) {
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         com.mediahub.android.core.designsystem.MediaHubIcon(
             imageVector = Lucide.FolderOpen,
@@ -309,7 +295,7 @@ private fun ArchiveSection(
             MediaHubText(
                 "预览只生成建议；选中的步骤落库并以计划 ID 二次确认后执行",
                 color = MediaHubColors.TextMuted,
-                fontSize = 10.sp,
+                fontSize = 12.sp,
             )
         }
     }
@@ -322,7 +308,7 @@ private fun ArchiveSection(
         Spacer(Modifier.height(8.dp))
         Column(Modifier.fillMaxWidth().background(MediaHubColors.Surface).padding(10.dp)) {
             MediaHubText(item.currentName, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            MediaHubText("${if(item.kind=="directory") "目录" else "文件"} · 需人工复核", color = MediaHubColors.TextSecondary, fontSize = 11.sp)
+            MediaHubText("${if(item.kind=="directory") "目录" else "文件"} · 需人工复核", color = MediaHubColors.TextSecondary, fontSize = 12.sp)
             Spacer(Modifier.height(6.dp))
             MediaHubButton(if(item.fileId in state.archiveSelected) "取消" else "选择", onClick = { onToggle(item.fileId) })
             Spacer(Modifier.height(6.dp))

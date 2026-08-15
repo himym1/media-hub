@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -25,14 +27,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.composables.icons.lucide.Film
 import com.composables.icons.lucide.LibraryBig
 import com.composables.icons.lucide.ListPlus
 import com.composables.icons.lucide.ListTodo
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
-import com.composables.icons.lucide.SquareTerminal
 import com.composables.icons.lucide.Settings2
+import com.composables.icons.lucide.SquareTerminal
 import com.mediahub.android.app.AppState
 import com.mediahub.android.app.AppViewModel
 import com.mediahub.android.app.MainDestination
@@ -42,6 +45,7 @@ import com.mediahub.android.core.config.ServerUrlStore
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
+import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTheme
 import com.mediahub.android.core.network.MediaHubApi
@@ -93,15 +97,11 @@ fun MediaHubApp() {
         val factory = remember(repository) { MediaHubViewModelFactory(repository) }
         val appViewModel = viewModel<AppViewModel>(factory = factory)
         val state by appViewModel.state.collectAsState()
-
         when (val currentState = state) {
-            AppState.Loading -> AppMessageScreen(title = "MEDIA HUB", message = "正在连接")
+            AppState.Loading -> AppMessageScreen(title = "MEDIA HUB", message = "正在连接…")
             AppState.Unauthenticated -> {
                 val authViewModel = viewModel<AuthViewModel>(factory = factory)
-                AuthRoute(
-                    viewModel = authViewModel,
-                    onAuthenticated = appViewModel::onAuthenticated,
-                )
+                AuthRoute(viewModel = authViewModel, onAuthenticated = appViewModel::onAuthenticated)
             }
             AppState.Authenticated -> AuthenticatedWorkspace(
                 appViewModel = appViewModel,
@@ -130,120 +130,115 @@ private fun AuthenticatedWorkspace(
 ) {
     val destination by appViewModel.destination.collectAsState()
     val subscriptionDraft by appViewModel.subscriptionDraft.collectAsState()
-    Box(Modifier.fillMaxSize().background(MediaHubColors.Canvas)) {
-        when (destination) {
-            MainDestination.Search -> {
-                val searchViewModel = viewModel<SearchViewModel>(factory = factory)
-                SearchRoute(
-                    viewModel = searchViewModel,
-                    onLogout = appViewModel::logout,
-                    onTransferCreated = { appViewModel.showDestination(MainDestination.Transfers) },
-                    onSubscriptionRequested = appViewModel::prepareSubscription,
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MediaHubColors.Canvas)
+            .statusBarsPadding(),
+    ) {
+        WorkspaceTopBar(
+            destination = destination,
+            onSystemSelected = {
+                appViewModel.showDestination(
+                    if (destination == MainDestination.Services) MainDestination.Operations else MainDestination.Services,
                 )
-            }
-            MainDestination.Subscriptions -> {
-                val subscriptionViewModel = viewModel<SubscriptionViewModel>(factory = factory)
-                SubscriptionRoute(
-                    viewModel = subscriptionViewModel,
-                    draft = subscriptionDraft,
-                    onDraftConsumed = appViewModel::consumeSubscriptionDraft,
-                    onLogout = appViewModel::logout,
-                )
-            }
-            MainDestination.Transfers -> {
-                val transferViewModel = viewModel<TransferViewModel>(factory = factory)
-                TransferRoute(
-                    viewModel = transferViewModel,
-                    onLogout = appViewModel::logout,
-                )
-            }
-            MainDestination.Library -> {
-                val libraryViewModel = viewModel<LibraryViewModel>(factory = factory)
-                LibraryRoute(
-                    viewModel = libraryViewModel,
-                    onLogout = appViewModel::logout,
-                )
-            }
-            MainDestination.Operations -> {
-                val operationsViewModel = viewModel<OperationsViewModel>(factory = factory)
-                OperationsRoute(
-                    viewModel = operationsViewModel,
-                    onLogout = appViewModel::logout,
-                )
-            }
-            MainDestination.Services -> {
-                val servicesViewModel = viewModel<ServicesViewModel>(factory = factory)
-                ServicesRoute(
-                    viewModel = servicesViewModel,
-                    onLogout = appViewModel::logout,
-                onChangeServer = onChangeServer,
-                )
+            },
+        )
+        Box(Modifier.weight(1f)) {
+            when (destination) {
+                MainDestination.Search -> {
+                    val searchViewModel = viewModel<SearchViewModel>(factory = factory)
+                    SearchRoute(
+                        viewModel = searchViewModel,
+                        onTransferCreated = { appViewModel.showDestination(MainDestination.Transfers) },
+                        onSubscriptionRequested = appViewModel::prepareSubscription,
+                    )
+                }
+                MainDestination.Transfers -> {
+                    val transferViewModel = viewModel<TransferViewModel>(factory = factory)
+                    TransferRoute(viewModel = transferViewModel)
+                }
+                MainDestination.Subscriptions -> {
+                    val subscriptionViewModel = viewModel<SubscriptionViewModel>(factory = factory)
+                    SubscriptionRoute(
+                        viewModel = subscriptionViewModel,
+                        draft = subscriptionDraft,
+                        onDraftConsumed = appViewModel::consumeSubscriptionDraft,
+                    )
+                }
+                MainDestination.Library -> {
+                    val libraryViewModel = viewModel<LibraryViewModel>(factory = factory)
+                    LibraryRoute(viewModel = libraryViewModel)
+                }
+                MainDestination.Operations -> {
+                    val operationsViewModel = viewModel<OperationsViewModel>(factory = factory)
+                    OperationsRoute(viewModel = operationsViewModel)
+                }
+                MainDestination.Services -> {
+                    val servicesViewModel = viewModel<ServicesViewModel>(factory = factory)
+                    ServicesRoute(
+                        viewModel = servicesViewModel,
+                        onLogout = appViewModel::logout,
+                        onChangeServer = onChangeServer,
+                    )
+                }
             }
         }
-        MainNavigationBar(
-            selected = destination,
-            onSelected = appViewModel::showDestination,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
+        MainNavigationBar(selected = destination, onSelected = appViewModel::showDestination)
     }
 }
 
 @Composable
-private fun MainNavigationBar(
-    selected: MainDestination,
-    onSelected: (MainDestination) -> Unit,
-    modifier: Modifier = Modifier,
-) {
+private fun WorkspaceTopBar(destination: MainDestination, onSystemSelected: () -> Unit) {
     Row(
-        modifier = modifier
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(60.dp)
+            .border(width = 1.dp, color = MediaHubColors.Border)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MediaHubIcon(
+            imageVector = Lucide.Film,
+            contentDescription = null,
+            tint = MediaHubColors.Accent,
+            modifier = Modifier.size(22.dp),
+        )
+        Column(modifier = Modifier.weight(1f).padding(start = 11.dp)) {
+            MediaHubText(text = destinationTitle(destination), fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+            MediaHubText(text = if (destination == MainDestination.Operations || destination == MainDestination.Services) "系统管理" else "Media Hub", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+        }
+        MediaHubIconButton(
+            imageVector = if (destination == MainDestination.Services) Lucide.SquareTerminal else Lucide.Settings2,
+            contentDescription = if (destination == MainDestination.Services) "打开运维工具" else "打开系统设置",
+            onClick = onSystemSelected,
+        )
+    }
+}
+
+private fun destinationTitle(destination: MainDestination) = when (destination) {
+    MainDestination.Search -> "发现"
+    MainDestination.Transfers -> "任务"
+    MainDestination.Subscriptions -> "订阅"
+    MainDestination.Library -> "媒体库"
+    MainDestination.Operations -> "运维"
+    MainDestination.Services -> "服务与设置"
+}
+
+@Composable
+private fun MainNavigationBar(selected: MainDestination, onSelected: (MainDestination) -> Unit) {
+    Row(
+        modifier = Modifier
             .fillMaxWidth()
             .background(MediaHubColors.Surface)
             .border(width = 1.dp, color = MediaHubColors.Border)
             .navigationBarsPadding()
-            .height(64.dp),
+            .height(66.dp),
     ) {
-        NavigationItem(
-            label = "发现",
-            icon = Lucide.Search,
-            selected = selected == MainDestination.Search,
-            onClick = { onSelected(MainDestination.Search) },
-            modifier = Modifier.weight(1f),
-        )
-        NavigationItem(
-            label = "订阅",
-            icon = Lucide.ListPlus,
-            selected = selected == MainDestination.Subscriptions,
-            onClick = { onSelected(MainDestination.Subscriptions) },
-            modifier = Modifier.weight(1f),
-        )
-        NavigationItem(
-            label = "任务",
-            icon = Lucide.ListTodo,
-            selected = selected == MainDestination.Transfers,
-            onClick = { onSelected(MainDestination.Transfers) },
-            modifier = Modifier.weight(1f),
-        )
-        NavigationItem(
-            label = "媒体库",
-            icon = Lucide.LibraryBig,
-            selected = selected == MainDestination.Library,
-            onClick = { onSelected(MainDestination.Library) },
-            modifier = Modifier.weight(1f),
-        )
-        NavigationItem(
-            label = "运维",
-            icon = Lucide.SquareTerminal,
-            selected = selected == MainDestination.Operations,
-            onClick = { onSelected(MainDestination.Operations) },
-            modifier = Modifier.weight(1f),
-        )
-        NavigationItem(
-            label = "服务",
-            icon = Lucide.Settings2,
-            selected = selected == MainDestination.Services,
-            onClick = { onSelected(MainDestination.Services) },
-            modifier = Modifier.weight(1f),
-        )
+        NavigationItem("发现", Lucide.Search, selected == MainDestination.Search, { onSelected(MainDestination.Search) }, Modifier.weight(1f))
+        NavigationItem("任务", Lucide.ListTodo, selected == MainDestination.Transfers, { onSelected(MainDestination.Transfers) }, Modifier.weight(1f))
+        NavigationItem("订阅", Lucide.ListPlus, selected == MainDestination.Subscriptions, { onSelected(MainDestination.Subscriptions) }, Modifier.weight(1f))
+        NavigationItem("媒体库", Lucide.LibraryBig, selected == MainDestination.Library, { onSelected(MainDestination.Library) }, Modifier.weight(1f))
     }
 }
 
@@ -256,23 +251,12 @@ private fun NavigationItem(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxHeight()
-            .selectable(selected = selected, role = Role.Tab, onClick = onClick),
+        modifier = modifier.fillMaxHeight().selectable(selected = selected, role = Role.Tab, onClick = onClick),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        MediaHubIcon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted,
-        )
-        MediaHubText(
-            text = label,
-            modifier = Modifier.padding(top = 4.dp),
-            color = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted,
-            fontSize = 10.sp,
-        )
+        MediaHubIcon(imageVector = icon, contentDescription = null, tint = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted)
+        MediaHubText(text = label, modifier = Modifier.padding(top = 4.dp), color = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted, fontSize = 12.sp)
     }
 }
 
@@ -289,19 +273,9 @@ private fun AppMessageScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         MediaHubText(text = title, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-        MediaHubText(
-            text = message,
-            modifier = Modifier.padding(top = 10.dp),
-            color = MediaHubColors.TextSecondary,
-            fontSize = 13.sp,
-        )
+        MediaHubText(text = message, modifier = Modifier.padding(top = 10.dp), color = MediaHubColors.TextSecondary, fontSize = 13.sp)
         if (actionLabel != null) {
-            MediaHubButton(
-                label = actionLabel,
-                icon = Lucide.RefreshCw,
-                onClick = onAction,
-                modifier = Modifier.padding(top = 22.dp),
-            )
+            MediaHubButton(label = actionLabel, icon = Lucide.RefreshCw, onClick = onAction, modifier = Modifier.padding(top = 22.dp))
         }
     }
 }

@@ -282,3 +282,25 @@
 .migration-command-list > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 52px; border-bottom: 1px solid #25282a; }
 .migration-command-list span { display: grid; gap: 2px; min-width: 0; }
 .migration-command-list small { color: #a4aaa7; overflow-wrap: anywhere; }
+
+/* Unified quiet system palette */
+.view-heading { border-color: var(--border); }
+.view-heading h2, .command-row { color: var(--text); }
+.view-heading h2 { font-size: 28px; letter-spacing: 0; }
+.service-state { color: var(--muted); border-color: var(--border-strong); font-size: 12px; }
+.service-state.healthy { color: var(--success); border-color: color-mix(in srgb, var(--success) 40%, var(--border)); }
+.form-field > span, .command-row small, .command-events li, .json-result { color: var(--muted); font-size: 12px; }
+.form-field input, .form-field select, .form-field textarea { color: var(--text); background: var(--surface-input); border-color: var(--border-strong); }
+.form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
+.primary-button { color: var(--bg); background: var(--accent); }
+.operation-groups { border-color: var(--border); }
+.operation-groups button { color: var(--muted); font-size: 13px; }
+.operation-groups button.active { color: var(--text); border-bottom-color: var(--accent); }
+.operation-console, .operation-history { background: var(--surface); border-color: var(--border); border-radius: 7px; }
+.command-row, .drive-command-list, .local-upload-jobs, .archive-suggestion, .migration-command-list { border-color: var(--border); }
+.command-row.active strong { color: var(--accent); }
+.json-result { background: var(--bg); border-color: var(--border); }
+.drive-files, .local-files { background: var(--border); border-color: var(--border); }
+.drive-files button, .local-files button { color: var(--text-secondary); background: var(--surface); }
+.drive-files button:not(:disabled):hover, .local-files button.active { color: var(--text); background: var(--surface-selected); }
+.drive-files small, .drive-command-list small, .local-files small, .local-upload-jobs small, .local-upload-submit > span, .archive-suggestion small, .migration-command-list small { color: var(--muted); font-size: 12px; }
