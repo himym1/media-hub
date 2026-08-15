@@ -34,10 +34,6 @@ func (c *Client) ReceiveShare(ctx context.Context, destinationID, shareCode, rec
 	if err != nil {
 		return err
 	}
-	fileID := "0"
-	if len(selected) > 0 {
-		fileID = strings.Join(selected, ",")
-	}
 	cookie := c.session()
 	if cookie == "" {
 		return ErrNotConfigured
@@ -46,6 +42,17 @@ func (c *Client) ReceiveShare(ctx context.Context, destinationID, shareCode, rec
 	if userID == "" {
 		return ErrUnauthorized
 	}
+	if len(selected) == 0 {
+		_, rootIDs, inspectErr := c.InspectShare(ctx, shareCode, receiveCode)
+		if inspectErr != nil {
+			return inspectErr
+		}
+		selected, err = normalizeShareFileIDs(rootIDs)
+		if err != nil || len(selected) == 0 {
+			return &WriteError{Code: "invalid_request", Err: ErrUpstreamResponse}
+		}
+	}
+	fileID := strings.Join(selected, ",")
 
 	values := url.Values{
 		"user_id":      {userID},
@@ -81,7 +88,7 @@ func (c *Client) ReceiveShare(ctx context.Context, destinationID, shareCode, rec
 		return &WriteError{Uncertain: true, Code: "invalid_response", Err: err}
 	}
 	errno := strings.Trim(string(payload.Errno), `"`)
-	if payload.State || errno == "4100024" {
+	if payload.State || errno == "4100024" || errno == "4000023" {
 		return nil
 	}
 	return &WriteError{Code: "provider_rejected", Err: ErrUpstreamResponse}
@@ -119,15 +126,15 @@ type shareDirectory struct {
 	depth int
 }
 
-func (c *Client) ShareVideoNames(ctx context.Context, shareCode, receiveCode string) ([]string, error) {
+func (c *Client) InspectShare(ctx context.Context, shareCode, receiveCode string) ([]string, []string, error) {
 	shareCode = strings.TrimSpace(shareCode)
 	receiveCode = strings.TrimSpace(receiveCode)
 	if !shareCodePattern.MatchString(shareCode) || !receiveCodePattern.MatchString(receiveCode) {
-		return nil, ErrUpstreamResponse
+		return nil, nil, ErrUpstreamResponse
 	}
 	cookie := c.session()
 	if cookie == "" {
-		return nil, ErrNotConfigured
+		return nil, nil, ErrNotConfigured
 	}
 
 	type shareItem struct {
@@ -139,6 +146,7 @@ func (c *Client) ShareVideoNames(ctx context.Context, shareCode, receiveCode str
 	directories := []shareDirectory{{}}
 	visited := map[string]struct{}{"__root__": {}}
 	names := make([]string, 0)
+	rootIDs := make([]string, 0)
 	totalEntries := 0
 	for len(directories) > 0 {
 		current := directories[0]
@@ -162,45 +170,49 @@ func (c *Client) ShareVideoNames(ctx context.Context, shareCode, receiveCode str
 				} `json:"data"`
 			}
 			if err := c.getJSONWithSession(ctx, c.shareSnapURL, query, cookie, &payload); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if !payload.State {
-				return nil, ErrUpstreamResponse
+				return nil, nil, ErrUpstreamResponse
 			}
 			if count, ok := shareInteger(payload.Data.Count); ok {
 				if count > shareSnapMaxEntries-directoryBaseEntries {
-					return nil, ErrUpstreamResponse
+					return nil, nil, ErrUpstreamResponse
 				}
 				if expected < 0 {
 					expected = count
 				} else if count != expected {
-					return nil, ErrUpstreamResponse
+					return nil, nil, ErrUpstreamResponse
 				}
 			} else if len(payload.Data.Count) != 0 && string(payload.Data.Count) != "null" {
-				return nil, ErrUpstreamResponse
+				return nil, nil, ErrUpstreamResponse
 			}
 			if len(payload.Data.List) == 0 {
 				if expected >= 0 && offset != expected {
-					return nil, ErrUpstreamResponse
+					return nil, nil, ErrUpstreamResponse
 				}
 				break
 			}
 			if expected >= 0 && offset+len(payload.Data.List) > expected {
-				return nil, ErrUpstreamResponse
+				return nil, nil, ErrUpstreamResponse
 			}
 			for _, item := range payload.Data.List {
 				totalEntries++
 				if totalEntries > shareSnapMaxEntries {
-					return nil, ErrUpstreamResponse
+					return nil, nil, ErrUpstreamResponse
 				}
 				isFile, ok := shareInteger(item.IsFile)
 				name := strings.TrimSpace(item.Name)
 				if !ok || (isFile != 0 && isFile != 1) || name == "" || len([]rune(name)) > 500 || strings.ContainsAny(name, "/\\\r\n\x00") {
-					return nil, ErrUpstreamResponse
+					return nil, nil, ErrUpstreamResponse
 				}
 				if isFile == 1 {
-					if shareID(item.FileID) == "" {
-						return nil, ErrUpstreamResponse
+					fileID := shareID(item.FileID)
+					if fileID == "" {
+						return nil, nil, ErrUpstreamResponse
+					}
+					if current.depth == 0 {
+						rootIDs = append(rootIDs, fileID)
 					}
 					if shareVideoName(name) {
 						names = append(names, name)
@@ -209,10 +221,13 @@ func (c *Client) ShareVideoNames(ctx context.Context, shareCode, receiveCode str
 				}
 				directoryID := shareID(item.DirID)
 				if directoryID == "" || current.depth >= shareSnapMaxDepth {
-					return nil, ErrUpstreamResponse
+					return nil, nil, ErrUpstreamResponse
+				}
+				if current.depth == 0 {
+					rootIDs = append(rootIDs, directoryID)
 				}
 				if _, exists := visited[directoryID]; exists {
-					return nil, ErrUpstreamResponse
+					return nil, nil, ErrUpstreamResponse
 				}
 				visited[directoryID] = struct{}{}
 				directories = append(directories, shareDirectory{id: directoryID, depth: current.depth + 1})
@@ -227,10 +242,10 @@ func (c *Client) ShareVideoNames(ctx context.Context, shareCode, receiveCode str
 			}
 		}
 	}
-	if len(names) == 0 {
-		return nil, ErrUpstreamResponse
+	if len(names) == 0 || len(rootIDs) == 0 {
+		return nil, nil, ErrUpstreamResponse
 	}
-	return names, nil
+	return names, rootIDs, nil
 }
 
 func shareVideoName(name string) bool {
@@ -283,9 +298,9 @@ func (s *AuthService) ReceiveShare(ctx context.Context, destinationID, shareCode
 	return s.drive.ReceiveShare(ctx, destinationID, shareCode, receiveCode, fileIDs)
 }
 
-func (s *AuthService) ShareVideoNames(ctx context.Context, shareCode, receiveCode string) ([]string, error) {
+func (s *AuthService) InspectShare(ctx context.Context, shareCode, receiveCode string) ([]string, []string, error) {
 	if err := s.prepareSession(ctx); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return s.drive.ShareVideoNames(ctx, shareCode, receiveCode)
+	return s.drive.InspectShare(ctx, shareCode, receiveCode)
 }

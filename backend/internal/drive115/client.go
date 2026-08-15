@@ -321,6 +321,10 @@ func (e *WriteError) SubmissionUncertain() bool {
 	return e != nil && e.Uncertain
 }
 
+func (e *WriteError) AutomaticRetryAllowed() bool {
+	return e != nil && e.Code != "provider_rejected" && e.Code != "invalid_request"
+}
+
 func (c *Client) ExecuteFileCommand(ctx context.Context, operation string, input map[string]any) error {
 	values := url.Values{}
 	endpoint := ""

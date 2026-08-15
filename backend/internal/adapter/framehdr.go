@@ -167,7 +167,7 @@ func (f *FrameHDR) StartTransfer(ctx context.Context, input search.TransferReque
 		if errors.As(err, &uncertain) && uncertain.SubmissionUncertain() {
 			return search.TransferResult{}, search.Failure{Code: "source_submission_unknown", Message: "115 分享接收结果未知，需要人工确认", Retryable: true}
 		}
-		return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "帧影资源接收到 115 失败", Retryable: true}
+		return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "帧影资源接收到 115 失败", Retryable: automaticWriteRetryAllowed(err)}
 	}
 	return search.TransferResult{
 		OperationID: input.IdempotencyKey, Status: "completed", FileID: input.DestinationID, Path: reference.Title, IsFile: false,

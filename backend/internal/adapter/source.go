@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strings"
 	"time"
@@ -20,9 +21,14 @@ type ShareReceiver interface {
 	ReceiveShare(ctx context.Context, destinationID, shareCode, receiveCode string, fileIDs []string) error
 }
 
-// ShareInspector lists media names from a share without importing it.
+// ShareInspector validates media names and returns the top-level entries to import.
 type ShareInspector interface {
-	ShareVideoNames(ctx context.Context, shareCode, receiveCode string) ([]string, error)
+	InspectShare(ctx context.Context, shareCode, receiveCode string) (videoNames, rootIDs []string, err error)
+}
+
+func automaticWriteRetryAllowed(err error) bool {
+	var classified interface{ AutomaticRetryAllowed() bool }
+	return !errors.As(err, &classified) || classified.AutomaticRetryAllowed()
 }
 
 func New(source config.SearchSource, timeout time.Duration, offline Offline, proxyURL *url.URL) search.TransferSource {

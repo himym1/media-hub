@@ -16,27 +16,35 @@ import (
 type juyingTransferTarget struct {
 	shareCode       string
 	receiveCode     string
+	shareFileIDs    []string
 	magnets         []string
 	shareVideoNames []string
+	shareRootIDs    []string
 	inspectErr      error
 	inspectCalls    int
 }
 
-func (t *juyingTransferTarget) ReceiveShare(_ context.Context, _ string, shareCode, receiveCode string, _ []string) error {
+func (t *juyingTransferTarget) ReceiveShare(_ context.Context, _ string, shareCode, receiveCode string, fileIDs []string) error {
 	t.shareCode = shareCode
 	t.receiveCode = receiveCode
+	t.shareFileIDs = append([]string(nil), fileIDs...)
 	return nil
 }
 
-func (t *juyingTransferTarget) ShareVideoNames(_ context.Context, _, _ string) ([]string, error) {
+func (t *juyingTransferTarget) InspectShare(_ context.Context, _, _ string) ([]string, []string, error) {
 	t.inspectCalls++
 	if t.inspectErr != nil {
-		return nil, t.inspectErr
+		return nil, nil, t.inspectErr
 	}
-	if t.shareVideoNames == nil {
-		return []string{"Van.Helsing.2004.2160p.mkv"}, nil
+	videoNames := t.shareVideoNames
+	if videoNames == nil {
+		videoNames = []string{"Van.Helsing.2004.2160p.mkv"}
 	}
-	return append([]string(nil), t.shareVideoNames...), nil
+	rootIDs := t.shareRootIDs
+	if rootIDs == nil {
+		rootIDs = []string{"10"}
+	}
+	return append([]string(nil), videoNames...), append([]string(nil), rootIDs...), nil
 }
 
 func (t *juyingTransferTarget) AddOfflineURLs(_ context.Context, _ string, urls []string) error {
@@ -90,8 +98,8 @@ func TestJuyingSearchAndTransfersSupportedResources(t *testing.T) {
 	if _, err := source.StartTransfer(context.Background(), search.TransferRequest{Reference: results[0].SourceRef, DestinationID: "dest", IdempotencyKey: "share-op"}); err != nil {
 		t.Fatal(err)
 	}
-	if target.shareCode != "shareABC123" || target.receiveCode != "WENG" {
-		t.Fatalf("share = %q/%q", target.shareCode, target.receiveCode)
+	if target.shareCode != "shareABC123" || target.receiveCode != "WENG" || len(target.shareFileIDs) != 1 || target.shareFileIDs[0] != "10" {
+		t.Fatalf("share target = %+v", target)
 	}
 	if results[1].SourceRef != "" || results[1].TransferState != "unavailable" {
 		t.Fatalf("magnet candidate remained transferable: %+v", results[1])

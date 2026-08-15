@@ -9,6 +9,17 @@ import (
 	"time"
 )
 
+func TestWriteErrorRejectsAutomaticRetryForDefinitiveFailures(t *testing.T) {
+	for _, code := range []string{"provider_rejected", "invalid_request"} {
+		if (&WriteError{Code: code, Err: ErrUpstreamResponse}).AutomaticRetryAllowed() {
+			t.Fatalf("code %q remained automatically retryable", code)
+		}
+	}
+	if !(&WriteError{Code: "temporary", Err: ErrUpstreamResponse}).AutomaticRetryAllowed() {
+		t.Fatal("temporary failure was blocked")
+	}
+}
+
 func TestReceiveShareSubmitsValidatedForm(t *testing.T) {
 	const cookie = "UID=123_session; CID=cid; SEID=seid"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
@@ -37,18 +48,22 @@ func TestReceiveShareSubmitsValidatedForm(t *testing.T) {
 }
 
 func TestReceiveShareTreatsAlreadyReceivedAsSuccess(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if request.FormValue("file_id") != "0" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		_, _ = w.Write([]byte(`{"state":false,"errno":4100024}`))
-	}))
-	defer server.Close()
-	client := NewClient("UID=123_session", time.Second)
-	client.shareReceiveURL = server.URL
-	if err := client.ReceiveShare(context.Background(), "0", "abc123", "", nil); err != nil {
-		t.Fatal(err)
+	for _, errno := range []string{"4100024", "4000023"} {
+		t.Run(errno, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+				if request.FormValue("file_id") != "10" {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				_, _ = w.Write([]byte(`{"state":false,"errno":` + errno + `}`))
+			}))
+			defer server.Close()
+			client := NewClient("UID=123_session", time.Second)
+			client.shareReceiveURL = server.URL
+			if err := client.ReceiveShare(context.Background(), "0", "abc123", "", []string{"10"}); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
@@ -85,7 +100,7 @@ func TestReceiveShareRejectsInvalidInputBeforeRequest(t *testing.T) {
 
 func TestReceiveShareMarksMalformedResponseUncertain(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if request.FormValue("file_id") != "0" {
+		if request.FormValue("file_id") != "10" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -94,7 +109,7 @@ func TestReceiveShareMarksMalformedResponseUncertain(t *testing.T) {
 	defer server.Close()
 	client := NewClient("UID=123_session", time.Second)
 	client.shareReceiveURL = server.URL
-	err := client.ReceiveShare(context.Background(), "0", "abc123", "", nil)
+	err := client.ReceiveShare(context.Background(), "0", "abc123", "", []string{"10"})
 	var writeErr *WriteError
 	if !errors.As(err, &writeErr) || !writeErr.Uncertain || writeErr.Code != "invalid_response" {
 		t.Fatalf("error = %#v", err)
@@ -112,7 +127,7 @@ func TestReceiveShareRejectsInvalidCookieUserIDBeforeSubmission(t *testing.T) {
 	for _, cookie := range []string{"CID=cid; SEID=seid", "UID=invalid_session; CID=cid; SEID=seid"} {
 		client := NewClient(cookie, time.Second)
 		client.shareReceiveURL = server.URL + "/receive"
-		err := client.ReceiveShare(context.Background(), "0", "abc123", "", nil)
+		err := client.ReceiveShare(context.Background(), "0", "abc123", "", []string{"10"})
 		if !errors.Is(err, ErrUnauthorized) {
 			t.Fatalf("cookie = %q error = %#v", cookie, err)
 		}
@@ -122,28 +137,38 @@ func TestReceiveShareRejectsInvalidCookieUserIDBeforeSubmission(t *testing.T) {
 	}
 }
 
-func TestReceiveShareUsesZeroToReceiveEntireShare(t *testing.T) {
+func TestReceiveShareInspectsRootIDsToReceiveEntireShare(t *testing.T) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		requests++
-		if request.Method != http.MethodPost || request.FormValue("user_id") != "123" || request.FormValue("file_id") != "0" || request.FormValue("cid") != "456" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/snap" && request.URL.Query().Get("cid") == "":
+			_, _ = w.Write([]byte(`{"state":true,"data":{"list":[{"fid":"10","fc":1,"n":"Van.Helsing.2004.mkv"},{"cid":"20","fc":0,"n":"Extras"}]}}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/snap" && request.URL.Query().Get("cid") == "20":
+			_, _ = w.Write([]byte(`{"state":true,"data":{"list":[{"fid":"30","fc":1,"n":"sample.mp4"}]}}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/receive":
+			if request.FormValue("user_id") != "123" || request.FormValue("file_id") != "10,20" || request.FormValue("cid") != "456" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_, _ = w.Write([]byte(`{"state":true}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
-		_, _ = w.Write([]byte(`{"state":true}`))
 	}))
 	defer server.Close()
 	client := NewClient("UID=123_session", time.Second)
-	client.shareReceiveURL = server.URL
+	client.shareSnapURL = server.URL + "/snap"
+	client.shareReceiveURL = server.URL + "/receive"
 	if err := client.ReceiveShare(context.Background(), "456", "abc123", "xy9z", nil); err != nil {
 		t.Fatal(err)
 	}
-	if requests != 1 {
+	if requests != 3 {
 		t.Fatalf("requests = %d", requests)
 	}
 }
 
-func TestShareVideoNamesListsNestedMediaWithoutReceiving(t *testing.T) {
+func TestInspectShareListsNestedMediaAndRootIDsWithoutReceiving(t *testing.T) {
 	const cookie = "UID=123_session; CID=cid; SEID=seid"
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
@@ -166,22 +191,22 @@ func TestShareVideoNamesListsNestedMediaWithoutReceiving(t *testing.T) {
 
 	client := NewClient(cookie, time.Second)
 	client.shareSnapURL = server.URL
-	names, err := client.ShareVideoNames(context.Background(), "abc123", "xy9z")
+	names, rootIDs, err := client.InspectShare(context.Background(), "abc123", "xy9z")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(names) != 1 || names[0] != "Van.Helsing.2004.2160p.mkv" || requests != 2 {
-		t.Fatalf("names=%#v requests=%d", names, requests)
+	if len(names) != 1 || names[0] != "Van.Helsing.2004.2160p.mkv" || len(rootIDs) != 2 || rootIDs[0] != "10" || rootIDs[1] != "11" || requests != 2 {
+		t.Fatalf("names=%#v roots=%#v requests=%d", names, rootIDs, requests)
 	}
 }
 
-func TestShareVideoNamesRejectsInvalidInputBeforeRequest(t *testing.T) {
+func TestInspectShareRejectsInvalidInputBeforeRequest(t *testing.T) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { requests++ }))
 	defer server.Close()
 	client := NewClient("UID=123_session", time.Second)
 	client.shareSnapURL = server.URL
-	if _, err := client.ShareVideoNames(context.Background(), "bad/code", ""); !errors.Is(err, ErrUpstreamResponse) {
+	if _, _, err := client.InspectShare(context.Background(), "bad/code", ""); !errors.Is(err, ErrUpstreamResponse) {
 		t.Fatalf("error = %#v", err)
 	}
 	if requests != 0 {

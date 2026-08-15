@@ -10,6 +10,20 @@ import (
 	"media-hub/backend/internal/search"
 )
 
+type classifiedWriteError bool
+
+func (e classifiedWriteError) Error() string               { return "classified write" }
+func (e classifiedWriteError) AutomaticRetryAllowed() bool { return bool(e) }
+
+func TestAutomaticWriteRetryClassification(t *testing.T) {
+	if automaticWriteRetryAllowed(classifiedWriteError(false)) {
+		t.Fatal("provider rejection remained automatically retryable")
+	}
+	if !automaticWriteRetryAllowed(classifiedWriteError(true)) || !automaticWriteRetryAllowed(http.ErrServerClosed) {
+		t.Fatal("retryable or unclassified failure was blocked")
+	}
+}
+
 func TestNewUsesBuiltinSourcesWhenURLEmpty(t *testing.T) {
 	for _, id := range []string{"mikan", "sidhub"} {
 		source := New(config.SearchSource{ID: id}, time.Second, nil, nil)

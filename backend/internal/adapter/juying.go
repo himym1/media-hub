@@ -285,19 +285,19 @@ func (s *Juying) StartTransfer(ctx context.Context, input search.TransferRequest
 		if !ok {
 			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "115 分享内容校验不可用", Retryable: false}
 		}
-		videoNames, err := inspector.ShareVideoNames(ctx, reference.ShareCode, reference.ReceiveCode)
+		videoNames, rootIDs, err := inspector.InspectShare(ctx, reference.ShareCode, reference.ReceiveCode)
 		if err != nil {
 			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "无法校验 115 分享内容", Retryable: true}
 		}
 		if !juyingShareMatchesResource(videoNames, reference.Title) {
 			return search.TransferResult{}, search.Failure{Code: "source_identity_mismatch", Message: "115 分享文件与聚影资源标题不一致", Retryable: false}
 		}
-		if err := s.receiver.ReceiveShare(ctx, input.DestinationID, reference.ShareCode, reference.ReceiveCode, nil); err != nil {
+		if err := s.receiver.ReceiveShare(ctx, input.DestinationID, reference.ShareCode, reference.ReceiveCode, rootIDs); err != nil {
 			var uncertain interface{ SubmissionUncertain() bool }
 			if errors.As(err, &uncertain) && uncertain.SubmissionUncertain() {
 				return search.TransferResult{}, search.Failure{Code: "source_submission_unknown", Message: "115 分享接收结果未知，需要人工确认", Retryable: true}
 			}
-			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "聚影资源接收到 115 失败", Retryable: true}
+			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "聚影资源接收到 115 失败", Retryable: automaticWriteRetryAllowed(err)}
 		}
 	case "magnet":
 		if _, err := validateMagnetURI(reference.Magnet); err != nil {

@@ -152,7 +152,7 @@ func (m *Mikan) StartTransfer(ctx context.Context, input search.TransferRequest)
 		if errors.As(err, &uncertain) && uncertain.SubmissionUncertain() {
 			return search.TransferResult{}, search.Failure{Code: "source_submission_unknown", Message: "115 离线转存结果未知，需要人工确认", Retryable: true}
 		}
-		return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "蜜柑转存到 115 失败", Retryable: true}
+		return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "蜜柑转存到 115 失败", Retryable: automaticWriteRetryAllowed(err)}
 	}
 	return search.TransferResult{
 		OperationID: input.IdempotencyKey,
