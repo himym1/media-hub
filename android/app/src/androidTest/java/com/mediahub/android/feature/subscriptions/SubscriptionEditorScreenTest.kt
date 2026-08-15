@@ -50,7 +50,7 @@ class SubscriptionEditorScreenTest {
 
         composeRule.onNodeWithText("资源来源").performScrollTo().assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
         val list = composeRule.onNode(hasScrollToIndexAction())
-        val sourceHelp = "不勾选时搜索全部已配置来源；暂不可用来源会自动跳过。"
+        val sourceHelp = "来源清单暂不可用；不选择时会搜索全部来源。"
         list.performScrollToNode(hasText(sourceHelp))
         composeRule.onNodeWithText(sourceHelp).assertIsDisplayed()
 
