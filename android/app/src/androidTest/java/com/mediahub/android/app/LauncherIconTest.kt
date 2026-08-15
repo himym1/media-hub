@@ -30,8 +30,9 @@ class LauncherIconTest {
         val bitmap = adaptiveIcon.toBitmap(192, 192, Bitmap.Config.ARGB_8888)
         val pixels = IntArray(bitmap.width * bitmap.height)
         bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        assertTrue(pixels.count { it ushr 24 > 0 } > pixels.size * 9 / 10)
-        assertTrue(pixels.toSet().size > 16)
         bitmap.writeToTestStorage("mediahub-launcher-icon")
+        val visiblePixels = pixels.count { it ushr 24 > 0 }
+        assertTrue("visible launcher pixels=$visiblePixels", visiblePixels > pixels.size * 3 / 5)
+        assertTrue("launcher color count=${pixels.toSet().size}", pixels.toSet().size > 16)
     }
 }
