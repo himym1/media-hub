@@ -1,5 +1,10 @@
 package com.mediahub.android.feature.library
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,7 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -47,6 +52,7 @@ import com.composables.icons.lucide.Film
 import com.composables.icons.lucide.LibraryBig
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.X
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubColors
@@ -56,6 +62,7 @@ import com.mediahub.android.core.designsystem.MediaHubSearchField
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.network.EmbyItem
 import com.mediahub.android.core.network.EmbyItemDetail
+import java.net.URI
 
 
 @Composable
@@ -229,7 +236,9 @@ internal fun LibraryScreen(
 
 @Composable
 internal fun LibraryDetailScreen(state: LibraryUiState, onBack: () -> Unit, onRefresh: () -> Unit) {
-    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    val selectedAppUrl = state.selectedItem?.appUrl
+    val opensInApp = remember(context, selectedAppUrl) { canOpenEmbyApp(context, selectedAppUrl) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
@@ -270,9 +279,9 @@ internal fun LibraryDetailScreen(state: LibraryUiState, onBack: () -> Unit, onRe
             }
             item {
                 MediaHubButton(
-                    label = "在 Emby 中打开",
-                    icon = Lucide.ExternalLink,
-                    onClick = { uriHandler.openUri(detail.externalUrl) },
+                    label = embyOpenLabel(opensInApp),
+                    icon = if (opensInApp) Lucide.Play else Lucide.ExternalLink,
+                    onClick = { openEmby(context, detail) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -334,6 +343,59 @@ private fun TechnicalDetails(detail: EmbyItemDetail) {
 @Composable
 private fun DetailTechnicalLine(label: String, value: String) {
     MediaHubText(text = "$label：$value", color = MediaHubColors.TextSecondary, fontSize = 12.sp)
+}
+
+private const val EmbyAndroidPackage = "com.mb.android"
+private val EmbyIdentifierPattern = Regex("^[A-Za-z0-9_-]{1,128}$")
+
+internal fun validatedEmbyAppUrl(value: String?): String? {
+    val parsed = runCatching { URI(value?.trim().orEmpty()) }.getOrNull() ?: return null
+    if (!parsed.scheme.equals("emby", ignoreCase = true) || !parsed.host.equals("items", ignoreCase = true) ||
+        parsed.userInfo != null || parsed.port != -1 || parsed.query != null || parsed.fragment != null
+    ) return null
+    val segments = parsed.path.orEmpty().split('/').filter(String::isNotEmpty)
+    if (segments.size != 2 || segments.any { !EmbyIdentifierPattern.matches(it) }) return null
+    return "emby://items/${segments[0]}/${segments[1]}"
+}
+
+internal fun embyOpenLabel(appAvailable: Boolean): String =
+    if (appAvailable) "在 Emby App 中打开" else "打开 Emby 网页"
+
+internal fun canOpenEmbyApp(context: Context, appUrl: String?): Boolean {
+    val validatedUrl = validatedEmbyAppUrl(appUrl) ?: return false
+    return try {
+        embyAppIntent(validatedUrl).resolveActivity(context.packageManager) != null
+    } catch (_: SecurityException) {
+        false
+    }
+}
+
+private fun openEmby(context: Context, detail: EmbyItemDetail) {
+    val appUrl = validatedEmbyAppUrl(detail.appUrl)
+    if (appUrl != null && canOpenEmbyApp(context, appUrl) && tryStartActivity(context, embyAppIntent(appUrl))) return
+
+    val webUrl = validatedEmbyWebUrl(detail.externalUrl)
+    if (webUrl == null || !tryStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(webUrl)))) {
+        Toast.makeText(context, "无法打开 Emby", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun embyAppIntent(appUrl: String): Intent =
+    Intent(Intent.ACTION_VIEW, Uri.parse(appUrl)).setPackage(EmbyAndroidPackage)
+
+private fun validatedEmbyWebUrl(value: String): String? {
+    val parsed = runCatching { URI(value.trim()) }.getOrNull() ?: return null
+    if (parsed.host.isNullOrBlank() || (parsed.scheme != "http" && parsed.scheme != "https")) return null
+    return parsed.toASCIIString()
+}
+
+private fun tryStartActivity(context: Context, intent: Intent): Boolean = try {
+    context.startActivity(intent)
+    true
+} catch (_: ActivityNotFoundException) {
+    false
+} catch (_: SecurityException) {
+    false
 }
 
 private fun visibleOriginalTitle(detail: EmbyItemDetail): String? {

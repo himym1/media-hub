@@ -28,6 +28,8 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 				return
 			}
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"范海辛","OriginalTitle":"Van Helsing","Overview":"Monster hunter","Type":"Movie","ProductionYear":2004,"Path":"/private/movie.mkv","ProviderIds":{"Tmdb":"7131"},"CommunityRating":7.2,"RunTimeTicks":79200000000,"Genres":["Action"],"MediaSources":[{"Id":"source-1","Path":"/private/movie.mkv"}]}`))
+		case "/System/Info":
+			_, _ = w.Write([]byte(`{"Id":"server-1","ServerName":"Test Emby","Version":"4.9.3"}`))
 		case "/Items":
 			if request.URL.Query().Get("UserId") != "user-1" {
 				w.WriteHeader(http.StatusBadRequest)
@@ -97,6 +99,9 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 	if strings.Contains(detail.ExternalURL, "test-key") || !strings.Contains(detail.ExternalURL, "item?id=item-1") {
 		t.Fatalf("unsafe or invalid external URL: %q", detail.ExternalURL)
 	}
+	if detail.AppURL != "emby://items/server-1/item-1" {
+		t.Fatalf("invalid app URL: %q", detail.AppURL)
+	}
 
 	item, found, err := client.FindIndexedItem(context.Background(), "Van Helsing", "movie", 2004, "7131")
 	if err != nil || !found || item.ID != "item-1" {
@@ -142,7 +147,7 @@ func TestItemDetailsWithoutUserUsesDirectEndpointAndMapsOnlyNotFound(t *testing.
 
 	client := NewClient(server.URL, "test-key", time.Second)
 	detail, err := client.ItemDetails(context.Background(), "item-1")
-	if err != nil || detail.ID != "item-1" {
+	if err != nil || detail.ID != "item-1" || detail.AppURL != "" {
 		t.Fatalf("item details: detail=%#v err=%v", detail, err)
 	}
 	if _, err := client.ItemDetails(context.Background(), "missing"); !errors.Is(err, ErrItemNotFound) {
@@ -160,6 +165,17 @@ func TestItemWebURLDropsConfigurationQueryAndRejectsNonHTTP(t *testing.T) {
 	}
 	if _, err := itemWebURL("javascript:alert(1)", "item-1"); !errors.Is(err, ErrUpstreamResponse) {
 		t.Fatalf("non-http URL error=%v", err)
+	}
+}
+
+func TestItemAppURLAcceptsOnlyBoundedEmbyIdentifiers(t *testing.T) {
+	if value := itemAppURL("server-1", "item_1"); value != "emby://items/server-1/item_1" {
+		t.Fatalf("item app URL=%q", value)
+	}
+	for _, input := range [][2]string{{"", "item-1"}, {"server/other", "item-1"}, {"server-1", "../item"}, {strings.Repeat("a", 129), "item-1"}} {
+		if value := itemAppURL(input[0], input[1]); value != "" {
+			t.Fatalf("unsafe item app URL=%q for %#v", value, input)
+		}
 	}
 }
 

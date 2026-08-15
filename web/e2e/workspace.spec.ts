@@ -119,7 +119,7 @@ test('library supports browsing item details and safe Emby actions', async ({ pa
   await page.getByText('更多信息', { exact: true }).click()
   await expect(page.getByText('Acceptance Movie', { exact: true })).toBeVisible()
   await expect(page.getByText('TMDB 编号', { exact: true })).toBeVisible()
-  await expect(page.getByRole('link', { name: '在 Emby 中打开' })).toHaveAttribute('href', /emby\.example/)
+  await expect(page.getByRole('link', { name: '打开 Emby 网页' })).toHaveAttribute('href', /emby\.example/)
   await expect(page.getByRole('button', { name: /删除/ })).toHaveCount(0)
   await page.getByRole('button', { name: '刷新元数据' }).click()
   await expectNoSeriousAccessibilityViolations(page)

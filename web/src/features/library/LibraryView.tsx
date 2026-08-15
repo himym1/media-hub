@@ -204,7 +204,7 @@ function LibraryItemDetail({ item, onRefresh, refreshing }: { item: EmbyItemDeta
     </details>
     <div className="library-detail-actions">
       <button className="secondary-command" disabled={refreshing} onClick={() => onRefresh(item.id)} type="button"><RefreshCw size={16} />{refreshing ? '已提交…' : '刷新元数据'}</button>
-      <a className="primary-action compact" href={item.externalUrl} rel="noreferrer" target="_blank"><ExternalLink size={16} />在 Emby 中打开</a>
+      <a className="primary-action compact" href={item.externalUrl} rel="noreferrer" target="_blank"><ExternalLink size={16} />打开 Emby 网页</a>
     </div>
   </>
 }

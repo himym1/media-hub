@@ -77,6 +77,7 @@ class LibraryScreenTest {
                             genres = listOf("Drama", "Science Fiction"),
                             mediaSourceCount = 1,
                             externalUrl = "https://emby.example/item-1",
+                            appUrl = "emby://items/server-1/item-1",
                         ),
                     ),
                     onBack = {},
@@ -90,6 +91,8 @@ class LibraryScreenTest {
         composeRule.onAllNodesWithText("TMDB 编号：100").assertCountEquals(0)
         composeRule.onAllNodesWithText("来自 Emby 的安全元数据").assertCountEquals(0)
         composeRule.onAllNodesWithText("Media Hub 不代理或删除媒体文件。").assertCountEquals(0)
+        composeRule.onNodeWithText("打开 Emby 网页").assertHasClickAction().assertHeightIsAtLeast(48.dp)
+        composeRule.onAllNodesWithText("在 Emby App 中打开").assertCountEquals(0)
 
         composeRule.onNode(hasText("更多信息") and hasClickAction())
             .assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()

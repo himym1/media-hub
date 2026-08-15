@@ -109,7 +109,11 @@ func (*embyStub) BrowseItems(_ context.Context, libraryID string, offset, limit 
 	return emby.SearchResult{Items: []emby.Item{{ID: libraryID + "-item", Name: "Movie", Type: "Movie"}}, Total: offset + limit + 1}, nil
 }
 func (*embyStub) ItemDetails(_ context.Context, itemID string) (emby.ItemDetail, error) {
-	return emby.ItemDetail{Item: emby.Item{ID: itemID, Name: "Movie", Type: "Movie"}, ExternalURL: "https://emby.example/web/index.html#!/item?id=" + itemID}, nil
+	return emby.ItemDetail{
+		Item:        emby.Item{ID: itemID, Name: "Movie", Type: "Movie"},
+		ExternalURL: "https://emby.example/web/index.html#!/item?id=" + itemID,
+		AppURL:      "emby://items/server-1/" + itemID,
+	}, nil
 }
 func (stub *embyStub) RefreshLibrary(_ context.Context, id string) error {
 	stub.refreshedLibrary = id
@@ -378,7 +382,8 @@ func TestEmbyBrowseDetailAndRefreshRoutes(t *testing.T) {
 	}
 	detailRecorder := httptest.NewRecorder()
 	router.ServeHTTP(detailRecorder, authenticatedRequest(http.MethodGet, "/api/v1/integrations/emby/items/item-1"))
-	if detailRecorder.Code != http.StatusOK || !strings.Contains(detailRecorder.Body.String(), "externalUrl") {
+	if detailRecorder.Code != http.StatusOK || !strings.Contains(detailRecorder.Body.String(), "externalUrl") ||
+		!strings.Contains(detailRecorder.Body.String(), `"appUrl":"emby://items/server-1/item-1"`) {
 		t.Fatalf("detail status=%d body=%s", detailRecorder.Code, detailRecorder.Body.String())
 	}
 	for _, target := range []string{

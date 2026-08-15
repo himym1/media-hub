@@ -259,6 +259,7 @@ export type EmbyItemDetail = EmbyItem & {
   genres?: string[]
   mediaSourceCount: number
   externalUrl: string
+  appUrl?: string
 }
 
 export type Drive115Status = {

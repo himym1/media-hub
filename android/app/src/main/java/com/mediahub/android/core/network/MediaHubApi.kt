@@ -283,6 +283,7 @@ class MediaHubApi(baseUrl: String) {
             genres = payload.optJSONArray("genres")?.strings().orEmpty(),
             mediaSourceCount = payload.getInt("mediaSourceCount"),
             externalUrl = payload.getString("externalUrl"),
+            appUrl = payload.optionalString("appUrl"),
         )
     }
 

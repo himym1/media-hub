@@ -69,6 +69,7 @@ type ItemDetail struct {
 	Genres           []string `json:"genres,omitempty"`
 	MediaSourceCount int      `json:"mediaSourceCount"`
 	ExternalURL      string   `json:"externalUrl"`
+	AppURL           string   `json:"appUrl,omitempty"`
 }
 
 type SearchResult struct {
@@ -318,11 +319,15 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 	if err != nil {
 		return ItemDetail{}, err
 	}
+	appURL := ""
+	if serverInfo, infoErr := c.readServerInfo(ctx, configuration, "System/Info", true); infoErr == nil {
+		appURL = itemAppURL(serverInfo.ID, itemID)
+	}
 	return ItemDetail{
 		Item: publicItem(item), OriginalTitle: boundedText(item.OriginalTitle, 300),
 		Overview: boundedText(item.Overview, 4000), CommunityRating: item.CommunityRating,
 		RuntimeMinutes: int(item.RunTimeTicks / 600_000_000), Genres: boundedStrings(item.Genres, 32, 100),
-		MediaSourceCount: len(item.MediaSources), ExternalURL: externalURL,
+		MediaSourceCount: len(item.MediaSources), ExternalURL: externalURL, AppURL: appURL,
 	}, nil
 }
 
@@ -512,6 +517,29 @@ func itemWebURL(baseURL, itemID string) (string, error) {
 	parsed.RawQuery = ""
 	parsed.Fragment = "!/item?id=" + url.QueryEscape(itemID)
 	return parsed.String(), nil
+}
+
+func itemAppURL(serverID, itemID string) string {
+	serverID = strings.TrimSpace(serverID)
+	itemID = strings.TrimSpace(itemID)
+	if !validEmbyIdentifier(serverID) || !validEmbyIdentifier(itemID) {
+		return ""
+	}
+	return (&url.URL{Scheme: "emby", Host: "items", Path: "/" + serverID + "/" + itemID}).String()
+}
+
+func validEmbyIdentifier(value string) bool {
+	if len(value) < 1 || len(value) > 128 {
+		return false
+	}
+	for index := 0; index < len(value); index++ {
+		character := value[index]
+		if (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') &&
+			(character < '0' || character > '9') && character != '-' && character != '_' {
+			return false
+		}
+	}
+	return true
 }
 
 func boundedText(value string, limit int) string {

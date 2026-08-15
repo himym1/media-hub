@@ -309,6 +309,7 @@ data class EmbyItemDetail(
     val genres: List<String>,
     val mediaSourceCount: Int,
     val externalUrl: String,
+    val appUrl: String? = null,
 )
 
 
