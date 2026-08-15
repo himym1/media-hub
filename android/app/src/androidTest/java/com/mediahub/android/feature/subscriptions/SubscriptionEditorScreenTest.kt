@@ -5,11 +5,14 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.mediahub.android.core.designsystem.MediaHubTheme
@@ -46,10 +49,14 @@ class SubscriptionEditorScreenTest {
         composeRule.onAllNodesWithText("原始标题").assertCountEquals(0)
 
         composeRule.onNodeWithText("资源来源").performScrollTo().assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
-        composeRule.onNodeWithText("不勾选时搜索全部已配置来源；暂不可用来源会自动跳过。")
-            .performScrollTo().assertIsDisplayed()
+        val list = composeRule.onNode(hasScrollToIndexAction())
+        val sourceHelp = "不勾选时搜索全部已配置来源；暂不可用来源会自动跳过。"
+        list.performScrollToNode(hasText(sourceHelp))
+        composeRule.onNodeWithText(sourceHelp).assertIsDisplayed()
 
-        composeRule.onNodeWithText("高级规则与媒体身份").performScrollTo().performClick()
-        composeRule.onNodeWithText("原始标题").performScrollTo().assertIsDisplayed()
+        list.performScrollToNode(hasText("高级规则与媒体身份"))
+        composeRule.onNodeWithText("高级规则与媒体身份").performClick()
+        list.performScrollToNode(hasText("原始标题"))
+        composeRule.onNodeWithText("原始标题").assertIsDisplayed()
     }
 }
