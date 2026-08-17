@@ -31,15 +31,16 @@ class SubscriptionEditorScreenTest {
             MediaHubTheme {
                 SubscriptionEditorScreen(
                     state = SubscriptionUiState(
-                        editing = true,
                         editor = SubscriptionEditorState(title = "验收影片", tmdbId = "100"),
                     ),
-                    onEditorChanged = {},
-                    onBack = {},
-                    onSave = {},
-                    onToggle = {},
-                    onRun = {},
-                    onDelete = {},
+                    actions = SubscriptionEditorActions(
+                        editorChanged = {},
+                        back = {},
+                        save = {},
+                        toggle = {},
+                        run = {},
+                        delete = {},
+                    ),
                 )
             }
         }

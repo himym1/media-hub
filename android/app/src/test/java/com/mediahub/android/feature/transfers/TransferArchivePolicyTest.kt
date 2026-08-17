@@ -15,6 +15,17 @@ class TransferArchivePolicyTest {
         assertFalse(canArchiveTransfer(job(state = "transferring", retryable = false)))
     }
 
+    @Test
+    fun detailClosesOnlyForInitializedMissingOrMatchingCompletedTarget() {
+        val item = job(state = "completed", retryable = false)
+        assertFalse(shouldCloseMissingTransferDetail("job-1", TransferUiState()))
+        assertFalse(shouldCloseMissingTransferDetail("job-1", TransferUiState(initialized = true, jobs = listOf(item))))
+        assertTrue(shouldCloseMissingTransferDetail("job-1", TransferUiState(initialized = true)))
+        assertFalse(shouldCloseCompletedTransferDetail("job-2", "job-1"))
+        assertFalse(shouldCloseCompletedTransferDetail("job-1", null))
+        assertTrue(shouldCloseCompletedTransferDetail("job-1", "job-1"))
+    }
+
     private fun job(state: String, retryable: Boolean) = TransferJob(
         id = "job-1",
         title = "Movie",

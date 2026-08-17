@@ -26,26 +26,57 @@ val primaryDestinations = listOf(
     MainDestination.Library,
 )
 
+sealed interface WorkspaceDetail {
+    data class LibraryItem(val itemId: String) : WorkspaceDetail
+    data class Transfer(val transferId: String) : WorkspaceDetail
+    data class SubscriptionEditor(
+        val subscriptionId: String?,
+        val key: Long = System.nanoTime(),
+    ) : WorkspaceDetail
+}
+
+data class WorkspaceRoute(
+    val destination: MainDestination = MainDestination.Search,
+    val detail: WorkspaceDetail? = null,
+)
+
 internal class MainNavigationHistory(
     initial: MainDestination = MainDestination.Search,
 ) {
     private var lastPrimary = initial.takeIf { it in primaryDestinations } ?: MainDestination.Search
+    var current = WorkspaceRoute(lastPrimary)
+        private set
 
-    fun show(destination: MainDestination): MainDestination {
+    fun show(destination: MainDestination): WorkspaceRoute {
         if (destination in primaryDestinations) lastPrimary = destination
-        return destination
+        return WorkspaceRoute(destination).also { current = it }
     }
 
-    fun openSystem(): MainDestination = MainDestination.Services
+    fun openSystem(): WorkspaceRoute = WorkspaceRoute(MainDestination.Services).also { current = it }
 
-    fun showSystem(destination: MainDestination): MainDestination =
-        destination.takeIf { it == MainDestination.Services || it == MainDestination.Operations } ?: MainDestination.Services
+    fun showSystem(destination: MainDestination): WorkspaceRoute {
+        val target = destination.takeIf { it == MainDestination.Services || it == MainDestination.Operations }
+            ?: MainDestination.Services
+        return WorkspaceRoute(target).also { current = it }
+    }
 
-    fun closeSystem(): MainDestination = lastPrimary
+    fun closeSystem(): WorkspaceRoute = WorkspaceRoute(lastPrimary).also { current = it }
 
-    fun reset(): MainDestination {
+    fun openDetail(detail: WorkspaceDetail): WorkspaceRoute {
+        val expectedDestination = when (detail) {
+            is WorkspaceDetail.LibraryItem -> MainDestination.Library
+            is WorkspaceDetail.Transfer -> MainDestination.Transfers
+            is WorkspaceDetail.SubscriptionEditor -> MainDestination.Subscriptions
+        }
+        if (current.destination == expectedDestination) current = current.copy(detail = detail)
+        return current
+    }
+
+    fun closeDetail(): WorkspaceRoute = current.copy(detail = null).also { current = it }
+
+    fun reset(): WorkspaceRoute {
         lastPrimary = MainDestination.Search
-        return lastPrimary
+        return WorkspaceRoute(lastPrimary).also { current = it }
     }
 }
 
@@ -62,9 +93,9 @@ class AppViewModel(
     private val _state = MutableStateFlow<AppState>(AppState.Loading)
     val state: StateFlow<AppState> = _state.asStateFlow()
 
-    private val _destination = MutableStateFlow(MainDestination.Search)
-    val destination: StateFlow<MainDestination> = _destination.asStateFlow()
     private val navigation = MainNavigationHistory()
+    private val _route = MutableStateFlow(navigation.current)
+    val route: StateFlow<WorkspaceRoute> = _route.asStateFlow()
 
     private val _subscriptionDraft = MutableStateFlow<SearchCandidate?>(null)
     val subscriptionDraft: StateFlow<SearchCandidate?> = _subscriptionDraft.asStateFlow()
@@ -72,7 +103,7 @@ class AppViewModel(
     init {
         viewModelScope.launch {
             repository.sessionExpired.collect {
-                _destination.value = navigation.reset()
+                _route.value = navigation.reset()
                 _subscriptionDraft.value = null
                 _state.value = AppState.Unauthenticated
             }
@@ -101,6 +132,7 @@ class AppViewModel(
         if (candidate.tmdbId == null || candidate.transferState == "identity_required") return
         _subscriptionDraft.value = candidate
         showDestination(MainDestination.Subscriptions)
+        openDetail(WorkspaceDetail.SubscriptionEditor(null))
     }
 
     fun consumeSubscriptionDraft() {
@@ -108,25 +140,33 @@ class AppViewModel(
     }
 
     fun showDestination(destination: MainDestination) {
-        _destination.value = navigation.show(destination)
+        _route.value = navigation.show(destination)
     }
 
     fun openSystem() {
-        _destination.value = navigation.openSystem()
+        _route.value = navigation.openSystem()
     }
 
     fun showSystemDestination(destination: MainDestination) {
-        _destination.value = navigation.showSystem(destination)
+        _route.value = navigation.showSystem(destination)
     }
 
     fun closeSystem() {
-        _destination.value = navigation.closeSystem()
+        _route.value = navigation.closeSystem()
+    }
+
+    fun openDetail(detail: WorkspaceDetail) {
+        _route.value = navigation.openDetail(detail)
+    }
+
+    fun closeDetail() {
+        _route.value = navigation.closeDetail()
     }
 
     fun logout() {
         viewModelScope.launch {
             runCatching { repository.logout() }
-            _destination.value = navigation.reset()
+            _route.value = navigation.reset()
             _subscriptionDraft.value = null
             _state.value = AppState.Unauthenticated
         }

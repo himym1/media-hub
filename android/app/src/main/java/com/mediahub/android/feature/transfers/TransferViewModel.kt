@@ -25,6 +25,8 @@ data class TransferUiState(
     val notificationRetrying: Boolean = false,
     val archiving: Boolean = false,
     val errorMessage: String? = null,
+    val initialized: Boolean = false,
+    val archivedCompletedId: String? = null,
 )
 
 class TransferViewModel(
@@ -61,6 +63,10 @@ class TransferViewModel(
         viewModelScope.launch { loadDetail(id) }
     }
 
+    fun closeDetail() {
+        _uiState.value = _uiState.value.copy(selectedId = null, selected = null, errorMessage = null)
+    }
+
     fun showArchived(archived: Boolean) {
         if (_uiState.value.archived == archived) return
         _uiState.value = _uiState.value.copy(
@@ -75,10 +81,11 @@ class TransferViewModel(
         if (!allowed || _uiState.value.archiving) return
         val archived = !_uiState.value.archived
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(archiving = true, errorMessage = null)
+            _uiState.value = _uiState.value.copy(archiving = true, errorMessage = null, archivedCompletedId = null)
             try {
                 repository.setTransferArchived(selected.id, archived)
                 load(false)
+                _uiState.value = _uiState.value.copy(archivedCompletedId = selected.id)
             } catch (error: ApiException) {
                 _uiState.value = _uiState.value.copy(archiving = false, errorMessage = error.message ?: "任务归档失败")
             } catch (_: Exception) {
@@ -87,6 +94,11 @@ class TransferViewModel(
         }
     }
 
+    fun consumeArchivedCompletion(id: String) {
+        if (_uiState.value.archivedCompletedId == id) {
+            _uiState.value = _uiState.value.copy(archivedCompletedId = null)
+        }
+    }
 
     fun retry() {
         val id = _uiState.value.selectedId ?: return
@@ -139,7 +151,6 @@ class TransferViewModel(
             val notifications = if (archived) emptyList() else repository.transferNotifications()
             if (_uiState.value.archived != archived) return
             val selectedId = _uiState.value.selectedId?.takeIf { id -> jobs.any { it.id == id } }
-                ?: jobs.firstOrNull()?.id
             _uiState.value = _uiState.value.copy(
                 jobs = jobs,
                 notifications = notifications,
@@ -151,6 +162,7 @@ class TransferViewModel(
                 notificationRetrying = false,
                 archiving = false,
                 errorMessage = null,
+                initialized = true,
             )
             if (selectedId != null) loadDetail(selectedId)
         } catch (error: ApiException) {

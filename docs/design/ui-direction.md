@@ -38,10 +38,13 @@ Visual density: 6 / 10
 
 ### Android
 
-- Miuix navigation bar and bottom sheets are wrapped by Media Hub components.
-- Search remains first screen.
-- Results use poster-led list rows with one clear transfer action.
-- Long-running task state is shown as a step timeline with expandable evidence.
+- Search remains the first screen; result rows form one continuous scanning surface and selected state carries the emphasis.
+- The workspace has one typed route. Main destinations show global top/bottom navigation; system and detail routes replace it instead of stacking another toolbar.
+- Services and Operations form one system layer with explicit back navigation. Operations shows one of 115 files, local upload, or archive organization at a time.
+- Library rows use stable 2:3 posters; movie details expose Media3 as the primary action, and series details require an episode selection.
+- Transfer status and subscription editing are independent detail routes with one toolbar and no bottom navigation.
+- Secondary subscription commands live behind one overflow control so 320 dp widths and large text retain room for the page title.
+- Long-running task state is shown as an unframed vertical timeline with expandable evidence.
 - Touch targets are at least 48 dp.
 - System back, predictive back, edge-to-edge, dynamic type, and dark mode are supported.
 

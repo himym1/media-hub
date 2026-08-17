@@ -41,19 +41,27 @@ internal data class SubscriptionEditorState(
     val preferSmaller: Boolean = false,
 )
 
+internal data class SubscriptionMutationResult(
+    val targetKey: Long,
+    val subscriptionId: String,
+)
+
 internal data class SubscriptionUiState(
     val subscriptions: List<MediaSubscription> = emptyList(),
     val selectedId: String? = null,
     val editor: SubscriptionEditorState = SubscriptionEditorState(),
     val runs: List<SubscriptionRun> = emptyList(),
     val availableSources: List<ProviderSourceSettings> = emptyList(),
-    val editing: Boolean = false,
     val loading: Boolean = false,
     val saving: Boolean = false,
     val errorMessage: String? = null,
     val exportPayload: String? = null,
     val actionMessage: String? = null,
+    val deleted: SubscriptionMutationResult? = null,
+    val saved: SubscriptionMutationResult? = null,
+    val initialized: Boolean = false,
 )
+
 
 class SubscriptionViewModel(
     private val repository: MediaHubRepository,
@@ -92,7 +100,6 @@ class SubscriptionViewModel(
                 sourceIds = listOf(candidate.sourceId),
             ),
             runs = emptyList(),
-            editing = true,
             errorMessage = null,
         )
     }
@@ -102,7 +109,6 @@ class SubscriptionViewModel(
             selectedId = null,
             editor = SubscriptionEditorState(),
             runs = emptyList(),
-            editing = true,
             errorMessage = null,
         )
     }
@@ -112,7 +118,6 @@ class SubscriptionViewModel(
         _uiState.value = _uiState.value.copy(
             selectedId = id,
             editor = editorFrom(item),
-            editing = true,
             errorMessage = null,
         )
         viewModelScope.launch { loadRuns(id) }
@@ -123,7 +128,6 @@ class SubscriptionViewModel(
             selectedId = null,
             editor = SubscriptionEditorState(),
             runs = emptyList(),
-            editing = false,
             errorMessage = null,
         )
     }
@@ -132,7 +136,7 @@ class SubscriptionViewModel(
         _uiState.value = _uiState.value.copy(editor = editor, errorMessage = null)
     }
 
-    fun save() {
+    fun save(targetKey: Long) {
         if (_uiState.value.saving) return
         val input = inputFrom(_uiState.value.editor)
         if (input == null) {
@@ -150,12 +154,21 @@ class SubscriptionViewModel(
                 }
                 load(false)
                 select(item.id)
-                _uiState.value = _uiState.value.copy(saving = false)
+                _uiState.value = _uiState.value.copy(
+                    saving = false,
+                    saved = SubscriptionMutationResult(targetKey, item.id),
+                )
             } catch (error: ApiException) {
                 _uiState.value = _uiState.value.copy(saving = false, errorMessage = error.message ?: "订阅保存失败")
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(saving = false, errorMessage = "无法保存订阅")
             }
+        }
+    }
+
+    fun consumeSaved(targetKey: Long) {
+        if (_uiState.value.saved?.targetKey == targetKey) {
+            _uiState.value = _uiState.value.copy(saved = null)
         }
     }
 
@@ -177,14 +190,23 @@ class SubscriptionViewModel(
         }
     }
 
-    fun delete() {
+    fun delete(targetKey: Long) {
         val id = _uiState.value.selectedId ?: return
         perform("订阅删除失败") {
             repository.deleteSubscription(id)
             _uiState.value = _uiState.value.copy(
-                selectedId = null, editor = SubscriptionEditorState(), runs = emptyList(), editing = false,
+                selectedId = null,
+                editor = SubscriptionEditorState(),
+                runs = emptyList(),
+                deleted = SubscriptionMutationResult(targetKey, id),
             )
             load(false)
+        }
+    }
+
+    fun consumeDeleted(targetKey: Long) {
+        if (_uiState.value.deleted?.targetKey == targetKey) {
+            _uiState.value = _uiState.value.copy(deleted = null)
         }
     }
 
@@ -257,10 +279,10 @@ class SubscriptionViewModel(
                 selectedId = selectedId,
                 editor = if (selectionRemoved) SubscriptionEditorState() else _uiState.value.editor,
                 runs = if (selectionRemoved) emptyList() else _uiState.value.runs,
-                editing = if (selectionRemoved) false else _uiState.value.editing,
                 availableSources = sources,
                 loading = false,
                 errorMessage = null,
+                initialized = true,
             )
             if (selectedId != null) loadRuns(selectedId)
         } catch (error: ApiException) {

@@ -94,7 +94,7 @@ internal fun ServicesRoute(
 }
 
 @Composable
-private fun ServicesScreen(
+internal fun ServicesScreen(
     uiState: ServicesUiState,
     onRefresh: () -> Unit,
     onToggleSettings: () -> Unit,
@@ -304,6 +304,8 @@ private fun OperationalSummary(statistics: OperationalStatistics) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Metric("进行中", statistics.transfersActive, Modifier.weight(1f))
             Metric("需处理", statistics.transfersNeedsAttention + statistics.commandsNeedsAttention + statistics.notificationsNeedsAttention, Modifier.weight(1f))
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Metric("启用订阅", statistics.subscriptionsEnabled, Modifier.weight(1f))
             Metric("失败运行", statistics.runsFailed, Modifier.weight(1f))
         }
@@ -322,9 +324,7 @@ private fun Metric(label: String, value: Int, modifier: Modifier) {
 private fun ServiceRow(integration: IntegrationHealth) {
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
-            .padding(15.dp),
+            .padding(horizontal = 2.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Spacer(

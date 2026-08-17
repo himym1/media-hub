@@ -1,0 +1,168 @@
+package com.mediahub.android
+
+import android.graphics.Bitmap
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.Density
+import androidx.test.core.graphics.writeToTestStorage
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.mediahub.android.core.designsystem.MediaHubTheme
+import com.mediahub.android.core.network.IntegrationHealth
+import com.mediahub.android.core.network.OperationalStatistics
+import com.mediahub.android.core.network.ReleaseFacts
+import com.mediahub.android.core.network.SearchCandidate
+import com.mediahub.android.feature.operations.OperationsScreen
+import com.mediahub.android.feature.operations.OperationsUiState
+import com.mediahub.android.feature.search.SearchScreen
+import com.mediahub.android.feature.search.SearchUiState
+import com.mediahub.android.feature.services.ServicesScreen
+import com.mediahub.android.feature.services.ServicesUiState
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class SecondStageLayoutTest {
+    @get:Rule
+    val composeRule = createComposeRule()
+
+    @Test
+    fun searchResultsRemainScannableAtLargeFont() {
+        val candidate = SearchCandidate(
+            id = "candidate-1",
+            title = "一部标题很长但仍需完整显示的电影资源",
+            year = 2026,
+            season = 0,
+            mediaType = "movie",
+            tmdbId = "100",
+            source = "mikan",
+            provider = "Mikan",
+            posterUrl = null,
+            release = ReleaseFacts("2160p", "HEVC", "Dolby Vision", "TrueHD Atmos", 32L * 1024 * 1024 * 1024),
+            transferState = "ready",
+            transferToken = "token",
+        )
+        composeRule.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                MediaHubTheme {
+                    SearchScreen(
+                        uiState = SearchUiState(
+                            query = "电影",
+                            submittedQuery = "电影",
+                            results = listOf(candidate),
+                            selectedCandidateId = candidate.id,
+                        ),
+                        onQueryChanged = {},
+                        onSearch = {},
+                        onRefreshOverview = {},
+                        onTrendingSelected = {},
+                        onCandidateSelected = {},
+                        onRecommendationSelected = {},
+                        onTransfer = {},
+                        onSubscribe = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithText(candidate.title).assertExists()
+        composeRule.onNodeWithText("开始转存").assertExists()
+        saveScreenshot("mediahub-search-large")
+    }
+
+    @Test
+    fun servicesMetricsUseTwoRowsAtLargeFont() {
+        composeRule.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                MediaHubTheme {
+                    ServicesScreen(
+                        uiState = ServicesUiState(
+                            integrations = listOf(IntegrationHealth("emby", "Emby", "healthy", "媒体库在线")),
+                            statistics = OperationalStatistics(4, 1, 2, 1, 0, 3, 2, 8, 1, 0, 0, 0),
+                        ),
+                        onRefresh = {},
+                        onToggleSettings = {},
+                        onSettingsDraftChange = {},
+                        onSaveSettings = {},
+                        onTestWeCom = {},
+                        onStartDriveAuthorization = {},
+                        onCurrentPasswordChange = {},
+                        onNewPasswordChange = {},
+                        onConfirmationChange = {},
+                        onChangePassword = {},
+                        onChangeServer = {},
+                        onCheckForUpdate = {},
+                        onDownloadUpdate = {},
+                        onInstallUpdate = {},
+                        onLogout = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("进行中").assertExists()
+        composeRule.onNodeWithText("失败运行").assertExists()
+        composeRule.onNodeWithText("Emby").assertExists()
+        saveScreenshot("mediahub-services-large")
+    }
+
+    @Test
+    fun operationsShowsOnlyTheSelectedTool() {
+        composeRule.setContent {
+            MediaHubTheme {
+                OperationsScreen(
+                    state = OperationsUiState(loading = false),
+                    onRefresh = {},
+                    onDriveParentChanged = {},
+                    onDriveOperationChanged = {},
+                    onDriveFileIdsChanged = {},
+                    onDriveTargetChanged = {},
+                    onDriveNameChanged = {},
+                    onCreateDriveCommand = {},
+                    onConfirmDriveCommand = {},
+                    onPlayDriveFile = { _, _ -> },
+                    onLocalRootChanged = {},
+                    onLocalPathChanged = {},
+                    onLocalEntrySelected = {},
+                    onLocalDestinationChanged = {},
+                    onCreateLocalUpload = {},
+                    onRetryLocalUpload = {},
+                    onArchiveParentChanged = {},
+                    onArchiveTargetChanged = {},
+                    onPreviewArchive = {},
+                    onToggleArchive = {},
+                    onArchiveNameChanged = { _, _ -> },
+                    onCreateArchivePlan = {},
+                    onConfirmArchive = {},
+                    onRetryArchive = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("当前目录 ID").assertExists()
+        composeRule.onNodeWithText("本地上传").performClick()
+        composeRule.onNodeWithText("当前服务器未配置本地上传目录").assertExists()
+        composeRule.onAllNodesWithText("当前目录 ID").assertCountEquals(0)
+        composeRule.onNodeWithText("归档整理").performClick()
+        composeRule.onNodeWithText("原生归档整理").assertExists()
+        composeRule.onAllNodesWithText("当前服务器未配置本地上传目录").assertCountEquals(0)
+        saveScreenshot("mediahub-operations-sections")
+    }
+
+    private fun saveScreenshot(name: String) {
+        val image = composeRule.onRoot().captureToImage()
+        assertTrue(image.width > 0 && image.height > 0)
+        image.asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false).writeToTestStorage(name)
+    }
+}

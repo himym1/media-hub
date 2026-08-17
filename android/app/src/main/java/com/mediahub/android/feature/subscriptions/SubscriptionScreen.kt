@@ -5,7 +5,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,7 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -47,6 +45,7 @@ import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.Clock3
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.EllipsisVertical
 import com.composables.icons.lucide.Pause
 import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.Plus
@@ -65,10 +64,62 @@ import com.mediahub.android.core.network.SubscriptionRun
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
+internal data class SubscriptionListActions(
+    val create: () -> Unit,
+    val select: (String) -> Unit,
+    val setAllEnabled: (Boolean) -> Unit,
+    val export: () -> Unit,
+    val exportConsumed: () -> Unit,
+    val import: (String) -> Unit,
+    val fileError: (String) -> Unit,
+)
+
+internal data class SubscriptionEditorActions(
+    val editorChanged: (SubscriptionEditorState) -> Unit,
+    val back: () -> Unit,
+    val backEnabled: Boolean = true,
+    val save: () -> Unit,
+    val toggle: () -> Unit,
+    val run: () -> Unit,
+    val delete: () -> Unit,
+)
+
+internal sealed interface SubscriptionRouteResolution {
+    data object Keep : SubscriptionRouteResolution
+    data class Replace(val subscriptionId: String, val targetKey: Long) : SubscriptionRouteResolution
+    data object Close : SubscriptionRouteResolution
+}
+
+internal fun resolveSubscriptionRoute(
+    editorOpen: Boolean,
+    editorItemId: String?,
+    editorKey: Long?,
+    initialized: Boolean,
+    itemExists: Boolean,
+    saved: SubscriptionMutationResult?,
+    deleted: SubscriptionMutationResult?,
+): SubscriptionRouteResolution {
+    if (!editorOpen || editorKey == null) return SubscriptionRouteResolution.Keep
+    if (deleted?.targetKey == editorKey && deleted.subscriptionId == editorItemId) {
+        return SubscriptionRouteResolution.Close
+    }
+    if (saved?.targetKey == editorKey && (editorItemId == null || editorItemId == saved.subscriptionId)) {
+        return SubscriptionRouteResolution.Replace(saved.subscriptionId, saved.targetKey)
+    }
+    if (editorItemId != null && initialized && !itemExists) return SubscriptionRouteResolution.Close
+    return SubscriptionRouteResolution.Keep
+}
+
 @Composable
 internal fun SubscriptionRoute(
     viewModel: SubscriptionViewModel,
     draft: SearchCandidate?,
+    editorOpen: Boolean,
+    editorItemId: String?,
+    editorKey: Long?,
+    onReplaceEditor: (String, Long) -> Unit,
+    onOpenEditor: (String?) -> Unit,
+    onCloseEditor: () -> Unit,
     onDraftConsumed: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -79,45 +130,81 @@ internal fun SubscriptionRoute(
     LaunchedEffect(draft) {
         if (draft != null) {
             viewModel.applyDraft(draft)
+            if (!editorOpen) onOpenEditor(null)
             onDraftConsumed()
         }
     }
-    BackHandler(enabled = state.editing, onBack = viewModel::closeEditor)
-    if (state.editing) {
-        SubscriptionEditorScreen(
-            state = state,
-            onEditorChanged = viewModel::updateEditor,
-            onBack = viewModel::closeEditor,
-            onSave = viewModel::save,
-            onToggle = viewModel::toggleEnabled,
-            onRun = viewModel::runNow,
-            onDelete = viewModel::delete,
-        )
-    } else {
-        SubscriptionListScreen(
-            state = state,
-            onCreate = viewModel::createNew,
-            onSelect = viewModel::select,
-            onSetAllEnabled = viewModel::setAllEnabled,
-            onExport = viewModel::exportBackup,
-            onExportConsumed = viewModel::consumeExport,
-            onImport = viewModel::importBackup,
-            onFileError = viewModel::reportFileError,
-        )
+    LaunchedEffect(
+        state.saved, state.deleted, state.subscriptions, state.initialized, editorItemId, editorKey, editorOpen,
+    ) {
+        when (val resolution = resolveSubscriptionRoute(
+            editorOpen = editorOpen,
+            editorItemId = editorItemId,
+            editorKey = editorKey,
+            initialized = state.initialized,
+            itemExists = editorItemId == null || state.subscriptions.any { it.id == editorItemId },
+            saved = state.saved,
+            deleted = state.deleted,
+        )) {
+            SubscriptionRouteResolution.Keep -> Unit
+            SubscriptionRouteResolution.Close -> {
+                viewModel.closeEditor()
+                onCloseEditor()
+            }
+            is SubscriptionRouteResolution.Replace -> {
+                onReplaceEditor(resolution.subscriptionId, resolution.targetKey)
+            }
+        }
+        state.saved?.let { viewModel.consumeSaved(it.targetKey) }
+        state.deleted?.let { viewModel.consumeDeleted(it.targetKey) }
     }
+    val closeEditor = {
+        if (!state.saving) {
+            viewModel.closeEditor()
+            onCloseEditor()
+        }
+    }
+    BackHandler(enabled = editorOpen && !state.saving, onBack = closeEditor)
+    val editorActions = SubscriptionEditorActions(
+        editorChanged = viewModel::updateEditor,
+        back = closeEditor,
+        backEnabled = !state.saving,
+        save = { editorKey?.let(viewModel::save) },
+        toggle = viewModel::toggleEnabled,
+        run = viewModel::runNow,
+        delete = { editorKey?.let(viewModel::delete) },
+    )
+    val listActions = SubscriptionListActions(
+        create = {
+            viewModel.createNew()
+            onOpenEditor(null)
+        },
+        select = { id ->
+            viewModel.select(id)
+            onOpenEditor(id)
+        },
+        setAllEnabled = viewModel::setAllEnabled,
+        export = viewModel::exportBackup,
+        exportConsumed = viewModel::consumeExport,
+        import = viewModel::importBackup,
+        fileError = viewModel::reportFileError,
+    )
+    if (editorOpen) SubscriptionEditorScreen(state = state, actions = editorActions)
+    else SubscriptionListScreen(state = state, actions = listActions)
 }
 
 @Composable
-private fun SubscriptionListScreen(
+internal fun SubscriptionListScreen(
     state: SubscriptionUiState,
-    onCreate: () -> Unit,
-    onSelect: (String) -> Unit,
-    onSetAllEnabled: (Boolean) -> Unit,
-    onExport: () -> Unit,
-    onExportConsumed: () -> Unit,
-    onImport: (String) -> Unit,
-    onFileError: (String) -> Unit,
+    actions: SubscriptionListActions,
 ) {
+    val onCreate = actions.create
+    val onSelect = actions.select
+    val onSetAllEnabled = actions.setAllEnabled
+    val onExport = actions.export
+    val onExportConsumed = actions.exportConsumed
+    val onImport = actions.import
+    val onFileError = actions.fileError
     val context = LocalContext.current
     val createDocument = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         val payload = state.exportPayload
@@ -146,6 +233,7 @@ private fun SubscriptionListScreen(
         if (state.exportPayload != null) createDocument.launch("media-hub-subscriptions.json")
     }
 
+    var toolsExpanded by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -157,22 +245,39 @@ private fun SubscriptionListScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             MediaHubText(text = "${state.subscriptions.size} 个订阅", modifier = Modifier.weight(1f), color = MediaHubColors.TextMuted, fontSize = 13.sp)
+            MediaHubIconButton(Lucide.EllipsisVertical, "更多订阅操作", { toolsExpanded = !toolsExpanded })
             MediaHubIconButton(Lucide.Plus, "新建订阅", onCreate)
+        }
+        if (toolsExpanded) {
+            Column(
+                modifier = Modifier.fillMaxWidth().background(MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp)),
+            ) {
+                SubscriptionMenuAction(Lucide.Upload, "导入订阅") {
+                    toolsExpanded = false
+                    openDocument.launch(arrayOf("application/json", "text/json", "text/plain"))
+                }
+                SubscriptionMenuAction(Lucide.Download, "导出订阅") {
+                    toolsExpanded = false
+                    onExport()
+                }
+                SubscriptionMenuAction(
+                    Lucide.Pause, "全部暂停", enabled = state.subscriptions.isNotEmpty() && !state.saving,
+                ) {
+                    toolsExpanded = false
+                    onSetAllEnabled(false)
+                }
+                SubscriptionMenuAction(
+                    Lucide.Play, "全部启用", enabled = state.subscriptions.isNotEmpty() && !state.saving,
+                ) {
+                    toolsExpanded = false
+                    onSetAllEnabled(true)
+                }
+            }
         }
         state.errorMessage?.let { ErrorLine(it) }
         state.actionMessage?.let { MediaHubText(text = it, color = MediaHubColors.Source, fontSize = 12.sp) }
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            MediaHubButton(label = "导入", icon = Lucide.Upload, onClick = { openDocument.launch(arrayOf("application/json", "text/json", "text/plain")) })
-            MediaHubButton(label = "导出", icon = Lucide.Download, onClick = onExport)
-            MediaHubButton(label = "全部暂停", icon = Lucide.Pause, enabled = state.subscriptions.isNotEmpty() && !state.saving, onClick = { onSetAllEnabled(false) })
-            MediaHubButton(label = "全部启用", icon = Lucide.Play, enabled = state.subscriptions.isNotEmpty() && !state.saving, onClick = { onSetAllEnabled(true) })
-        }
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(top = 20.dp),
-            contentPadding = PaddingValues(bottom = 24.dp),
+            modifier = Modifier.fillMaxSize().padding(top = 8.dp),
         ) {
             items(state.subscriptions, key = { it.id }) { item ->
                 Row(
@@ -233,15 +338,36 @@ private fun SubscriptionListScreen(
 }
 
 @Composable
+private fun SubscriptionMenuAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MediaHubIcon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        MediaHubText(label, modifier = Modifier.padding(start = 11.dp), fontSize = 13.sp)
+    }
+}
+
+@Composable
 internal fun SubscriptionEditorScreen(
     state: SubscriptionUiState,
-    onEditorChanged: (SubscriptionEditorState) -> Unit,
-    onBack: () -> Unit,
-    onSave: () -> Unit,
-    onToggle: () -> Unit,
-    onRun: () -> Unit,
-    onDelete: () -> Unit,
+    actions: SubscriptionEditorActions,
 ) {
+    val onEditorChanged = actions.editorChanged
+    val onBack = actions.back
+    val onSave = actions.save
+    val onToggle = actions.toggle
+    val onRun = actions.run
+    val onDelete = actions.delete
     val editor = state.editor
     val existing = state.selectedId != null
     var confirmingDelete by remember(state.selectedId) { mutableStateOf(false) }
@@ -257,7 +383,9 @@ internal fun SubscriptionEditorScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MediaHubIconButton(Lucide.ArrowLeft, "返回订阅列表", onBack)
+                MediaHubIconButton(
+                    Lucide.ArrowLeft, "返回订阅列表", onBack, enabled = actions.backEnabled,
+                )
                 Column(Modifier.weight(1f)) {
                     MediaHubText(text = if (existing) "编辑订阅" else "新建订阅", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
                     MediaHubText(text = "身份、版本偏好与调度", color = MediaHubColors.TextMuted, fontSize = 12.sp)

@@ -79,7 +79,7 @@ internal fun SearchRoute(
 }
 
 @Composable
-private fun SearchScreen(
+internal fun SearchScreen(
     uiState: SearchUiState,
     onQueryChanged: (String) -> Unit,
     onSearch: () -> Unit,
@@ -97,18 +97,12 @@ private fun SearchScreen(
             .background(MediaHubColors.Canvas)
             .padding(horizontal = 16.dp),
     ) {
-        MediaHubText(
-            text = "搜索资源并加入自动转存流程",
-            modifier = Modifier.padding(top = 14.dp, bottom = 10.dp),
-            color = MediaHubColors.TextMuted,
-            fontSize = 13.sp,
-        )
         MediaHubSearchField(
             value = uiState.query,
             onValueChange = onQueryChanged,
             onSearch = onSearch,
             enabled = !uiState.searching,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
         )
         StatusLine(
             integrations = uiState.integrations,
@@ -156,7 +150,7 @@ private fun SearchScreen(
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             items(items = uiState.results, key = { it.id }) { candidate ->
                 ReleaseRow(
@@ -306,13 +300,12 @@ private fun ReleaseRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val background = if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface
-
+    val background = if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Canvas
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .background(background, RoundedCornerShape(8.dp))
+            .background(background, RoundedCornerShape(6.dp))
             .selectable(
                 selected = selected,
                 onClick = onClick,

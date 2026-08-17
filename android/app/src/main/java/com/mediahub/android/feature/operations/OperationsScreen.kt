@@ -20,6 +20,9 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -37,8 +40,15 @@ import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubText
+import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubTextField
 
+
+private val operationSections = listOf(
+    "drive" to "115 文件",
+    "upload" to "本地上传",
+    "archive" to "归档整理",
+)
 
 @Composable
 internal fun OperationsRoute(
@@ -75,7 +85,7 @@ internal fun OperationsRoute(
 }
 
 @Composable
-private fun OperationsScreen(
+internal fun OperationsScreen(
     state: OperationsUiState,
     onRefresh: () -> Unit,
     onDriveParentChanged: (String) -> Unit,
@@ -101,6 +111,7 @@ private fun OperationsScreen(
     onConfirmArchive: (com.mediahub.android.core.network.ArchivePlan) -> Unit,
     onRetryArchive: (com.mediahub.android.core.network.ArchivePlan) -> Unit,
 ) {
+    var section by rememberSaveable { mutableStateOf("drive") }
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -123,31 +134,58 @@ private fun OperationsScreen(
                 MediaHubIconButton(imageVector = Lucide.RefreshCw, contentDescription = "刷新", onClick = onRefresh)
             }
         }
+        item {
+            MediaHubSegmentedControl(
+                options = operationSections,
+                selected = section,
+                onSelected = { section = it },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         state.error?.let { message ->
             item { MediaHubText(text = message, color = MediaHubColors.Error, fontSize = 12.sp) }
         }
         if (state.loading) {
             item { MediaHubText(text = "正在读取运维能力...", color = MediaHubColors.TextMuted, fontSize = 13.sp) }
         } else {
-            item {
-                Drive115Section(
-                    state = state,
-                    onParentChanged = onDriveParentChanged,
-                    onOperationChanged = onDriveOperationChanged,
-                    onFileIdsChanged = onDriveFileIdsChanged,
-                    onTargetChanged = onDriveTargetChanged,
-                    onNameChanged = onDriveNameChanged,
-                    onCreate = onCreateDriveCommand,
-                    onConfirm = onConfirmDriveCommand,
-                    onPlay = { file -> onPlayDriveFile(file, state.driveParentId) },
-                )
+            when (section) {
+                "drive" -> item {
+                    Drive115Section(
+                        state = state,
+                        onParentChanged = onDriveParentChanged,
+                        onOperationChanged = onDriveOperationChanged,
+                        onFileIdsChanged = onDriveFileIdsChanged,
+                        onTargetChanged = onDriveTargetChanged,
+                        onNameChanged = onDriveNameChanged,
+                        onCreate = onCreateDriveCommand,
+                        onConfirm = onConfirmDriveCommand,
+                        onPlay = { file -> onPlayDriveFile(file, state.driveParentId) },
+                    )
+                }
+                "upload" -> item {
+                    if (state.localRoots.isEmpty()) {
+                        MediaHubText(
+                            "当前服务器未配置本地上传目录",
+                            modifier = Modifier.padding(vertical = 28.dp),
+                            color = MediaHubColors.TextMuted,
+                            fontSize = 13.sp,
+                        )
+                    } else {
+                        LocalUploadSection(
+                            state, onLocalRootChanged, onLocalPathChanged, onLocalEntrySelected,
+                            onLocalDestinationChanged, onCreateLocalUpload, onRetryLocalUpload,
+                        )
+                    }
+                }
+                else -> item {
+                    ArchiveSection(
+                        state, onArchiveParentChanged, onArchiveTargetChanged, onPreviewArchive,
+                        onToggleArchive, onArchiveNameChanged, onCreateArchivePlan, onConfirmArchive, onRetryArchive,
+                    )
+                }
             }
-            if (state.localRoots.isNotEmpty()) item {
-                LocalUploadSection(state,onLocalRootChanged,onLocalPathChanged,onLocalEntrySelected,onLocalDestinationChanged,onCreateLocalUpload,onRetryLocalUpload)
-            }
-            item { ArchiveSection(state,onArchiveParentChanged,onArchiveTargetChanged,onPreviewArchive,onToggleArchive,onArchiveNameChanged,onCreateArchivePlan,onConfirmArchive,onRetryArchive) }
-        }
     }
+}
 }
 
 @Composable

@@ -41,7 +41,7 @@ class SystemNavigationTest {
             MediaHubTheme {
                 WorkspaceShell(
                     destination = destination,
-                    libraryDetailOpen = false,
+                    detailOpen = false,
                     onSystemBack = { destination = MainDestination.Library },
                     onOpenSystem = { destination = MainDestination.Services },
                     onSystemSelected = { destination = it },
@@ -70,7 +70,7 @@ class SystemNavigationTest {
             MediaHubTheme {
                 WorkspaceShell(
                     destination = MainDestination.Library,
-                    libraryDetailOpen = true,
+                    detailOpen = true,
                     onSystemBack = {},
                     onOpenSystem = {},
                     onSystemSelected = {},

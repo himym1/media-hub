@@ -34,10 +34,26 @@ class NavigationModelTest {
     fun systemLayerReturnsToEachPreviouslySelectedPrimaryDestination() {
         val navigation = MainNavigationHistory()
         for (primary in listOf(MainDestination.Transfers, MainDestination.Subscriptions, MainDestination.Library)) {
-            assertEquals(primary, navigation.show(primary))
-            assertEquals(MainDestination.Services, navigation.openSystem())
-            assertEquals(MainDestination.Operations, navigation.showSystem(MainDestination.Operations))
-            assertEquals(primary, navigation.closeSystem())
+            assertEquals(primary, navigation.show(primary).destination)
+            assertEquals(MainDestination.Services, navigation.openSystem().destination)
+            assertEquals(MainDestination.Operations, navigation.showSystem(MainDestination.Operations).destination)
+            assertEquals(primary, navigation.closeSystem().destination)
         }
+    }
+
+    @Test
+    fun typedDetailsOnlyOpenOnTheirOwningDestinationAndPrimaryNavigationClearsThem() {
+        val navigation = MainNavigationHistory()
+        navigation.show(MainDestination.Search)
+        assertEquals(null, navigation.openDetail(WorkspaceDetail.SubscriptionEditor(null)).detail)
+
+        navigation.show(MainDestination.Subscriptions)
+        val editor = WorkspaceDetail.SubscriptionEditor("subscription-1")
+        assertEquals(editor, navigation.openDetail(editor).detail)
+        assertEquals(null, navigation.show(MainDestination.Transfers).detail)
+
+        val transfer = WorkspaceDetail.Transfer("transfer-1")
+        assertEquals(transfer, navigation.openDetail(transfer).detail)
+        assertEquals(null, navigation.closeDetail().detail)
     }
 }

@@ -21,10 +21,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -49,6 +45,7 @@ import com.composables.icons.lucide.SquareTerminal
 import com.mediahub.android.app.AppState
 import com.mediahub.android.app.AppViewModel
 import com.mediahub.android.app.MainDestination
+import com.mediahub.android.app.WorkspaceDetail
 import com.mediahub.android.app.primaryDestinations
 import com.mediahub.android.app.MediaHubViewModelFactory
 import com.mediahub.android.app.ServerViewModelStoreHolder
@@ -173,18 +170,16 @@ private fun AuthenticatedWorkspace(
     posterLoader: PosterLoader,
 ) {
     val context = LocalContext.current
-    val destination by appViewModel.destination.collectAsState()
+    val route by appViewModel.route.collectAsState()
+    val destination = route.destination
+    val detail = route.detail
     val subscriptionDraft by appViewModel.subscriptionDraft.collectAsState()
     val inSystem = destination == MainDestination.Services || destination == MainDestination.Operations
-    var selectedLibraryItemId by rememberSaveable(serverGeneration) { mutableStateOf<String?>(null) }
-    val libraryDetailOpen = destination == MainDestination.Library && selectedLibraryItemId != null
-    LaunchedEffect(destination) {
-        if (destination != MainDestination.Library) selectedLibraryItemId = null
-    }
+    val detailOpen = detail != null
     BackHandler(enabled = inSystem, onBack = appViewModel::closeSystem)
     WorkspaceShell(
         destination = destination,
-        libraryDetailOpen = libraryDetailOpen,
+        detailOpen = detailOpen,
         onSystemBack = appViewModel::closeSystem,
         onOpenSystem = appViewModel::openSystem,
         onSystemSelected = appViewModel::showSystemDestination,
@@ -201,13 +196,28 @@ private fun AuthenticatedWorkspace(
                 }
                 MainDestination.Transfers -> {
                     val transferViewModel = viewModel<TransferViewModel>(key = "transfers-$serverGeneration", factory = factory)
-                    TransferRoute(viewModel = transferViewModel)
+                    TransferRoute(
+                        viewModel = transferViewModel,
+                        detailId = (detail as? WorkspaceDetail.Transfer)?.transferId,
+                        onDetailChanged = { id ->
+                            if (id == null) appViewModel.closeDetail()
+                            else appViewModel.openDetail(WorkspaceDetail.Transfer(id))
+                        },
+                    )
                 }
                 MainDestination.Subscriptions -> {
                     val subscriptionViewModel = viewModel<SubscriptionViewModel>(key = "subscriptions-$serverGeneration", factory = factory)
                     SubscriptionRoute(
                         viewModel = subscriptionViewModel,
                         draft = subscriptionDraft,
+                        editorOpen = detail is WorkspaceDetail.SubscriptionEditor,
+                        editorItemId = (detail as? WorkspaceDetail.SubscriptionEditor)?.subscriptionId,
+                        editorKey = (detail as? WorkspaceDetail.SubscriptionEditor)?.key,
+                        onReplaceEditor = { id, key ->
+                            appViewModel.openDetail(WorkspaceDetail.SubscriptionEditor(id, key))
+                        },
+                        onOpenEditor = { id -> appViewModel.openDetail(WorkspaceDetail.SubscriptionEditor(id)) },
+                        onCloseEditor = appViewModel::closeDetail,
                         onDraftConsumed = appViewModel::consumeSubscriptionDraft,
                     )
                 }
@@ -218,8 +228,11 @@ private fun AuthenticatedWorkspace(
                         browseViewModel = libraryViewModel,
                         detailViewModel = detailViewModel,
                         posterLoader = posterLoader,
-                        selectedItemId = selectedLibraryItemId,
-                        onSelectedItemChanged = { selectedLibraryItemId = it },
+                        selectedItemId = (detail as? WorkspaceDetail.LibraryItem)?.itemId,
+                        onSelectedItemChanged = { id ->
+                            if (id == null) appViewModel.closeDetail()
+                            else appViewModel.openDetail(WorkspaceDetail.LibraryItem(id))
+                        },
                         onPlayItem = { item, fallback ->
                             context.startActivity(
                                 PlayerActivity.intent(
@@ -262,7 +275,7 @@ private fun AuthenticatedWorkspace(
 @Composable
 internal fun WorkspaceShell(
     destination: MainDestination,
-    libraryDetailOpen: Boolean,
+    detailOpen: Boolean,
     onSystemBack: () -> Unit,
     onOpenSystem: () -> Unit,
     onSystemSelected: (MainDestination) -> Unit,
@@ -273,7 +286,7 @@ internal fun WorkspaceShell(
     Column(
         modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas).statusBarsPadding(),
     ) {
-        if (!libraryDetailOpen) {
+        if (!detailOpen) {
             Box(Modifier.testTag("workspace-top-bar")) {
                 WorkspaceTopBar(
                     destination = destination,
@@ -287,7 +300,7 @@ internal fun WorkspaceShell(
             SystemSectionSwitcher(destination = destination, onSelected = onSystemSelected)
         }
         Box(Modifier.weight(1f)) { content() }
-        if (!inSystem && !libraryDetailOpen) {
+        if (!inSystem && !detailOpen) {
             Box(Modifier.testTag("workspace-bottom-nav")) {
                 MainNavigationBar(selected = destination, onSelected = onPrimarySelected)
             }

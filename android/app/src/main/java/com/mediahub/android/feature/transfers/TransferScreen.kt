@@ -1,4 +1,5 @@
 package com.mediahub.android.feature.transfers
+import androidx.activity.compose.BackHandler
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -27,6 +29,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Archive
 import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.CircleAlert
@@ -51,34 +54,80 @@ import java.util.Locale
 private val timeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.CHINA)
     .withZone(ZoneId.systemDefault())
 
+internal fun shouldCloseMissingTransferDetail(detailId: String?, state: TransferUiState): Boolean =
+    detailId != null && state.initialized && state.jobs.none { it.id == detailId }
+
+internal fun shouldCloseCompletedTransferDetail(detailId: String?, completedId: String?): Boolean =
+    detailId != null && detailId == completedId
+
+internal data class TransferActions(
+    val select: (String) -> Unit,
+    val refresh: () -> Unit,
+    val back: () -> Unit,
+    val retry: () -> Unit,
+    val retryNotification: (TransferNotification) -> Unit,
+    val showArchived: (Boolean) -> Unit,
+    val setArchived: () -> Unit,
+)
+
 @Composable
-internal fun TransferRoute(viewModel: TransferViewModel) {
+internal fun TransferRoute(
+    viewModel: TransferViewModel,
+    detailId: String?,
+    onDetailChanged: (String?) -> Unit,
+) {
     val uiState by viewModel.uiState.collectAsState()
     DisposableEffect(viewModel) {
         viewModel.startPolling()
         onDispose(viewModel::stopPolling)
     }
-    TransferScreen(
-        uiState = uiState,
-        onSelect = viewModel::select,
-        onRefresh = viewModel::refresh,
-        onRetry = viewModel::retry,
-        onRetryNotification = viewModel::retryNotification,
-        onShowArchived = viewModel::showArchived,
-        onSetArchived = viewModel::setSelectedArchived,
+    LaunchedEffect(detailId, uiState.jobs) {
+        if (detailId == null) {
+            viewModel.closeDetail()
+        } else if (uiState.jobs.any { it.id == detailId } && uiState.selectedId != detailId) {
+            viewModel.select(detailId)
+        } else if (shouldCloseMissingTransferDetail(detailId, uiState)) {
+            viewModel.closeDetail()
+            onDetailChanged(null)
+        }
+    }
+    LaunchedEffect(detailId, uiState.archivedCompletedId) {
+        val completedId = uiState.archivedCompletedId ?: return@LaunchedEffect
+        if (shouldCloseCompletedTransferDetail(detailId, completedId)) {
+            viewModel.closeDetail()
+            onDetailChanged(null)
+        }
+        viewModel.consumeArchivedCompletion(completedId)
+    }
+    val actions = TransferActions(
+        select = { id ->
+            viewModel.select(id)
+            onDetailChanged(id)
+        },
+        refresh = viewModel::refresh,
+        back = {
+            viewModel.closeDetail()
+            onDetailChanged(null)
+        },
+        retry = viewModel::retry,
+        retryNotification = viewModel::retryNotification,
+        showArchived = viewModel::showArchived,
+        setArchived = viewModel::setSelectedArchived,
     )
+    TransferScreen(uiState = uiState, detailOpen = detailId != null, actions = actions)
 }
 
 @Composable
-private fun TransferScreen(
+internal fun TransferScreen(
     uiState: TransferUiState,
-    onSelect: (String) -> Unit,
-    onRefresh: () -> Unit,
-    onRetry: () -> Unit,
-    onRetryNotification: (TransferNotification) -> Unit,
-    onShowArchived: (Boolean) -> Unit,
-    onSetArchived: () -> Unit,
+    detailOpen: Boolean,
+    actions: TransferActions,
 ) {
+    BackHandler(enabled = detailOpen, onBack = actions.back)
+    if (detailOpen) {
+        TransferDetailPage(uiState = uiState, actions = actions)
+        return
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -98,14 +147,14 @@ private fun TransferScreen(
             MediaHubIconButton(
                 imageVector = Lucide.RefreshCw,
                 contentDescription = "刷新任务",
-                onClick = onRefresh,
+                onClick = actions.refresh,
                 enabled = !uiState.refreshing,
             )
         }
         MediaHubSegmentedControl(
             options = listOf("current" to "当前", "archived" to "已归档"),
             selected = if (uiState.archived) "archived" else "current",
-            onSelected = { onShowArchived(it == "archived") },
+            onSelected = { actions.showArchived(it == "archived") },
             modifier = Modifier.padding(bottom = 12.dp),
         )
 
@@ -149,23 +198,54 @@ private fun TransferScreen(
                     TransferRow(
                         job = job,
                         selected = uiState.selectedId == job.id,
-                        onClick = { onSelect(job.id) },
+                        onClick = { actions.select(job.id) },
                     )
                 }
-                uiState.selected?.let { selected ->
-                    item(key = "detail-${selected.id}") {
-                        TransferDetail(
-                            job = selected,
-                            notification = uiState.notifications.firstOrNull { it.jobId == selected.id && it.state == "needs_attention" },
-                            retrying = uiState.retrying,
-                            notificationRetrying = uiState.notificationRetrying,
-                            onRetry = onRetry,
-                            onRetryNotification = onRetryNotification,
-                            archived = uiState.archived,
-                            archiving = uiState.archiving,
-                            onSetArchived = onSetArchived,
-                        )
-                    }
+        }
+        }
+    }
+}
+
+@Composable
+private fun TransferDetailPage(
+    uiState: TransferUiState,
+    actions: TransferActions,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas).padding(horizontal = 16.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MediaHubIconButton(Lucide.ArrowLeft, "返回任务列表", actions.back)
+            Column(Modifier.weight(1f)) {
+                MediaHubText("任务详情", fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+                MediaHubText(
+                    uiState.selected?.let(::transferTitle) ?: "正在读取任务",
+                    color = MediaHubColors.TextMuted,
+                    fontSize = 12.sp,
+                )
+            }
+        }
+        uiState.errorMessage?.let { MediaHubText(it, color = MediaHubColors.Error, fontSize = 12.sp) }
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(bottom = 18.dp),
+        ) {
+            uiState.selected?.let { selected ->
+                item(key = selected.id) {
+                    TransferDetail(
+                        job = selected,
+                        notification = uiState.notifications.firstOrNull { it.jobId == selected.id && it.state == "needs_attention" },
+                        retrying = uiState.retrying,
+                        notificationRetrying = uiState.notificationRetrying,
+                        onRetry = actions.retry,
+                        onRetryNotification = actions.retryNotification,
+                        archived = uiState.archived,
+                        archiving = uiState.archiving,
+                        onSetArchived = actions.setArchived,
+                    )
                 }
             }
         }
@@ -178,7 +258,7 @@ private fun TransferRow(job: TransferJob, selected: Boolean, onClick: () -> Unit
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .background(if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface, RoundedCornerShape(8.dp))
+            .background(if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Canvas, RoundedCornerShape(6.dp))
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
