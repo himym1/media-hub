@@ -165,9 +165,9 @@ class WorkspaceDetailFlowTest {
         composeRule.onNodeWithContentDescription("更多订阅操作").assertExists()
         composeRule.onNodeWithContentDescription("新建订阅").assertExists()
         composeRule.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
-        composeRule.onNodeWithText("示例订阅").assertExists()
+        composeRule.onNodeWithContentDescription("打开订阅 示例订阅").assertExists()
         saveScreenshot("mediahub-subscription-list-large")
-        composeRule.onNodeWithText("示例订阅").performClick()
+        composeRule.onNodeWithContentDescription("打开订阅 示例订阅").performClick()
         composeRule.onNodeWithTag("workspace-top-bar").assertDoesNotExist()
         composeRule.onNodeWithTag("workspace-bottom-nav").assertDoesNotExist()
         composeRule.onNodeWithText("编辑订阅").assertExists()
@@ -177,7 +177,7 @@ class WorkspaceDetailFlowTest {
         composeRule.onNodeWithTag("workspace-top-bar").assertExists()
         composeRule.onNodeWithTag("workspace-bottom-nav").assertExists()
         composeRule.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
-        composeRule.onNodeWithText("示例订阅").assertExists()
+        composeRule.onNodeWithContentDescription("打开订阅 示例订阅").assertExists()
     }
 
     private fun transferJob() = TransferJob(

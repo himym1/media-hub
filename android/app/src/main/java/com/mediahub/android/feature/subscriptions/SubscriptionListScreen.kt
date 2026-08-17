@@ -25,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -141,6 +143,7 @@ internal fun SubscriptionListScreen(
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
                         .clickable(role = Role.Button) { actions.select(item.id) }
+                        .semantics { contentDescription = "打开订阅 ${item.title}" }
                         .padding(vertical = 15.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
