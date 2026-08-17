@@ -190,7 +190,7 @@ func (c *Client) resolveExternalStreamRedirect(
 		return "", err
 	}
 	request.Header.Set("Accept", "*/*")
-	request.Header.Set("Range", "bytes=0-0")
+	// Range requests make some Emby versions proxy remote STRM content instead of returning the configured redirect.
 	request.Header.Set("User-Agent", playbackUserAgent)
 	request.Header.Set("X-Emby-Token", configuration.apiKey)
 	response, err := c.client.Do(request)

@@ -78,7 +78,7 @@ func TestResolveEmbyItemAcceptsExternalRedirectWithoutExposingToken(t *testing.T
 		case "/Items/item-1/PlaybackInfo":
 			_, _ = w.Write([]byte(`{"MediaSources":[{"Id":"source-1","Path":"/private/movie.strm","Container":"mkv"}]}`))
 		case "/Videos/item-1/stream.mkv":
-			if request.Header.Get("Range") != "bytes=0-0" || request.Header.Get("X-Emby-Token") != "emby-key" || request.URL.Query().Get("EnableRedirection") != "true" {
+			if request.Header.Get("Range") != "" || request.Header.Get("X-Emby-Token") != "emby-key" || request.URL.Query().Get("EnableRedirection") != "true" {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
