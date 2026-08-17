@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -100,6 +101,37 @@ fun MediaHubButton(
             Box(Modifier.width(7.dp))
         }
         MiuixText(label, fontSize = 13.sp)
+    }
+}
+
+@Composable
+fun MediaHubSecondaryButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
+) {
+    Row(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .alpha(if (enabled) 1f else 0.45f)
+            .background(MediaHubColors.SurfaceInput, RoundedCornerShape(8.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            MediaHubIcon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MediaHubColors.TextPrimary,
+            )
+            Box(Modifier.width(8.dp))
+        }
+        MediaHubText(text = label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
 

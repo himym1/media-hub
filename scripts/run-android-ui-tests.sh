@@ -14,7 +14,12 @@ for screenshot in \
     mediahub-launcher-icon.png \
     mediahub-launcher-round.png \
     mediahub-launcher-monochrome.png \
-    mediahub-launcher-themed.png; do
+    mediahub-launcher-themed.png \
+    mediahub-system-navigation.png \
+    mediahub-workspace-detail.png \
+    mediahub-library-browse.png \
+    mediahub-library-movie-detail.png \
+    mediahub-library-episodes-large.png; do
     matches=("$output_dir"/**/"$screenshot")
     if (( ${#matches[@]} == 0 )) || [[ ! -s "${matches[0]}" ]]; then
         echo "Missing Android UI evidence: $screenshot" >&2

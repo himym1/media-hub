@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.16.0
+  version: 0.17.0
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -433,6 +433,45 @@ paths:
         '502': { $ref: '#/components/responses/ProblemResponse' }
         '503': { $ref: '#/components/responses/ProblemResponse' }
         '504': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/emby/items/{id}/episodes:
+    get:
+      operationId: getEmbyEpisodes
+      summary: List playable episodes with item-specific Emby fallback URLs
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
+      responses:
+        '200':
+          description: Playable episodes ordered by season and episode
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmbyEpisodeList' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/emby/items/{id}/primary-image:
+    get:
+      operationId: getEmbyPrimaryImage
+      summary: Read a bounded Emby poster without exposing the Emby API key
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
+      responses:
+        '200':
+          description: Bounded primary poster image
+          headers:
+            Cache-Control: { schema: { type: string } }
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
   /integrations/emby/items/{id}/refresh:
     post:
       operationId: refreshEmbyItem
@@ -527,16 +566,38 @@ paths:
         '502': { $ref: '#/components/responses/ProblemResponse' }
   /playback/descriptors:
     post:
-      operationId: createPlaybackDescriptor
-      summary: Resolve one trusted 115 video file into an upstream temporary playback description
-      description: The upstream URL lifetime may be unknown. Clients must re-resolve the same parentId/fileId after a recognized expiration response.
+      operationId: createLegacyDrive115PlaybackDescriptor
+      deprecated: true
+      summary: Legacy alias for a trusted 115 playback descriptor
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/PlaybackDescriptorRequest' }
+            schema: { $ref: '#/components/schemas/Drive115PlaybackTarget' }
+      responses:
+        '201':
+          description: Upstream-issued playback description
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlaybackDescriptor' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /playback/descriptors/drive115:
+    post:
+      operationId: createDrive115PlaybackDescriptor
+      summary: Resolve one trusted 115 video file into an upstream temporary playback description
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Drive115PlaybackTarget' }
       responses:
         '201':
           description: Upstream-issued playback description; Media Hub does not proxy media bytes
@@ -548,6 +609,48 @@ paths:
         '404': { $ref: '#/components/responses/ProblemResponse' }
         '502': { $ref: '#/components/responses/ProblemResponse' }
         '503': { $ref: '#/components/responses/ProblemResponse' }
+  /playback/descriptors/emby:
+    post:
+      operationId: createEmbyPlaybackDescriptor
+      summary: Resolve one Emby movie or episode to an external HTTPS stream
+      description: Returns direct media only when Emby exposes an external HTTPS path or redirect; Emby credentials remain server-side.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmbyPlaybackTarget' }
+      responses:
+        '201':
+          description: Direct playback descriptor with an optional opaque Emby progress session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlaybackDescriptor' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /playback/sessions/{id}/events:
+    post:
+      operationId: reportPlaybackSessionEvent
+      summary: Forward ordered Media3 playback progress to the owning media provider
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-f0-9]{48}$' } }
+        - { $ref: '#/components/parameters/CSRFToken' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlaybackSessionEvent' }
+      responses:
+        '204': { description: Event accepted by the owning provider }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
   /integrations/115/commands:
     get:
       operationId: listDrive115Commands
@@ -1692,6 +1795,22 @@ components:
           type: object
           additionalProperties:
             type: string
+        season: { type: integer, minimum: 0 }
+        episode: { type: integer, minimum: 0 }
+    EmbyEpisode:
+      allOf:
+        - $ref: '#/components/schemas/EmbyItem'
+        - type: object
+          required: [externalUrl]
+          properties:
+            externalUrl: { type: string, format: uri }
+            appUrl: { type: string, format: uri, pattern: '^emby://items/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$' }
+    EmbyEpisodeList:
+      type: object
+      required: [items, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/EmbyEpisode' } }
+        total: { type: integer, minimum: 0 }
     EmbyItemDetail:
       allOf:
         - $ref: '#/components/schemas/EmbyItem'
@@ -1738,13 +1857,19 @@ components:
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Drive115File' } }
         total: { type: integer, minimum: 0 }
-    PlaybackDescriptorRequest:
+    Drive115PlaybackTarget:
       type: object
       additionalProperties: false
       required: [parentId, fileId]
       properties:
         parentId: { type: string, pattern: '^[0-9]{1,32}$' }
         fileId: { type: string, pattern: '^[0-9]{1,32}$' }
+    EmbyPlaybackTarget:
+      type: object
+      additionalProperties: false
+      required: [itemId]
+      properties:
+        itemId: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' }
     PlaybackDescriptor:
       type: object
       additionalProperties: false
@@ -1753,10 +1878,23 @@ components:
         streamUrl: { type: string, format: uri, pattern: '^https://' }
         userAgent: { type: string, minLength: 1, maxLength: 512 }
         title: { type: string, minLength: 1, maxLength: 255 }
+        startPositionMs: { type: integer, format: int64, minimum: 0, maximum: 604800000 }
         expiresAt:
           type: string
           format: date-time
           description: Present only when the upstream provides a verifiable expiry.
+        sessionId:
+          type: string
+          pattern: '^[a-f0-9]{48}$'
+          description: Opaque user-bound session used to synchronize provider playback progress.
+    PlaybackSessionEvent:
+      type: object
+      additionalProperties: false
+      required: [event, positionMs, paused]
+      properties:
+        event: { type: string, enum: [started, progress, stopped] }
+        positionMs: { type: integer, format: int64, minimum: 0, maximum: 604800000 }
+        paused: { type: boolean }
     Drive115CommandInput:
       type: object
       required: [operation, params]

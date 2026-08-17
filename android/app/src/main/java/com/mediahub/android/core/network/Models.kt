@@ -293,11 +293,19 @@ data class EmbyItem(
     val type: String,
     val year: Int?,
     val tmdbId: String?,
+    val season: Int = 0,
+    val episode: Int = 0,
 )
 
 data class EmbyItemPage(
     val items: List<EmbyItem>,
     val total: Int,
+)
+
+data class EmbyEpisode(
+    val item: EmbyItem,
+    val externalUrl: String,
+    val appUrl: String?,
 )
 
 data class EmbyItemDetail(

@@ -285,6 +285,20 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         )
     }
 
+    suspend fun episodes(token: String, seriesId: String): List<EmbyEpisode> {
+        val payload = JSONObject(request(
+            "/api/v1/integrations/emby/items/${encode(seriesId)}/episodes",
+            token = token,
+        ))
+        return payload.getJSONArray("items").objects { value ->
+            EmbyEpisode(
+                item = parseEmbyItem(value),
+                externalUrl = value.getString("externalUrl"),
+                appUrl = value.optionalString("appUrl"),
+            )
+        }
+    }
+
     suspend fun refreshLibrary(token: String, libraryId: String) {
         request("/api/v1/integrations/emby/libraries/${encode(libraryId)}/refresh", method = "POST", token = token)
     }
@@ -539,6 +553,8 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         type = item.getString("type"),
         year = if (item.has("year")) item.getInt("year") else null,
         tmdbId = item.optJSONObject("providerIds")?.optionalString("Tmdb"),
+        season = item.optInt("season", 0),
+        episode = item.optInt("episode", 0),
     )
 
 

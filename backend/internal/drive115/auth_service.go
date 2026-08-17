@@ -408,14 +408,14 @@ func (s *AuthService) ListFiles(ctx context.Context, parentID string, limit, off
 	return s.drive.ListFiles(ctx, parentID, limit, offset)
 }
 
-func (s *AuthService) Resolve(ctx context.Context, parentID, fileID, playbackUserAgent string) (playback.SourceMedia, error) {
+func (s *AuthService) ResolveDrive115(ctx context.Context, target playback.Drive115Target, playbackUserAgent string) (playback.SourceMedia, error) {
 	if err := s.prepareSession(ctx); err != nil {
 		return playback.SourceMedia{}, normalizePlaybackSourceError(err)
 	}
-	return s.drive.resolvePlayback(ctx, parentID, fileID, playbackUserAgent)
+	return s.drive.resolvePlayback(ctx, target, playbackUserAgent)
 }
 
-var _ playback.Source = (*AuthService)(nil)
+var _ playback.Drive115Resolver = (*AuthService)(nil)
 
 func (s *AuthService) FolderPath(ctx context.Context, folderID string) (string, error) {
 	if err := s.prepareSession(ctx); err != nil {

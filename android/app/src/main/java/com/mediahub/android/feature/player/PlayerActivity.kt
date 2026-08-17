@@ -10,6 +10,7 @@ import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -56,9 +57,10 @@ class PlayerActivity : ComponentActivity() {
                     onControllerChanged = { activeController = it },
                     actions = PlayerActions(
                         onRetry = {},
-                        onBack = ::finish,
+                        onBack = ::closePlayer,
                         onToggleOrientation = ::toggleOrientation,
                         onEnterPictureInPicture = ::enterPictureInPicture,
+                        onFallback = request.fallback?.let { { openFallback() } },
                     ),
                 )
             }
@@ -80,6 +82,28 @@ class PlayerActivity : ComponentActivity() {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus && !isInPictureInPictureMode) hideSystemBars()
     }
+    private fun closePlayer() {
+        startService(MediaHubPlaybackService.invalidateIntent(this))
+        finish()
+    }
+    private fun openFallback() {
+        val fallback = request.fallback ?: return
+        startService(MediaHubPlaybackService.invalidateIntent(this))
+        val opened = fallback.appUrl?.let { appUrl ->
+            runCatching {
+                startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(appUrl)).setPackage("com.mb.android"))
+            }.isSuccess
+        } == true || fallback.webUrl?.let { webUrl ->
+            runCatching { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(webUrl))) }.isSuccess
+        } == true
+        if (opened) {
+            finish()
+        } else {
+            Toast.makeText(this, "无法打开 Emby", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
 
     private fun hideSystemBars() {
         WindowCompat.setDecorFitsSystemWindows(window, false)

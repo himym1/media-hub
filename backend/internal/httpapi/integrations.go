@@ -116,6 +116,47 @@ func (h *handler) getEmbyItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+func (h *handler) getEmbyEpisodes(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Emby == nil {
+		writeIntegrationUnavailable(w)
+		return
+	}
+	seriesID := r.PathValue("id")
+	if !embyIDPattern.MatchString(seriesID) {
+		writeInvalidEmbyID(w)
+		return
+	}
+	episodes, err := h.dependencies.Emby.Episodes(r.Context(), seriesID)
+	if err != nil {
+		writeIntegrationProblem(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": episodes, "total": len(episodes)})
+}
+
+func (h *handler) getEmbyPrimaryImage(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Emby == nil {
+		writeIntegrationUnavailable(w)
+		return
+	}
+	itemID := r.PathValue("id")
+	if !embyIDPattern.MatchString(itemID) {
+		writeInvalidEmbyID(w)
+		return
+	}
+	image, err := h.dependencies.Emby.PrimaryImage(r.Context(), itemID, 320)
+	if err != nil {
+		writeIntegrationProblem(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", image.ContentType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(image.Data)))
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(image.Data)
+}
+
 func (h *handler) refreshEmbyLibrary(w http.ResponseWriter, r *http.Request) {
 	h.refreshEmbyObject(w, r, true)
 }

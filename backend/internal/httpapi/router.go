@@ -65,6 +65,8 @@ type EmbyReader interface {
 	ItemDetails(context.Context, string) (emby.ItemDetail, error)
 	RefreshLibrary(context.Context, string) error
 	RefreshItem(context.Context, string) error
+	Episodes(context.Context, string) ([]emby.Episode, error)
+	PrimaryImage(context.Context, string, int) (emby.PrimaryImage, error)
 }
 
 type Drive115Reader interface {
@@ -86,7 +88,9 @@ type Drive115CommandService interface {
 }
 
 type PlaybackService interface {
-	Create(context.Context, string, string) (playback.Descriptor, error)
+	CreateDrive115(context.Context, playback.Drive115Target) (playback.Descriptor, error)
+	CreateEmbyItem(context.Context, int64, playback.EmbyItemTarget) (playback.Descriptor, error)
+	Report(context.Context, int64, string, playback.SessionEvent) error
 }
 
 type ArchiveService interface {
@@ -206,13 +210,18 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/integrations/emby/libraries/{id}/items", h.protected(h.browseEmbyLibraryItems))
 	mux.Handle("POST /api/v1/integrations/emby/libraries/{id}/refresh", h.protected(h.refreshEmbyLibrary))
 	mux.Handle("GET /api/v1/integrations/emby/items/{id}", h.protected(h.getEmbyItem))
+	mux.Handle("GET /api/v1/integrations/emby/items/{id}/episodes", h.protected(h.getEmbyEpisodes))
+	mux.Handle("GET /api/v1/integrations/emby/items/{id}/primary-image", h.protected(h.getEmbyPrimaryImage))
 	mux.Handle("POST /api/v1/integrations/emby/items/{id}/refresh", h.protected(h.refreshEmbyItem))
 	mux.Handle("POST /api/v1/integrations/wecom/test", h.protected(h.testWeComNotification))
+	mux.Handle("POST /api/v1/playback/sessions/{id}/events", h.protected(h.reportPlaybackSession))
 	mux.Handle("GET /api/v1/integrations/115/status", h.protected(h.getDrive115Status))
 	mux.Handle("POST /api/v1/integrations/115/auth/device", h.protected(h.startDrive115Authorization))
 	mux.Handle("GET /api/v1/integrations/115/auth/device/{id}", h.protected(h.pollDrive115Authorization))
 	mux.Handle("GET /api/v1/integrations/115/files", h.protected(h.listDrive115Files))
-	mux.Handle("POST /api/v1/playback/descriptors", h.protected(h.createPlayback))
+	mux.Handle("POST /api/v1/playback/descriptors", h.protected(h.createDrive115Playback))
+	mux.Handle("POST /api/v1/playback/descriptors/drive115", h.protected(h.createDrive115Playback))
+	mux.Handle("POST /api/v1/playback/descriptors/emby", h.protected(h.createEmbyPlayback))
 	mux.Handle("POST /api/v1/integrations/115/commands", h.protected(h.createDrive115Command))
 	mux.Handle("GET /api/v1/integrations/115/commands", h.protected(h.listDrive115Commands))
 	mux.Handle("GET /api/v1/integrations/115/commands/{id}", h.protected(h.getDrive115Command))

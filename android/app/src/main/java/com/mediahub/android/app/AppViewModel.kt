@@ -26,6 +26,29 @@ val primaryDestinations = listOf(
     MainDestination.Library,
 )
 
+internal class MainNavigationHistory(
+    initial: MainDestination = MainDestination.Search,
+) {
+    private var lastPrimary = initial.takeIf { it in primaryDestinations } ?: MainDestination.Search
+
+    fun show(destination: MainDestination): MainDestination {
+        if (destination in primaryDestinations) lastPrimary = destination
+        return destination
+    }
+
+    fun openSystem(): MainDestination = MainDestination.Services
+
+    fun showSystem(destination: MainDestination): MainDestination =
+        destination.takeIf { it == MainDestination.Services || it == MainDestination.Operations } ?: MainDestination.Services
+
+    fun closeSystem(): MainDestination = lastPrimary
+
+    fun reset(): MainDestination {
+        lastPrimary = MainDestination.Search
+        return lastPrimary
+    }
+}
+
 sealed interface AppState {
     data object Loading : AppState
     data object Authenticated : AppState
@@ -41,6 +64,7 @@ class AppViewModel(
 
     private val _destination = MutableStateFlow(MainDestination.Search)
     val destination: StateFlow<MainDestination> = _destination.asStateFlow()
+    private val navigation = MainNavigationHistory()
 
     private val _subscriptionDraft = MutableStateFlow<SearchCandidate?>(null)
     val subscriptionDraft: StateFlow<SearchCandidate?> = _subscriptionDraft.asStateFlow()
@@ -48,7 +72,7 @@ class AppViewModel(
     init {
         viewModelScope.launch {
             repository.sessionExpired.collect {
-                _destination.value = MainDestination.Search
+                _destination.value = navigation.reset()
                 _subscriptionDraft.value = null
                 _state.value = AppState.Unauthenticated
             }
@@ -76,7 +100,7 @@ class AppViewModel(
     fun prepareSubscription(candidate: SearchCandidate) {
         if (candidate.tmdbId == null || candidate.transferState == "identity_required") return
         _subscriptionDraft.value = candidate
-        _destination.value = MainDestination.Subscriptions
+        showDestination(MainDestination.Subscriptions)
     }
 
     fun consumeSubscriptionDraft() {
@@ -84,13 +108,25 @@ class AppViewModel(
     }
 
     fun showDestination(destination: MainDestination) {
-        _destination.value = destination
+        _destination.value = navigation.show(destination)
+    }
+
+    fun openSystem() {
+        _destination.value = navigation.openSystem()
+    }
+
+    fun showSystemDestination(destination: MainDestination) {
+        _destination.value = navigation.showSystem(destination)
+    }
+
+    fun closeSystem() {
+        _destination.value = navigation.closeSystem()
     }
 
     fun logout() {
         viewModelScope.launch {
             runCatching { repository.logout() }
-            _destination.value = MainDestination.Search
+            _destination.value = navigation.reset()
             _subscriptionDraft.value = null
             _state.value = AppState.Unauthenticated
         }

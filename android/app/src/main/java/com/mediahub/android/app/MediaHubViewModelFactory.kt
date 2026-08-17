@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.mediahub.android.data.MediaHubRepository
 import com.mediahub.android.feature.auth.AuthViewModel
+import com.mediahub.android.feature.library.LibraryDetailViewModel
 import com.mediahub.android.feature.library.LibraryViewModel
 import com.mediahub.android.feature.operations.OperationsViewModel
 import com.mediahub.android.feature.search.SearchViewModel
@@ -21,6 +22,7 @@ class MediaHubViewModelFactory(
         modelClass.isAssignableFrom(SearchViewModel::class.java) -> SearchViewModel(repository) as T
         modelClass.isAssignableFrom(TransferViewModel::class.java) -> TransferViewModel(repository) as T
         modelClass.isAssignableFrom(LibraryViewModel::class.java) -> LibraryViewModel(repository) as T
+        modelClass.isAssignableFrom(LibraryDetailViewModel::class.java) -> LibraryDetailViewModel(repository) as T
         modelClass.isAssignableFrom(ServicesViewModel::class.java) -> ServicesViewModel(repository) as T
         modelClass.isAssignableFrom(OperationsViewModel::class.java) -> OperationsViewModel(repository) as T
         modelClass.isAssignableFrom(SubscriptionViewModel::class.java) -> SubscriptionViewModel(repository) as T

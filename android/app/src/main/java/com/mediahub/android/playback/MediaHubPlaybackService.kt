@@ -29,23 +29,38 @@ class MediaHubPlaybackService : MediaSessionService() {
     private lateinit var player: ExoPlayer
     private lateinit var mediaSession: MediaSession
     private lateinit var httpFactory: DefaultHttpDataSource.Factory
+    private lateinit var sessionReporter: PlaybackSessionReporter
+    private lateinit var sessionTracker: PlaybackSessionTracker
     private var currentRequest: PlaybackRequest? = null
     private var refreshing = false
     private val recoveryCoordinator = PlaybackRecoveryCoordinator()
-    private var resolveJob: Job? = null
     private var resolveGeneration = 0L
+    private var commandGeneration = 0L
+    private var commandJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
+        sessionReporter = PlaybackSessionReporter {
+            (application as MediaHubApplication).container.requireConfigured().playbackRepository
+        }
         httpFactory = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(false)
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, httpFactory)))
             .build()
+        sessionTracker = PlaybackSessionTracker(
+            scope = scope,
+            reporter = sessionReporter,
+            positionMs = { player.currentPosition.coerceAtLeast(0L) },
+            paused = { !player.isPlaying },
+        )
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) {
                     recoveryCoordinator.onReady()
                     publishState(STATE_READY, null)
+                    sessionTracker.onReady()
+                } else if (playbackState == Player.STATE_ENDED) {
+                    sessionTracker.stop()
                 }
             }
 
@@ -62,7 +77,18 @@ class MediaHubPlaybackService : MediaSessionService() {
                     publishState(STATE_ERROR, "视频连接中断")
                     return
                 }
-                resolveAndPlay(action.request, action.positionMs, action.autoPlay, refresh = true)
+                val command = ++commandGeneration
+                commandJob?.cancel()
+                commandJob = scope.launch {
+                    if (command != commandGeneration || currentRequest?.mediaId != action.request.mediaId) return@launch
+                    resolveAndPlay(
+                        action.request, action.positionMs, action.autoPlay, refresh = true, command = command,
+                    )
+                }
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                sessionTracker.onPlayingChanged()
             }
         })
         mediaSession = MediaSession.Builder(this, player)
@@ -73,23 +99,33 @@ class MediaHubPlaybackService : MediaSessionService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_INVALIDATE -> {
-                invalidatePlayback()
-                stopSelf()
+                val command = ++commandGeneration
+                commandJob?.cancel()
+                commandJob = scope.launch {
+                    if (command != commandGeneration) return@launch
+                    sessionTracker.stopAndFlush()
+                    if (command != commandGeneration) return@launch
+                    invalidatePlayback()
+                    stopSelf()
+                }
             }
             ACTION_PLAY -> {
                 val request = PlaybackRequestIntentCodec.read(intent)
                 if (request != null) {
-                    val sameMedia = currentRequest?.mediaId == request.mediaId && player.currentMediaItem != null
                     val force = intent.getBooleanExtra(EXTRA_FORCE, false)
-                    if (!sameMedia || force) {
-                        val position = if (sameMedia) player.currentPosition.coerceAtLeast(0L) else 0L
-                        if (!sameMedia) {
-                            player.stop()
-                            player.clearMediaItems()
-                        }
+                    val command = ++commandGeneration
+                    commandJob?.cancel()
+                    commandJob = scope.launch {
+                        if (command != commandGeneration) return@launch
+                        val sameMedia = currentRequest?.mediaId == request.mediaId && player.currentMediaItem != null
+                        if (sameMedia && !force) return@launch
+                        sessionTracker.stopAndFlush()
+                        if (command != commandGeneration) return@launch
+                        player.stop()
+                        player.clearMediaItems()
                         currentRequest = request
                         recoveryCoordinator.onReady()
-                        resolveAndPlay(request, position, true, refresh = force)
+                        resolveAndPlay(request, 0L, true, refresh = force, command = command)
                     }
                 }
             }
@@ -100,7 +136,8 @@ class MediaHubPlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession = mediaSession
 
     override fun onDestroy() {
-        resolveJob?.cancel()
+        commandJob?.cancel()
+        sessionTracker.closeBestEffort()
         scope.cancel()
         mediaSession.release()
         player.release()
@@ -108,7 +145,6 @@ class MediaHubPlaybackService : MediaSessionService() {
     }
 
     private fun invalidatePlayback() {
-        resolveJob?.cancel()
         resolveGeneration++
         refreshing = false
         currentRequest = null
@@ -117,51 +153,53 @@ class MediaHubPlaybackService : MediaSessionService() {
         publishState(STATE_LOADING, null)
     }
 
-    private fun resolveAndPlay(
+    private suspend fun resolveAndPlay(
         request: PlaybackRequest,
         positionMs: Long,
         autoPlay: Boolean,
         refresh: Boolean,
+        command: Long,
     ) {
-        resolveJob?.cancel()
+        if (command != commandGeneration) return
         val generation = ++resolveGeneration
-        resolveJob = scope.launch {
-            refreshing = refresh
-            publishState(STATE_LOADING, null)
-            try {
-                val dependencies = (application as MediaHubApplication).container.requireConfigured()
-                if (!matchesServerIdentity(request, dependencies.serverIdentity)) {
-                    currentRequest = null
-                    player.stop()
-                    player.clearMediaItems()
-                    publishState(STATE_ERROR, "服务器已切换，请返回后重新选择视频")
-                    return@launch
-                }
-                val descriptor = dependencies.playbackRepository.createDescriptor(request)
-                if (generation != resolveGeneration || currentRequest?.mediaId != request.mediaId) return@launch
-                play(request, descriptor, positionMs, autoPlay)
-            } catch (_: Exception) {
-                if (generation == resolveGeneration && currentRequest?.mediaId == request.mediaId) {
-                    publishState(STATE_ERROR, if (refresh) "播放地址已失效，重新连接失败" else "暂时无法播放这个 115 文件")
-                }
-            } finally {
-                if (generation == resolveGeneration) refreshing = false
+        refreshing = refresh
+        publishState(STATE_LOADING, null)
+        try {
+            val dependencies = (application as MediaHubApplication).container.requireConfigured()
+            if (!matchesServerIdentity(request, dependencies.serverIdentity)) {
+                currentRequest = null
+                player.stop()
+                player.clearMediaItems()
+                publishState(STATE_ERROR, "服务器已切换，请返回后重新选择视频")
+                return
             }
+            val descriptor = dependencies.playbackRepository.createDescriptor(request)
+            if (command != commandGeneration || generation != resolveGeneration || currentRequest?.mediaId != request.mediaId) return
+            play(request, descriptor, positionMs, autoPlay)
+        } catch (_: Exception) {
+            if (command == commandGeneration && generation == resolveGeneration && currentRequest?.mediaId == request.mediaId) {
+                publishState(STATE_ERROR, if (refresh) "播放地址已失效，重新连接失败" else "暂时无法直接播放")
+            }
+        } finally {
+            if (generation == resolveGeneration) refreshing = false
         }
     }
 
     private fun play(request: PlaybackRequest, descriptor: PlaybackDescriptor, positionMs: Long, autoPlay: Boolean) {
         currentRequest = request
+        sessionTracker.attach(descriptor.sessionId)
         httpFactory.setUserAgent(descriptor.userAgent)
         val item = MediaItem.Builder()
             .setMediaId(request.mediaId)
             .setUri(descriptor.streamUrl.toUri())
             .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder().setTitle(descriptor.title).build())
             .build()
-        player.setMediaItem(item, positionMs)
+        val startPositionMs = positionMs.takeIf { it > 0L } ?: descriptor.startPositionMs
+        player.setMediaItem(item, startPositionMs)
         player.prepare()
         player.playWhenReady = autoPlay
     }
+
 
     private fun publishState(state: String, message: String?) {
         mediaSession.setSessionExtras(stateExtras(state, message))

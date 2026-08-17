@@ -41,7 +41,7 @@ func TestAuthServiceResolvesPlaybackByTrustedFileMetadata(t *testing.T) {
 	client.fileInfoURL = server.URL + "/info"
 	client.downloadURL = server.URL + "/download"
 	service := NewAuthService(nil, nil, client, time.Second)
-	value, err := service.Resolve(context.Background(), "10", "20", playbackUA)
+	value, err := service.ResolveDrive115(context.Background(), playback.Drive115Target{ParentID: "10", FileID: "20"}, playbackUA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestResolvePlaybackRejectsMismatchedParentAndUnknownFile(t *testing.T) {
 	client.fileInfoURL = server.URL
 	service := NewAuthService(nil, nil, client, time.Second)
 	for _, fileID := range []string{"20", "99"} {
-		_, err := service.Resolve(context.Background(), "10", fileID, "player")
+		_, err := service.ResolveDrive115(context.Background(), playback.Drive115Target{ParentID: "10", FileID: fileID}, "player")
 		if !errors.Is(err, playback.ErrNotFound) {
 			t.Fatalf("fileID=%s error=%v", fileID, err)
 		}
@@ -72,7 +72,7 @@ func TestResolvePlaybackRejectsMismatchedParentAndUnknownFile(t *testing.T) {
 
 func TestResolvePlaybackRequiresPreparedSession(t *testing.T) {
 	service := NewAuthService(nil, nil, NewClient("", time.Second), time.Second)
-	_, err := service.Resolve(context.Background(), "10", "20", "player")
+	_, err := service.ResolveDrive115(context.Background(), playback.Drive115Target{ParentID: "10", FileID: "20"}, "player")
 	if !errors.Is(err, playback.ErrSourceNotConfigured) {
 		t.Fatalf("error=%v", err)
 	}

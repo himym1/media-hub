@@ -4,6 +4,7 @@ import android.content.Context
 import com.mediahub.android.BuildConfig
 import com.mediahub.android.core.auth.SecureSessionStore
 import com.mediahub.android.core.config.ServerUrlStore
+import com.mediahub.android.core.image.EmbyPosterLoader
 import com.mediahub.android.core.network.MediaHubApi
 import com.mediahub.android.core.network.MediaHubHttpClient
 import com.mediahub.android.data.MediaHubRepository
@@ -31,6 +32,7 @@ class AppContainer(context: Context) {
             serverIdentity = serverIdentity(transport.baseUrl),
             repository = MediaHubRepository(MediaHubApi(transport), sessionStore),
             playbackRepository = NetworkPlaybackRepository(transport, sessionStore),
+            posterLoader = EmbyPosterLoader(transport, sessionStore),
         ).also { configured = it }
     }
 
@@ -52,6 +54,7 @@ data class ConfiguredDependencies(
     val serverIdentity: String,
     val repository: MediaHubRepository,
     val playbackRepository: PlaybackRepository,
+    val posterLoader: EmbyPosterLoader,
 )
 
 private fun serverIdentity(serverUrl: String): String =

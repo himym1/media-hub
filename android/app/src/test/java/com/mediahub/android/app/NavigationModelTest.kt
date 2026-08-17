@@ -29,4 +29,15 @@ class NavigationModelTest {
         assertEquals("运维", MainDestination.Operations.title)
         assertEquals("服务与设置", MainDestination.Services.title)
     }
+
+    @Test
+    fun systemLayerReturnsToEachPreviouslySelectedPrimaryDestination() {
+        val navigation = MainNavigationHistory()
+        for (primary in listOf(MainDestination.Transfers, MainDestination.Subscriptions, MainDestination.Library)) {
+            assertEquals(primary, navigation.show(primary))
+            assertEquals(MainDestination.Services, navigation.openSystem())
+            assertEquals(MainDestination.Operations, navigation.showSystem(MainDestination.Operations))
+            assertEquals(primary, navigation.closeSystem())
+        }
+    }
 }

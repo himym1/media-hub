@@ -20,7 +20,7 @@ class EmbyOpenTargetTest {
 
     @Test
     fun labelsMatchTheResolvedDestination() {
-        assertEquals("在 Emby App 中打开", embyOpenLabel(appAvailable = true))
-        assertEquals("打开 Emby 网页", embyOpenLabel(appAvailable = false))
+        assertEquals("使用 Emby 播放", embyPlayLabel(appAvailable = true))
+        assertEquals("在 Emby 网页中播放", embyPlayLabel(appAvailable = false))
     }
 }

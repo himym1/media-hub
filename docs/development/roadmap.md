@@ -56,12 +56,13 @@ Implementation status: SQLite persistence, scheduler, source/release rules, epis
 - [x] Source health/search/transfer capabilities use one project-owned contract; provider-specific login, feeds, and check-in remain adapter responsibilities.
 - [x] 115 QR login, connection testing, destination routing, bounded browsing, durable file commands, archive plans, and symlink-rejecting local upload.
 - [x] QMediaSync-backed synchronization records, persisted transfer events, Emby refresh, and playback verification replace SubX STRM operations.
+- [ ] Promote Android Emby-managed Media3 playback from experimental after real movie/episode redirect, Range seek, resume, progress, and fallback acceptance.
 - [x] Native user-scoped operational summary and Media Hub-owned structured logs; provider-private logs are not proxied.
 - [x] MoviePilot and Telegram are intentionally rejected by the product boundary; Enterprise WeChat is the supported notification channel.
 - [x] Native administrator password change with Argon2id rehashing and transactional revocation of other sessions.
 - [x] Authenticated Enterprise WeChat delivery-state list and exact-ID-confirmed manual resend for uncertain outcomes.
 
-Media Hub will not implement SubX playback proxy routes: QMediaSync and Emby retain the managed-library path, while Android direct-file playback uses an authenticated upstream description and sends media directly from 115 CDN to Media3.
+Media Hub will not implement SubX playback proxy routes: Android resolves typed 115 or Emby targets to external HTTPS media, Media3 connects directly, and Emby App/Web remains the fallback. Media Hub forwards opaque playback progress events but never proxies media bytes.
 
 Exit gate: every item in the [SubX parity matrix](../integrations/subx-parity.md) has a tested native, delegated, optional, or intentionally rejected mapping.
 

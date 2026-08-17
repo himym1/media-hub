@@ -54,6 +54,32 @@ class MediaHubHttpClient(baseUrl: String) {
         }
     }
 
+    suspend fun requestBytes(
+        path: String,
+        token: String,
+        maxBytes: Int = 2 * 1024 * 1024,
+    ): ByteArray = withContext(Dispatchers.IO) {
+        require(path.startsWith('/')) { "Media Hub API path must be absolute" }
+        val connection = URL(baseUrl + path).openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            connection.readTimeout = READ_TIMEOUT_MS
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Accept", "image/webp,image/png,image/jpeg")
+            connection.setRequestProperty("Authorization", "Bearer $token")
+            connection.setRequestProperty("User-Agent", "Media-Hub-Android/${BuildConfig.VERSION_NAME}")
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                val problem = connection.errorStream.readLimited(MAX_RESPONSE_BYTES)
+                throw parseError(status, problem)
+            }
+            connection.inputStream.readBytesLimited(maxBytes)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     private fun parseError(status: Int, body: String): ApiException {
         val payload = runCatching { JSONObject(body) }.getOrNull()
         return ApiException(
@@ -61,6 +87,20 @@ class MediaHubHttpClient(baseUrl: String) {
             code = payload?.optString("code")?.takeIf(String::isNotBlank) ?: "request_failed",
             message = payload?.optString("title")?.takeIf(String::isNotBlank) ?: "请求失败",
         )
+    }
+
+    private fun InputStream.readBytesLimited(limit: Int): ByteArray = use { input ->
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        var total = 0
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            total += count
+            if (total > limit) throw IOException("Media Hub image response exceeded size limit")
+            output.write(buffer, 0, count)
+        }
+        output.toByteArray()
     }
 
     private fun InputStream?.readLimited(limit: Int): String {

@@ -22,8 +22,9 @@
                               +--------+ +---+ +----------+
 
 Video playback paths:
-- Managed library: Media Hub -> Emby -> STRM -> 115 CDN -> Player
-- Android direct file: Media Hub playback description -> Media3 -> 115 CDN
+- Managed Android library: Emby metadata/episodes -> Media Hub playback descriptor -> Media3 -> 115 CDN
+- Emby fallback: Media Hub -> Emby App/Web -> STRM -> 115 CDN
+- Diagnostic direct file: trusted 115 file -> Media Hub playback descriptor -> Media3 -> 115 CDN
 ```
 
 ## Runtime Containers
@@ -58,7 +59,7 @@ The Web build is embedded into the Go server image for deployment. Development k
 - `workflow`: durable stage machine, retries, and compensation rules.
 - `qms`: QMediaSync synchronization adapter.
 - `emby`: duplicate checks, refresh, index checks, and playback readiness.
-- `playback`: validates trusted 115 file targets and returns upstream temporary playback descriptions without proxying media.
+- `playback`: resolves typed trusted 115 and Emby item targets, owns opaque progress sessions, and validates upstream HTTPS descriptions without proxying media.
 - `notify`: enterprise WeChat delivery with idempotent event keys.
 - `store`: SQLite repositories and migrations.
 - `httpapi`: versioned HTTP API and Web static serving.
@@ -127,7 +128,7 @@ SQLite WAL is sufficient for the expected single-node workload. A PostgreSQL mig
 - Passwords use a memory-hard hash.
 - Sessions use secure, HTTP-only cookies on Web and revocable bearer tokens on Android.
 - Provider secrets are encrypted at rest with a key supplied outside the database.
-- API responses and logs never contain 115 cookies, share passwords, API keys, or enterprise WeChat secrets. The authenticated playback-description endpoint may return an upstream temporary 115 HTTPS URL to Android memory; it is never persisted or logged.
+- API responses and logs never contain 115 cookies, share passwords, API keys, or enterprise WeChat secrets. Authenticated playback descriptors may return an upstream temporary HTTPS URL to Android memory; URLs are never persisted or logged, and opaque sessions synchronize Emby progress without exposing provider credentials.
 - CORS is disabled in production because Web is served from the same origin.
 - Mutating operations require CSRF protection for cookie-authenticated Web requests.
 

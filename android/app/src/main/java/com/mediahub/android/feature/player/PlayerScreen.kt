@@ -22,6 +22,7 @@ import com.composables.icons.lucide.PictureInPicture2
 import com.composables.icons.lucide.RotateCw
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubText
 
 internal sealed interface PlayerUiState {
@@ -35,6 +36,7 @@ internal data class PlayerActions(
     val onBack: () -> Unit,
     val onToggleOrientation: () -> Unit,
     val onEnterPictureInPicture: () -> Unit,
+    val onFallback: (() -> Unit)? = null,
 )
 
 @Composable
@@ -58,7 +60,7 @@ internal fun PlayerScreen(
         }
         when (state) {
             PlayerUiState.Loading -> MediaHubText(
-                "正在准备 115 视频…",
+                "正在准备视频…",
                 color = Color.White,
                 modifier = Modifier.align(Alignment.Center),
             )
@@ -69,6 +71,9 @@ internal fun PlayerScreen(
             ) {
                 MediaHubText(state.message, color = Color.White)
                 MediaHubButton("重试", onClick = actions.onRetry)
+                actions.onFallback?.let { fallback ->
+                    MediaHubSecondaryButton("使用 Emby 播放", onClick = fallback)
+                }
             }
             PlayerUiState.Ready -> Unit
         }

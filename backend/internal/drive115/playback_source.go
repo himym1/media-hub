@@ -20,15 +20,15 @@ type playbackFileInfo struct {
 	PickCode string
 }
 
-func (c *Client) resolvePlayback(ctx context.Context, parentID, fileID, playbackUserAgent string) (playback.SourceMedia, error) {
-	if !numericIDPattern.MatchString(parentID) || !numericIDPattern.MatchString(fileID) || strings.TrimSpace(playbackUserAgent) == "" {
+func (c *Client) resolvePlayback(ctx context.Context, target playback.Drive115Target, playbackUserAgent string) (playback.SourceMedia, error) {
+	if !numericIDPattern.MatchString(target.ParentID) || !numericIDPattern.MatchString(target.FileID) || strings.TrimSpace(playbackUserAgent) == "" {
 		return playback.SourceMedia{}, playback.ErrInvalidRequest
 	}
-	info, err := c.playbackFileInfo(ctx, fileID)
+	info, err := c.playbackFileInfo(ctx, target.FileID)
 	if err != nil {
 		return playback.SourceMedia{}, normalizePlaybackSourceError(err)
 	}
-	if info.FileID != fileID || info.ParentID != parentID || info.Name == "" || info.PickCode == "" {
+	if info.FileID != target.FileID || info.ParentID != target.ParentID || info.Name == "" || info.PickCode == "" {
 		return playback.SourceMedia{}, playback.ErrNotFound
 	}
 	streamURL, err := c.resolveDownloadURL(ctx, info.PickCode, playbackUserAgent)

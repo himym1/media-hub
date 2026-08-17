@@ -17,7 +17,7 @@ class PlaybackRecoveryTest {
     @Test
     fun recoveryPreservesTargetPositionAndAllowsOnlyOneAttemptUntilReady() {
         val coordinator = PlaybackRecoveryCoordinator()
-        val request = PlaybackRequest("10", "20", "Movie.mkv", serverIdentity = "a".repeat(64))
+        val request = PlaybackRequest(Drive115Target("10", "20"), "Movie.mkv", serverIdentity = "a".repeat(64))
 
         val action = coordinator.recover(403, request, positionMs = 91_234L, autoPlay = true)
         assertSame(request, action?.request)
@@ -31,7 +31,7 @@ class PlaybackRecoveryTest {
 
     @Test
     fun serverIdentityMustMatchCurrentConfiguration() {
-        val request = PlaybackRequest("10", "20", "Movie.mkv", serverIdentity = "a".repeat(64))
+        val request = PlaybackRequest(Drive115Target("10", "20"), "Movie.mkv", serverIdentity = "a".repeat(64))
         assertTrue(matchesServerIdentity(request, "a".repeat(64)))
         assertFalse(matchesServerIdentity(request, "b".repeat(64)))
     }

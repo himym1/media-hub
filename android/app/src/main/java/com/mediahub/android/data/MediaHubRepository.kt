@@ -11,6 +11,7 @@ import com.mediahub.android.core.network.Drive115DeviceAuthorization
 import com.mediahub.android.core.network.Drive115Command
 import com.mediahub.android.core.network.Drive115File
 import com.mediahub.android.core.network.DiscoveryItem
+import com.mediahub.android.core.network.EmbyEpisode
 import com.mediahub.android.core.network.EmbyItem
 import com.mediahub.android.core.network.EmbyItemDetail
 import com.mediahub.android.core.network.EmbyItemPage
@@ -167,6 +168,8 @@ class MediaHubRepository(
         authenticated { token -> api.libraryItems(token, libraryId, offset, limit) }
 
     suspend fun itemDetails(itemId: String): EmbyItemDetail = authenticated { token -> api.itemDetails(token, itemId) }
+
+    suspend fun episodes(seriesId: String): List<EmbyEpisode> = authenticated { token -> api.episodes(token, seriesId) }
 
     suspend fun refreshLibrary(libraryId: String) = authenticated { token -> api.refreshLibrary(token, libraryId) }
 

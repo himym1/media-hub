@@ -115,6 +115,16 @@ func (*embyStub) ItemDetails(_ context.Context, itemID string) (emby.ItemDetail,
 		AppURL:      "emby://items/server-1/" + itemID,
 	}, nil
 }
+func (*embyStub) Episodes(_ context.Context, seriesID string) ([]emby.Episode, error) {
+	return []emby.Episode{{
+		Item:        emby.Item{ID: seriesID + "-episode-1", Name: "Episode 1", Type: "Episode", Season: 1, Episode: 1},
+		ExternalURL: "https://emby.example/web/index.html#!/item?id=" + seriesID + "-episode-1",
+		AppURL:      "emby://items/server-1/" + seriesID + "-episode-1",
+	}}, nil
+}
+func (*embyStub) PrimaryImage(context.Context, string, int) (emby.PrimaryImage, error) {
+	return emby.PrimaryImage{Data: []byte("image"), ContentType: "image/jpeg"}, nil
+}
 func (stub *embyStub) RefreshLibrary(_ context.Context, id string) error {
 	stub.refreshedLibrary = id
 	return nil
@@ -385,6 +395,16 @@ func TestEmbyBrowseDetailAndRefreshRoutes(t *testing.T) {
 	if detailRecorder.Code != http.StatusOK || !strings.Contains(detailRecorder.Body.String(), "externalUrl") ||
 		!strings.Contains(detailRecorder.Body.String(), `"appUrl":"emby://items/server-1/item-1"`) {
 		t.Fatalf("detail status=%d body=%s", detailRecorder.Code, detailRecorder.Body.String())
+	}
+	episodesRecorder := httptest.NewRecorder()
+	router.ServeHTTP(episodesRecorder, authenticatedRequest(http.MethodGet, "/api/v1/integrations/emby/items/series-1/episodes"))
+	if episodesRecorder.Code != http.StatusOK || !strings.Contains(episodesRecorder.Body.String(), `"appUrl":"emby://items/server-1/series-1-episode-1"`) {
+		t.Fatalf("episodes status=%d body=%s", episodesRecorder.Code, episodesRecorder.Body.String())
+	}
+	imageRecorder := httptest.NewRecorder()
+	router.ServeHTTP(imageRecorder, authenticatedRequest(http.MethodGet, "/api/v1/integrations/emby/items/item-1/primary-image"))
+	if imageRecorder.Code != http.StatusOK || imageRecorder.Header().Get("Content-Type") != "image/jpeg" || imageRecorder.Body.String() != "image" {
+		t.Fatalf("image status=%d type=%q body=%q", imageRecorder.Code, imageRecorder.Header().Get("Content-Type"), imageRecorder.Body.String())
 	}
 	for _, target := range []string{
 		"/api/v1/integrations/emby/libraries/library-1/refresh",

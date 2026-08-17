@@ -92,7 +92,7 @@ Parity therefore means exposing equivalent control, queue, audit, and readiness 
 | 115 authorization and file operations | Native | Encrypted PKCE device authorization, automatic refresh, bounded directory reads, and durable create-folder/move/rename/delete commands; uncertain writes require ID-confirmed replay |
 | STRM generation | Native | QMediaSync manual synchronization, record polling, Emby refresh, and playback verification |
 | SubX STRM records/audits | Native | QMediaSync status/records plus Media Hub transfer events and Emby playback verification replace SubX-specific STRM projections |
-| Android direct playback | Experimental | Code path and component UI are implemented; production readiness still requires real 115 initial-play, Range-seek, matching User-Agent, and expired-link recovery acceptance |
+| Android Emby-managed Media3 playback | Experimental | Typed movie/episode targets, item-specific fallback, resume position, poster loading, and opaque Emby progress sessions are implemented; production readiness still requires real QMediaSync/Emby redirect, Range-seek, and progress acceptance |
 | Archive organization | Native | Review-only suggestions, explicit editable rename/move steps, encrypted durable plans, plan-ID confirmation, ordered progress, and uncertain-step recovery |
 | Local upload | Native | Configured opaque root IDs, symlink-rejecting relative paths, encrypted durable jobs, SHA-1 rapid upload, OSS multipart progress, and ID-confirmed uncertain replay |
 | TMDB trends, recommendations, and tracked catalog | Native | Direct bounded TMDB identity reads plus native subscription catalog; recommendation choices return to the existing resource-search flow |

@@ -8,22 +8,84 @@ import (
 	"media-hub/backend/internal/playback"
 )
 
-type createPlaybackRequest struct {
+type createDrive115PlaybackRequest struct {
 	ParentID string `json:"parentId"`
 	FileID   string `json:"fileId"`
 }
 
-func (h *handler) createPlayback(w http.ResponseWriter, r *http.Request) {
+type createEmbyPlaybackRequest struct {
+	ItemID string `json:"itemId"`
+}
+
+type playbackSessionEventRequest struct {
+	Event      playback.SessionEventType `json:"event"`
+	PositionMS int64                     `json:"positionMs"`
+	Paused     bool                      `json:"paused"`
+}
+
+func (h *handler) createDrive115Playback(w http.ResponseWriter, r *http.Request) {
 	if h.dependencies.Playback == nil {
 		writePlaybackProblem(w, playback.ErrUnavailable)
 		return
 	}
-	var input createPlaybackRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&input); err != nil {
-		writePlaybackProblem(w, playback.ErrInvalidRequest)
+	var input createDrive115PlaybackRequest
+	if !decodePlaybackRequest(w, r, &input) {
 		return
 	}
-	value, err := h.dependencies.Playback.Create(r.Context(), input.ParentID, input.FileID)
+	value, err := h.dependencies.Playback.CreateDrive115(r.Context(), playback.Drive115Target{
+		ParentID: input.ParentID,
+		FileID:   input.FileID,
+	})
+	writePlaybackResult(w, value, err)
+}
+
+func (h *handler) createEmbyPlayback(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Playback == nil {
+		writePlaybackProblem(w, playback.ErrUnavailable)
+		return
+	}
+	var input createEmbyPlaybackRequest
+	if !decodePlaybackRequest(w, r, &input) {
+		return
+	}
+	principal := principalFromContext(r.Context())
+	value, err := h.dependencies.Playback.CreateEmbyItem(
+		r.Context(), principal.UserID, playback.EmbyItemTarget{ItemID: input.ItemID},
+	)
+	writePlaybackResult(w, value, err)
+}
+
+func (h *handler) reportPlaybackSession(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Playback == nil {
+		writePlaybackProblem(w, playback.ErrUnavailable)
+		return
+	}
+	var input playbackSessionEventRequest
+	if !decodePlaybackRequest(w, r, &input) {
+		return
+	}
+	err := h.dependencies.Playback.Report(
+		r.Context(),
+		principalFromContext(r.Context()).UserID,
+		r.PathValue("id"),
+		playback.SessionEvent{Type: input.Event, PositionMS: input.PositionMS, Paused: input.Paused},
+	)
+	if err != nil {
+		writePlaybackProblem(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func decodePlaybackRequest(w http.ResponseWriter, r *http.Request, target any) bool {
+	if r.Body == nil || json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(target) != nil {
+		writePlaybackProblem(w, playback.ErrInvalidRequest)
+		return false
+	}
+	return true
+}
+
+func writePlaybackResult(w http.ResponseWriter, value playback.Descriptor, err error) {
 	if err != nil {
 		writePlaybackProblem(w, err)
 		return
@@ -36,12 +98,12 @@ func writePlaybackProblem(w http.ResponseWriter, err error) {
 	case errors.Is(err, playback.ErrInvalidRequest):
 		writeProblem(w, problem{Title: "播放请求无效", Status: http.StatusBadRequest, Code: "invalid_playback_request"})
 	case errors.Is(err, playback.ErrNotFound):
-		writeProblem(w, problem{Title: "视频文件不存在或不可播放", Status: http.StatusNotFound, Code: "playable_media_not_found"})
+		writeProblem(w, problem{Title: "媒体不存在或不可播放", Status: http.StatusNotFound, Code: "playable_media_not_found"})
 	case errors.Is(err, playback.ErrSourceNotConfigured):
-		writeProblem(w, problem{Title: "115 尚未授权", Status: http.StatusServiceUnavailable, Code: "not_configured"})
+		writeProblem(w, problem{Title: "播放源尚未配置", Status: http.StatusServiceUnavailable, Code: "playback_source_not_configured"})
 	case errors.Is(err, playback.ErrSourceUnauthorized):
-		writeProblem(w, problem{Title: "115 授权已失效", Status: http.StatusBadGateway, Code: "provider_unauthorized"})
+		writeProblem(w, problem{Title: "播放源授权已失效", Status: http.StatusBadGateway, Code: "playback_source_unauthorized"})
 	default:
-		writeProblem(w, problem{Title: "暂时无法创建播放会话", Status: http.StatusBadGateway, Code: "playback_unavailable"})
+		writeProblem(w, problem{Title: "暂时无法直接播放", Status: http.StatusBadGateway, Code: "direct_playback_unavailable"})
 	}
 }

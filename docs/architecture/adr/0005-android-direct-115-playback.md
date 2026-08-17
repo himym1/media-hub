@@ -13,7 +13,7 @@ Media Hub already authenticates 115, exposes bounded file browsing, and verifies
 
 Add an independent backend `playback` domain and an Android-only Media3 player.
 
-- `POST /api/v1/playback/descriptors` accepts a trusted numeric `parentId` and `fileId` under normal Media Hub authentication.
+- `POST /api/v1/playback/descriptors/drive115` accepts a trusted numeric `parentId` and `fileId` under normal Media Hub authentication.
 - The 115 adapter loads the encrypted session, reads file metadata by `file_id`, verifies the returned file and parent IDs, resolves the current upstream URL with a fixed player User-Agent, and returns no cookie or pickcode.
 - The response contains an upstream temporary HTTPS URL, User-Agent, title, and `expiresAt` only when the upstream supplies a verifiable expiry. Unknown expiry is not synthesized.
 - Android keeps the URL only in memory. It is not persisted, logged, placed in navigation URLs, or included in screenshots.

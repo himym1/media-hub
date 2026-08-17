@@ -107,14 +107,24 @@ type baseItem struct {
 	RunTimeTicks      int64             `json:"RunTimeTicks"`
 	Genres            []string          `json:"Genres"`
 	MediaSources      []mediaSource     `json:"MediaSources"`
+	UserData          userData          `json:"UserData"`
+}
+
+type userData struct {
+	PlaybackPositionTicks int64 `json:"PlaybackPositionTicks"`
 }
 
 type mediaSource struct {
-	ID string `json:"Id"`
+	ID                 string `json:"Id"`
+	Path               string `json:"Path"`
+	DirectStreamURL    string `json:"DirectStreamUrl"`
+	SupportsDirectPlay bool   `json:"SupportsDirectPlay"`
+	Container          string `json:"Container"`
 }
 
 type playbackInfoResponse struct {
-	MediaSources []mediaSource `json:"MediaSources"`
+	MediaSources  []mediaSource `json:"MediaSources"`
+	PlaySessionID string        `json:"PlaySessionId"`
 }
 
 func NewClient(baseURL, apiKey string, timeout time.Duration, userID ...string) *Client {

@@ -1,5 +1,6 @@
 package com.mediahub.android
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -20,9 +21,14 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -30,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Film
 import com.composables.icons.lucide.LibraryBig
 import com.composables.icons.lucide.ListPlus
@@ -49,6 +56,8 @@ import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
+import com.mediahub.android.core.image.PosterLoader
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTheme
 import com.mediahub.android.feature.auth.AuthRoute
@@ -56,10 +65,13 @@ import com.mediahub.android.feature.auth.AuthViewModel
 import com.mediahub.android.feature.config.ServerConfigScreen
 import com.mediahub.android.feature.config.ServerConfigViewModel
 import com.mediahub.android.feature.library.LibraryRoute
+import com.mediahub.android.feature.library.LibraryDetailViewModel
 import com.mediahub.android.feature.library.LibraryViewModel
 import com.mediahub.android.feature.operations.OperationsRoute
 import com.mediahub.android.feature.operations.OperationsViewModel
 import com.mediahub.android.feature.player.PlayerActivity
+import com.mediahub.android.playback.Drive115Target
+import com.mediahub.android.playback.EmbyItemTarget
 import com.mediahub.android.playback.PlaybackRequest
 import com.mediahub.android.feature.search.SearchRoute
 import com.mediahub.android.feature.search.SearchViewModel
@@ -127,6 +139,7 @@ fun MediaHubApp() {
                     factory = factory,
                     serverGeneration = serverGeneration,
                     serverIdentity = serverIdentity,
+                    posterLoader = dependencies.posterLoader,
                     onChangeServer = {
                         applicationContext.startService(MediaHubPlaybackService.invalidateIntent(applicationContext))
                         serverStoreHolder.clearServerScope()
@@ -157,25 +170,26 @@ private fun AuthenticatedWorkspace(
     onChangeServer: () -> Unit,
     serverGeneration: Long,
     serverIdentity: String,
+    posterLoader: PosterLoader,
 ) {
     val context = LocalContext.current
     val destination by appViewModel.destination.collectAsState()
     val subscriptionDraft by appViewModel.subscriptionDraft.collectAsState()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MediaHubColors.Canvas)
-            .statusBarsPadding(),
+    val inSystem = destination == MainDestination.Services || destination == MainDestination.Operations
+    var selectedLibraryItemId by rememberSaveable(serverGeneration) { mutableStateOf<String?>(null) }
+    val libraryDetailOpen = destination == MainDestination.Library && selectedLibraryItemId != null
+    LaunchedEffect(destination) {
+        if (destination != MainDestination.Library) selectedLibraryItemId = null
+    }
+    BackHandler(enabled = inSystem, onBack = appViewModel::closeSystem)
+    WorkspaceShell(
+        destination = destination,
+        libraryDetailOpen = libraryDetailOpen,
+        onSystemBack = appViewModel::closeSystem,
+        onOpenSystem = appViewModel::openSystem,
+        onSystemSelected = appViewModel::showSystemDestination,
+        onPrimarySelected = appViewModel::showDestination,
     ) {
-        WorkspaceTopBar(
-            destination = destination,
-            onSystemSelected = {
-                appViewModel.showDestination(
-                    if (destination == MainDestination.Services) MainDestination.Operations else MainDestination.Services,
-                )
-            },
-        )
-        Box(Modifier.weight(1f)) {
             when (destination) {
                 MainDestination.Search -> {
                     val searchViewModel = viewModel<SearchViewModel>(key = "search-$serverGeneration", factory = factory)
@@ -199,7 +213,22 @@ private fun AuthenticatedWorkspace(
                 }
                 MainDestination.Library -> {
                     val libraryViewModel = viewModel<LibraryViewModel>(key = "library-$serverGeneration", factory = factory)
-                    LibraryRoute(viewModel = libraryViewModel)
+                    val detailViewModel = viewModel<LibraryDetailViewModel>(key = "library-detail-$serverGeneration", factory = factory)
+                    LibraryRoute(
+                        browseViewModel = libraryViewModel,
+                        detailViewModel = detailViewModel,
+                        posterLoader = posterLoader,
+                        selectedItemId = selectedLibraryItemId,
+                        onSelectedItemChanged = { selectedLibraryItemId = it },
+                        onPlayItem = { item, fallback ->
+                            context.startActivity(
+                                PlayerActivity.intent(
+                                    context,
+                                    PlaybackRequest(EmbyItemTarget(item.id), item.name, serverIdentity, fallback),
+                                ),
+                            )
+                        },
+                    )
                 }
                 MainDestination.Operations -> {
                     val operationsViewModel = viewModel<OperationsViewModel>(key = "operations-$serverGeneration", factory = factory)
@@ -207,7 +236,10 @@ private fun AuthenticatedWorkspace(
                         viewModel = operationsViewModel,
                         onPlayDriveFile = { file, parentId ->
                             context.startActivity(
-                                PlayerActivity.intent(context, PlaybackRequest(parentId, file.id, file.name, serverIdentity)),
+                                PlayerActivity.intent(
+                                    context,
+                                    PlaybackRequest(Drive115Target(parentId, file.id), file.name, serverIdentity),
+                                ),
                             )
                         },
                     )
@@ -224,37 +256,108 @@ private fun AuthenticatedWorkspace(
                     )
                 }
             }
-        }
-        MainNavigationBar(selected = destination, onSelected = appViewModel::showDestination)
     }
 }
 
 @Composable
-private fun WorkspaceTopBar(destination: MainDestination, onSystemSelected: () -> Unit) {
+internal fun WorkspaceShell(
+    destination: MainDestination,
+    libraryDetailOpen: Boolean,
+    onSystemBack: () -> Unit,
+    onOpenSystem: () -> Unit,
+    onSystemSelected: (MainDestination) -> Unit,
+    onPrimarySelected: (MainDestination) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val inSystem = destination == MainDestination.Services || destination == MainDestination.Operations
+    Column(
+        modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas).statusBarsPadding(),
+    ) {
+        if (!libraryDetailOpen) {
+            Box(Modifier.testTag("workspace-top-bar")) {
+                WorkspaceTopBar(
+                    destination = destination,
+                    inSystem = inSystem,
+                    onBack = onSystemBack,
+                    onOpenSystem = onOpenSystem,
+                )
+            }
+        }
+        if (inSystem) {
+            SystemSectionSwitcher(destination = destination, onSelected = onSystemSelected)
+        }
+        Box(Modifier.weight(1f)) { content() }
+        if (!inSystem && !libraryDetailOpen) {
+            Box(Modifier.testTag("workspace-bottom-nav")) {
+                MainNavigationBar(selected = destination, onSelected = onPrimarySelected)
+            }
+        }
+    }
+}
+
+@Composable
+internal fun WorkspaceTopBar(
+    destination: MainDestination,
+    inSystem: Boolean,
+    onBack: () -> Unit,
+    onOpenSystem: () -> Unit,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(60.dp)
-            .border(width = 1.dp, color = MediaHubColors.Border)
-            .padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaHubIcon(
-            imageVector = Lucide.Film,
-            contentDescription = null,
-            tint = MediaHubColors.Accent,
-            modifier = Modifier.size(22.dp),
-        )
-        Column(modifier = Modifier.weight(1f).padding(start = 11.dp)) {
-            MediaHubText(text = destination.title, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
-            MediaHubText(text = if (destination == MainDestination.Operations || destination == MainDestination.Services) "系统管理" else "Media Hub", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+        if (inSystem) {
+            MediaHubIconButton(
+                imageVector = Lucide.ArrowLeft,
+                contentDescription = "返回主页面",
+                onClick = onBack,
+            )
+        } else {
+            MediaHubIcon(
+                imageVector = Lucide.Film,
+                contentDescription = null,
+                tint = MediaHubColors.Accent,
+                modifier = Modifier.size(22.dp),
+            )
         }
-        MediaHubIconButton(
-            imageVector = if (destination == MainDestination.Services) Lucide.SquareTerminal else Lucide.Settings2,
-            contentDescription = if (destination == MainDestination.Services) "打开运维工具" else "打开系统设置",
-            onClick = onSystemSelected,
-        )
+        Column(modifier = Modifier.weight(1f).padding(start = if (inSystem) 4.dp else 11.dp)) {
+            MediaHubText(
+                text = if (inSystem) "系统" else destination.title,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            MediaHubText(
+                text = if (inSystem) destination.title else "Media Hub",
+                color = MediaHubColors.TextMuted,
+                fontSize = 12.sp,
+            )
+        }
+        if (!inSystem) {
+            MediaHubIconButton(
+                imageVector = Lucide.Settings2,
+                contentDescription = "打开系统",
+                onClick = onOpenSystem,
+            )
+        }
     }
+}
+
+@Composable
+internal fun SystemSectionSwitcher(
+    destination: MainDestination,
+    onSelected: (MainDestination) -> Unit,
+) {
+    MediaHubSegmentedControl(
+        options = listOf(
+            MainDestination.Services.name to "服务",
+            MainDestination.Operations.name to "运维",
+        ),
+        selected = destination.name,
+        onSelected = { value ->
+            MainDestination.entries.firstOrNull { it.name == value }?.let(onSelected)
+        },
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
 }
 
 private fun destinationIcon(destination: MainDestination) = when (destination) {
