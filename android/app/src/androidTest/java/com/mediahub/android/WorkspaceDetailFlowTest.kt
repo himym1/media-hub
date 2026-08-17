@@ -10,6 +10,9 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -164,6 +167,7 @@ class WorkspaceDetailFlowTest {
         composeRule.onNodeWithContentDescription("新建订阅").assertExists()
         saveScreenshot("mediahub-subscription-list-large")
 
+        composeRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("示例订阅"))
         composeRule.onNodeWithText("示例订阅").performClick()
         composeRule.onNodeWithTag("workspace-top-bar").assertDoesNotExist()
         composeRule.onNodeWithTag("workspace-bottom-nav").assertDoesNotExist()

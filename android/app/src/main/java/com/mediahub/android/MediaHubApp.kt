@@ -77,6 +77,7 @@ import com.mediahub.android.feature.services.ServicesRoute
 import com.mediahub.android.feature.services.ServicesViewModel
 import com.mediahub.android.feature.subscriptions.SubscriptionRoute
 import com.mediahub.android.feature.subscriptions.SubscriptionViewModel
+import com.mediahub.android.feature.subscriptions.SubscriptionNavigator
 import com.mediahub.android.feature.transfers.TransferRoute
 import com.mediahub.android.feature.transfers.TransferViewModel
 
@@ -210,14 +211,15 @@ private fun AuthenticatedWorkspace(
                     SubscriptionRoute(
                         viewModel = subscriptionViewModel,
                         draft = subscriptionDraft,
-                        editorOpen = detail is WorkspaceDetail.SubscriptionEditor,
-                        editorItemId = (detail as? WorkspaceDetail.SubscriptionEditor)?.subscriptionId,
-                        editorKey = (detail as? WorkspaceDetail.SubscriptionEditor)?.key,
-                        onReplaceEditor = { id, key ->
-                            appViewModel.openDetail(WorkspaceDetail.SubscriptionEditor(id, key))
-                        },
-                        onOpenEditor = { id -> appViewModel.openDetail(WorkspaceDetail.SubscriptionEditor(id)) },
-                        onCloseEditor = appViewModel::closeDetail,
+                        navigator = SubscriptionNavigator(
+                            editorItemId = (detail as? WorkspaceDetail.SubscriptionEditor)?.subscriptionId,
+                            editorKey = (detail as? WorkspaceDetail.SubscriptionEditor)?.key,
+                            replaceEditor = { id, key ->
+                                appViewModel.openDetail(WorkspaceDetail.SubscriptionEditor(id, key))
+                            },
+                            openEditor = { id -> appViewModel.openDetail(WorkspaceDetail.SubscriptionEditor(id)) },
+                            closeEditor = appViewModel::closeDetail,
+                        ),
                         onDraftConsumed = appViewModel::consumeSubscriptionDraft,
                     )
                 }

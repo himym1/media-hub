@@ -150,10 +150,10 @@ class SecondStageLayoutTest {
             }
         }
 
-        composeRule.onNodeWithText("当前目录 ID").assertExists()
+        composeRule.onAllNodesWithText("115 文件").assertCountEquals(2)
         composeRule.onNodeWithText("本地上传").performClick()
         composeRule.onNodeWithText("当前服务器未配置本地上传目录").assertExists()
-        composeRule.onAllNodesWithText("当前目录 ID").assertCountEquals(0)
+        composeRule.onAllNodesWithText("115 文件").assertCountEquals(1)
         composeRule.onNodeWithText("归档整理").performClick()
         composeRule.onNodeWithText("原生归档整理").assertExists()
         composeRule.onAllNodesWithText("当前服务器未配置本地上传目录").assertCountEquals(0)
