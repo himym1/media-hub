@@ -7,6 +7,8 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -53,8 +55,9 @@ class SystemNavigationTest {
         composeRule.onNodeWithContentDescription("返回主页面")
             .assertHasClickAction().assertHeightIsAtLeast(48.dp)
         composeRule.onNodeWithText("服务").assertIsSelected().assertHeightIsAtLeast(48.dp)
-        composeRule.onNodeWithText("运维").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
-        composeRule.onNodeWithText("运维").assertIsSelected()
+        composeRule.onNode(hasText("运维") and hasClickAction())
+            .assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
+        composeRule.onNode(hasText("运维") and hasClickAction()).assertIsSelected()
         composeRule.onNodeWithContentDescription("返回主页面").performClick()
         composeRule.runOnIdle { assertEquals(MainDestination.Library, destination) }
         composeRule.onNodeWithTag("workspace-bottom-nav").assertExists()
