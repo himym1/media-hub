@@ -11,8 +11,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.hasScrollToIndexAction
-import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -165,9 +164,9 @@ class WorkspaceDetailFlowTest {
 
         composeRule.onNodeWithContentDescription("更多订阅操作").assertExists()
         composeRule.onNodeWithContentDescription("新建订阅").assertExists()
+        composeRule.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
+        composeRule.onNodeWithText("示例订阅").assertExists()
         saveScreenshot("mediahub-subscription-list-large")
-
-        composeRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("示例订阅"))
         composeRule.onNodeWithText("示例订阅").performClick()
         composeRule.onNodeWithTag("workspace-top-bar").assertDoesNotExist()
         composeRule.onNodeWithTag("workspace-bottom-nav").assertDoesNotExist()
@@ -177,6 +176,7 @@ class WorkspaceDetailFlowTest {
         composeRule.onNodeWithContentDescription("返回订阅列表").performClick()
         composeRule.onNodeWithTag("workspace-top-bar").assertExists()
         composeRule.onNodeWithTag("workspace-bottom-nav").assertExists()
+        composeRule.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
         composeRule.onNodeWithText("示例订阅").assertExists()
     }
 
