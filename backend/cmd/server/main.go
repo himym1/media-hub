@@ -22,6 +22,7 @@ import (
 	"media-hub/backend/internal/httpapi"
 	"media-hub/backend/internal/integration"
 	"media-hub/backend/internal/localupload"
+	"media-hub/backend/internal/playback"
 	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/securepayload"
@@ -190,6 +191,7 @@ func run(logger *slog.Logger) error {
 		Handler: httpapi.NewRouter(version, httpapi.Dependencies{
 			Auth: authService, Overview: overview, Search: searchService, Discovery: tmdbClient,
 			QMediaSync: qmsClient, Emby: embyClient, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
+			Playback: playback.NewService(drive115AuthService),
 			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService,
 			Settings: settingsService, WeComTester: wecomClient,
 			SecureCookies: configuration.SecureCookies,

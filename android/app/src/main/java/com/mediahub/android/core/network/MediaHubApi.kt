@@ -15,13 +15,11 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-class MediaHubApi(baseUrl: String) {
-    private val baseUrl = baseUrl.trimEnd('/').also { value ->
-        val parsed = URL(value)
-        require(parsed.protocol == "https" || (BuildConfig.DEBUG && parsed.protocol == "http")) {
-            "Release builds require an HTTPS Media Hub API URL"
-        }
-    }
+class MediaHubApi(private val http: MediaHubHttpClient) {
+    constructor(baseUrl: String) : this(MediaHubHttpClient(baseUrl))
+
+    private val baseUrl: String
+		get() = http.baseUrl
 
     suspend fun login(password: String): String {
         val body = JSONObject()
@@ -47,7 +45,7 @@ class MediaHubApi(baseUrl: String) {
             val connection = URL(baseUrl + path).openConnection() as HttpURLConnection
             try {
                 connection.requestMethod = "GET"
-                connection.connectTimeout = CONNECT_TIMEOUT_MS
+                connection.connectTimeout = DOWNLOAD_CONNECT_TIMEOUT_MS
                 connection.readTimeout = DOWNLOAD_TIMEOUT_MS
                 connection.instanceFollowRedirects = false
                 connection.setRequestProperty("Accept", "application/vnd.android.package-archive")
@@ -748,32 +746,7 @@ class MediaHubApi(baseUrl: String) {
         body: String? = null,
         token: String? = null,
         headers: Map<String, String> = emptyMap(),
-    ): String = withContext(Dispatchers.IO) {
-        val connection = URL(baseUrl + path).openConnection() as HttpURLConnection
-        try {
-            connection.requestMethod = method
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("User-Agent", "Media-Hub-Android/${BuildConfig.VERSION_NAME}")
-            if (token != null) connection.setRequestProperty("Authorization", "Bearer $token")
-            headers.forEach(connection::setRequestProperty)
-            if (body != null) {
-                connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.outputStream.use { output -> output.write(body.toByteArray(Charsets.UTF_8)) }
-            }
-
-            val status = connection.responseCode
-            val responseBody = (if (status in 200..299) connection.inputStream else connection.errorStream)
-                .readLimited(MAX_RESPONSE_BYTES)
-            if (status !in 200..299) throw parseError(status, responseBody)
-            responseBody
-        } finally {
-            connection.disconnect()
-        }
-    }
+    ): String = http.request(path, method, body, token, headers)
 
     private fun parseError(status: Int, body: String): ApiException {
         val payload = runCatching { JSONObject(body) }.getOrNull()
@@ -807,8 +780,7 @@ class MediaHubApi(baseUrl: String) {
     }
 
     private companion object {
-        const val CONNECT_TIMEOUT_MS = 5_000
-        const val READ_TIMEOUT_MS = 15_000
+        const val DOWNLOAD_CONNECT_TIMEOUT_MS = 5_000
         const val DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000
         const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
     }

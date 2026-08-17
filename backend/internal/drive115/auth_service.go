@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"media-hub/backend/internal/integration"
+	"media-hub/backend/internal/playback"
 	"media-hub/backend/internal/securepayload"
 	"media-hub/backend/internal/store"
 )
@@ -406,6 +407,15 @@ func (s *AuthService) ListFiles(ctx context.Context, parentID string, limit, off
 	}
 	return s.drive.ListFiles(ctx, parentID, limit, offset)
 }
+
+func (s *AuthService) Resolve(ctx context.Context, parentID, fileID, playbackUserAgent string) (playback.SourceMedia, error) {
+	if err := s.prepareSession(ctx); err != nil {
+		return playback.SourceMedia{}, normalizePlaybackSourceError(err)
+	}
+	return s.drive.resolvePlayback(ctx, parentID, fileID, playbackUserAgent)
+}
+
+var _ playback.Source = (*AuthService)(nil)
 
 func (s *AuthService) FolderPath(ctx context.Context, folderID string) (string, error) {
 	if err := s.prepareSession(ctx); err != nil {

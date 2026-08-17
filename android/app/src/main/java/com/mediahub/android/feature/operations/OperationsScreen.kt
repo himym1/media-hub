@@ -31,6 +31,7 @@ import com.composables.icons.lucide.FolderOpen
 import com.composables.icons.lucide.HardDrive
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.Upload
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubColors
@@ -42,6 +43,7 @@ import com.mediahub.android.core.designsystem.MediaHubTextField
 @Composable
 internal fun OperationsRoute(
     viewModel: OperationsViewModel,
+    onPlayDriveFile: (com.mediahub.android.core.network.Drive115File, String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
     OperationsScreen(
@@ -54,6 +56,7 @@ internal fun OperationsRoute(
         onDriveNameChanged = viewModel::setDriveName,
         onCreateDriveCommand = viewModel::createDriveCommand,
         onConfirmDriveCommand = viewModel::confirmDriveCommand,
+        onPlayDriveFile = onPlayDriveFile,
         onLocalRootChanged = viewModel::setLocalRoot,
         onLocalPathChanged = viewModel::setLocalPath,
         onLocalEntrySelected = viewModel::selectLocalEntry,
@@ -82,6 +85,7 @@ private fun OperationsScreen(
     onDriveNameChanged: (String) -> Unit,
     onCreateDriveCommand: () -> Unit,
     onConfirmDriveCommand: (com.mediahub.android.core.network.Drive115Command) -> Unit,
+    onPlayDriveFile: (com.mediahub.android.core.network.Drive115File, String) -> Unit,
     onLocalRootChanged: (String) -> Unit,
     onLocalPathChanged: (String) -> Unit,
     onLocalEntrySelected: (com.mediahub.android.core.network.LocalUploadEntry) -> Unit,
@@ -135,11 +139,12 @@ private fun OperationsScreen(
                     onNameChanged = onDriveNameChanged,
                     onCreate = onCreateDriveCommand,
                     onConfirm = onConfirmDriveCommand,
+                    onPlay = { file -> onPlayDriveFile(file, state.driveParentId) },
                 )
             }
             if (state.localRoots.isNotEmpty()) item {
-				LocalUploadSection(state,onLocalRootChanged,onLocalPathChanged,onLocalEntrySelected,onLocalDestinationChanged,onCreateLocalUpload,onRetryLocalUpload)
-			}
+                LocalUploadSection(state,onLocalRootChanged,onLocalPathChanged,onLocalEntrySelected,onLocalDestinationChanged,onCreateLocalUpload,onRetryLocalUpload)
+            }
             item { ArchiveSection(state,onArchiveParentChanged,onArchiveTargetChanged,onPreviewArchive,onToggleArchive,onArchiveNameChanged,onCreateArchivePlan,onConfirmArchive,onRetryArchive) }
         }
     }
@@ -155,6 +160,7 @@ private fun Drive115Section(
     onNameChanged: (String) -> Unit,
     onCreate: () -> Unit,
     onConfirm: (com.mediahub.android.core.network.Drive115Command) -> Unit,
+    onPlay: (com.mediahub.android.core.network.Drive115File) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -177,6 +183,13 @@ private fun Drive115Section(
                 Column(Modifier.weight(1f)) {
                     MediaHubText(text = file.name, color = MediaHubColors.TextStrong, fontSize = 12.sp)
                     MediaHubText(text = if (file.kind == "folder") "目录 ${file.id}" else "${formatBytes(file.size)} · ${file.id}", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+                }
+                if (file.kind == "file" && isPlayableVideoName(file.name)) {
+                    MediaHubIconButton(
+                        imageVector = Lucide.Play,
+                        contentDescription = "播放 ${file.name}",
+                        onClick = { onPlay(file) },
+                    )
                 }
             }
         }
@@ -426,4 +439,9 @@ private fun ArchiveSection(
             }
         }
     }
+}
+
+internal fun isPlayableVideoName(name: String): Boolean = when (name.substringAfterLast('.', "").lowercase()) {
+    "mp4", "mkv", "m4v", "mov", "webm", "avi", "ts", "m2ts" -> true
+    else -> false
 }

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" style="--background:#111416;--primary:#62D69A;--secondary:#4C8FF7">
+  <title>Media Hub icon mark</title>
+  <desc>A single rounded hub glyph with a circular media core.</desc>
+  <defs>
+    <path id="hub-glyph" fill-rule="evenodd" d="
+      M 322 196
+      C 276 196 240 232 240 278
+      L 240 746
+      C 240 792 276 828 322 828
+      L 752 828
+      C 798 828 834 792 834 746
+      L 834 580
+      C 834 452 732 350 604 350
+      C 524 350 456 380 404 432
+      L 404 278
+      C 404 232 368 196 322 196
+      Z
+      M 556 476
+      C 492 476 440 528 440 592
+      C 440 656 492 708 556 708
+      C 620 708 672 656 672 592
+      C 672 528 620 476 556 476
+      Z"/>
+    <clipPath id="hub-clip">
+      <use href="#hub-glyph"/>
+    </clipPath>
+  </defs>
+  <use href="#hub-glyph" fill="var(--primary)"/>
+  <path d="
+    M 620 350
+    C 602 390 586 432 576 476
+    C 636 514 660 582 632 650
+    C 610 704 570 738 520 754
+    L 520 828
+    L 752 828
+    C 798 828 834 792 834 746
+    L 834 580
+    C 834 452 742 366 620 350
+    Z" fill="var(--secondary)" clip-path="url(#hub-clip)"/>
+</svg>

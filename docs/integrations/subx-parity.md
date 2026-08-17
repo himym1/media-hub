@@ -67,9 +67,9 @@ The reference deployment includes STRM generation, queue control, failed-item re
 Media Hub preserves its existing product boundary:
 
 - QMediaSync owns STRM generation and STRM consistency operations.
-- Emby owns library and playback APIs.
+- Emby owns managed-library playback APIs; Android may also play an individually selected, trusted 115 file through Media3.
 - 115 CDN sends media directly to the player.
-- Media Hub never adds an equivalent media proxy or playback redirect endpoint.
+- Media Hub never adds an equivalent media proxy or playback redirect endpoint. Its authenticated Android playback-description endpoint returns only the current upstream-issued HTTPS description and matching User-Agent; the lifetime may be unknown and the value is not persisted.
 
 Parity therefore means exposing equivalent control, queue, audit, and readiness outcomes through QMediaSync and Emby adapters, not copying SubX media-serving behavior.
 
@@ -92,7 +92,7 @@ Parity therefore means exposing equivalent control, queue, audit, and readiness 
 | 115 authorization and file operations | Native | Encrypted PKCE device authorization, automatic refresh, bounded directory reads, and durable create-folder/move/rename/delete commands; uncertain writes require ID-confirmed replay |
 | STRM generation | Native | QMediaSync manual synchronization, record polling, Emby refresh, and playback verification |
 | SubX STRM records/audits | Native | QMediaSync status/records plus Media Hub transfer events and Emby playback verification replace SubX-specific STRM projections |
-| Playback routes | Rejected | Direct 115 CDN-to-player path through Emby; Media Hub never proxies media |
+| Android direct playback | Experimental | Code path and component UI are implemented; production readiness still requires real 115 initial-play, Range-seek, matching User-Agent, and expired-link recovery acceptance |
 | Archive organization | Native | Review-only suggestions, explicit editable rename/move steps, encrypted durable plans, plan-ID confirmation, ordered progress, and uncertain-step recovery |
 | Local upload | Native | Configured opaque root IDs, symlink-rejecting relative paths, encrypted durable jobs, SHA-1 rapid upload, OSS multipart progress, and ID-confirmed uncertain replay |
 | TMDB trends, recommendations, and tracked catalog | Native | Direct bounded TMDB identity reads plus native subscription catalog; recommendation choices return to the existing resource-search flow |

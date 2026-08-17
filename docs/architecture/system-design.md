@@ -21,7 +21,9 @@
                               |Sources | |115| |QMS / Emby|
                               +--------+ +---+ +----------+
 
-Video playback path: 115 CDN --------------------------> Player
+Video playback paths:
+- Managed library: Media Hub -> Emby -> STRM -> 115 CDN -> Player
+- Android direct file: Media Hub playback description -> Media3 -> 115 CDN
 ```
 
 ## Runtime Containers
@@ -56,6 +58,7 @@ The Web build is embedded into the Go server image for deployment. Development k
 - `workflow`: durable stage machine, retries, and compensation rules.
 - `qms`: QMediaSync synchronization adapter.
 - `emby`: duplicate checks, refresh, index checks, and playback readiness.
+- `playback`: validates trusted 115 file targets and returns upstream temporary playback descriptions without proxying media.
 - `notify`: enterprise WeChat delivery with idempotent event keys.
 - `store`: SQLite repositories and migrations.
 - `httpapi`: versioned HTTP API and Web static serving.
@@ -124,7 +127,7 @@ SQLite WAL is sufficient for the expected single-node workload. A PostgreSQL mig
 - Passwords use a memory-hard hash.
 - Sessions use secure, HTTP-only cookies on Web and revocable bearer tokens on Android.
 - Provider secrets are encrypted at rest with a key supplied outside the database.
-- API responses and logs never contain 115 cookies, share passwords, direct URLs, API keys, or enterprise WeChat secrets.
+- API responses and logs never contain 115 cookies, share passwords, API keys, or enterprise WeChat secrets. The authenticated playback-description endpoint may return an upstream temporary 115 HTTPS URL to Android memory; it is never persisted or logged.
 - CORS is disabled in production because Web is served from the same origin.
 - Mutating operations require CSRF protection for cookie-authenticated Web requests.
 
@@ -155,6 +158,6 @@ QMediaSync, Emby, and SubX remain independent during migration. Media Hub first 
 3. Incorrect media identity causing wrong movie/series routing.
 4. QMediaSync synchronization accepted but not completed.
 5. Emby index delay or metadata-provider timeout.
-6. Playback URL generated for a mismatched player User-Agent.
+6. Playback description generated for a mismatched player User-Agent or changed 115 response schema.
 
 Each hotspot must have a contract test or deterministic health probe before its integration is declared production-ready.

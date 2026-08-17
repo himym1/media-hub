@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.15.2
+  version: 0.16.0
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -525,6 +525,29 @@ paths:
               schema: { $ref: '#/components/schemas/Drive115FileList' }
         '401': { $ref: '#/components/responses/ProblemResponse' }
         '502': { $ref: '#/components/responses/ProblemResponse' }
+  /playback/descriptors:
+    post:
+      operationId: createPlaybackDescriptor
+      summary: Resolve one trusted 115 video file into an upstream temporary playback description
+      description: The upstream URL lifetime may be unknown. Clients must re-resolve the same parentId/fileId after a recognized expiration response.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlaybackDescriptorRequest' }
+      responses:
+        '201':
+          description: Upstream-issued playback description; Media Hub does not proxy media bytes
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlaybackDescriptor' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
   /integrations/115/commands:
     get:
       operationId: listDrive115Commands
@@ -1715,6 +1738,25 @@ components:
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Drive115File' } }
         total: { type: integer, minimum: 0 }
+    PlaybackDescriptorRequest:
+      type: object
+      additionalProperties: false
+      required: [parentId, fileId]
+      properties:
+        parentId: { type: string, pattern: '^[0-9]{1,32}$' }
+        fileId: { type: string, pattern: '^[0-9]{1,32}$' }
+    PlaybackDescriptor:
+      type: object
+      additionalProperties: false
+      required: [streamUrl, userAgent, title]
+      properties:
+        streamUrl: { type: string, format: uri, pattern: '^https://' }
+        userAgent: { type: string, minLength: 1, maxLength: 512 }
+        title: { type: string, minLength: 1, maxLength: 255 }
+        expiresAt:
+          type: string
+          format: date-time
+          description: Present only when the upstream provides a verifiable expiry.
     Drive115CommandInput:
       type: object
       required: [operation, params]

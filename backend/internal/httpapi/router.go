@@ -13,6 +13,7 @@ import (
 	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/integration"
 	"media-hub/backend/internal/localupload"
+	"media-hub/backend/internal/playback"
 	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/settings"
@@ -84,6 +85,10 @@ type Drive115CommandService interface {
 	Retry(context.Context, int64, string, string) (drive115.Command, error)
 }
 
+type PlaybackService interface {
+	Create(context.Context, string, string) (playback.Descriptor, error)
+}
+
 type ArchiveService interface {
 	Preview(context.Context, string) ([]archive.Suggestion, error)
 	Create(context.Context, int64, []archive.Step) (archive.Plan, error)
@@ -148,6 +153,7 @@ type Dependencies struct {
 	Drive115         Drive115Reader
 	Drive115Auth     Drive115Authorizer
 	Drive115Commands Drive115CommandService
+	Playback         PlaybackService
 	LocalUploads     LocalUploadService
 	Archive          ArchiveService
 	Workflow         TransferWorkflow
@@ -206,6 +212,7 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("POST /api/v1/integrations/115/auth/device", h.protected(h.startDrive115Authorization))
 	mux.Handle("GET /api/v1/integrations/115/auth/device/{id}", h.protected(h.pollDrive115Authorization))
 	mux.Handle("GET /api/v1/integrations/115/files", h.protected(h.listDrive115Files))
+	mux.Handle("POST /api/v1/playback/descriptors", h.protected(h.createPlayback))
 	mux.Handle("POST /api/v1/integrations/115/commands", h.protected(h.createDrive115Command))
 	mux.Handle("GET /api/v1/integrations/115/commands", h.protected(h.listDrive115Commands))
 	mux.Handle("GET /api/v1/integrations/115/commands/{id}", h.protected(h.getDrive115Command))

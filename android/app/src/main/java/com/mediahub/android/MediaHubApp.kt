@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -26,6 +27,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.Film
 import com.composables.icons.lucide.LibraryBig
@@ -41,16 +44,13 @@ import com.mediahub.android.app.AppViewModel
 import com.mediahub.android.app.MainDestination
 import com.mediahub.android.app.primaryDestinations
 import com.mediahub.android.app.MediaHubViewModelFactory
-import com.mediahub.android.core.auth.SecureSessionStore
-import com.mediahub.android.core.config.ServerUrlStore
+import com.mediahub.android.app.ServerViewModelStoreHolder
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTheme
-import com.mediahub.android.core.network.MediaHubApi
-import com.mediahub.android.data.MediaHubRepository
 import com.mediahub.android.feature.auth.AuthRoute
 import com.mediahub.android.feature.auth.AuthViewModel
 import com.mediahub.android.feature.config.ServerConfigScreen
@@ -59,8 +59,11 @@ import com.mediahub.android.feature.library.LibraryRoute
 import com.mediahub.android.feature.library.LibraryViewModel
 import com.mediahub.android.feature.operations.OperationsRoute
 import com.mediahub.android.feature.operations.OperationsViewModel
+import com.mediahub.android.feature.player.PlayerActivity
+import com.mediahub.android.playback.PlaybackRequest
 import com.mediahub.android.feature.search.SearchRoute
 import com.mediahub.android.feature.search.SearchViewModel
+import com.mediahub.android.playback.MediaHubPlaybackService
 import com.mediahub.android.feature.services.ServicesRoute
 import com.mediahub.android.feature.services.ServicesViewModel
 import com.mediahub.android.feature.subscriptions.SubscriptionRoute
@@ -72,55 +75,79 @@ import com.mediahub.android.feature.transfers.TransferViewModel
 fun MediaHubApp() {
     MediaHubTheme {
         val applicationContext = LocalContext.current.applicationContext
-        val serverUrlStore = remember { ServerUrlStore(applicationContext) }
-        val initialServerUrl = remember { serverUrlStore.load(BuildConfig.API_BASE_URL) }
+        val container = remember { (applicationContext as MediaHubApplication).container }
+        val serverStoreHolder = viewModel<ServerViewModelStoreHolder>()
+        val serverUrlStore = container.serverUrlStore
+        val initialServerUrl = remember { container.initialServerUrl() }
         val configuredServerUrl = remember { androidx.compose.runtime.mutableStateOf(initialServerUrl) }
         if (configuredServerUrl.value.isBlank()) {
             val configViewModel = remember { ServerConfigViewModel(serverUrlStore, "") }
-            ServerConfigScreen(viewModel = configViewModel, onConfigured = { configuredServerUrl.value = it })
+            ServerConfigScreen(
+                viewModel = configViewModel,
+                onConfigured = { value ->
+                    container.configureServer(value)
+                    configuredServerUrl.value = value
+                },
+            )
             return@MediaHubTheme
         }
-        val repositoryResult = remember(configuredServerUrl.value) {
-            runCatching {
-                MediaHubRepository(
-                    api = MediaHubApi(configuredServerUrl.value),
-                    sessionStore = SecureSessionStore(applicationContext),
+        val dependenciesResult = remember(configuredServerUrl.value) {
+            runCatching { container.configureServer(configuredServerUrl.value) }
+        }
+        val dependencies = dependenciesResult.getOrNull()
+        if (dependencies == null) {
+            val configViewModel = remember { ServerConfigViewModel(serverUrlStore, configuredServerUrl.value) }
+            ServerConfigScreen(
+                viewModel = configViewModel,
+                onConfigured = { value ->
+                    container.configureServer(value)
+                    configuredServerUrl.value = value
+                },
+            )
+            return@MediaHubTheme
+        }
+        val repository = dependencies.repository
+        val serverGeneration = dependencies.generation
+        val serverIdentity = dependencies.serverIdentity
+        val serverViewModelStoreOwner = remember(serverStoreHolder, serverGeneration) {
+            serverStoreHolder.ownerFor(serverGeneration)
+        }
+        ServerViewModelScope(serverViewModelStoreOwner) {
+            val factory = remember(repository) { MediaHubViewModelFactory(repository) }
+            val appViewModel = viewModel<AppViewModel>(key = "app-$serverGeneration", factory = factory)
+            val state by appViewModel.state.collectAsState()
+            when (val currentState = state) {
+                AppState.Loading -> AppMessageScreen(title = "MEDIA HUB", message = "正在连接…")
+                AppState.Unauthenticated -> {
+                    val authViewModel = viewModel<AuthViewModel>(key = "auth-$serverGeneration", factory = factory)
+                    AuthRoute(viewModel = authViewModel, onAuthenticated = appViewModel::onAuthenticated)
+                }
+                AppState.Authenticated -> AuthenticatedWorkspace(
+                    appViewModel = appViewModel,
+                    factory = factory,
+                    serverGeneration = serverGeneration,
+                    serverIdentity = serverIdentity,
+                    onChangeServer = {
+                        applicationContext.startService(MediaHubPlaybackService.invalidateIntent(applicationContext))
+                        serverStoreHolder.clearServerScope()
+                        container.clearConfiguration()
+                        configuredServerUrl.value = ""
+                    },
+                )
+                is AppState.Error -> AppMessageScreen(
+                    title = "连接失败",
+                    message = currentState.message,
+                    actionLabel = "重试",
+                    onAction = appViewModel::restoreSession,
                 )
             }
         }
-        val repository = repositoryResult.getOrNull()
-        if (repository == null) {
-            val configViewModel = remember { ServerConfigViewModel(serverUrlStore, configuredServerUrl.value) }
-            ServerConfigScreen(viewModel = configViewModel, onConfigured = { configuredServerUrl.value = it })
-            return@MediaHubTheme
-        }
-
-        val factory = remember(repository) { MediaHubViewModelFactory(repository) }
-        val appViewModel = viewModel<AppViewModel>(factory = factory)
-        val state by appViewModel.state.collectAsState()
-        when (val currentState = state) {
-            AppState.Loading -> AppMessageScreen(title = "MEDIA HUB", message = "正在连接…")
-            AppState.Unauthenticated -> {
-                val authViewModel = viewModel<AuthViewModel>(factory = factory)
-                AuthRoute(viewModel = authViewModel, onAuthenticated = appViewModel::onAuthenticated)
-            }
-            AppState.Authenticated -> AuthenticatedWorkspace(
-                appViewModel = appViewModel,
-                factory = factory,
-                onChangeServer = {
-                    serverUrlStore.clear()
-                    SecureSessionStore(applicationContext).clear()
-                    configuredServerUrl.value = ""
-                },
-            )
-            is AppState.Error -> AppMessageScreen(
-                title = "连接失败",
-                message = currentState.message,
-                actionLabel = "重试",
-                onAction = appViewModel::restoreSession,
-            )
-        }
     }
+}
+
+@Composable
+private fun ServerViewModelScope(owner: ViewModelStoreOwner, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalViewModelStoreOwner provides owner, content = content)
 }
 
 @Composable
@@ -128,7 +155,10 @@ private fun AuthenticatedWorkspace(
     appViewModel: AppViewModel,
     factory: MediaHubViewModelFactory,
     onChangeServer: () -> Unit,
+    serverGeneration: Long,
+    serverIdentity: String,
 ) {
+    val context = LocalContext.current
     val destination by appViewModel.destination.collectAsState()
     val subscriptionDraft by appViewModel.subscriptionDraft.collectAsState()
     Column(
@@ -148,7 +178,7 @@ private fun AuthenticatedWorkspace(
         Box(Modifier.weight(1f)) {
             when (destination) {
                 MainDestination.Search -> {
-                    val searchViewModel = viewModel<SearchViewModel>(factory = factory)
+                    val searchViewModel = viewModel<SearchViewModel>(key = "search-$serverGeneration", factory = factory)
                     SearchRoute(
                         viewModel = searchViewModel,
                         onTransferCreated = { appViewModel.showDestination(MainDestination.Transfers) },
@@ -156,11 +186,11 @@ private fun AuthenticatedWorkspace(
                     )
                 }
                 MainDestination.Transfers -> {
-                    val transferViewModel = viewModel<TransferViewModel>(factory = factory)
+                    val transferViewModel = viewModel<TransferViewModel>(key = "transfers-$serverGeneration", factory = factory)
                     TransferRoute(viewModel = transferViewModel)
                 }
                 MainDestination.Subscriptions -> {
-                    val subscriptionViewModel = viewModel<SubscriptionViewModel>(factory = factory)
+                    val subscriptionViewModel = viewModel<SubscriptionViewModel>(key = "subscriptions-$serverGeneration", factory = factory)
                     SubscriptionRoute(
                         viewModel = subscriptionViewModel,
                         draft = subscriptionDraft,
@@ -168,18 +198,28 @@ private fun AuthenticatedWorkspace(
                     )
                 }
                 MainDestination.Library -> {
-                    val libraryViewModel = viewModel<LibraryViewModel>(factory = factory)
+                    val libraryViewModel = viewModel<LibraryViewModel>(key = "library-$serverGeneration", factory = factory)
                     LibraryRoute(viewModel = libraryViewModel)
                 }
                 MainDestination.Operations -> {
-                    val operationsViewModel = viewModel<OperationsViewModel>(factory = factory)
-                    OperationsRoute(viewModel = operationsViewModel)
+                    val operationsViewModel = viewModel<OperationsViewModel>(key = "operations-$serverGeneration", factory = factory)
+                    OperationsRoute(
+                        viewModel = operationsViewModel,
+                        onPlayDriveFile = { file, parentId ->
+                            context.startActivity(
+                                PlayerActivity.intent(context, PlaybackRequest(parentId, file.id, file.name, serverIdentity)),
+                            )
+                        },
+                    )
                 }
                 MainDestination.Services -> {
-                    val servicesViewModel = viewModel<ServicesViewModel>(factory = factory)
+                    val servicesViewModel = viewModel<ServicesViewModel>(key = "services-$serverGeneration", factory = factory)
                     ServicesRoute(
                         viewModel = servicesViewModel,
-                        onLogout = appViewModel::logout,
+                        onLogout = {
+                            context.startService(MediaHubPlaybackService.invalidateIntent(context))
+                            appViewModel.logout()
+                        },
                         onChangeServer = onChangeServer,
                     )
                 }

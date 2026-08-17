@@ -45,6 +45,13 @@ Visual density: 6 / 10
 - Touch targets are at least 48 dp.
 - System back, predictive back, edge-to-edge, dynamic type, and dark mode are supported.
 
+### Launcher Icon
+
+- The canonical geometry and palette are defined once in [`media-hub-icon-mark.svg`](media-hub-icon-mark.svg); it has a transparent canvas and contains the two-color mark only.
+- Regenerate Android foreground, themed monochrome, legacy, and round PNGs with `./scripts/generate-android-launcher-icons.sh` on macOS.
+- Verify generated resources are current without modifying the worktree with `./scripts/generate-android-launcher-icons.sh --check`.
+- Do not edit generated `mipmap-*` PNGs or `ic_launcher_background` by hand. They are derived from the canonical SVG palette and alpha.
+
 ## Typography
 
 - Web: system-safe sans stack initially; self-hosted font is introduced only with a licensed asset.

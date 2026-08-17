@@ -22,6 +22,8 @@ const (
 	userInfoEndpoint     = "https://webapi.115.com/files/index_info"
 	userProfileEndpoint  = "https://my.115.com/?ct=ajax&ac=nav"
 	filesEndpoint        = "https://webapi.115.com/files"
+	fileInfoEndpoint     = "https://webapi.115.com/files/get_info"
+	downloadEndpoint     = "https://webapi.115.com/files/download"
 	folderAddEndpoint    = "https://webapi.115.com/files/add"
 	fileMoveEndpoint     = "https://webapi.115.com/files/move"
 	fileRenameEndpoint   = "https://webapi.115.com/files/batch_rename"
@@ -44,6 +46,8 @@ type Client struct {
 	userInfoURL     string
 	userProfileURL  string
 	filesURL        string
+	fileInfoURL     string
+	downloadURL     string
 	folderAddURL    string
 	fileMoveURL     string
 	fileRenameURL   string
@@ -69,6 +73,8 @@ func NewClient(cookie string, timeout time.Duration) *Client {
 		userInfoURL:     userInfoEndpoint,
 		userProfileURL:  userProfileEndpoint,
 		filesURL:        filesEndpoint,
+		fileInfoURL:     fileInfoEndpoint,
+		downloadURL:     downloadEndpoint,
 		folderAddURL:    folderAddEndpoint,
 		fileMoveURL:     fileMoveEndpoint,
 		fileRenameURL:   fileRenameEndpoint,

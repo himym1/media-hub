@@ -9,7 +9,9 @@ coroutines = "1.10.2"
 miuix = "0.9.3"
 lucide = "1.1.0"
 navigation3 = "1.1.5"
+media3 = "1.11.0"
 junit4 = "4.13.2"
+json = "20250517"
 androidxTestExt = "1.3.0"
 androidxTestRunner = "1.7.0"
 composeUiTest = "1.11.2"
@@ -26,7 +28,11 @@ miuix-squircle = { module = "top.yukonga.miuix.kmp:miuix-squircle", version.ref 
 lucide-icons = { module = "com.composables:icons-lucide", version.ref = "lucide" }
 androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "navigation3" }
 androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
+androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
+androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
+androidx-media3-session = { module = "androidx.media3:media3-session", version.ref = "media3" }
 junit4 = { module = "junit:junit", version.ref = "junit4" }
+json = { module = "org.json:json", version.ref = "json" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestExt" }
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4", version.ref = "composeUiTest" }

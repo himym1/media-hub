@@ -61,7 +61,7 @@ Implementation status: SQLite persistence, scheduler, source/release rules, epis
 - [x] Native administrator password change with Argon2id rehashing and transactional revocation of other sessions.
 - [x] Authenticated Enterprise WeChat delivery-state list and exact-ID-confirmed manual resend for uncertain outcomes.
 
-Media Hub will not implement SubX playback proxy routes: QMediaSync owns STRM generation, Emby owns playback APIs, and 115 CDN remains the direct media path.
+Media Hub will not implement SubX playback proxy routes: QMediaSync and Emby retain the managed-library path, while Android direct-file playback uses an authenticated upstream description and sends media directly from 115 CDN to Media3.
 
 Exit gate: every item in the [SubX parity matrix](../integrations/subx-parity.md) has a tested native, delegated, optional, or intentionally rejected mapping.
 
@@ -78,7 +78,7 @@ Implementation status: backup imports map recognized subscriptions to native sou
 
 ## Deferred
 
-- Built-in player.
+- Web built-in player.
 - iOS or desktop app.
 - Multi-user roles.
 - Public registration and billing.

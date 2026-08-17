@@ -46,6 +46,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  icon-assets:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/generate-android-launcher-icons.sh --check
+
   android:
     runs-on: ubuntu-latest
     steps:
