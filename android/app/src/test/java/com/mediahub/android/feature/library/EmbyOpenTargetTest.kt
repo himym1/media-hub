@@ -18,9 +18,4 @@ class EmbyOpenTargetTest {
         assertNull(validatedEmbyAppUrl("emby://other/server-1/item-1"))
     }
 
-    @Test
-    fun labelsMatchTheResolvedDestination() {
-        assertEquals("使用 Emby 播放", embyPlayLabel(appAvailable = true))
-        assertEquals("在 Emby 网页中播放", embyPlayLabel(appAvailable = false))
-    }
 }

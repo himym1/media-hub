@@ -93,7 +93,7 @@ class PlayerScreenTest {
     }
 
     @Test
-    fun nonRetryableFailureOffersOnlyEmbyFallback() {
+    fun nonRetryableFailureDoesNotOfferEmbyFallback() {
         composeRule.setContent {
             MediaHubTheme {
                 PlayerScreen(
@@ -101,12 +101,12 @@ class PlayerScreenTest {
                     title = "测试视频",
                     controller = null,
                     isPictureInPicture = false,
-                    actions = PlayerActions({}, {}, {}, {}, onFallback = {}),
+                    actions = PlayerActions({}, {}, {}, {}),
                 )
             }
         }
         composeRule.onNodeWithText("当前媒体暂无直链").assertExists()
         composeRule.onNodeWithText("重试").assertDoesNotExist()
-        composeRule.onNodeWithText("使用 Emby 播放").assertHasClickAction()
+        composeRule.onNodeWithText("使用 Emby 播放").assertDoesNotExist()
     }
 }

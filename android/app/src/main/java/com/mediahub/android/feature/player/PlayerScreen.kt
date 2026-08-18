@@ -25,7 +25,6 @@ import com.composables.icons.lucide.PictureInPicture2
 import com.composables.icons.lucide.RotateCw
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubIconButton
-import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubText
 
 internal sealed interface PlayerUiState {
@@ -74,9 +73,6 @@ internal fun PlayerScreen(
             ) {
                 MediaHubText(state.message, color = Color.White)
                 if (state.retryable) MediaHubButton("重试", onClick = actions.onRetry)
-                actions.onFallback?.let { fallback ->
-                    MediaHubSecondaryButton("使用 Emby 播放", onClick = fallback)
-                }
             }
             PlayerUiState.Ready -> Unit
         }

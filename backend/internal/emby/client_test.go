@@ -20,7 +20,7 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 		}
 		switch request.URL.Path {
 		case "/Library/MediaFolders":
-			_, _ = w.Write([]byte(`{"Items":[{"Id":"library-1","Name":"电影","CollectionType":"movies"}],"TotalRecordCount":1}`))
+			_, _ = w.Write([]byte(`{"Items":[{"Id":"library-1","Name":"电影","CollectionType":"movies"},{"Id":"library-music","Name":"音乐","CollectionType":"music"},{"Id":"library-empty","Name":"本地电影","CollectionType":"movies"}],"TotalRecordCount":3}`))
 		case "/Users/user-1/Items/item-1":
 			query := request.URL.Query()
 			if query.Get("UserId") != "" || !strings.Contains(query.Get("Fields"), "Overview") {
@@ -40,6 +40,14 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 			case query.Get("ParentId") != "":
 				if query.Get("IncludeItemTypes") == "Episode" {
 					_, _ = w.Write([]byte(`{"Items":[],"TotalRecordCount":0}`))
+					return
+				}
+				if query.Get("IncludeItemTypes") == "Movie" {
+					if query.Get("ParentId") != "library-1" {
+						_, _ = w.Write([]byte(`{"Items":[],"TotalRecordCount":0}`))
+						return
+					}
+					_, _ = w.Write([]byte(`{"Items":[{"Id":"item-2","Name":"Library Movie","Type":"Movie","Path":"/library/movie.strm","MediaSources":[{"Path":"/library/movie.strm"}]}],"TotalRecordCount":1}`))
 					return
 				}
 				if query.Get("ParentId") != "library-1" || query.Get("StartIndex") != "0" || query.Get("Limit") != "10000" || !strings.Contains(query.Get("Fields"), "MediaSources") {

@@ -149,13 +149,13 @@ func TestCreateEmbyDescriptorUsesSeparatePlaybackFacadeEndToEnd(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Location", "https://cdn.example/movie.mkv?temporary=1")
+		w.Header().Set("Location", "http://qms.local/115/url/video.mkv?pickcode=abcd1234")
 		w.WriteHeader(http.StatusTemporaryRedirect)
 	}))
 	defer facade.Close()
 
 	embyClient := emby.NewClientWithPlayback(origin.URL, "emby-key", time.Second, "user-1", facade.URL)
-	service := playback.NewService(nil, embyClient)
+	service := playback.NewService(pickCodeResolverStub{}, embyClient)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/playback/descriptors/emby", strings.NewReader(`{"itemId":"item-1"}`))
 	request.Header.Set("Authorization", "Bearer valid-session")
@@ -181,4 +181,17 @@ func TestCreateEmbyDescriptorPreservesSourceUnauthorizedProblem(t *testing.T) {
 	if recorder.Code != http.StatusBadGateway || !strings.Contains(recorder.Body.String(), `"code":"playback_source_unauthorized"`) {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
+}
+
+type pickCodeResolverStub struct{}
+
+func (pickCodeResolverStub) ResolveDrive115(context.Context, playback.Drive115Target, string) (playback.SourceMedia, error) {
+	return playback.SourceMedia{}, playback.ErrUnavailable
+}
+
+func (pickCodeResolverStub) ResolvePickCode(_ context.Context, pickCode, name, _ string) (playback.SourceMedia, error) {
+	if pickCode != "abcd1234" {
+		return playback.SourceMedia{}, playback.ErrUnavailable
+	}
+	return playback.SourceMedia{URL: "https://cdn.example/movie.mkv?temporary=1", Name: name}, nil
 }
