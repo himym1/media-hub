@@ -5,6 +5,8 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -39,6 +41,9 @@ class MediaHubPlaybackService : MediaSessionService() {
         httpFactory = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(false)
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, httpFactory)))
+            .setAudioAttributes(AudioAttributes.DEFAULT, true)
+            .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
         sessionTracker = PlaybackSessionTracker(
             scope = scope,
