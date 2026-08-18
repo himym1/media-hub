@@ -19,9 +19,7 @@ import com.mediahub.android.MediaHubApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class MediaHubPlaybackService : MediaSessionService() {
@@ -31,12 +29,7 @@ class MediaHubPlaybackService : MediaSessionService() {
     private lateinit var httpFactory: DefaultHttpDataSource.Factory
     private lateinit var sessionReporter: PlaybackSessionReporter
     private lateinit var sessionTracker: PlaybackSessionTracker
-    private var currentRequest: PlaybackRequest? = null
-    private var refreshing = false
-    private val recoveryCoordinator = PlaybackRecoveryCoordinator()
-    private var resolveGeneration = 0L
-    private var commandGeneration = 0L
-    private var commandJob: Job? = null
+    private lateinit var commandCoordinator: PlaybackCommandCoordinator
 
     override fun onCreate() {
         super.onCreate()
@@ -53,10 +46,44 @@ class MediaHubPlaybackService : MediaSessionService() {
             positionMs = { player.currentPosition.coerceAtLeast(0L) },
             paused = { !player.isPlaying },
         )
+        commandCoordinator = PlaybackCommandCoordinator(
+            scope = scope,
+            host = object : PlaybackCommandHost {
+                override val currentMediaId: String? get() = player.currentMediaItem?.mediaId
+                override val hasMediaItem: Boolean get() = player.currentMediaItem != null
+                override val positionMs: Long get() = player.currentPosition.coerceAtLeast(0L)
+                override val playWhenReady: Boolean get() = player.playWhenReady
+
+                override suspend fun resolve(request: PlaybackRequest): PlaybackDescriptor {
+                    val dependencies = (application as MediaHubApplication).container.requireConfigured()
+                    if (!matchesServerIdentity(request, dependencies.serverIdentity)) {
+                        throw PlaybackServerChangedException()
+                    }
+                    return dependencies.playbackRepository.createDescriptor(request)
+                }
+
+                override suspend fun stopSessionAndFlush() = sessionTracker.stopAndFlush()
+                override fun stopSession() = sessionTracker.stop()
+                override fun pause() { player.playWhenReady = false }
+                override fun clearMedia() {
+                    player.stop()
+                    player.clearMediaItems()
+                }
+                override fun applyDescriptor(
+                    request: PlaybackRequest,
+                    descriptor: PlaybackDescriptor,
+                    positionMs: Long,
+                    autoPlay: Boolean,
+                ) = play(request, descriptor, positionMs, autoPlay)
+                override fun publishLoading() = publishState(STATE_LOADING, null)
+                override fun publishError(message: String) = publishState(STATE_ERROR, message)
+                override fun stopService() = stopSelf()
+            },
+        )
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) {
-                    recoveryCoordinator.onReady()
+                    commandCoordinator.onReady()
                     publishState(STATE_READY, null)
                     sessionTracker.onReady()
                 } else if (playbackState == Player.STATE_ENDED) {
@@ -65,29 +92,7 @@ class MediaHubPlaybackService : MediaSessionService() {
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                val request = currentRequest ?: return
-                if (player.currentMediaItem?.mediaId != request.mediaId || refreshing) return
-                val action = recoveryCoordinator.recover(
-                    responseCode = playbackHttpStatus(error),
-                    request = request,
-                    positionMs = player.currentPosition.coerceAtLeast(0L),
-                    autoPlay = player.playWhenReady,
-                )
-                if (action == null) {
-                    player.playWhenReady = false
-                    sessionTracker.stop()
-                    publishState(STATE_ERROR, "视频连接中断")
-                    return
-                }
-                val command = ++commandGeneration
-                commandJob?.cancel()
-                commandJob = scope.launch {
-                    sessionTracker.stopAndFlush()
-                    if (command != commandGeneration || currentRequest?.mediaId != action.request.mediaId) return@launch
-                    resolveAndPlay(
-                        action.request, action.positionMs, action.autoPlay, refresh = true, command = command,
-                    )
-                }
+                commandCoordinator.onPlayerError(playbackHttpStatus(error))
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -101,36 +106,9 @@ class MediaHubPlaybackService : MediaSessionService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_INVALIDATE -> {
-                val command = ++commandGeneration
-                commandJob?.cancel()
-                commandJob = scope.launch {
-                    if (command != commandGeneration) return@launch
-                    sessionTracker.stopAndFlush()
-                    if (command != commandGeneration) return@launch
-                    invalidatePlayback()
-                    stopSelf()
-                }
-            }
-            ACTION_PLAY -> {
-                val request = PlaybackRequestIntentCodec.read(intent)
-                if (request != null) {
-                    val force = intent.getBooleanExtra(EXTRA_FORCE, false)
-                    val command = ++commandGeneration
-                    commandJob?.cancel()
-                    commandJob = scope.launch {
-                        if (command != commandGeneration) return@launch
-                        val sameMedia = currentRequest?.mediaId == request.mediaId && player.currentMediaItem != null
-                        if (sameMedia && !force) return@launch
-                        sessionTracker.stopAndFlush()
-                        if (command != commandGeneration) return@launch
-                        player.stop()
-                        player.clearMediaItems()
-                        currentRequest = request
-                        recoveryCoordinator.onReady()
-                        resolveAndPlay(request, 0L, true, refresh = force, command = command)
-                    }
-                }
+            ACTION_INVALIDATE -> commandCoordinator.submitInvalidate()
+            ACTION_PLAY -> PlaybackRequestIntentCodec.read(intent)?.let { request ->
+                commandCoordinator.submitPlay(request, intent.getBooleanExtra(EXTRA_FORCE, false))
             }
         }
         return super.onStartCommand(intent, flags, startId)
@@ -139,7 +117,7 @@ class MediaHubPlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession = mediaSession
 
     override fun onDestroy() {
-        commandJob?.cancel()
+        commandCoordinator.close()
         sessionTracker.closeBestEffort()
         scope.cancel()
         mediaSession.release()
@@ -147,49 +125,8 @@ class MediaHubPlaybackService : MediaSessionService() {
         super.onDestroy()
     }
 
-    private fun invalidatePlayback() {
-        resolveGeneration++
-        refreshing = false
-        currentRequest = null
-        player.stop()
-        player.clearMediaItems()
-        publishState(STATE_LOADING, null)
-    }
-
-    private suspend fun resolveAndPlay(
-        request: PlaybackRequest,
-        positionMs: Long,
-        autoPlay: Boolean,
-        refresh: Boolean,
-        command: Long,
-    ) {
-        if (command != commandGeneration) return
-        val generation = ++resolveGeneration
-        refreshing = refresh
-        publishState(STATE_LOADING, null)
-        try {
-            val dependencies = (application as MediaHubApplication).container.requireConfigured()
-            if (!matchesServerIdentity(request, dependencies.serverIdentity)) {
-                currentRequest = null
-                player.stop()
-                player.clearMediaItems()
-                publishState(STATE_ERROR, "服务器已切换，请返回后重新选择视频")
-                return
-            }
-            val descriptor = dependencies.playbackRepository.createDescriptor(request)
-            if (command != commandGeneration || generation != resolveGeneration || currentRequest?.mediaId != request.mediaId) return
-            play(request, descriptor, positionMs, autoPlay)
-        } catch (_: Exception) {
-            if (command == commandGeneration && generation == resolveGeneration && currentRequest?.mediaId == request.mediaId) {
-                publishState(STATE_ERROR, if (refresh) "播放地址已失效，重新连接失败" else "暂时无法直接播放")
-            }
-        } finally {
-            if (generation == resolveGeneration) refreshing = false
-        }
-    }
 
     private fun play(request: PlaybackRequest, descriptor: PlaybackDescriptor, positionMs: Long, autoPlay: Boolean) {
-        currentRequest = request
         sessionTracker.attach(descriptor.sessionId)
         httpFactory.setUserAgent(descriptor.userAgent)
         val item = MediaItem.Builder()
@@ -235,32 +172,6 @@ class MediaHubPlaybackService : MediaSessionService() {
     }
 }
 
-internal data class PlaybackRecoveryAction(
-    val request: PlaybackRequest,
-    val positionMs: Long,
-    val autoPlay: Boolean,
-)
-
-internal class PlaybackRecoveryCoordinator {
-    private var acquired = false
-
-    fun recover(
-        responseCode: Int?,
-        request: PlaybackRequest,
-        positionMs: Long,
-        autoPlay: Boolean,
-    ): PlaybackRecoveryAction? {
-        if (responseCode == null || acquired || !isRefreshableHttpStatus(responseCode)) return null
-        acquired = true
-        return PlaybackRecoveryAction(request, positionMs, autoPlay)
-    }
-
-    fun onReady() {
-        acquired = false
-    }
-}
-
-internal fun isRefreshableHttpStatus(responseCode: Int): Boolean = responseCode in setOf(401, 403, 404, 410)
 
 private fun playbackHttpStatus(error: PlaybackException): Int? {
     var cause: Throwable? = error
@@ -270,7 +181,3 @@ private fun playbackHttpStatus(error: PlaybackException): Int? {
     }
     return null
 }
-
-
-internal fun matchesServerIdentity(request: PlaybackRequest, configuredIdentity: String): Boolean =
-    request.serverIdentity == configuredIdentity
