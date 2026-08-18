@@ -28,4 +28,5 @@ Emby remains the source of library identity, movie/series/episode organization, 
 - The 115 operations player remains available for diagnostics but is not the normal media-consumption entry.
 - A failed direct resolution presents a validated Emby fallback in the player error state.
 - Media Hub still does not transcode. QMediaSync `emby302` reads STRM and emits the upstream redirect; Media Hub consumes only the redirect header and never proxies media bytes. Unsupported codecs and sources without a safe external redirect require Emby playback.
+- An isolated Debug device test proves Media3 READY, positive Range seeking, fixed User-Agent, two embedded audio tracks, one embedded text track, Activity rotation/back, and real platform PiP with synthetic media. This evidence does not establish production QMediaSync/115 playback.
 - Production readiness requires a real movie and episode probe through QMediaSync/Emby, including Range seek, resume position, and Emby progress updates.
