@@ -22,6 +22,7 @@ internal data class ArchiveState(
     val selected: Set<String> = emptySet(),
     val names: Map<String, String> = emptyMap(),
     val error: String? = null,
+    val initialized: Boolean = false,
 )
 
 class ArchiveViewModel(
@@ -31,16 +32,13 @@ class ArchiveViewModel(
     internal val uiState: StateFlow<ArchiveState> = _uiState.asStateFlow()
     private var pollingJob: Job? = null
 
-    init {
-        refresh()
-    }
 
     fun refresh() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(loading = true, error = null)
             try {
                 val plans = repository.archivePlans()
-                _uiState.value = _uiState.value.copy(loading = false, plans = plans)
+                _uiState.value = _uiState.value.copy(loading = false, initialized = true, plans = plans)
                 startPollingIfNeeded()
             } catch (error: ApiException) {
                 fail(error.message ?: "无法读取归档计划")
@@ -149,6 +147,6 @@ class ArchiveViewModel(
     private fun activePlan(plan: ArchivePlan): Boolean = plan.state == "queued" || plan.state == "running"
 
     private fun fail(message: String) {
-        _uiState.value = _uiState.value.copy(loading = false, error = message)
+        _uiState.value = _uiState.value.copy(loading = false, initialized = true, error = message)
     }
 }

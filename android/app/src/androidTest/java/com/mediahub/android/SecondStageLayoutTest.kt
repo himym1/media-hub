@@ -2,6 +2,9 @@ package com.mediahub.android
 
 import android.graphics.Bitmap
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertCountEquals
@@ -133,12 +136,15 @@ class SecondStageLayoutTest {
         var driveRefreshes = 0
         var uploadRefreshes = 0
         var archiveRefreshes = 0
+        var section by mutableStateOf("drive")
         composeRule.setContent {
             MediaHubTheme {
                 OperationsScreen(
                     driveState = Drive115State(loading = false, error = "115 读取失败"),
                     localUploadState = LocalUploadState(loading = false, error = "上传读取失败"),
                     archiveState = ArchiveState(loading = false, error = "归档读取失败"),
+                    section = section,
+                    onSectionChanged = { section = it },
                     driveActions = Drive115Actions({ driveRefreshes++ }, {}, {}, {}, {}, {}, {}, {}, {}),
                     localUploadActions = LocalUploadActions({ uploadRefreshes++ }, {}, {}, {}, {}, {}, {}),
                     archiveActions = ArchiveActions({ archiveRefreshes++ }, {}, {}, {}, {}, { _, _ -> }, {}, {}, {}),

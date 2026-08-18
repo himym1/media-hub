@@ -25,6 +25,7 @@ internal data class LocalUploadState(
     val destinationId: String = "",
     val invoking: Boolean = false,
     val error: String? = null,
+    val initialized: Boolean = false,
 )
 
 class LocalUploadViewModel(
@@ -35,9 +36,6 @@ class LocalUploadViewModel(
     private var pollingJob: Job? = null
     private var filesJob: Job? = null
 
-    init {
-        refresh()
-    }
 
     fun refresh() {
         viewModelScope.launch {
@@ -53,6 +51,7 @@ class LocalUploadViewModel(
                     rootId = rootId,
                     entries = entries,
                     uploads = uploads,
+                    initialized = true,
                 )
                 startPollingIfNeeded()
             } catch (error: ApiException) {
@@ -159,6 +158,6 @@ class LocalUploadViewModel(
         upload.state in setOf("queued", "hashing", "submitting_init", "uploading")
 
     private fun fail(message: String) {
-        _uiState.value = _uiState.value.copy(loading = false, error = message)
+        _uiState.value = _uiState.value.copy(loading = false, initialized = true, error = message)
     }
 }

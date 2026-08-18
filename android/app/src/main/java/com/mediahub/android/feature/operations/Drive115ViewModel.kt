@@ -24,6 +24,7 @@ internal data class Drive115State(
     val name: String = "",
     val invoking: Boolean = false,
     val error: String? = null,
+    val initialized: Boolean = false,
 )
 
 class Drive115ViewModel(
@@ -34,9 +35,6 @@ class Drive115ViewModel(
     private var pollingJob: Job? = null
     private var refreshJob: Job? = null
 
-    init {
-        refresh()
-    }
 
     fun refresh() {
         refreshJob?.cancel()
@@ -46,7 +44,9 @@ class Drive115ViewModel(
                 val state = _uiState.value
                 val files = repository.drive115Files(state.parentId)
                 val commands = repository.drive115Commands()
-                _uiState.value = _uiState.value.copy(loading = false, files = files, commands = commands)
+                _uiState.value = _uiState.value.copy(
+                    loading = false, initialized = true, files = files, commands = commands,
+                )
                 startPollingIfNeeded()
             } catch (error: ApiException) {
                 fail(error.message ?: "无法读取 115 文件")
@@ -160,6 +160,6 @@ class Drive115ViewModel(
         command.state == "queued" || command.state == "submitting"
 
     private fun fail(message: String) {
-        _uiState.value = _uiState.value.copy(loading = false, error = message)
+        _uiState.value = _uiState.value.copy(loading = false, initialized = true, error = message)
     }
 }

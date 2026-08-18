@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,10 +43,20 @@ internal fun OperationsRoute(
     val driveState by driveViewModel.uiState.collectAsState()
     val localUploadState by localUploadViewModel.uiState.collectAsState()
     val archiveState by archiveViewModel.uiState.collectAsState()
+    var section by rememberSaveable { mutableStateOf("drive") }
+    LaunchedEffect(section, driveState.initialized, localUploadState.initialized, archiveState.initialized) {
+        when (section) {
+            "drive" -> if (!driveState.initialized) driveViewModel.refresh()
+            "upload" -> if (!localUploadState.initialized) localUploadViewModel.refresh()
+            else -> if (!archiveState.initialized) archiveViewModel.refresh()
+        }
+    }
     OperationsScreen(
         driveState = driveState,
         localUploadState = localUploadState,
         archiveState = archiveState,
+        section = section,
+        onSectionChanged = { section = it },
         driveActions = Drive115Actions(
             refresh = driveViewModel::refresh,
             parentChanged = driveViewModel::setParentId,
@@ -88,8 +99,9 @@ internal fun OperationsScreen(
     driveActions: Drive115Actions,
     localUploadActions: LocalUploadActions,
     archiveActions: ArchiveActions,
+    section: String,
+    onSectionChanged: (String) -> Unit,
 ) {
-    var section by rememberSaveable { mutableStateOf("drive") }
     val loading = when (section) {
         "drive" -> driveState.loading
         "upload" -> localUploadState.loading
@@ -132,7 +144,7 @@ internal fun OperationsScreen(
             MediaHubSegmentedControl(
                 options = operationSections,
                 selected = section,
-                onSelected = { section = it },
+                onSelected = onSectionChanged,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
