@@ -1,4 +1,6 @@
 package com.mediahub.android.playback
+import com.mediahub.android.core.network.ApiException
+import java.io.IOException
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
@@ -101,6 +103,28 @@ class PlaybackCommandCoordinatorTest {
 
         assertEquals(listOf("stop-session-flush", "clear", "loading", "stop-service"), host.events)
         coordinator.close()
+    }
+
+    @Test
+    fun resolutionErrorsKeepStableUserFacingMeaning() {
+        assertEquals(
+            "直接播放尚未配置",
+            playbackResolutionErrorMessage(ApiException(503, "playback_source_not_configured", "ignored"), false),
+        )
+        assertEquals(
+            "播放源授权已失效",
+            playbackResolutionErrorMessage(ApiException(502, "playback_source_unauthorized", "ignored"), false),
+        )
+        assertEquals(
+            "当前媒体无法直接播放",
+            playbackResolutionErrorMessage(ApiException(404, "playable_media_not_found", "ignored"), false),
+        )
+        assertEquals(
+            "当前媒体暂无直链",
+            playbackResolutionErrorMessage(ApiException(502, "direct_playback_unavailable", "ignored"), false),
+        )
+        assertEquals("无法连接 Media Hub", playbackResolutionErrorMessage(IOException(), false))
+        assertEquals("播放地址已失效，重新连接失败", playbackResolutionErrorMessage(IllegalStateException(), true))
     }
 
     private fun request(id: String) = PlaybackRequest(
