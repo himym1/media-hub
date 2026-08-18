@@ -50,6 +50,7 @@ import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.image.PosterLoader
 import com.mediahub.android.core.network.EmbyItemDetail
+import com.mediahub.android.core.network.EmbyItem
 import com.mediahub.android.playback.PlaybackFallback
 import java.net.URI
 
@@ -110,7 +111,7 @@ internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDeta
             } else {
                 item {
                     MediaHubButton(
-                        label = "直接播放",
+                        label = playbackActionLabel(detail.item),
                         icon = Lucide.Play,
                         onClick = { actions.onPlayItem(detail.item, fallback) },
                         modifier = Modifier.fillMaxWidth(),
@@ -316,3 +317,9 @@ private val genreLabels = mapOf(
     "war & politics" to "战争政治",
     "western" to "西部",
 )
+
+internal fun playbackActionLabel(item: EmbyItem): String = when {
+    item.played -> "重新播放"
+    item.playbackPositionMs >= 30_000L -> "继续播放"
+    else -> "播放"
+}

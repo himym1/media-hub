@@ -93,7 +93,7 @@ class LibraryScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("直接播放").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
+        composeRule.onNodeWithText("继续播放").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
         composeRule.onNodeWithText("在 Emby 网页中播放").assertHasClickAction().assertHeightIsAtLeast(48.dp)
         composeRule.runOnIdle {
             assertEquals("item-1", played?.first?.id)
@@ -108,7 +108,7 @@ class LibraryScreenTest {
     @Test
     fun episodePickerUsesEpisodeSpecificTargetAndFallbackAtLargeFont() {
         val episode = EmbyEpisode(
-            item = EmbyItem(id = "episode-2", name = "第二集", type = "Episode", year = 2026, tmdbId = null, season = 1, episode = 2),
+            item = EmbyItem(id = "episode-2", name = "第二集", type = "Episode", year = 2026, tmdbId = null, season = 1, episode = 2, playbackPositionMs = 65_000),
             externalUrl = "https://emby.example/episode-2",
             appUrl = "emby://items/server-1/episode-2",
         )
@@ -131,7 +131,8 @@ class LibraryScreenTest {
         }
 
         composeRule.onNodeWithText("第 1 季").assertHasClickAction().assertHeightIsAtLeast(48.dp)
-        composeRule.onNodeWithContentDescription("播放 第 2 集 · 第二集").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
+        composeRule.onNodeWithText("继续 1:05").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("继续播放 第 2 集 · 第二集").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
         composeRule.runOnIdle {
             assertEquals("episode-2", played?.first?.id)
             assertEquals("emby://items/server-1/episode-2", played?.second?.appUrl)
@@ -158,7 +159,7 @@ class LibraryScreenTest {
     )
 
     private fun movieDetail(type: String = "Movie", id: String = "item-1") = EmbyItemDetail(
-        item = EmbyItem(id = id, name = "验收影片", type = type, year = 2026, tmdbId = "100"),
+        item = EmbyItem(id = id, name = "验收影片", type = type, year = 2026, tmdbId = "100", playbackPositionMs = if (type == "Movie") 2_500_000 else 0),
         originalTitle = "Acceptance Movie",
         overview = "用于验证媒体库详情。",
         communityRating = 8.2,

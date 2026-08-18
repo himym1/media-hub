@@ -52,13 +52,15 @@ type Library struct {
 }
 
 type Item struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Type        string            `json:"type"`
-	Year        int               `json:"year,omitempty"`
-	ProviderIDs map[string]string `json:"providerIds,omitempty"`
-	Season      int               `json:"season,omitempty"`
-	Episode     int               `json:"episode,omitempty"`
+	ID                 string            `json:"id"`
+	Name               string            `json:"name"`
+	Type               string            `json:"type"`
+	Year               int               `json:"year,omitempty"`
+	ProviderIDs        map[string]string `json:"providerIds,omitempty"`
+	Season             int               `json:"season,omitempty"`
+	Episode            int               `json:"episode,omitempty"`
+	PlaybackPositionMS int64             `json:"playbackPositionMs,omitempty"`
+	Played             bool              `json:"played,omitempty"`
 }
 
 type ItemDetail struct {
@@ -113,6 +115,7 @@ type baseItem struct {
 
 type userData struct {
 	PlaybackPositionTicks int64 `json:"PlaybackPositionTicks"`
+	Played                bool  `json:"Played"`
 }
 
 type mediaSource struct {
@@ -319,7 +322,7 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 		return ItemDetail{}, ErrUpstreamResponse
 	}
 	query := url.Values{
-		"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,ProviderIds,RunTimeTicks"},
+		"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,ProviderIds,RunTimeTicks,UserData"},
 	}
 	endpointPath := path.Join("Items", itemID)
 	if configuration.userID != "" {
@@ -522,6 +525,8 @@ func publicItem(item baseItem) Item {
 	return Item{
 		ID: item.ID, Name: item.Name, Type: item.Type, Year: item.ProductionYear,
 		ProviderIDs: item.ProviderIDs, Season: item.ParentIndexNumber, Episode: item.IndexNumber,
+		PlaybackPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
+		Played:             item.UserData.Played,
 	}
 }
 

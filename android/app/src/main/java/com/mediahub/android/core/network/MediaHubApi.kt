@@ -555,6 +555,8 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         tmdbId = item.optJSONObject("providerIds")?.optionalString("Tmdb"),
         season = item.optInt("season", 0),
         episode = item.optInt("episode", 0),
+        playbackPositionMs = item.optLong("playbackPositionMs", 0L).coerceAtLeast(0L),
+        played = item.optBoolean("played", false),
     )
 
 

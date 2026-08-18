@@ -18,6 +18,7 @@ Emby remains the source of library identity, movie/series/episode organization, 
 - An Emby descriptor may contain a user-bound opaque playback session and `startPositionMs`. The Android player reports ordered started, progress, paused, and stopped events; Media Hub forwards them to Emby `Sessions/Playing*` endpoints.
 - Playback sessions are in-memory, expire after 24 hours, are removed on stop, and are opportunistically pruned during session creation.
 - Series details expose playable episodes with episode-specific Emby fallback URLs. A series itself is never sent to Media3 as a playable item.
+- Movie details and episode rows expose Emby `UserData` resume position and watched state as non-sensitive read models, so Android can label continue/replay actions before creating a playback session.
 - Primary poster images use a separate authenticated, 2 MiB-bounded image endpoint. Android loads them through a four-request bounded loader with a 20-image decoded LRU. Image bytes do not enter screen StateFlow.
 - The workspace owns the selected library item ID. Detail mode is derived directly from that ID and hides global top and bottom navigation, leaving one detail toolbar.
 - System settings and operations share a separate system layer with explicit back navigation and a Services/Operations segmented control.

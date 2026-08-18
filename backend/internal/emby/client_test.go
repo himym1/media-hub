@@ -134,7 +134,7 @@ func TestItemDetailsWithoutUserUsesDirectEndpointAndMapsOnlyNotFound(t *testing.
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","MediaSources":[]}`))
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","MediaSources":[],"UserData":{"PlaybackPositionTicks":650000000,"Played":false}}`))
 		case "/Items/missing":
 			w.WriteHeader(http.StatusNotFound)
 		case "/Items/failure":
@@ -147,7 +147,7 @@ func TestItemDetailsWithoutUserUsesDirectEndpointAndMapsOnlyNotFound(t *testing.
 
 	client := NewClient(server.URL, "test-key", time.Second)
 	detail, err := client.ItemDetails(context.Background(), "item-1")
-	if err != nil || detail.ID != "item-1" || detail.AppURL != "" {
+	if err != nil || detail.ID != "item-1" || detail.AppURL != "" || detail.PlaybackPositionMS != 65_000 || detail.Played {
 		t.Fatalf("item details: detail=%#v err=%v", detail, err)
 	}
 	if _, err := client.ItemDetails(context.Background(), "missing"); !errors.Is(err, ErrItemNotFound) {

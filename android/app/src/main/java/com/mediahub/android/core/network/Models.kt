@@ -295,6 +295,8 @@ data class EmbyItem(
     val tmdbId: String?,
     val season: Int = 0,
     val episode: Int = 0,
+    val playbackPositionMs: Long = 0,
+    val played: Boolean = false,
 )
 
 data class EmbyItemPage(

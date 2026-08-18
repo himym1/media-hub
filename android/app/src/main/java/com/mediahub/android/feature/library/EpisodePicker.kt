@@ -82,6 +82,7 @@ internal fun EpisodePicker(
                 }
                 Column {
                     visibleEpisodes.forEach { episode ->
+                        val progress = episodeProgressLabel(episode)
                         Row(
                             modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -92,10 +93,13 @@ internal fun EpisodePicker(
                                 color = MediaHubColors.TextStrong,
                                 fontSize = 13.sp,
                             )
+                            if (progress.isNotEmpty()) {
+                                MediaHubText(progress, color = MediaHubColors.Accent, fontSize = 12.sp)
+                            }
                             Spacer(Modifier.width(8.dp))
                             MediaHubIconButton(
                                 imageVector = Lucide.Play,
-                                contentDescription = "播放 ${episodeLabel(episode)}",
+                                contentDescription = "${playbackActionLabel(episode.item)} ${episodeLabel(episode)}",
                                 onClick = { onPlay(episode) },
                             )
                         }
@@ -111,4 +115,18 @@ internal fun episodeLabel(episode: EmbyEpisode): String {
     val item = episode.item
     val number = item.episode.takeIf { it > 0 }?.let { "第 $it 集" }
     return listOfNotNull(number, item.name.takeIf(String::isNotBlank)).joinToString(" · ").ifBlank { "分集" }
+}
+
+internal fun episodeProgressLabel(episode: EmbyEpisode): String = when {
+    episode.item.played -> "已看"
+    episode.item.playbackPositionMs >= 30_000L -> "继续 ${formatPlaybackPosition(episode.item.playbackPositionMs)}"
+    else -> ""
+}
+
+internal fun formatPlaybackPosition(positionMs: Long): String {
+    val totalSeconds = positionMs.coerceAtLeast(0L) / 1_000
+    val hours = totalSeconds / 3_600
+    val minutes = (totalSeconds % 3_600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds) else "%d:%02d".format(minutes, seconds)
 }

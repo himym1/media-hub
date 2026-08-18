@@ -32,7 +32,7 @@ func (c *Client) Episodes(ctx context.Context, seriesID string) ([]Episode, erro
 		return nil, ErrItemNotFound
 	}
 	query := url.Values{
-		"Fields":    {"ProviderIds,MediaSources"},
+		"Fields":    {"ProviderIds,MediaSources,UserData"},
 		"IsMissing": {"false"},
 		"SortBy":    {"ParentIndexNumber,IndexNumber"},
 		"SortOrder": {"Ascending"},
