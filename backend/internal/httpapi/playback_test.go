@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,11 +11,14 @@ import (
 	"time"
 
 	"media-hub/backend/internal/playback"
+
+	"media-hub/backend/internal/emby"
 )
 
 type playbackStub struct {
 	driveTarget playback.Drive115Target
 	embyTarget  playback.EmbyItemTarget
+	embyErr     error
 	userID      int64
 	sessionID   string
 	event       playback.SessionEvent
@@ -26,6 +30,9 @@ func (stub *playbackStub) CreateDrive115(_ context.Context, target playback.Driv
 }
 
 func (stub *playbackStub) CreateEmbyItem(_ context.Context, userID int64, target playback.EmbyItemTarget) (playback.Descriptor, error) {
+	if stub.embyErr != nil {
+		return playback.Descriptor{}, stub.embyErr
+	}
 	stub.userID = userID
 	stub.embyTarget = target
 	value := playbackTestDescriptor("Movie")
@@ -122,5 +129,56 @@ func TestPlaybackSessionEventUsesAuthenticatedOwner(t *testing.T) {
 	}
 	if provider.userID != 1 || provider.sessionID != sessionID || provider.event.Type != playback.SessionProgress || provider.event.PositionMS != 12345 || !provider.event.Paused {
 		t.Fatalf("user=%d session=%q event=%#v", provider.userID, provider.sessionID, provider.event)
+	}
+}
+
+func TestCreateEmbyDescriptorUsesSeparatePlaybackFacadeEndToEnd(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Users/user-1/Items/item-1":
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","UserData":{"PlaybackPositionTicks":420000000}}`))
+		case "/Items/item-1/PlaybackInfo":
+			_, _ = w.Write([]byte(`{"PlaySessionId":"play-session-1","MediaSources":[{"Id":"source-1","Path":"/strm/movie.strm","Container":"mkv"}]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer origin.Close()
+	facade := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/Videos/item-1/stream.mkv" || request.Header.Get("X-Emby-Token") != "emby-key" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Location", "https://cdn.example/movie.mkv?temporary=1")
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer facade.Close()
+
+	embyClient := emby.NewClientWithPlayback(origin.URL, "emby-key", time.Second, "user-1", facade.URL)
+	service := playback.NewService(nil, embyClient)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/playback/descriptors/emby", strings.NewReader(`{"itemId":"item-1"}`))
+	request.Header.Set("Authorization", "Bearer valid-session")
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Playback: service}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var descriptor playback.Descriptor
+	if err := json.Unmarshal(recorder.Body.Bytes(), &descriptor); err != nil {
+		t.Fatal(err)
+	}
+	if descriptor.StreamURL != "https://cdn.example/movie.mkv?temporary=1" || descriptor.UserAgent != playback.PlayerUserAgent || descriptor.StartPositionMS != 42_000 || len(descriptor.SessionID) != 48 {
+		t.Fatalf("descriptor=%#v", descriptor)
+	}
+}
+
+func TestCreateEmbyDescriptorPreservesSourceUnauthorizedProblem(t *testing.T) {
+	provider := &playbackStub{embyErr: fmt.Errorf("%w: facade rejected token", playback.ErrSourceUnauthorized)}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/playback/descriptors/emby", strings.NewReader(`{"itemId":"item-1"}`))
+	request.Header.Set("Authorization", "Bearer valid-session")
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Playback: provider}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadGateway || !strings.Contains(recorder.Body.String(), `"code":"playback_source_unauthorized"`) {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
