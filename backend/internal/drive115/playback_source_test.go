@@ -77,3 +77,25 @@ func TestResolvePlaybackRequiresPreparedSession(t *testing.T) {
 		t.Fatalf("error=%v", err)
 	}
 }
+
+func TestResolvePickCodeUsesPreparedSession(t *testing.T) {
+	const playbackUA = "MediaHub-Test-Player"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/download" || request.URL.Query().Get("pickcode") != "abcd1234" || request.Header.Get("User-Agent") != playbackUA {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte(`{"state":true,"url":{"url":"https://cdn.example/Movie.mkv?token=short"}}`))
+	}))
+	defer server.Close()
+	client := NewClient("UID=uid; CID=cid; SEID=seid", time.Second)
+	client.downloadURL = server.URL + "/download"
+	service := NewAuthService(nil, nil, client, time.Second)
+	value, err := service.ResolvePickCode(context.Background(), "abcd1234", "Movie.mkv", playbackUA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.Name != "Movie.mkv" || value.URL != "https://cdn.example/Movie.mkv?token=short" {
+		t.Fatalf("media = %#v", value)
+	}
+}

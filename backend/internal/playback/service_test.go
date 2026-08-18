@@ -9,16 +9,29 @@ import (
 )
 
 type driveResolverStub struct {
-	media  SourceMedia
-	err    error
-	target Drive115Target
-	ua     string
+	media    SourceMedia
+	err      error
+	target   Drive115Target
+	ua       string
+	pickCode string
 }
 
 func (s *driveResolverStub) ResolveDrive115(_ context.Context, target Drive115Target, userAgent string) (SourceMedia, error) {
 	s.target = target
 	s.ua = userAgent
 	return s.media, s.err
+}
+
+func (s *driveResolverStub) ResolvePickCode(_ context.Context, pickCode, name, userAgent string) (SourceMedia, error) {
+	s.pickCode = pickCode
+	s.ua = userAgent
+	if s.err != nil {
+		return SourceMedia{}, s.err
+	}
+	if s.media.Name == "" {
+		s.media.Name = name
+	}
+	return s.media, nil
 }
 
 type embyResolverStub struct {
@@ -157,5 +170,18 @@ func TestCreatingSessionRemovesExpiredEntries(t *testing.T) {
 	service.mutex.Unlock()
 	if firstExists || count != 1 {
 		t.Fatalf("first exists=%v session count=%d", firstExists, count)
+	}
+}
+
+func TestCreateEmbyItemResolves115PickCodeToHTTPS(t *testing.T) {
+	drive := &driveResolverStub{media: SourceMedia{URL: "https://cdn.example/video.mkv?token=short", Name: "Movie.mkv"}}
+	emby := &embyResolverStub{media: SourceMedia{Name: "Movie", PickCode: "abcd1234"}}
+	service := NewService(drive, emby)
+	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.StreamURL != drive.media.URL || drive.pickCode != "abcd1234" || value.Title != "Movie" {
+		t.Fatalf("descriptor=%#v pick=%q", value, drive.pickCode)
 	}
 }

@@ -38,6 +38,22 @@ func (c *Client) resolvePlayback(ctx context.Context, target playback.Drive115Ta
 	return playback.SourceMedia{URL: streamURL, Name: info.Name}, nil
 }
 
+func (c *Client) resolvePickCode(ctx context.Context, pickCode, name, playbackUserAgent string) (playback.SourceMedia, error) {
+	pickCode = strings.TrimSpace(pickCode)
+	name = strings.TrimSpace(name)
+	if pickCode == "" || strings.TrimSpace(playbackUserAgent) == "" {
+		return playback.SourceMedia{}, playback.ErrInvalidRequest
+	}
+	streamURL, err := c.resolveDownloadURL(ctx, pickCode, playbackUserAgent)
+	if err != nil {
+		return playback.SourceMedia{}, normalizePlaybackSourceError(err)
+	}
+	if name == "" {
+		name = "video"
+	}
+	return playback.SourceMedia{URL: streamURL, Name: name}, nil
+}
+
 func (c *Client) playbackFileInfo(ctx context.Context, fileID string) (playbackFileInfo, error) {
 	cookie := c.session()
 	if cookie == "" {

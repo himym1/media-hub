@@ -21,7 +21,7 @@ func TestEpisodesExposeUserPlaybackStateWithoutCredentials(t *testing.T) {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			_, _ = w.Write([]byte(`{"Items":[{"Id":"episode-1","Name":"Episode 1","Type":"Episode","ParentIndexNumber":1,"IndexNumber":1,"MediaSources":[{"Id":"source-1"}],"UserData":{"PlaybackPositionTicks":650000000,"Played":true}}]}`))
+			_, _ = w.Write([]byte(`{"Items":[{"Id":"episode-1","Name":"Episode 1","Type":"Episode","ParentIndexNumber":1,"IndexNumber":1,"Path":"/library/episode.strm","MediaSources":[{"Id":"source-1","Path":"/library/episode.strm"}],"UserData":{"PlaybackPositionTicks":650000000,"Played":true}}]}`))
 		case "/System/Info":
 			_, _ = w.Write([]byte(`{"Id":"server-1","ServerName":"Emby","Version":"4.9"}`))
 		default:

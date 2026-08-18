@@ -60,30 +60,50 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 			return playback.SourceMedia{}, playback.ErrUnavailable
 		}
 	}
+	hasCloudSource := false
 	for _, source := range response.MediaSources {
-		if !validEmbyIdentifier(source.ID) {
+		if !validEmbyIdentifier(source.ID) || (!is115Source(source) && !is115Path(item.Path)) {
 			continue
 		}
+		hasCloudSource = true
 		session, err := c.playbackSession(target.ItemID, source.ID, playSessionID)
 		if err != nil {
 			return playback.SourceMedia{}, playback.ErrUnavailable
 		}
+		media := playback.SourceMedia{
+			Name: item.Name, Session: session,
+			StartPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
+		}
+		if code := firstNonEmpty(pickCodeFromValue(source.DirectStreamURL), pickCodeFromValue(source.Path)); code != "" {
+			media.PickCode = code
+			return media, nil
+		}
 		for _, candidate := range []string{source.DirectStreamURL, source.Path} {
 			if safeExternalPlaybackURL(candidate, configuration.baseURL, c.playbackBaseURL) {
-				return playback.SourceMedia{
-					URL: strings.TrimSpace(candidate), Name: item.Name, Session: session,
-					StartPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
-				}, nil
+				media.URL = strings.TrimSpace(candidate)
+				return media, nil
+			}
+		}
+		if body, readErr := c.readStrmBody(ctx, configuration, target.ItemID); readErr == nil {
+			if code := pickCodeFromValue(body); code != "" {
+				media.PickCode = code
+				return media, nil
+			}
+			if line := firstNonEmpty(strings.Split(body, "\n")...); safeExternalPlaybackURL(line, configuration.baseURL, c.playbackBaseURL) {
+				media.URL = strings.TrimSpace(line)
+				return media, nil
 			}
 		}
 		redirect, err := c.resolveExternalStreamRedirect(
 			ctx, configuration, target.ItemID, source, playSessionID, playbackUserAgent,
 		)
+		if code := pickCodeFromValue(redirect); code != "" {
+			media.PickCode = code
+			return media, nil
+		}
 		if err == nil && redirect != "" {
-			return playback.SourceMedia{
-				URL: redirect, Name: item.Name, Session: session,
-				StartPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
-			}, nil
+			media.URL = redirect
+			return media, nil
 		}
 		if errors.Is(err, errNoExternalPlayback) {
 			continue
@@ -92,6 +112,9 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 			return playback.SourceMedia{}, err
 		}
 		return playback.SourceMedia{}, fmt.Errorf("%w: Emby playback facade request failed", playback.ErrUnavailable)
+	}
+	if !hasCloudSource {
+		return playback.SourceMedia{}, playback.ErrNotFound
 	}
 	return playback.SourceMedia{}, playback.ErrUnavailable
 }
@@ -218,8 +241,11 @@ func (c *Client) resolveExternalStreamRedirect(
 		return "", errNoExternalPlayback
 	}
 	location, err := response.Location()
-	if err != nil || !safeExternalPlaybackURL(location.String(), configuration.baseURL, playbackBaseURL) {
+	if err != nil {
 		return "", errNoExternalPlayback
+	}
+	if !safeExternalPlaybackURL(location.String(), configuration.baseURL, playbackBaseURL) {
+		return location.String(), errNoExternalPlayback
 	}
 	return location.String(), nil
 }
@@ -257,6 +283,33 @@ func normalizePlaybackError(err error) error {
 	default:
 		return err
 	}
+}
+
+func (c *Client) readStrmBody(ctx context.Context, configuration clientConfig, itemID string) (string, error) {
+	endpoint, err := endpointURL(configuration.baseURL, path.Join("Items", itemID, "Download"), nil)
+	if err != nil {
+		return "", err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("Accept", "text/plain, application/octet-stream")
+	request.Header.Set("User-Agent", "Media-Hub/emby-playback")
+	request.Header.Set("X-Emby-Token", configuration.apiKey)
+	response, err := c.client.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return "", errNoExternalPlayback
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, 4096))
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
 }
 
 var (

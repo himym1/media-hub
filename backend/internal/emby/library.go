@@ -32,7 +32,7 @@ func (c *Client) Episodes(ctx context.Context, seriesID string) ([]Episode, erro
 		return nil, ErrItemNotFound
 	}
 	query := url.Values{
-		"Fields":    {"ProviderIds,MediaSources,UserData"},
+		"Fields":    {"ProviderIds,MediaSources,UserData,Path"},
 		"IsMissing": {"false"},
 		"SortBy":    {"ParentIndexNumber,IndexNumber"},
 		"SortOrder": {"Ascending"},
@@ -51,7 +51,7 @@ func (c *Client) Episodes(ctx context.Context, seriesID string) ([]Episode, erro
 	}
 	items := make([]Episode, 0, len(response.Items))
 	for _, item := range response.Items {
-		if item.ID == "" || item.Type != "Episode" || len(item.MediaSources) == 0 {
+		if item.ID == "" || item.Type != "Episode" || !is115Item(item) {
 			continue
 		}
 		externalURL, err := itemWebURL(configuration.baseURL, item.ID)

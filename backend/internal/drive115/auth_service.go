@@ -415,6 +415,13 @@ func (s *AuthService) ResolveDrive115(ctx context.Context, target playback.Drive
 	return s.drive.resolvePlayback(ctx, target, playbackUserAgent)
 }
 
+func (s *AuthService) ResolvePickCode(ctx context.Context, pickCode, name, playbackUserAgent string) (playback.SourceMedia, error) {
+	if err := s.prepareSession(ctx); err != nil {
+		return playback.SourceMedia{}, normalizePlaybackSourceError(err)
+	}
+	return s.drive.resolvePickCode(ctx, pickCode, name, playbackUserAgent)
+}
+
 var _ playback.Drive115Resolver = (*AuthService)(nil)
 
 func (s *AuthService) FolderPath(ctx context.Context, folderID string) (string, error) {

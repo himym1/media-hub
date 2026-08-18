@@ -36,6 +36,7 @@ type EmbyItemTarget struct {
 
 type Drive115Resolver interface {
 	ResolveDrive115(context.Context, Drive115Target, string) (SourceMedia, error)
+	ResolvePickCode(context.Context, string, string, string) (SourceMedia, error)
 }
 
 type EmbyResolver interface {
@@ -68,6 +69,7 @@ type SourceSession struct {
 type SourceMedia struct {
 	URL             string
 	Name            string
+	PickCode        string
 	ExpiresAt       *time.Time
 	Session         *SourceSession
 	StartPositionMS int64
@@ -132,6 +134,19 @@ func (s *Service) CreateEmbyItem(ctx context.Context, userID int64, target EmbyI
 	media, err := s.emby.ResolveEmbyItem(ctx, target, PlayerUserAgent)
 	if err != nil {
 		return Descriptor{}, err
+	}
+	if media.URL == "" {
+		if s.drive115 == nil || validPickCode(media.PickCode) == "" {
+			return Descriptor{}, ErrUnavailable
+		}
+		resolved, resolveErr := s.drive115.ResolvePickCode(ctx, media.PickCode, media.Name, PlayerUserAgent)
+		if resolveErr != nil {
+			return Descriptor{}, resolveErr
+		}
+		media.URL = resolved.URL
+		if strings.TrimSpace(media.Name) == "" {
+			media.Name = resolved.Name
+		}
 	}
 	value, err := descriptor(media)
 	if err != nil {
@@ -226,6 +241,19 @@ func validSessionID(value string) bool {
 	}
 	_, err := hex.DecodeString(value)
 	return err == nil
+}
+
+func validPickCode(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) < 4 || len(value) > 32 {
+		return ""
+	}
+	for _, character := range value {
+		if (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') && (character < '0' || character > '9') {
+			return ""
+		}
+	}
+	return value
 }
 
 func numericID(value string) bool {

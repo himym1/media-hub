@@ -27,7 +27,7 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"范海辛","OriginalTitle":"Van Helsing","Overview":"Monster hunter","Type":"Movie","ProductionYear":2004,"Path":"/private/movie.mkv","ProviderIds":{"Tmdb":"7131"},"CommunityRating":7.2,"RunTimeTicks":79200000000,"Genres":["Action"],"MediaSources":[{"Id":"source-1","Path":"/private/movie.mkv"}]}`))
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"范海辛","OriginalTitle":"Van Helsing","Overview":"Monster hunter","Type":"Movie","ProductionYear":2004,"Path":"/private/movie.strm","ProviderIds":{"Tmdb":"7131"},"CommunityRating":7.2,"RunTimeTicks":79200000000,"Genres":["Action"],"MediaSources":[{"Id":"source-1","Path":"/private/movie.strm","Container":"strm"}]}`))
 		case "/System/Info":
 			_, _ = w.Write([]byte(`{"Id":"server-1","ServerName":"Test Emby","Version":"4.9.3"}`))
 		case "/Items":
@@ -38,11 +38,15 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 			query := request.URL.Query()
 			switch {
 			case query.Get("ParentId") != "":
-				if query.Get("ParentId") != "library-1" || query.Get("StartIndex") != "20" || query.Get("Limit") != "10" || !strings.Contains(query.Get("Fields"), "UserData") {
+				if query.Get("IncludeItemTypes") == "Episode" {
+					_, _ = w.Write([]byte(`{"Items":[],"TotalRecordCount":0}`))
+					return
+				}
+				if query.Get("ParentId") != "library-1" || query.Get("StartIndex") != "0" || query.Get("Limit") != "10000" || !strings.Contains(query.Get("Fields"), "MediaSources") {
 					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
-				_, _ = w.Write([]byte(`{"Items":[{"Id":"item-2","Name":"Library Movie","Type":"Movie","ProductionYear":2025,"ProviderIds":{"Tmdb":"999"},"UserData":{"PlaybackPositionTicks":25000000000}}],"TotalRecordCount":21}`))
+				_, _ = w.Write([]byte(`{"Items":[{"Id":"item-2","Name":"Library Movie","Type":"Movie","ProductionYear":2025,"Path":"/library/movie.strm","ProviderIds":{"Tmdb":"999"},"MediaSources":[{"Path":"/library/movie.strm"}],"UserData":{"PlaybackPositionTicks":25000000000}}],"TotalRecordCount":21}`))
 			case query.Get("AnyProviderIdEquals") != "":
 				providerQueries++
 				if query.Get("AnyProviderIdEquals") != "Tmdb.7131" {
@@ -52,7 +56,7 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 				_, _ = w.Write([]byte(`{"Items":[{"Id":"item-1","Name":"范海辛","Type":"Movie","ProductionYear":2004,"Path":"/private/movie.mkv","ProviderIds":{"Tmdb":"7131"}}],"TotalRecordCount":1}`))
 			default:
 				titleQueries++
-				_, _ = w.Write([]byte(`{"Items":[{"Id":"item-1","Name":"范海辛","Type":"Movie","ProductionYear":2004,"Path":"/private/movie.mkv","ProviderIds":{"Tmdb":"7131"}}],"TotalRecordCount":1}`))
+				_, _ = w.Write([]byte(`{"Items":[{"Id":"item-1","Name":"范海辛","Type":"Movie","ProductionYear":2004,"Path":"/private/movie.strm","ProviderIds":{"Tmdb":"7131"},"MediaSources":[{"Path":"/private/movie.strm"}]}],"TotalRecordCount":1}`))
 			}
 		case "/Items/library-1/Refresh", "/Items/item-1/Refresh":
 			if request.Method != http.MethodPost {
@@ -88,8 +92,8 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 	if result.Total != 1 || len(result.Items) != 1 || result.Items[0].ProviderIDs["Tmdb"] != "7131" {
 		t.Fatalf("unexpected result: %#v", result)
 	}
-	browse, err := client.BrowseItems(context.Background(), "library-1", 20, 10)
-	if err != nil || browse.Total != 21 || len(browse.Items) != 1 || browse.Items[0].ID != "item-2" || browse.Items[0].PlaybackPositionMS != 2_500_000 {
+	browse, err := client.BrowseItems(context.Background(), "library-1", 0, 10)
+	if err != nil || browse.Total != 1 || len(browse.Items) != 1 || browse.Items[0].ID != "item-2" || browse.Items[0].PlaybackPositionMS != 2_500_000 {
 		t.Fatalf("browse items: result=%#v err=%v", browse, err)
 	}
 	detail, err := client.ItemDetails(context.Background(), "item-1")
@@ -134,7 +138,7 @@ func TestItemDetailsWithoutUserUsesDirectEndpointAndMapsOnlyNotFound(t *testing.
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","MediaSources":[],"UserData":{"PlaybackPositionTicks":650000000,"Played":false}}`))
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/private/movie.strm","MediaSources":[{"Path":"/private/movie.strm"}],"UserData":{"PlaybackPositionTicks":650000000,"Played":false}}`))
 		case "/Items/missing":
 			w.WriteHeader(http.StatusNotFound)
 		case "/Items/failure":

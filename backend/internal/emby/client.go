@@ -110,6 +110,8 @@ type baseItem struct {
 	RunTimeTicks      int64             `json:"RunTimeTicks"`
 	Genres            []string          `json:"Genres"`
 	MediaSources      []mediaSource     `json:"MediaSources"`
+	Path              string            `json:"Path"`
+	SeriesID          string            `json:"SeriesId"`
 	UserData          userData          `json:"UserData"`
 }
 
@@ -246,7 +248,49 @@ func (c *Client) Libraries(ctx context.Context) ([]Library, error) {
 }
 
 func (c *Client) SearchItems(ctx context.Context, queryText string, limit int) (SearchResult, error) {
-	return c.searchItems(ctx, c.configuration(), queryText, limit)
+	configuration := c.configuration()
+	if err := validateAuthenticated(configuration); err != nil {
+		return SearchResult{}, err
+	}
+	queryText = strings.TrimSpace(queryText)
+	if queryText == "" {
+		return SearchResult{}, fmt.Errorf("search term is required")
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	query := url.Values{
+		"Fields":           {"ProviderIds,MediaSources,Path"},
+		"IncludeItemTypes": {"Movie,Series"},
+		"Limit":            {"100"},
+		"Recursive":        {"true"},
+		"SearchTerm":       {queryText},
+	}
+	if configuration.userID != "" {
+		query.Set("UserId", configuration.userID)
+	}
+	var response itemResponse
+	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
+		return SearchResult{}, err
+	}
+	seriesIDs := make(map[string]struct{})
+	for _, item := range response.Items {
+		if item.Type != "Series" || item.ID == "" {
+			continue
+		}
+		visible, err := c.cloudItemVisible(ctx, configuration, item)
+		if err != nil {
+			return SearchResult{}, err
+		}
+		if visible {
+			seriesIDs[item.ID] = struct{}{}
+		}
+	}
+	filtered := filter115Items(response.Items, seriesIDs)
+	if len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+	return publicItems(itemResponse{Items: filtered, TotalRecordCount: len(filtered)}), nil
 }
 
 func (c *Client) searchItems(ctx context.Context, configuration clientConfig, queryText string, limit int) (SearchResult, error) {
@@ -293,14 +337,14 @@ func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limi
 		limit = 50
 	}
 	query := url.Values{
-		"Fields":           {"ProviderIds,UserData"},
+		"Fields":           {"ProviderIds,UserData,MediaSources,Path"},
 		"IncludeItemTypes": {"Movie,Series"},
-		"Limit":            {strconv.Itoa(limit)},
+		"Limit":            {"10000"},
 		"ParentId":         {libraryID},
 		"Recursive":        {"true"},
 		"SortBy":           {"SortName"},
 		"SortOrder":        {"Ascending"},
-		"StartIndex":       {strconv.Itoa(offset)},
+		"StartIndex":       {"0"},
 	}
 	if configuration.userID != "" {
 		query.Set("UserId", configuration.userID)
@@ -309,7 +353,19 @@ func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limi
 	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
 		return SearchResult{}, err
 	}
-	return publicItems(response), nil
+	seriesIDs, err := c.cloudSeriesIDs(ctx, configuration, libraryID)
+	if err != nil {
+		return SearchResult{}, err
+	}
+	filtered := filter115Items(response.Items, seriesIDs)
+	if offset > len(filtered) {
+		offset = len(filtered)
+	}
+	end := offset + limit
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	return publicItems(itemResponse{Items: filtered[offset:end], TotalRecordCount: len(filtered)}), nil
 }
 
 func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, error) {
@@ -322,7 +378,7 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 		return ItemDetail{}, ErrUpstreamResponse
 	}
 	query := url.Values{
-		"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,ProviderIds,RunTimeTicks,UserData"},
+		"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,Path,ProviderIds,RunTimeTicks,UserData"},
 	}
 	endpointPath := path.Join("Items", itemID)
 	if configuration.userID != "" {
@@ -333,6 +389,13 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 		return ItemDetail{}, err
 	}
 	if item.ID != itemID || item.Name == "" {
+		return ItemDetail{}, ErrItemNotFound
+	}
+	visible, err := c.cloudItemVisible(ctx, configuration, item)
+	if err != nil {
+		return ItemDetail{}, err
+	}
+	if !visible {
 		return ItemDetail{}, ErrItemNotFound
 	}
 	externalURL, err := itemWebURL(configuration.baseURL, itemID)
