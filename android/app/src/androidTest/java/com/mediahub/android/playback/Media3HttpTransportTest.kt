@@ -2,6 +2,7 @@ package com.mediahub.android.playback
 
 import android.content.Context
 import androidx.media3.common.MediaItem
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -43,6 +44,13 @@ class Media3HttpTransportTest {
             }
             try {
                 assertTrue("fixture never became ready", ready.await(15, TimeUnit.SECONDS))
+                InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                    val groups = player.currentTracks.groups
+                    val audioTracks = groups.filter { it.type == C.TRACK_TYPE_AUDIO }.sumOf { it.length }
+                    val textTracks = groups.filter { it.type == C.TRACK_TYPE_TEXT }.sumOf { it.length }
+                    assertTrue("expected two embedded audio tracks, got $audioTracks", audioTracks >= 2)
+                    assertTrue("expected an embedded subtitle track, got $textTracks", textTracks >= 1)
+                }
                 InstrumentationRegistry.getInstrumentation().runOnMainSync {
                     player.seekTo(20_000)
                 }
