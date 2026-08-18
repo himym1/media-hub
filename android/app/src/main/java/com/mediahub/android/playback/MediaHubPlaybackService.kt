@@ -76,7 +76,8 @@ class MediaHubPlaybackService : MediaSessionService() {
                     autoPlay: Boolean,
                 ) = play(request, descriptor, positionMs, autoPlay)
                 override fun publishLoading() = publishState(STATE_LOADING, null)
-                override fun publishError(message: String) = publishState(STATE_ERROR, message)
+                override fun publishError(failure: PlaybackFailure) =
+                    publishState(STATE_ERROR, failure.message, failure.retryable)
                 override fun stopService() = stopSelf()
             },
         )
@@ -141,18 +142,20 @@ class MediaHubPlaybackService : MediaSessionService() {
     }
 
 
-    private fun publishState(state: String, message: String?) {
-        mediaSession.setSessionExtras(stateExtras(state, message))
+    private fun publishState(state: String, message: String?, retryable: Boolean = false) {
+        mediaSession.setSessionExtras(stateExtras(state, message, retryable))
     }
 
-    private fun stateExtras(state: String, message: String?): Bundle = Bundle().apply {
+    private fun stateExtras(state: String, message: String?, retryable: Boolean = false): Bundle = Bundle().apply {
         putString(EXTRA_STATE, state)
+        putBoolean(EXTRA_RETRYABLE, retryable)
         if (message != null) putString(EXTRA_MESSAGE, message)
     }
 
     companion object {
         const val EXTRA_STATE = "state"
         const val EXTRA_MESSAGE = "message"
+        const val EXTRA_RETRYABLE = "retryable"
         const val STATE_LOADING = "loading"
         const val STATE_READY = "ready"
         const val STATE_ERROR = "error"

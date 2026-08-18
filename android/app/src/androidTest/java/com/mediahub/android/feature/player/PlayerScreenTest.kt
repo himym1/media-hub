@@ -12,6 +12,7 @@ import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -89,5 +90,23 @@ class PlayerScreenTest {
             assertEquals(View.VISIBLE, view.findViewById<View>(androidx.media3.ui.R.id.exo_subtitle).visibility)
             assertEquals(View.VISIBLE, view.findViewById<View>(androidx.media3.ui.R.id.exo_settings).visibility)
         }
+    }
+
+    @Test
+    fun nonRetryableFailureOffersOnlyEmbyFallback() {
+        composeRule.setContent {
+            MediaHubTheme {
+                PlayerScreen(
+                    state = PlayerUiState.Error("当前媒体暂无直链", retryable = false),
+                    title = "测试视频",
+                    controller = null,
+                    isPictureInPicture = false,
+                    actions = PlayerActions({}, {}, {}, {}, onFallback = {}),
+                )
+            }
+        }
+        composeRule.onNodeWithText("当前媒体暂无直链").assertExists()
+        composeRule.onNodeWithText("重试").assertDoesNotExist()
+        composeRule.onNodeWithText("使用 Emby 播放").assertHasClickAction()
     }
 }

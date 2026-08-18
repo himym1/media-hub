@@ -20,7 +20,7 @@ internal interface PlaybackCommandHost {
     fun clearMedia()
     fun applyDescriptor(request: PlaybackRequest, descriptor: PlaybackDescriptor, positionMs: Long, autoPlay: Boolean)
     fun publishLoading()
-    fun publishError(message: String)
+    fun publishError(failure: PlaybackFailure)
     fun stopService()
 }
 
@@ -77,7 +77,7 @@ internal class PlaybackCommandCoordinator(
         if (action == null) {
             host.pause()
             host.stopSession()
-            host.publishError("视频连接中断")
+            host.publishError(PlaybackFailure("视频连接中断", retryable = true))
             return
         }
         launchLatest { command ->
@@ -125,11 +125,11 @@ internal class PlaybackCommandCoordinator(
             if (isCurrent(command) && currentRequest?.mediaId == request.mediaId) {
                 currentRequest = null
                 host.clearMedia()
-                host.publishError("服务器已切换，请返回后重新选择视频")
+                host.publishError(PlaybackFailure("服务器已切换，请返回后重新选择视频", retryable = false))
             }
         } catch (error: Exception) {
             if (isCurrent(command) && currentRequest?.mediaId == request.mediaId) {
-                host.publishError(playbackResolutionErrorMessage(error, refresh))
+                host.publishError(playbackResolutionFailure(error, refresh))
             }
         } finally {
             if (isCurrent(command)) refreshing = false
@@ -169,16 +169,18 @@ internal fun isRefreshableHttpStatus(responseCode: Int): Boolean = responseCode 
 internal fun matchesServerIdentity(request: PlaybackRequest, configuredIdentity: String): Boolean =
     request.serverIdentity == configuredIdentity
 
-internal fun playbackResolutionErrorMessage(error: Exception, refresh: Boolean): String = when {
+internal data class PlaybackFailure(val message: String, val retryable: Boolean)
+
+internal fun playbackResolutionFailure(error: Exception, refresh: Boolean): PlaybackFailure = when {
     error is ApiException -> when (error.code) {
-        "authentication_required" -> "登录已失效，请重新登录"
-        "playback_source_not_configured" -> "直接播放尚未配置"
-        "playback_source_unauthorized" -> "播放源授权已失效"
-        "playable_media_not_found" -> "当前媒体无法直接播放"
-        "direct_playback_unavailable" -> "当前媒体暂无直链"
-        else -> error.message.orEmpty().ifBlank { "暂时无法直接播放" }
+        "authentication_required" -> PlaybackFailure("登录已失效，请重新登录", false)
+        "playback_source_not_configured" -> PlaybackFailure("直接播放尚未配置", false)
+        "playback_source_unauthorized" -> PlaybackFailure("播放源授权已失效", false)
+        "playable_media_not_found" -> PlaybackFailure("当前媒体无法直接播放", false)
+        "direct_playback_unavailable" -> PlaybackFailure("当前媒体暂无直链", false)
+        else -> PlaybackFailure(error.message.orEmpty().ifBlank { "暂时无法直接播放" }, true)
     }
-    error is IOException -> "无法连接 Media Hub"
-    refresh -> "播放地址已失效，重新连接失败"
-    else -> "暂时无法直接播放"
+    error is IOException -> PlaybackFailure("无法连接 Media Hub", true)
+    refresh -> PlaybackFailure("播放地址已失效，重新连接失败", true)
+    else -> PlaybackFailure("暂时无法直接播放", true)
 }

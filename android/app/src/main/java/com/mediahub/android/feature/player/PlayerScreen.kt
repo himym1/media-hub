@@ -30,7 +30,7 @@ import com.mediahub.android.core.designsystem.MediaHubText
 internal sealed interface PlayerUiState {
     data object Loading : PlayerUiState
     data object Ready : PlayerUiState
-    data class Error(val message: String) : PlayerUiState
+    data class Error(val message: String, val retryable: Boolean) : PlayerUiState
 }
 
 internal data class PlayerActions(
@@ -72,7 +72,7 @@ internal fun PlayerScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 MediaHubText(state.message, color = Color.White)
-                MediaHubButton("重试", onClick = actions.onRetry)
+                if (state.retryable) MediaHubButton("重试", onClick = actions.onRetry)
                 actions.onFallback?.let { fallback ->
                     MediaHubSecondaryButton("使用 Emby 播放", onClick = fallback)
                 }

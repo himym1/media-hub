@@ -83,6 +83,7 @@ class PlaybackCommandCoordinatorTest {
         coordinator.onPlayerError(500)
 
         assertEquals(listOf("pause", "stop-session", "error:视频连接中断"), host.events)
+        assertEquals(PlaybackFailure("视频连接中断", true), host.failure)
         coordinator.close()
     }
 
@@ -108,23 +109,26 @@ class PlaybackCommandCoordinatorTest {
     @Test
     fun resolutionErrorsKeepStableUserFacingMeaning() {
         assertEquals(
-            "直接播放尚未配置",
-            playbackResolutionErrorMessage(ApiException(503, "playback_source_not_configured", "ignored"), false),
+            PlaybackFailure("直接播放尚未配置", false),
+            playbackResolutionFailure(ApiException(503, "playback_source_not_configured", "ignored"), false),
         )
         assertEquals(
-            "播放源授权已失效",
-            playbackResolutionErrorMessage(ApiException(502, "playback_source_unauthorized", "ignored"), false),
+            PlaybackFailure("播放源授权已失效", false),
+            playbackResolutionFailure(ApiException(502, "playback_source_unauthorized", "ignored"), false),
         )
         assertEquals(
-            "当前媒体无法直接播放",
-            playbackResolutionErrorMessage(ApiException(404, "playable_media_not_found", "ignored"), false),
+            PlaybackFailure("当前媒体无法直接播放", false),
+            playbackResolutionFailure(ApiException(404, "playable_media_not_found", "ignored"), false),
         )
         assertEquals(
-            "当前媒体暂无直链",
-            playbackResolutionErrorMessage(ApiException(502, "direct_playback_unavailable", "ignored"), false),
+            PlaybackFailure("当前媒体暂无直链", false),
+            playbackResolutionFailure(ApiException(502, "direct_playback_unavailable", "ignored"), false),
         )
-        assertEquals("无法连接 Media Hub", playbackResolutionErrorMessage(IOException(), false))
-        assertEquals("播放地址已失效，重新连接失败", playbackResolutionErrorMessage(IllegalStateException(), true))
+        assertEquals(PlaybackFailure("无法连接 Media Hub", true), playbackResolutionFailure(IOException(), false))
+        assertEquals(
+            PlaybackFailure("播放地址已失效，重新连接失败", true),
+            playbackResolutionFailure(IllegalStateException(), true),
+        )
     }
 
     private fun request(id: String) = PlaybackRequest(
@@ -151,6 +155,7 @@ private class FakePlaybackCommandHost : PlaybackCommandHost {
     override var playWhenReady: Boolean = true
     var appliedPositionMs = -1L
     var appliedAutoPlay = false
+    var failure: PlaybackFailure? = null
 
     override suspend fun resolve(request: PlaybackRequest): PlaybackDescriptor {
         events += "resolve"
@@ -194,8 +199,9 @@ private class FakePlaybackCommandHost : PlaybackCommandHost {
         events += "loading"
     }
 
-    override fun publishError(message: String) {
-        events += "error:$message"
+    override fun publishError(failure: PlaybackFailure) {
+        this.failure = failure
+        events += "error:${failure.message}"
     }
 
     override fun stopService() {

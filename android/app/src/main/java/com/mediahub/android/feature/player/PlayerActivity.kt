@@ -195,6 +195,7 @@ private fun Bundle.playerUiState(): PlayerUiState = when (getString(MediaHubPlay
     MediaHubPlaybackService.STATE_READY -> PlayerUiState.Ready
     MediaHubPlaybackService.STATE_ERROR -> PlayerUiState.Error(
         getString(MediaHubPlaybackService.EXTRA_MESSAGE).orEmpty().ifBlank { "播放失败" },
+        getBoolean(MediaHubPlaybackService.EXTRA_RETRYABLE, false),
     )
     else -> PlayerUiState.Loading
 }
