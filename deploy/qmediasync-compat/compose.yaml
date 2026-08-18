@@ -1,0 +1,17 @@
+services:
+  qms-emby-compat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: himym/qms-emby-compat:0.1.0
+    container_name: himym-qms-emby-compat
+    restart: unless-stopped
+    environment:
+      QMS_EMBY_UPSTREAM: ${QMS_EMBY_UPSTREAM:?set QMS_EMBY_UPSTREAM to the current Emby base URL}
+    networks:
+      - qmediasync
+
+networks:
+  qmediasync:
+    external: true
+    name: himym-qmediasync
