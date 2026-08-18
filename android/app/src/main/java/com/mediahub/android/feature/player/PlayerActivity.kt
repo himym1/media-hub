@@ -13,6 +13,7 @@ import android.util.Rational
 import android.widget.Toast
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
@@ -50,6 +51,9 @@ class PlayerActivity : ComponentActivity() {
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = closePlayer()
+        })
         setContent {
             MediaHubTheme {
                 val isPictureInPicture by pictureInPicture.collectAsState()
