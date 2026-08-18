@@ -95,7 +95,10 @@ class SecondStageLayoutTest {
                 MediaHubTheme {
                     ServicesScreen(
                         uiState = ServicesUiState(
-                            integrations = listOf(IntegrationHealth("emby", "Emby", "healthy", "媒体库在线")),
+                            integrations = listOf(
+                                IntegrationHealth("emby", "Emby", "healthy", "媒体库在线"),
+                                IntegrationHealth("emby-playback", "Media3 播放入口", "healthy", "QMediaSync 播放入口在线"),
+                            ),
                             statistics = OperationalStatistics(4, 1, 2, 1, 0, 3, 2, 8, 1, 0, 0, 0),
                         ),
                         onRefresh = {},
@@ -121,6 +124,7 @@ class SecondStageLayoutTest {
         composeRule.onNodeWithText("进行中").assertExists()
         composeRule.onNodeWithText("失败运行").assertExists()
         composeRule.onNodeWithText("Emby").assertExists()
+        composeRule.onNodeWithText("Media3 播放入口").assertExists()
         saveScreenshot("mediahub-services-large")
     }
 

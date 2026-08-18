@@ -149,6 +149,7 @@ func run(logger *slog.Logger) error {
 		wecomClient,
 		qmsClient,
 		embyClient,
+		emby.NewPlaybackChecker(embyClient),
 	)
 	statisticsService := statistics.NewService(dataStore)
 	localUploadService := localupload.NewService(dataStore, securePayloadCodec, configuration.LocalUploadRoots)
