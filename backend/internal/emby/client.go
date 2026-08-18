@@ -242,7 +242,10 @@ func (c *Client) Libraries(ctx context.Context) ([]Library, error) {
 		}
 		hasCloud, err := c.libraryHasCloudMedia(ctx, configuration, item.ID, item.CollectionType)
 		if err != nil {
-			return nil, err
+			libraries = append(libraries, Library{
+				ID: item.ID, Name: item.Name, CollectionType: item.CollectionType,
+			})
+			continue
 		}
 		if !hasCloud {
 			continue
@@ -256,7 +259,7 @@ func (c *Client) Libraries(ctx context.Context) ([]Library, error) {
 
 func browsableLibraryType(collectionType string) bool {
 	switch strings.ToLower(strings.TrimSpace(collectionType)) {
-	case "movies", "tvshows":
+	case "movies", "movie", "tvshows", "tv", "tvshow":
 		return true
 	default:
 		return false
@@ -264,14 +267,14 @@ func browsableLibraryType(collectionType string) bool {
 }
 
 func (c *Client) libraryHasCloudMedia(ctx context.Context, configuration clientConfig, libraryID, collectionType string) (bool, error) {
-	if strings.EqualFold(strings.TrimSpace(collectionType), "tvshows") {
-		ids, err := c.cloudSeriesIDs(ctx, configuration, libraryID)
-		return len(ids) > 0, err
+	include := "Movie"
+	if libraryLooksLikeTV(collectionType) {
+		include = "Episode"
 	}
 	query := url.Values{
 		"Fields":           {"MediaSources,Path"},
-		"IncludeItemTypes": {"Movie"},
-		"Limit":            {"200"},
+		"IncludeItemTypes": {include},
+		"Limit":            {"20"},
 		"ParentId":         {libraryID},
 		"Recursive":        {"true"},
 		"StartIndex":       {"0"},
@@ -289,6 +292,15 @@ func (c *Client) libraryHasCloudMedia(ctx context.Context, configuration clientC
 		}
 	}
 	return false, nil
+}
+
+func libraryLooksLikeTV(collectionType string) bool {
+	switch strings.ToLower(strings.TrimSpace(collectionType)) {
+	case "tvshows", "tv", "tvshow":
+		return true
+	default:
+		return false
+	}
 }
 
 func (c *Client) SearchItems(ctx context.Context, queryText string, limit int) (SearchResult, error) {

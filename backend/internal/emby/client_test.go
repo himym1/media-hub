@@ -89,7 +89,7 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read libraries: %v", err)
 	}
-	if len(libraries) != 1 || libraries[0].CollectionType != "movies" {
+	if len(libraries) != 1 || libraries[0].ID != "library-1" || libraries[0].CollectionType != "movies" {
 		t.Fatalf("unexpected libraries: %#v", libraries)
 	}
 
@@ -214,5 +214,27 @@ func TestFindPlayableItemRequiresEveryEpisodeInRange(t *testing.T) {
 	_, found, err = client.FindPlayableItem(context.Background(), "Example", "series", 2024, "123", 1, 1, 3)
 	if err != nil || found {
 		t.Fatalf("missing episode range found=%v err=%v", found, err)
+	}
+}
+
+func TestLibrariesKeepsMovieAndTVWhenProbeFails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Library/MediaFolders":
+			_, _ = w.Write([]byte(`{"Items":[{"Id":"library-movies","Name":"电影","CollectionType":"movies"},{"Id":"library-shows","Name":"剧集","CollectionType":"tvshows"},{"Id":"library-music","Name":"音乐","CollectionType":"music"}]}`))
+		case "/Items":
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	libraries, err := NewClient(server.URL, "test-key", time.Second).Libraries(context.Background())
+	if err != nil {
+		t.Fatalf("read libraries: %v", err)
+	}
+	if len(libraries) != 2 || libraries[0].ID != "library-movies" || libraries[1].ID != "library-shows" {
+		t.Fatalf("unexpected libraries: %#v", libraries)
 	}
 }
