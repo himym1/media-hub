@@ -7,11 +7,17 @@ import (
 )
 
 func is115Item(item baseItem) bool {
-	if is115Path(item.Path) {
+	if pickCodeFromItem(item) != "" {
+		return true
+	}
+	if hasForeignPlaybackURL(item) {
+		return false
+	}
+	if isStrmPath(item.Path) {
 		return true
 	}
 	for _, source := range item.MediaSources {
-		if is115Source(source) {
+		if isStrmSource(source) {
 			return true
 		}
 	}
@@ -19,21 +25,53 @@ func is115Item(item baseItem) bool {
 }
 
 func is115Source(source mediaSource) bool {
-	return strings.EqualFold(strings.TrimSpace(source.Container), "strm") ||
-		is115Path(source.Path) ||
-		is115Path(source.DirectStreamURL)
-}
-
-func is115Path(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return false
-	}
-	lower := strings.ToLower(trimmed)
-	if strings.HasSuffix(lower, ".strm") || strings.Contains(lower, "pickcode=") || strings.Contains(lower, "pick_code=") {
+	if pickCodeFromValue(source.Path) != "" || pickCodeFromValue(source.DirectStreamURL) != "" {
 		return true
 	}
-	return pickCodeFromValue(trimmed) != ""
+	if hasForeignURL(source.Path) || hasForeignURL(source.DirectStreamURL) {
+		return false
+	}
+	return isStrmSource(source)
+}
+
+func isStrmSource(source mediaSource) bool {
+	return strings.EqualFold(strings.TrimSpace(source.Container), "strm") || isStrmPath(source.Path)
+}
+
+func isStrmPath(value string) bool {
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(value)), ".strm")
+}
+
+func hasForeignPlaybackURL(item baseItem) bool {
+	if hasForeignURL(item.Path) {
+		return true
+	}
+	for _, source := range item.MediaSources {
+		if hasForeignURL(source.Path) || hasForeignURL(source.DirectStreamURL) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasForeignURL(value string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return false
+	}
+	return pickCodeFromValue(value) == ""
+}
+
+func pickCodeFromItem(item baseItem) string {
+	if code := pickCodeFromValue(item.Path); code != "" {
+		return code
+	}
+	for _, source := range item.MediaSources {
+		if code := firstNonEmpty(pickCodeFromValue(source.DirectStreamURL), pickCodeFromValue(source.Path)); code != "" {
+			return code
+		}
+	}
+	return ""
 }
 
 func pickCodeFromValue(value string) string {

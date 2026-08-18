@@ -26,10 +26,12 @@ func TestPickCodeFromValue(t *testing.T) {
 func TestFilter115ItemsKeepsCloudMovies(t *testing.T) {
 	items := filter115Items([]baseItem{
 		{ID: "local", Name: "Local", Type: "Movie", Path: "/volume1/media/movie.mkv"},
+		{ID: "foreign", Name: "Foreign", Type: "Movie", Path: "/library/other.strm", MediaSources: []mediaSource{{Path: "https://other.example/video.m3u8"}}},
 		{ID: "cloud", Name: "Cloud", Type: "Movie", Path: "/library/movie.strm"},
+		{ID: "pick", Name: "Pick", Type: "Movie", Path: "http://qms.local/115/url/video.mkv?pickcode=abcd1234"},
 		{ID: "series-1", Name: "Series", Type: "Series"},
 	}, map[string]struct{}{"series-1": {}})
-	if len(items) != 2 || items[0].ID != "cloud" || items[1].ID != "series-1" {
+	if len(items) != 3 || items[0].ID != "cloud" || items[1].ID != "pick" || items[2].ID != "series-1" {
 		t.Fatalf("items=%#v", items)
 	}
 }

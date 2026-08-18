@@ -74,13 +74,14 @@ func TestCreateDrive115ReturnsBoundedHTTPSDescriptor(t *testing.T) {
 }
 
 func TestCreateEmbyItemUsesTypedResolver(t *testing.T) {
-	emby := &embyResolverStub{media: SourceMedia{URL: "https://cdn.example/movie", Name: "Movie"}}
-	service := NewService(nil, emby)
+	drive := &driveResolverStub{media: SourceMedia{URL: "https://cdn.example/movie.mkv?token=short", Name: "Movie.mkv"}}
+	emby := &embyResolverStub{media: SourceMedia{Name: "Movie", PickCode: "abcd1234"}}
+	service := NewService(drive, emby)
 	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "emby-item_20"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.Title != "Movie" || emby.target.ItemID != "emby-item_20" || emby.ua != PlayerUserAgent {
+	if value.StreamURL != drive.media.URL || value.Title != "Movie" || emby.target.ItemID != "emby-item_20" || emby.ua != PlayerUserAgent || drive.pickCode != "abcd1234" {
 		t.Fatalf("descriptor=%#v target=%#v ua=%q", value, emby.target, emby.ua)
 	}
 }
@@ -122,10 +123,11 @@ func TestCreateRejectsInvalidTargetsAndUnsafeMedia(t *testing.T) {
 func TestEmbyPlaybackSessionIsOpaqueUserBoundAndDeletedOnStop(t *testing.T) {
 	reporter := &sessionReporterStub{}
 	emby := &embyResolverStub{media: SourceMedia{
-		URL: "https://cdn.example/movie", Name: "Movie",
+		Name: "Movie", PickCode: "abcd1234",
 		Session: &SourceSession{Reporter: reporter, Reference: "private-emby-reference"},
 	}}
-	service := NewService(nil, emby)
+	drive := &driveResolverStub{media: SourceMedia{URL: "https://cdn.example/movie", Name: "Movie"}}
+	service := NewService(drive, emby)
 	descriptor, err := service.CreateEmbyItem(context.Background(), 7, EmbyItemTarget{ItemID: "item-1"})
 	if err != nil {
 		t.Fatal(err)
@@ -150,10 +152,11 @@ func TestEmbyPlaybackSessionIsOpaqueUserBoundAndDeletedOnStop(t *testing.T) {
 func TestCreatingSessionRemovesExpiredEntries(t *testing.T) {
 	reporter := &sessionReporterStub{}
 	emby := &embyResolverStub{media: SourceMedia{
-		URL: "https://cdn.example/movie", Name: "Movie",
+		Name: "Movie", PickCode: "abcd1234",
 		Session: &SourceSession{Reporter: reporter, Reference: "reference"},
 	}}
-	service := NewService(nil, emby)
+	drive := &driveResolverStub{media: SourceMedia{URL: "https://cdn.example/movie", Name: "Movie"}}
+	service := NewService(drive, emby)
 	now := time.Date(2026, 8, 18, 0, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
 	first, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"})

@@ -62,7 +62,7 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 	}
 	hasCloudSource := false
 	for _, source := range response.MediaSources {
-		if !validEmbyIdentifier(source.ID) || (!is115Source(source) && !is115Path(item.Path)) {
+		if !validEmbyIdentifier(source.ID) || (!is115Source(source) && !is115Item(item)) {
 			continue
 		}
 		hasCloudSource = true
@@ -70,40 +70,12 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 		if err != nil {
 			return playback.SourceMedia{}, playback.ErrUnavailable
 		}
-		media := playback.SourceMedia{
-			Name: item.Name, Session: session,
-			StartPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
-		}
-		if code := firstNonEmpty(pickCodeFromValue(source.DirectStreamURL), pickCodeFromValue(source.Path)); code != "" {
-			media.PickCode = code
-			return media, nil
-		}
-		for _, candidate := range []string{source.DirectStreamURL, source.Path} {
-			if safeExternalPlaybackURL(candidate, configuration.baseURL, c.playbackBaseURL) {
-				media.URL = strings.TrimSpace(candidate)
-				return media, nil
-			}
-		}
-		if body, readErr := c.readStrmBody(ctx, configuration, target.ItemID); readErr == nil {
-			if code := pickCodeFromValue(body); code != "" {
-				media.PickCode = code
-				return media, nil
-			}
-			if line := firstNonEmpty(strings.Split(body, "\n")...); safeExternalPlaybackURL(line, configuration.baseURL, c.playbackBaseURL) {
-				media.URL = strings.TrimSpace(line)
-				return media, nil
-			}
-		}
-		redirect, err := c.resolveExternalStreamRedirect(
-			ctx, configuration, target.ItemID, source, playSessionID, playbackUserAgent,
-		)
-		if code := pickCodeFromValue(redirect); code != "" {
-			media.PickCode = code
-			return media, nil
-		}
-		if err == nil && redirect != "" {
-			media.URL = redirect
-			return media, nil
+		code, err := c.resolveCloudSource(ctx, configuration, target.ItemID, item, source, playSessionID, playbackUserAgent)
+		if code != "" {
+			return playback.SourceMedia{
+				Name: item.Name, PickCode: code, Session: session,
+				StartPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
+			}, nil
 		}
 		if errors.Is(err, errNoExternalPlayback) {
 			continue
@@ -117,6 +89,33 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 		return playback.SourceMedia{}, playback.ErrNotFound
 	}
 	return playback.SourceMedia{}, playback.ErrUnavailable
+}
+
+func (c *Client) resolveCloudSource(
+	ctx context.Context,
+	configuration clientConfig,
+	itemID string,
+	item baseItem,
+	source mediaSource,
+	playSessionID string,
+	playbackUserAgent string,
+) (string, error) {
+	if code := firstNonEmpty(pickCodeFromValue(source.DirectStreamURL), pickCodeFromValue(source.Path), pickCodeFromValue(item.Path)); code != "" {
+		return code, nil
+	}
+	if body, err := c.readStrmBody(ctx, configuration, itemID); err == nil {
+		if code := pickCodeFromValue(body); code != "" {
+			return code, nil
+		}
+	}
+	redirect, err := c.resolveExternalStreamRedirect(ctx, configuration, itemID, source, playSessionID, playbackUserAgent)
+	if code := pickCodeFromValue(redirect); code != "" {
+		return code, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return "", errNoExternalPlayback
 }
 
 func (c *Client) playbackSession(itemID, mediaSourceID, playSessionID string) (*playback.SourceSession, error) {

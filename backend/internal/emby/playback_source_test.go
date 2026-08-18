@@ -25,7 +25,7 @@ func TestResolveEmbyItemAndReportPlaybackSession(t *testing.T) {
 		case "/Users/user-1/Items/item-1":
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/private/movie.strm","UserData":{"PlaybackPositionTicks":420000000},"MediaSources":[{"Id":"source-1","Path":"/private/movie.strm"}]}`))
 		case "/Items/item-1/PlaybackInfo":
-			_, _ = w.Write([]byte(`{"PlaySessionId":"play-session-1","MediaSources":[{"Id":"source-1","Path":"/private/movie.strm","DirectStreamUrl":"https://cdn.example/movie.mkv","Container":"strm"}]}`))
+			_, _ = w.Write([]byte(`{"PlaySessionId":"play-session-1","MediaSources":[{"Id":"source-1","Path":"/private/movie.strm","DirectStreamUrl":"http://qms.local/115/url/video.mkv?pickcode=abcd1234","Container":"strm"}]}`))
 		case "/Sessions/Playing", "/Sessions/Playing/Progress", "/Sessions/Playing/Stopped":
 			var payload map[string]any
 			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || payload["ItemId"] != "item-1" || payload["MediaSourceId"] != "source-1" || payload["PlaySessionId"] != "play-session-1" {
@@ -47,7 +47,7 @@ func TestResolveEmbyItemAndReportPlaybackSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if media.URL != "https://cdn.example/movie.mkv" || media.Name != "Movie" || media.Session == nil || media.StartPositionMS != 42_000 {
+	if media.PickCode != "abcd1234" || media.URL != "" || media.Name != "Movie" || media.Session == nil || media.StartPositionMS != 42_000 {
 		t.Fatalf("media = %#v", media)
 	}
 	for _, event := range []playback.SessionEvent{
@@ -82,7 +82,7 @@ func TestResolveEmbyItemAcceptsExternalRedirectWithoutExposingToken(t *testing.T
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			w.Header().Set("Location", "https://cdn.example/redirected.mkv?temporary=1")
+			w.Header().Set("Location", "http://qms.local/115/url/video.mkv?pickcode=abcd1234")
 			w.WriteHeader(http.StatusTemporaryRedirect)
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -95,7 +95,7 @@ func TestResolveEmbyItemAcceptsExternalRedirectWithoutExposingToken(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if media.URL != "https://cdn.example/redirected.mkv?temporary=1" || media.Session == nil {
+	if media.PickCode != "abcd1234" || media.URL != "" || media.Session == nil {
 		t.Fatalf("media = %#v", media)
 	}
 }
@@ -139,7 +139,7 @@ func TestResolveEmbyItemUsesImmutablePlaybackFacadeAfterCredentialReconfigure(t 
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Location", "https://cdn.example/movie.mkv?temporary=1")
+		w.Header().Set("Location", "http://qms.local/115/url/video.mkv?pickcode=abcd1234")
 		w.WriteHeader(http.StatusTemporaryRedirect)
 	}))
 	defer facade.Close()
@@ -150,7 +150,7 @@ func TestResolveEmbyItemUsesImmutablePlaybackFacadeAfterCredentialReconfigure(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if media.URL != "https://cdn.example/movie.mkv?temporary=1" || facadeRequests != 1 {
+	if media.PickCode != "abcd1234" || media.URL != "" || facadeRequests != 1 {
 		t.Fatalf("media=%#v facadeRequests=%d", media, facadeRequests)
 	}
 }
@@ -199,5 +199,24 @@ func TestResolveEmbyItemExtractsPickCodeFromQMSRedirect(t *testing.T) {
 	}
 	if media.PickCode != "abcd1234" || media.URL != "" {
 		t.Fatalf("media=%#v", media)
+	}
+}
+
+func TestResolveEmbyItemRejectsHTTPSWithoutPickCode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Items/item-1":
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/other.strm","MediaSources":[{"Path":"https://other.example/video.m3u8"}]}`))
+		case "/Items/item-1/PlaybackInfo":
+			_, _ = w.Write([]byte(`{"MediaSources":[{"Id":"source-1","Path":"https://other.example/video.m3u8","Container":"strm"}]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "emby-key", time.Second)
+	_, err := client.ResolveEmbyItem(context.Background(), playback.EmbyItemTarget{ItemID: "item-1"}, "player-ua")
+	if !errors.Is(err, playback.ErrNotFound) {
+		t.Fatalf("error = %v", err)
 	}
 }

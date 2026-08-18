@@ -135,18 +135,16 @@ func (s *Service) CreateEmbyItem(ctx context.Context, userID int64, target EmbyI
 	if err != nil {
 		return Descriptor{}, err
 	}
-	if media.URL == "" {
-		if s.drive115 == nil || validPickCode(media.PickCode) == "" {
-			return Descriptor{}, ErrUnavailable
-		}
-		resolved, resolveErr := s.drive115.ResolvePickCode(ctx, media.PickCode, media.Name, PlayerUserAgent)
-		if resolveErr != nil {
-			return Descriptor{}, resolveErr
-		}
-		media.URL = resolved.URL
-		if strings.TrimSpace(media.Name) == "" {
-			media.Name = resolved.Name
-		}
+	if s.drive115 == nil || validPickCode(media.PickCode) == "" {
+		return Descriptor{}, ErrUnavailable
+	}
+	resolved, resolveErr := s.drive115.ResolvePickCode(ctx, media.PickCode, media.Name, PlayerUserAgent)
+	if resolveErr != nil {
+		return Descriptor{}, resolveErr
+	}
+	media.URL = resolved.URL
+	if strings.TrimSpace(media.Name) == "" {
+		media.Name = resolved.Name
 	}
 	value, err := descriptor(media)
 	if err != nil {
