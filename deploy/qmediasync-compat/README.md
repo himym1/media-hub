@@ -2,7 +2,7 @@
 
 This sidecar is a narrow compatibility layer for QMediaSync `v0.14.23` and Emby servers that return a JSON error string when `Items/{id}/PlaybackInfo` is requested without a body.
 
-It changes only empty-body requests whose path ends in `/PlaybackInfo`:
+It changes only `/PlaybackInfo` requests whose body is empty, `null`, or `""`:
 
 - method becomes `POST`
 - body becomes `{}`
@@ -34,7 +34,7 @@ docker compose -f compose.yaml config --quiet
 QMS_EMBY_UPSTREAM=http://192.168.8.146:58096 docker compose -f compose.yaml build
 ```
 
-The tests require exact preservation of query parameters and `X-Emby-Token`, exact path joining, `{}` injection for empty PlaybackInfo requests, and no changes to existing bodies or unrelated requests.
+The tests require exact preservation of query parameters and `X-Emby-Token`, exact path joining, `{}` injection for empty/`null` PlaybackInfo requests, no truncation of larger existing bodies, and no changes to unrelated requests.
 
 ## Production Cutover
 
