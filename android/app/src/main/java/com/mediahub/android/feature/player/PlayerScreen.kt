@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.annotation.OptIn
@@ -90,7 +91,13 @@ internal fun PlayerScreen(
                     contentDescription = "返回",
                     onClick = actions.onBack,
                 )
-                MediaHubText(title, color = Color.White, modifier = Modifier.weight(1f).padding(horizontal = 4.dp))
+                MediaHubText(
+                    title,
+                    color = Color.White,
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 MediaHubIconButton(
                     imageVector = Lucide.RotateCw,
                     contentDescription = "旋转屏幕",

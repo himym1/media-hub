@@ -41,7 +41,7 @@ class PlayerScreenTest {
             MediaHubTheme {
                 PlayerScreen(
                     state = PlayerUiState.Loading,
-                    title = "测试视频",
+                    title = "这是一段非常长的电影标题，用于验证播放器顶栏在小屏和大字体下不会挤压旋转与画中画按钮",
                     controller = null,
                     isPictureInPicture = pipMode,
                     actions = PlayerActions(

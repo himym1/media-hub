@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ArrowRight
@@ -53,6 +54,8 @@ fun MediaHubText(
     color: Color = MediaHubColors.TextPrimary,
     fontSize: TextUnit = 14.sp,
     fontWeight: FontWeight? = null,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
 ) {
     MiuixText(
         text = text,
@@ -60,6 +63,8 @@ fun MediaHubText(
         color = color,
         fontSize = fontSize,
         fontWeight = fontWeight,
+        maxLines = maxLines,
+        overflow = overflow,
     )
 }
 
