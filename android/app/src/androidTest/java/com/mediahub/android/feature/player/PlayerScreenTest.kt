@@ -1,9 +1,12 @@
 package com.mediahub.android.feature.player
+import android.view.View
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.captureToImage
@@ -14,6 +17,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.core.graphics.writeToTestStorage
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.media3.ui.PlayerView
 import com.mediahub.android.core.designsystem.MediaHubTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -66,5 +70,24 @@ class PlayerScreenTest {
         val pipImage = composeRule.onRoot().captureToImage()
         assertTrue(pipImage.width > 0 && pipImage.height > 0)
         pipImage.asAndroidBitmap().writeToTestStorage("mediahub-player-pip")
+    }
+
+    @Test
+    fun media3ControlsExposeTracksAndHidePlaylistCommands() {
+        var playerView: PlayerView? = null
+        composeRule.setContent {
+            val context = LocalContext.current
+            SideEffect { playerView = createPlayerView(context) }
+        }
+        composeRule.runOnIdle {
+            val view = checkNotNull(playerView)
+            assertEquals(4_000, view.controllerShowTimeoutMs)
+            assertTrue(view.useController)
+            assertEquals(View.GONE, view.findViewById<View>(androidx.media3.ui.R.id.exo_prev).visibility)
+            assertEquals(View.GONE, view.findViewById<View>(androidx.media3.ui.R.id.exo_next).visibility)
+            assertEquals(View.GONE, view.findViewById<View>(androidx.media3.ui.R.id.exo_shuffle).visibility)
+            assertEquals(View.VISIBLE, view.findViewById<View>(androidx.media3.ui.R.id.exo_subtitle).visibility)
+            assertEquals(View.VISIBLE, view.findViewById<View>(androidx.media3.ui.R.id.exo_settings).visibility)
+        }
     }
 }

@@ -14,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.ui.PlayerView
 import com.composables.icons.lucide.ArrowLeft
@@ -50,7 +52,7 @@ internal fun PlayerScreen(
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (controller != null) {
             AndroidView(
-                factory = { context -> PlayerView(context) },
+                factory = { context -> createPlayerView(context) },
                 update = {
                     it.player = controller
                     it.useController = !isPictureInPicture
@@ -102,4 +104,16 @@ internal fun PlayerScreen(
             }
         }
     }
+}
+
+@OptIn(UnstableApi::class)
+internal fun createPlayerView(context: android.content.Context): PlayerView = PlayerView(context).apply {
+    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+    setShowSubtitleButton(true)
+    setShowPreviousButton(false)
+    setShowNextButton(false)
+    setShowShuffleButton(false)
+    controllerShowTimeoutMs = 4_000
+    controllerHideOnTouch = true
+    controllerAutoShow = true
 }
