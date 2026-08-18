@@ -17,6 +17,8 @@ import (
 	"media-hub/backend/internal/playback"
 )
 
+var errNoExternalPlayback = errors.New("Emby media source has no external playback redirect")
+
 type playbackReference struct {
 	ItemID        string `json:"itemId"`
 	MediaSourceID string `json:"mediaSourceId"`
@@ -67,7 +69,7 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 			return playback.SourceMedia{}, playback.ErrUnavailable
 		}
 		for _, candidate := range []string{source.DirectStreamURL, source.Path} {
-			if safeExternalPlaybackURL(candidate, configuration.baseURL) {
+			if safeExternalPlaybackURL(candidate, configuration.baseURL, c.playbackBaseURL) {
 				return playback.SourceMedia{
 					URL: strings.TrimSpace(candidate), Name: item.Name, Session: session,
 					StartPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
@@ -83,6 +85,13 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 				StartPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
 			}, nil
 		}
+		if errors.Is(err, errNoExternalPlayback) {
+			continue
+		}
+		if errors.Is(err, playback.ErrSourceUnauthorized) {
+			return playback.SourceMedia{}, err
+		}
+		return playback.SourceMedia{}, fmt.Errorf("%w: Emby playback facade request failed", playback.ErrUnavailable)
 	}
 	return playback.SourceMedia{}, playback.ErrUnavailable
 }
@@ -181,7 +190,11 @@ func (c *Client) resolveExternalStreamRedirect(
 		"EnableRedirection": {"true"},
 		"EnableRemoteMedia": {"true"},
 	}
-	endpoint, err := endpointURL(configuration.baseURL, endpointPath, query)
+	playbackBaseURL := c.playbackBaseURL
+	if playbackBaseURL == "" {
+		playbackBaseURL = configuration.baseURL
+	}
+	endpoint, err := endpointURL(playbackBaseURL, endpointPath, query)
 	if err != nil {
 		return "", err
 	}
@@ -202,22 +215,27 @@ func (c *Client) resolveExternalStreamRedirect(
 		return "", playback.ErrSourceUnauthorized
 	}
 	if response.StatusCode < 300 || response.StatusCode > 399 {
-		return "", playback.ErrUnavailable
+		return "", errNoExternalPlayback
 	}
 	location, err := response.Location()
-	if err != nil || !safeExternalPlaybackURL(location.String(), configuration.baseURL) {
-		return "", playback.ErrUnavailable
+	if err != nil || !safeExternalPlaybackURL(location.String(), configuration.baseURL, playbackBaseURL) {
+		return "", errNoExternalPlayback
 	}
 	return location.String(), nil
 }
 
-func safeExternalPlaybackURL(value, embyBaseURL string) bool {
+func safeExternalPlaybackURL(value string, blockedBaseURLs ...string) bool {
 	parsed, err := url.Parse(strings.TrimSpace(value))
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
 		return false
 	}
-	embyURL, err := url.Parse(strings.TrimSpace(embyBaseURL))
-	return err == nil && !strings.EqualFold(parsed.Host, embyURL.Host)
+	for _, blocked := range blockedBaseURLs {
+		blockedURL, blockedErr := url.Parse(strings.TrimSpace(blocked))
+		if blockedErr == nil && strings.EqualFold(parsed.Host, blockedURL.Host) {
+			return false
+		}
+	}
+	return true
 }
 
 func randomPlaybackID() (string, error) {

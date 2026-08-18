@@ -27,6 +27,7 @@ type Config struct {
 	DataEncryptionKey      string
 	QMediaSync             QMediaSync
 	Emby                   Emby
+	EmbyPlaybackBaseURL    string
 	Drive115               Drive115
 	TMDB                   TMDB
 	WeCom                  WeCom
@@ -181,6 +182,10 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	embyPlaybackURL, err := baseURLValue(lookup, "MEDIA_HUB_EMBY_PLAYBACK_URL")
+	if err != nil {
+		return Config{}, err
+	}
 	tmdbURL, err := baseURLValue(lookup, "MEDIA_HUB_TMDB_URL")
 	if err != nil {
 		return Config{}, err
@@ -256,6 +261,7 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		DataEncryptionKey:      secretValue(lookup, "MEDIA_HUB_DATA_ENCRYPTION_KEY"),
 		QMediaSync:             qms,
 		Emby:                   emby,
+		EmbyPlaybackBaseURL:    embyPlaybackURL,
 		Drive115:               drive115,
 		TMDB:                   tmdbConfig,
 		WeCom:                  wecomConfig,

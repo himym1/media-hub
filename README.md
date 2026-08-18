@@ -64,6 +64,7 @@ MEDIA_HUB_QMS_MOVIE_TARGET_PATH=<strm-target-path>
 MEDIA_HUB_QMS_SERIES_TARGET_PATH=<strm-target-path>
 
 MEDIA_HUB_EMBY_URL=<emby-base-url>
+MEDIA_HUB_EMBY_PLAYBACK_URL=<qmediasync-emby302-internal-url>
 MEDIA_HUB_EMBY_API_KEY=<emby-api-key>
 MEDIA_HUB_EMBY_USER_ID=<emby-user-id>
 MEDIA_HUB_EMBY_MOVIE_LIBRARY_ID=<library-id>

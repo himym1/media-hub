@@ -92,11 +92,12 @@ func run(logger *slog.Logger) error {
 		configuration.QMediaSync.APIKey,
 		configuration.ProbeTimeout,
 	)
-	embyClient := emby.NewClient(
+	embyClient := emby.NewClientWithPlayback(
 		configuration.Emby.BaseURL,
 		configuration.Emby.APIKey,
 		configuration.ProbeTimeout,
 		configuration.Emby.UserID,
+		configuration.EmbyPlaybackBaseURL,
 	)
 	drive115Client := drive115.NewClient("", configuration.ProbeTimeout)
 	drive115AuthService := drive115.NewAuthService(

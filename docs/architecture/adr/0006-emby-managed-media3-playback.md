@@ -13,7 +13,7 @@ Emby remains the source of library identity, movie/series/episode organization, 
 
 - The normal Android flow is Emby library -> movie or episode target -> Media3.
 - Playback uses typed `Drive115Target` and `EmbyItemTarget` resolver interfaces. Provider adapters do not depend on each other.
-- An Emby target is direct-playable only when `PlaybackInfo` exposes an external HTTPS URL or the authenticated Emby static stream endpoint redirects to one. Server-hosted media without an external redirect falls back to the Emby App/Web.
+- An Emby target is direct-playable only when `PlaybackInfo` exposes an external HTTPS URL or the deployment-configured QMediaSync `emby302` facade returns one. The ordinary Emby base URL remains authoritative for library reads and progress; `MEDIA_HUB_EMBY_PLAYBACK_URL` is an immutable deployment route used only for redirect headers.
 - Emby credentials remain server-side. Media Hub returns no Emby API key and proxies no video payload.
 - An Emby descriptor may contain a user-bound opaque playback session and `startPositionMs`. The Android player reports ordered started, progress, paused, and stopped events; Media Hub forwards them to Emby `Sessions/Playing*` endpoints.
 - Playback sessions are in-memory, expire after 24 hours, are removed on stop, and are opportunistically pruned during session creation.
@@ -26,5 +26,5 @@ Emby remains the source of library identity, movie/series/episode organization, 
 
 - The 115 operations player remains available for diagnostics but is not the normal media-consumption entry.
 - A failed direct resolution presents a validated Emby fallback in the player error state.
-- Media Hub still does not transcode. Unsupported codecs and Emby-hosted streams without a safe external redirect require Emby playback.
+- Media Hub still does not transcode. QMediaSync `emby302` reads STRM and emits the upstream redirect; Media Hub consumes only the redirect header and never proxies media bytes. Unsupported codecs and sources without a safe external redirect require Emby playback.
 - Production readiness requires a real movie and episode probe through QMediaSync/Emby, including Range seek, resume position, and Emby progress updates.

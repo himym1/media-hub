@@ -118,3 +118,61 @@ func TestResolveEmbyItemRejectsServerHostedStreamWithoutRedirect(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestResolveEmbyItemUsesImmutablePlaybackFacadeAfterCredentialReconfigure(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Items/item-1":
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie"}`))
+		case "/Items/item-1/PlaybackInfo":
+			_, _ = w.Write([]byte(`{"PlaySessionId":"session-1","MediaSources":[{"Id":"source-1","Path":"/strm/movie.strm","Container":"mkv"}]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer origin.Close()
+
+	facadeRequests := 0
+	facade := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		facadeRequests++
+		if request.URL.Path != "/Videos/item-1/stream.mkv" || request.Header.Get("X-Emby-Token") != "new-key" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Location", "https://cdn.example/movie.mkv?temporary=1")
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer facade.Close()
+
+	client := NewClientWithPlayback(origin.URL, "old-key", time.Second, "", facade.URL)
+	client.Configure(origin.URL, "new-key", "")
+	media, err := client.ResolveEmbyItem(context.Background(), playback.EmbyItemTarget{ItemID: "item-1"}, "player-ua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if media.URL != "https://cdn.example/movie.mkv?temporary=1" || facadeRequests != 1 {
+		t.Fatalf("media=%#v facadeRequests=%d", media, facadeRequests)
+	}
+}
+
+func TestResolveEmbyItemPreservesPlaybackFacadeUnauthorized(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Items/item-1":
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie"}`))
+		case "/Items/item-1/PlaybackInfo":
+			_, _ = w.Write([]byte(`{"MediaSources":[{"Id":"source-1","Path":"/strm/movie.strm"}]}`))
+		}
+	}))
+	defer origin.Close()
+	facade := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer facade.Close()
+
+	client := NewClientWithPlayback(origin.URL, "emby-key", time.Second, "", facade.URL)
+	_, err := client.ResolveEmbyItem(context.Background(), playback.EmbyItemTarget{ItemID: "item-1"}, "player-ua")
+	if !errors.Is(err, playback.ErrSourceUnauthorized) {
+		t.Fatalf("error = %v", err)
+	}
+}

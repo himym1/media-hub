@@ -17,6 +17,7 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 		"MEDIA_HUB_QMS_URL":                  "http://qms.local/",
 		"MEDIA_HUB_QMS_API_KEY":              "qms-test-value",
 		"MEDIA_HUB_EMBY_URL":                 "https://emby.local",
+		"MEDIA_HUB_EMBY_PLAYBACK_URL":        "http://qms-emby.local:8095",
 		"MEDIA_HUB_EMBY_API_KEY":             "emby-test-value",
 		"MEDIA_HUB_115_ACCESS_TOKEN":         "115-test-value",
 		"MEDIA_HUB_TMDB_ACCESS_TOKEN":        "tmdb-token",
@@ -54,7 +55,7 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 	if loaded.QMediaSync.BaseURL != "http://qms.local" || loaded.QMediaSync.APIKey == "" {
 		t.Fatal("unexpected QMediaSync configuration")
 	}
-	if loaded.Emby.BaseURL != "https://emby.local" || loaded.Emby.APIKey == "" {
+	if loaded.Emby.BaseURL != "https://emby.local" || loaded.EmbyPlaybackBaseURL != "http://qms-emby.local:8095" || loaded.Emby.APIKey == "" {
 		t.Fatal("unexpected Emby configuration")
 	}
 	if loaded.TMDB.BaseURL != "https://api.themoviedb.org/3" || loaded.TMDB.AccessToken == "" {

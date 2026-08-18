@@ -33,9 +33,10 @@ type clientConfig struct {
 }
 
 type Client struct {
-	mutex  sync.RWMutex
-	config clientConfig
-	client *http.Client
+	mutex           sync.RWMutex
+	config          clientConfig
+	playbackBaseURL string
+	client          *http.Client
 }
 
 type ServerInfo struct {
@@ -141,6 +142,12 @@ func NewClient(baseURL, apiKey string, timeout time.Duration, userID ...string) 
 			},
 		},
 	}
+}
+
+func NewClientWithPlayback(baseURL, apiKey string, timeout time.Duration, userID, playbackBaseURL string) *Client {
+	client := NewClient(baseURL, apiKey, timeout, userID)
+	client.playbackBaseURL = strings.TrimRight(strings.TrimSpace(playbackBaseURL), "/")
+	return client
 }
 
 func (c *Client) Configure(baseURL, apiKey, userID string) {
