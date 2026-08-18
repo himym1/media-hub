@@ -13,6 +13,7 @@ import {
 } from '../../shared/api/mediaHub'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
+import { playbackStatus } from './libraryPlayback'
 
 const pageSize = 24
 
@@ -191,6 +192,7 @@ function LibraryItemDetail({ item, onRefresh, refreshing }: { item: EmbyItemDeta
       <div><dt>年份</dt><dd>{item.year || '未知'}</dd></div>
       <div><dt>时长</dt><dd>{item.runtimeMinutes ? `${item.runtimeMinutes} 分钟` : '未提供'}</dd></div>
       <div><dt>评分</dt><dd>{item.communityRating ? item.communityRating.toFixed(1) : '未提供'}</dd></div>
+      <div><dt>进度</dt><dd>{playbackStatus(item)}</dd></div>
     </dl>
     {genres.length ? <div className="library-genres">{genres.map((genre) => <span key={genre}>{genre}</span>)}</div> : null}
     <p className="library-overview">{item.overview || '暂未提供简介。'}</p>
@@ -210,8 +212,10 @@ function LibraryItemDetail({ item, onRefresh, refreshing }: { item: EmbyItemDeta
 }
 
 function LibraryItemButton({ item, selected, onSelect }: { item: EmbyItem; selected: boolean; onSelect: (id: string) => void }) {
-  return <button aria-pressed={selected} className={selected ? 'library-item selected' : 'library-item'} onClick={() => onSelect(item.id)} type="button"><span className="library-item-icon"><Film size={18} /></span><span><strong>{item.name}</strong><small>{mediaTypeLabel(item.type)}{item.year ? ` · ${item.year}` : ''}</small></span><ChevronRight size={17} /></button>
+  const status = item.played || (item.playbackPositionMs ?? 0) >= 30_000 ? ` · ${playbackStatus(item)}` : ''
+  return <button aria-pressed={selected} className={selected ? 'library-item selected' : 'library-item'} onClick={() => onSelect(item.id)} type="button"><span className="library-item-icon"><Film size={18} /></span><span><strong>{item.name}</strong><small>{mediaTypeLabel(item.type)}{item.year ? ` · ${item.year}` : ''}{status}</small></span><ChevronRight size={17} /></button>
 }
+
 
 function libraryCollectionLabel(type?: string) {
   if (type === 'movies') return '电影'

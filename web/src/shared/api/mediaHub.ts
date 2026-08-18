@@ -244,6 +244,8 @@ export type EmbyItem = {
   type: string
   year?: number
   providerIds?: Record<string, string>
+  playbackPositionMs?: number
+  played?: boolean
 }
 
 export type EmbyItemSearch = {
