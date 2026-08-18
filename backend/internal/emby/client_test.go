@@ -38,11 +38,11 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 			query := request.URL.Query()
 			switch {
 			case query.Get("ParentId") != "":
-				if query.Get("ParentId") != "library-1" || query.Get("StartIndex") != "20" || query.Get("Limit") != "10" {
+				if query.Get("ParentId") != "library-1" || query.Get("StartIndex") != "20" || query.Get("Limit") != "10" || !strings.Contains(query.Get("Fields"), "UserData") {
 					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
-				_, _ = w.Write([]byte(`{"Items":[{"Id":"item-2","Name":"Library Movie","Type":"Movie","ProductionYear":2025,"ProviderIds":{"Tmdb":"999"}}],"TotalRecordCount":21}`))
+				_, _ = w.Write([]byte(`{"Items":[{"Id":"item-2","Name":"Library Movie","Type":"Movie","ProductionYear":2025,"ProviderIds":{"Tmdb":"999"},"UserData":{"PlaybackPositionTicks":25000000000}}],"TotalRecordCount":21}`))
 			case query.Get("AnyProviderIdEquals") != "":
 				providerQueries++
 				if query.Get("AnyProviderIdEquals") != "Tmdb.7131" {
@@ -89,7 +89,7 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 		t.Fatalf("unexpected result: %#v", result)
 	}
 	browse, err := client.BrowseItems(context.Background(), "library-1", 20, 10)
-	if err != nil || browse.Total != 21 || len(browse.Items) != 1 || browse.Items[0].ID != "item-2" {
+	if err != nil || browse.Total != 21 || len(browse.Items) != 1 || browse.Items[0].ID != "item-2" || browse.Items[0].PlaybackPositionMS != 2_500_000 {
 		t.Fatalf("browse items: result=%#v err=%v", browse, err)
 	}
 	detail, err := client.ItemDetails(context.Background(), "item-1")

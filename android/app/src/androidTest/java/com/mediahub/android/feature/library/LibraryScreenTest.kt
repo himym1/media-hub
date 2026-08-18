@@ -62,7 +62,7 @@ class LibraryScreenTest {
                     uiState = LibraryBrowseState(
                         libraries = listOf(MediaLibrary(id = "movies", name = "电影", collectionType = "movies")),
                         selectedLibraryId = "movies",
-                        items = listOf(EmbyItem(id = "item-1", name = "验收影片", type = "Movie", year = 2026, tmdbId = "100")),
+                        items = listOf(EmbyItem(id = "item-1", name = "验收影片", type = "Movie", year = 2026, tmdbId = "100", playbackPositionMs = 2_500_000)),
                         total = 1,
                     ),
                     actions = browseActions(onSelectItem = { selectedItem = it }),
@@ -74,6 +74,7 @@ class LibraryScreenTest {
         composeRule.onNode(hasText("电影") and isSelectable())
             .assertIsSelected().assertHasClickAction().assertHeightIsAtLeast(48.dp)
         composeRule.onNodeWithText("验收影片").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
+        composeRule.onNodeWithText("电影 · 2026 · 继续 41:40").assertIsDisplayed()
         composeRule.onAllNodesWithText("TMDB 100").assertCountEquals(0)
         composeRule.onNodeWithContentDescription("刷新当前媒体库").assertHasClickAction().assertHeightIsAtLeast(48.dp)
         composeRule.runOnIdle { assertEquals("item-1", selectedItem) }

@@ -265,7 +265,11 @@ private fun EmbyItemRow(item: EmbyItem, posterLoader: PosterLoader, onClick: () 
             Column(Modifier.weight(1f)) {
                 MediaHubText(text = item.name, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 MediaHubText(
-                    text = listOfNotNull(mediaTypeLabel(item.type), item.year?.toString()).joinToString(" · "),
+                    text = listOfNotNull(
+                        mediaTypeLabel(item.type),
+                        item.year?.toString(),
+                        libraryPlaybackStatus(item),
+                    ).joinToString(" · "),
                     modifier = Modifier.padding(top = 4.dp),
                     color = MediaHubColors.TextMuted,
                     fontSize = 12.sp,
@@ -297,4 +301,10 @@ private fun collectionLabel(type: String?): String = when (type) {
     "movies" -> "电影"
     "tvshows" -> "剧集"
     else -> "媒体"
+}
+
+internal fun libraryPlaybackStatus(item: EmbyItem): String? = when {
+    item.played -> "已看"
+    item.playbackPositionMs >= 30_000L -> "继续 ${formatPlaybackPosition(item.playbackPositionMs)}"
+    else -> null
 }

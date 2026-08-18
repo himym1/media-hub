@@ -293,7 +293,7 @@ func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limi
 		limit = 50
 	}
 	query := url.Values{
-		"Fields":           {"ProviderIds"},
+		"Fields":           {"ProviderIds,UserData"},
 		"IncludeItemTypes": {"Movie,Series"},
 		"Limit":            {strconv.Itoa(limit)},
 		"ParentId":         {libraryID},
