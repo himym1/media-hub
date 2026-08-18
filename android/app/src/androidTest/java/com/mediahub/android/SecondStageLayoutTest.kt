@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -19,13 +20,19 @@ import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.OperationalStatistics
 import com.mediahub.android.core.network.ReleaseFacts
 import com.mediahub.android.core.network.SearchCandidate
+import com.mediahub.android.feature.operations.ArchiveActions
+import com.mediahub.android.feature.operations.ArchiveState
+import com.mediahub.android.feature.operations.Drive115Actions
+import com.mediahub.android.feature.operations.Drive115State
+import com.mediahub.android.feature.operations.LocalUploadActions
+import com.mediahub.android.feature.operations.LocalUploadState
 import com.mediahub.android.feature.operations.OperationsScreen
-import com.mediahub.android.feature.operations.OperationsUiState
 import com.mediahub.android.feature.search.SearchScreen
 import com.mediahub.android.feature.search.SearchUiState
 import com.mediahub.android.feature.services.ServicesScreen
 import com.mediahub.android.feature.services.ServicesUiState
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -119,44 +126,41 @@ class SecondStageLayoutTest {
 
     @Test
     fun operationsShowsOnlyTheSelectedTool() {
+        var driveRefreshes = 0
+        var uploadRefreshes = 0
+        var archiveRefreshes = 0
         composeRule.setContent {
             MediaHubTheme {
                 OperationsScreen(
-                    state = OperationsUiState(loading = false),
-                    onRefresh = {},
-                    onDriveParentChanged = {},
-                    onDriveOperationChanged = {},
-                    onDriveFileIdsChanged = {},
-                    onDriveTargetChanged = {},
-                    onDriveNameChanged = {},
-                    onCreateDriveCommand = {},
-                    onConfirmDriveCommand = {},
-                    onPlayDriveFile = { _, _ -> },
-                    onLocalRootChanged = {},
-                    onLocalPathChanged = {},
-                    onLocalEntrySelected = {},
-                    onLocalDestinationChanged = {},
-                    onCreateLocalUpload = {},
-                    onRetryLocalUpload = {},
-                    onArchiveParentChanged = {},
-                    onArchiveTargetChanged = {},
-                    onPreviewArchive = {},
-                    onToggleArchive = {},
-                    onArchiveNameChanged = { _, _ -> },
-                    onCreateArchivePlan = {},
-                    onConfirmArchive = {},
-                    onRetryArchive = {},
+                    driveState = Drive115State(loading = false, error = "115 读取失败"),
+                    localUploadState = LocalUploadState(loading = false, error = "上传读取失败"),
+                    archiveState = ArchiveState(loading = false, error = "归档读取失败"),
+                    driveActions = Drive115Actions({ driveRefreshes++ }, {}, {}, {}, {}, {}, {}, {}, {}),
+                    localUploadActions = LocalUploadActions({ uploadRefreshes++ }, {}, {}, {}, {}, {}, {}),
+                    archiveActions = ArchiveActions({ archiveRefreshes++ }, {}, {}, {}, {}, { _, _ -> }, {}, {}, {}),
                 )
             }
         }
 
         composeRule.onAllNodesWithText("115 文件").assertCountEquals(2)
+        composeRule.onNodeWithText("115 读取失败").assertExists()
+        composeRule.onNodeWithContentDescription("刷新当前工具").performClick()
+        assertEquals(1, driveRefreshes)
         composeRule.onNodeWithText("本地上传").performClick()
         composeRule.onNodeWithText("当前服务器未配置本地上传目录").assertExists()
         composeRule.onAllNodesWithText("115 文件").assertCountEquals(1)
+        composeRule.onNodeWithText("上传读取失败").assertExists()
+        composeRule.onAllNodesWithText("115 读取失败").assertCountEquals(0)
+        composeRule.onNodeWithContentDescription("刷新当前工具").performClick()
+        assertEquals(1, uploadRefreshes)
         composeRule.onNodeWithText("归档整理").performClick()
         composeRule.onNodeWithText("原生归档整理").assertExists()
         composeRule.onAllNodesWithText("当前服务器未配置本地上传目录").assertCountEquals(0)
+        composeRule.onNodeWithText("归档读取失败").assertExists()
+        composeRule.onNodeWithContentDescription("刷新当前工具").performClick()
+        assertEquals(1, archiveRefreshes)
+        assertEquals(1, driveRefreshes)
+        assertEquals(1, uploadRefreshes)
         saveScreenshot("mediahub-operations-sections")
     }
 

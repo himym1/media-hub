@@ -64,8 +64,10 @@ import com.mediahub.android.feature.config.ServerConfigViewModel
 import com.mediahub.android.feature.library.LibraryRoute
 import com.mediahub.android.feature.library.LibraryDetailViewModel
 import com.mediahub.android.feature.library.LibraryViewModel
+import com.mediahub.android.feature.operations.ArchiveViewModel
+import com.mediahub.android.feature.operations.Drive115ViewModel
+import com.mediahub.android.feature.operations.LocalUploadViewModel
 import com.mediahub.android.feature.operations.OperationsRoute
-import com.mediahub.android.feature.operations.OperationsViewModel
 import com.mediahub.android.feature.player.PlayerActivity
 import com.mediahub.android.playback.Drive115Target
 import com.mediahub.android.playback.EmbyItemTarget
@@ -246,9 +248,13 @@ private fun AuthenticatedWorkspace(
                     )
                 }
                 MainDestination.Operations -> {
-                    val operationsViewModel = viewModel<OperationsViewModel>(key = "operations-$serverGeneration", factory = factory)
+                    val driveViewModel = viewModel<Drive115ViewModel>(key = "operations-drive-$serverGeneration", factory = factory)
+                    val localUploadViewModel = viewModel<LocalUploadViewModel>(key = "operations-upload-$serverGeneration", factory = factory)
+                    val archiveViewModel = viewModel<ArchiveViewModel>(key = "operations-archive-$serverGeneration", factory = factory)
                     OperationsRoute(
-                        viewModel = operationsViewModel,
+                        driveViewModel = driveViewModel,
+                        localUploadViewModel = localUploadViewModel,
+                        archiveViewModel = archiveViewModel,
                         onPlayDriveFile = { file, parentId ->
                             context.startActivity(
                                 PlayerActivity.intent(

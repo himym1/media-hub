@@ -6,7 +6,9 @@ import com.mediahub.android.data.MediaHubRepository
 import com.mediahub.android.feature.auth.AuthViewModel
 import com.mediahub.android.feature.library.LibraryDetailViewModel
 import com.mediahub.android.feature.library.LibraryViewModel
-import com.mediahub.android.feature.operations.OperationsViewModel
+import com.mediahub.android.feature.operations.ArchiveViewModel
+import com.mediahub.android.feature.operations.Drive115ViewModel
+import com.mediahub.android.feature.operations.LocalUploadViewModel
 import com.mediahub.android.feature.search.SearchViewModel
 import com.mediahub.android.feature.services.ServicesViewModel
 import com.mediahub.android.feature.subscriptions.SubscriptionViewModel
@@ -24,7 +26,9 @@ class MediaHubViewModelFactory(
         modelClass.isAssignableFrom(LibraryViewModel::class.java) -> LibraryViewModel(repository) as T
         modelClass.isAssignableFrom(LibraryDetailViewModel::class.java) -> LibraryDetailViewModel(repository) as T
         modelClass.isAssignableFrom(ServicesViewModel::class.java) -> ServicesViewModel(repository) as T
-        modelClass.isAssignableFrom(OperationsViewModel::class.java) -> OperationsViewModel(repository) as T
+        modelClass.isAssignableFrom(Drive115ViewModel::class.java) -> Drive115ViewModel(repository) as T
+        modelClass.isAssignableFrom(LocalUploadViewModel::class.java) -> LocalUploadViewModel(repository) as T
+        modelClass.isAssignableFrom(ArchiveViewModel::class.java) -> ArchiveViewModel(repository) as T
         modelClass.isAssignableFrom(SubscriptionViewModel::class.java) -> SubscriptionViewModel(repository) as T
         else -> throw IllegalArgumentException("Unknown ViewModel class")
     }
