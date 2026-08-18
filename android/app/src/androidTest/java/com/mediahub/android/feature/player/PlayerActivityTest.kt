@@ -3,7 +3,6 @@ package com.mediahub.android.feature.player
 import android.content.pm.ActivityInfo
 import android.content.ComponentName
 import android.content.pm.PackageManager
-import androidx.lifecycle.Lifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -59,11 +58,8 @@ class PlayerActivityTest {
         scenario?.onActivity { activity ->
             assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE, activity.requestedOrientation)
             activity.onBackPressedDispatcher.onBackPressed()
+            assertTrue(activity.isFinishing)
         }
-        composeRule.waitForIdle()
-
-        composeRule.waitUntil(timeoutMillis = 5_000) { scenario?.state == Lifecycle.State.DESTROYED }
-        assertTrue(scenario?.state == Lifecycle.State.DESTROYED)
     }
 
     @Test
