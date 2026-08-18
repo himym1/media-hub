@@ -51,6 +51,14 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
 
    `install-layout.sh` 会安装覆盖文件并创建 mode `0700` 的 `tunnel/`。把专用 SSH 私钥安装为 `tunnel/id_ed25519`、mode `0600`，不要输出或提交它。覆盖文件在 Media Hub 默认网络中运行 `mikan-egress`，并等待隧道健康后启动 Media Hub，因此不依赖其他 Compose 项目或外部网络。代理必须是无凭据的 HTTP(S) URL；不要把全局 `HTTP_PROXY` / `HTTPS_PROXY` 注入 Media Hub。
 
+   Android从Emby媒体库进入Media3时，可将播放重定向解析交给QMediaSync内置的`emby302`内网端口：
+
+   ```text
+   MEDIA_HUB_EMBY_PLAYBACK_URL=http://<qmediasync-nas-address>:<mapped-8095-port>
+   ```
+
+   该值是部署级路由，不进入加密Provider Settings。普通`MEDIA_HUB_EMBY_URL`继续负责媒体库、详情和播放进度；playback URL只用于读取`/Videos/{id}/stream`的外部HTTPS重定向头。Media Hub和QMediaSync都不应向Media Hub代理视频字节。升级部署文件后，用`docker compose config`和`docker inspect media-hub`确认变量实际进入容器环境。
+
    聚影官方源支持两种认证模式：`web` 使用站点用户名/密码并在服务端维护短期 Cookie/token 会话；`developer` 使用 App ID/API Key。建议通过加密 Provider Settings 配置。若使用 `.env` 启动基线，则设置 `MEDIA_HUB_SOURCE_JUYING_AUTH_MODE=web|developer`、`..._ACCOUNT` 和 `..._TOKEN`；历史凭据未设置 mode 时继续按 `developer` 解释。显式切换 mode 会清空旧模式凭据，防止密码与 API Key 互相复用。
 
 企业微信通知支持两种发送模式。`app` 复用普通自建应用，通过 `message/send` 使用 Corp ID、Secret、Agent ID 和 ToUser；`appchat` 继续兼容通过 Chat ID 调用 `appchat/send` 的历史配置。生产优先在加密 Provider Settings 中配置并使用“发送测试通知”验收；`.env` 启动基线可设置 `MEDIA_HUB_WECOM_SEND_MODE=app|appchat`，自建应用模式还需 `MEDIA_HUB_WECOM_AGENT_ID` 和 `MEDIA_HUB_WECOM_TO_USER`。测试请求结果未知时不会自动重发。

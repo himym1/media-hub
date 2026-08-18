@@ -7,6 +7,14 @@ def require_condition(condition, message)
   abort(message) unless condition
 end
 
+base_path = File.expand_path("../deploy/compose.yaml", __dir__)
+base_compose = YAML.safe_load(File.read(base_path))
+base_environment = base_compose.fetch("services").fetch("media-hub").fetch("environment")
+require_condition(
+  base_environment.fetch("MEDIA_HUB_EMBY_PLAYBACK_URL") == "${MEDIA_HUB_EMBY_PLAYBACK_URL:-}",
+  "Media Hub compose must pass the deployment-level Emby playback facade URL",
+)
+
 path = File.expand_path("../deploy/compose.mikan-egress.yaml", __dir__)
 compose = YAML.safe_load(File.read(path))
 services = compose.fetch("services")
