@@ -144,8 +144,8 @@ func TestResolveEmbyItemUsesImmutablePlaybackFacadeAfterCredentialReconfigure(t 
 	}))
 	defer facade.Close()
 
-	client := NewClientWithPlayback(origin.URL, "old-key", time.Second, "", facade.URL)
-	client.Configure(origin.URL, "new-key", "")
+	client := NewConfiguredClient(RuntimeConfig{BaseURL: origin.URL, APIKey: "old-key", PlaybackBaseURL: facade.URL}, time.Second)
+	client.Configure(RuntimeConfig{BaseURL: origin.URL, APIKey: "new-key", PlaybackBaseURL: facade.URL})
 	media, err := client.ResolveEmbyItem(context.Background(), playback.EmbyItemTarget{ItemID: "item-1"}, "player-ua")
 	if err != nil {
 		t.Fatal(err)
@@ -170,7 +170,7 @@ func TestResolveEmbyItemPreservesPlaybackFacadeUnauthorized(t *testing.T) {
 	}))
 	defer facade.Close()
 
-	client := NewClientWithPlayback(origin.URL, "emby-key", time.Second, "", facade.URL)
+	client := NewConfiguredClient(RuntimeConfig{BaseURL: origin.URL, APIKey: "emby-key", PlaybackBaseURL: facade.URL}, time.Second)
 	_, err := client.ResolveEmbyItem(context.Background(), playback.EmbyItemTarget{ItemID: "item-1"}, "player-ua")
 	if !errors.Is(err, playback.ErrSourceUnauthorized) {
 		t.Fatalf("error = %v", err)

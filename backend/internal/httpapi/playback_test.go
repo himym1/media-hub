@@ -154,7 +154,9 @@ func TestCreateEmbyDescriptorUsesSeparatePlaybackFacadeEndToEnd(t *testing.T) {
 	}))
 	defer facade.Close()
 
-	embyClient := emby.NewClientWithPlayback(origin.URL, "emby-key", time.Second, "user-1", facade.URL)
+	embyClient := emby.NewConfiguredClient(emby.RuntimeConfig{
+		BaseURL: origin.URL, APIKey: "emby-key", UserID: "user-1", PlaybackBaseURL: facade.URL,
+	}, time.Second)
 	service := playback.NewService(pickCodeResolverStub{}, embyClient)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/playback/descriptors/emby", strings.NewReader(`{"itemId":"item-1"}`))

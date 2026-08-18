@@ -26,17 +26,28 @@ var (
 	ErrUpstreamResponse = errors.New("Emby returned an invalid response")
 )
 
+type RuntimeConfig struct {
+	BaseURL         string
+	APIKey          string
+	UserID          string
+	PlaybackBaseURL string
+	MovieLibraryID  string
+	SeriesLibraryID string
+}
+
 type clientConfig struct {
-	baseURL string
-	apiKey  string
-	userID  string
+	baseURL         string
+	apiKey          string
+	userID          string
+	playbackBaseURL string
+	movieLibraryID  string
+	seriesLibraryID string
 }
 
 type Client struct {
-	mutex           sync.RWMutex
-	config          clientConfig
-	playbackBaseURL string
-	client          *http.Client
+	mutex  sync.RWMutex
+	config clientConfig
+	client *http.Client
 }
 
 type ServerInfo struct {
@@ -136,10 +147,16 @@ type playbackInfoResponse struct {
 func NewClient(baseURL, apiKey string, timeout time.Duration, userID ...string) *Client {
 	configuredUserID := ""
 	if len(userID) > 0 {
-		configuredUserID = strings.TrimSpace(userID[0])
+		configuredUserID = userID[0]
 	}
+	return NewConfiguredClient(RuntimeConfig{
+		BaseURL: baseURL, APIKey: apiKey, UserID: configuredUserID,
+	}, timeout)
+}
+
+func NewConfiguredClient(configuration RuntimeConfig, timeout time.Duration) *Client {
 	return &Client{
-		config: clientConfig{baseURL: baseURL, apiKey: apiKey, userID: configuredUserID},
+		config: runtimeClientConfig(configuration),
 		client: &http.Client{
 			Timeout: timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -149,16 +166,21 @@ func NewClient(baseURL, apiKey string, timeout time.Duration, userID ...string) 
 	}
 }
 
-func NewClientWithPlayback(baseURL, apiKey string, timeout time.Duration, userID, playbackBaseURL string) *Client {
-	client := NewClient(baseURL, apiKey, timeout, userID)
-	client.playbackBaseURL = strings.TrimRight(strings.TrimSpace(playbackBaseURL), "/")
-	return client
+func (c *Client) Configure(configuration RuntimeConfig) {
+	c.mutex.Lock()
+	c.config = runtimeClientConfig(configuration)
+	c.mutex.Unlock()
 }
 
-func (c *Client) Configure(baseURL, apiKey, userID string) {
-	c.mutex.Lock()
-	c.config = clientConfig{baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"), apiKey: strings.TrimSpace(apiKey), userID: strings.TrimSpace(userID)}
-	c.mutex.Unlock()
+func runtimeClientConfig(configuration RuntimeConfig) clientConfig {
+	return clientConfig{
+		baseURL:         strings.TrimRight(strings.TrimSpace(configuration.BaseURL), "/"),
+		apiKey:          strings.TrimSpace(configuration.APIKey),
+		userID:          strings.TrimSpace(configuration.UserID),
+		playbackBaseURL: strings.TrimRight(strings.TrimSpace(configuration.PlaybackBaseURL), "/"),
+		movieLibraryID:  strings.TrimSpace(configuration.MovieLibraryID),
+		seriesLibraryID: strings.TrimSpace(configuration.SeriesLibraryID),
+	}
 }
 
 func (c *Client) configuration() clientConfig {
@@ -224,83 +246,43 @@ func (c *Client) ServerInfo(ctx context.Context) (ServerInfo, error) {
 	return c.readServerInfo(ctx, configuration, "System/Info", true)
 }
 
-func (c *Client) Libraries(ctx context.Context) ([]Library, error) {
+func (c *Client) Libraries(context.Context) ([]Library, error) {
 	configuration := c.configuration()
 	if err := validateAuthenticated(configuration); err != nil {
 		return nil, err
 	}
-	query := url.Values{"Fields": {"CollectionType"}}
-	var response itemResponse
-	if err := c.getJSON(ctx, configuration, "Library/MediaFolders", query, true, &response); err != nil {
-		return nil, err
-	}
-
-	libraries := make([]Library, 0, len(response.Items))
-	for _, item := range response.Items {
-		if item.ID == "" || item.Name == "" || !browsableLibraryType(item.CollectionType) {
-			continue
-		}
-		hasCloud, err := c.libraryHasCloudMedia(ctx, configuration, item.ID, item.CollectionType)
-		if err != nil {
-			libraries = append(libraries, Library{
-				ID: item.ID, Name: item.Name, CollectionType: item.CollectionType,
-			})
-			continue
-		}
-		if !hasCloud {
-			continue
-		}
+	libraries := make([]Library, 0, 2)
+	if configuration.movieLibraryID != "" {
 		libraries = append(libraries, Library{
-			ID: item.ID, Name: item.Name, CollectionType: item.CollectionType,
+			ID: configuration.movieLibraryID, Name: "115电影", CollectionType: "movies",
+		})
+	}
+	if configuration.seriesLibraryID != "" && configuration.seriesLibraryID != configuration.movieLibraryID {
+		libraries = append(libraries, Library{
+			ID: configuration.seriesLibraryID, Name: "115电视剧", CollectionType: "tvshows",
 		})
 	}
 	return libraries, nil
 }
 
-func browsableLibraryType(collectionType string) bool {
-	switch strings.ToLower(strings.TrimSpace(collectionType)) {
-	case "movies", "movie", "tvshows", "tv", "tvshow":
-		return true
-	default:
-		return false
+func configuredLibraryIDs(configuration clientConfig) []string {
+	ids := make([]string, 0, 2)
+	if configuration.movieLibraryID != "" {
+		ids = append(ids, configuration.movieLibraryID)
 	}
+	if configuration.seriesLibraryID != "" && configuration.seriesLibraryID != configuration.movieLibraryID {
+		ids = append(ids, configuration.seriesLibraryID)
+	}
+	return ids
 }
 
-func (c *Client) libraryHasCloudMedia(ctx context.Context, configuration clientConfig, libraryID, collectionType string) (bool, error) {
-	include := "Movie"
-	if libraryLooksLikeTV(collectionType) {
-		include = "Episode"
-	}
-	query := url.Values{
-		"Fields":           {"MediaSources,Path"},
-		"IncludeItemTypes": {include},
-		"Limit":            {"20"},
-		"ParentId":         {libraryID},
-		"Recursive":        {"true"},
-		"StartIndex":       {"0"},
-	}
-	if configuration.userID != "" {
-		query.Set("UserId", configuration.userID)
-	}
-	var response itemResponse
-	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
-		return false, err
-	}
-	for _, item := range response.Items {
-		if is115Item(item) {
-			return true, nil
+func libraryAllowed(configuration clientConfig, libraryID string) bool {
+	for _, configuredID := range configuredLibraryIDs(configuration) {
+		if libraryID == configuredID {
+			return true
 		}
 	}
-	return false, nil
-}
-
-func libraryLooksLikeTV(collectionType string) bool {
-	switch strings.ToLower(strings.TrimSpace(collectionType)) {
-	case "tvshows", "tv", "tvshow":
-		return true
-	default:
-		return false
-	}
+	return false
 }
 
 func (c *Client) SearchItems(ctx context.Context, queryText string, limit int) (SearchResult, error) {
@@ -326,8 +308,22 @@ func (c *Client) SearchItems(ctx context.Context, queryText string, limit int) (
 		query.Set("UserId", configuration.userID)
 	}
 	var response itemResponse
-	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
-		return SearchResult{}, err
+	seen := make(map[string]struct{})
+	for _, libraryID := range configuredLibraryIDs(configuration) {
+		query.Set("ParentId", libraryID)
+		var libraryResponse itemResponse
+		if err := c.getJSON(ctx, configuration, "Items", query, true, &libraryResponse); err != nil {
+			return SearchResult{}, err
+		}
+		for _, item := range libraryResponse.Items {
+			if _, exists := seen[item.ID]; item.ID != "" && exists {
+				continue
+			}
+			if item.ID != "" {
+				seen[item.ID] = struct{}{}
+			}
+			response.Items = append(response.Items, item)
+		}
 	}
 	seriesIDs := make(map[string]struct{})
 	for _, item := range response.Items {
@@ -383,8 +379,8 @@ func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limi
 		return SearchResult{}, err
 	}
 	libraryID = strings.TrimSpace(libraryID)
-	if libraryID == "" {
-		return SearchResult{}, ErrUpstreamResponse
+	if !libraryAllowed(configuration, libraryID) {
+		return SearchResult{}, ErrItemNotFound
 	}
 	if offset < 0 {
 		offset = 0

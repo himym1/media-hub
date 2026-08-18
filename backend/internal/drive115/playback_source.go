@@ -8,7 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
 	"media-hub/backend/internal/playback"
 )
@@ -94,18 +96,32 @@ func (c *Client) resolveDownloadURL(ctx context.Context, pickCode, playbackUserA
 	if cookie == "" {
 		return "", ErrNotConfigured
 	}
+	key, err := generateM115Key()
+	if err != nil {
+		return "", ErrUpstreamResponse
+	}
+	payload, err := json.Marshal(map[string]string{"pickcode": pickCode})
+	if err != nil {
+		return "", ErrUpstreamResponse
+	}
+	encoded, err := encodeM115(payload, key)
+	if err != nil {
+		return "", ErrUpstreamResponse
+	}
 	endpoint, err := url.Parse(c.downloadURL)
 	if err != nil {
 		return "", ErrUpstreamResponse
 	}
 	query := endpoint.Query()
-	query.Set("pickcode", pickCode)
+	query.Set("t", strconv.FormatInt(time.Now().Unix(), 10))
 	endpoint.RawQuery = query.Encode()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	form := url.Values{"data": {encoded}}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), strings.NewReader(form.Encode()))
 	if err != nil {
 		return "", ErrUpstreamResponse
 	}
 	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Cookie", cookie)
 	request.Header.Set("User-Agent", playbackUserAgent)
 	response, err := c.client.Do(request)
@@ -119,28 +135,41 @@ func (c *Client) resolveDownloadURL(ctx context.Context, pickCode, playbackUserA
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return "", ErrUpstreamResponse
 	}
-	var payload struct {
-		State   bool            `json:"state"`
-		FileURL string          `json:"file_url"`
-		URL     json.RawMessage `json:"url"`
+	var result struct {
+		State bool   `json:"state"`
+		Data  string `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&payload); err != nil || !payload.State {
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&result); err != nil || !result.State || result.Data == "" {
 		return "", ErrUpstreamResponse
 	}
-	if value := strings.TrimSpace(payload.FileURL); value != "" {
-		return value, nil
+	decoded, err := decodeM115(result.Data, key)
+	if err != nil {
+		return "", ErrUpstreamResponse
 	}
-	var direct string
-	if err := json.Unmarshal(payload.URL, &direct); err == nil && strings.TrimSpace(direct) != "" {
-		return strings.TrimSpace(direct), nil
+	streamURL := m115DownloadURL(decoded)
+	parsed, err := url.Parse(streamURL)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
+		return "", ErrUpstreamResponse
 	}
-	var nested struct {
-		URL string `json:"url"`
+	return parsed.String(), nil
+}
+
+func m115DownloadURL(payload []byte) string {
+	var files map[string]struct {
+		URL json.RawMessage `json:"url"`
 	}
-	if err := json.Unmarshal(payload.URL, &nested); err == nil && strings.TrimSpace(nested.URL) != "" {
-		return strings.TrimSpace(nested.URL), nil
+	if json.Unmarshal(payload, &files) != nil {
+		return ""
 	}
-	return "", ErrUpstreamResponse
+	for _, file := range files {
+		var nested struct {
+			URL string `json:"url"`
+		}
+		if json.Unmarshal(file.URL, &nested) == nil && strings.TrimSpace(nested.URL) != "" {
+			return strings.TrimSpace(nested.URL)
+		}
+	}
+	return ""
 }
 
 func normalizePlaybackSourceError(err error) error {

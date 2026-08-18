@@ -212,7 +212,7 @@ func (c *Client) resolveExternalStreamRedirect(
 		"EnableRedirection": {"true"},
 		"EnableRemoteMedia": {"true"},
 	}
-	playbackBaseURL := c.playbackBaseURL
+	playbackBaseURL := configuration.playbackBaseURL
 	if playbackBaseURL == "" {
 		playbackBaseURL = configuration.baseURL
 	}

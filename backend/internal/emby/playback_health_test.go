@@ -20,8 +20,8 @@ func TestPlaybackCheckerUsesImmutableFacadeAndCurrentCredentials(t *testing.T) {
 	}))
 	defer facade.Close()
 
-	client := NewClientWithPlayback("https://emby.example", "old-key", time.Second, "", facade.URL)
-	client.Configure("https://emby-new.example", "new-key", "")
+	client := NewConfiguredClient(RuntimeConfig{BaseURL: "https://emby.example", APIKey: "old-key", PlaybackBaseURL: facade.URL}, time.Second)
+	client.Configure(RuntimeConfig{BaseURL: "https://emby-new.example", APIKey: "new-key", PlaybackBaseURL: facade.URL})
 	health := NewPlaybackChecker(client).Check(context.Background())
 	if health.ID != "emby-playback" || health.Status != integration.StatusHealthy {
 		t.Fatalf("health = %#v", health)
@@ -39,7 +39,7 @@ func TestPlaybackCheckerDistinguishesUnconfiguredAndUnauthorized(t *testing.T) {
 	}))
 	defer facade.Close()
 	unauthorized := NewPlaybackChecker(
-		NewClientWithPlayback("https://emby.example", "bad-key", time.Second, "", facade.URL),
+		NewConfiguredClient(RuntimeConfig{BaseURL: "https://emby.example", APIKey: "bad-key", PlaybackBaseURL: facade.URL}, time.Second),
 	).Check(context.Background())
 	if unauthorized.Status != integration.StatusDegraded {
 		t.Fatalf("unauthorized = %#v", unauthorized)

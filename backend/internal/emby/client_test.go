@@ -37,7 +37,7 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 			}
 			query := request.URL.Query()
 			switch {
-			case query.Get("ParentId") != "":
+			case query.Get("ParentId") != "" && query.Get("SearchTerm") == "":
 				if query.Get("IncludeItemTypes") == "Episode" {
 					_, _ = w.Write([]byte(`{"Items":[],"TotalRecordCount":0}`))
 					return
@@ -85,6 +85,9 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.URL, "test-key", time.Second, "user-1")
+	client.Configure(RuntimeConfig{
+		BaseURL: server.URL, APIKey: "test-key", UserID: "user-1", MovieLibraryID: "library-1",
+	})
 	libraries, err := client.Libraries(context.Background())
 	if err != nil {
 		t.Fatalf("read libraries: %v", err)
@@ -217,24 +220,27 @@ func TestFindPlayableItemRequiresEveryEpisodeInRange(t *testing.T) {
 	}
 }
 
-func TestLibrariesKeepsMovieAndTVWhenProbeFails(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		switch request.URL.Path {
-		case "/Library/MediaFolders":
-			_, _ = w.Write([]byte(`{"Items":[{"Id":"library-movies","Name":"电影","CollectionType":"movies"},{"Id":"library-shows","Name":"剧集","CollectionType":"tvshows"},{"Id":"library-music","Name":"音乐","CollectionType":"music"}]}`))
-		case "/Items":
-			w.WriteHeader(http.StatusInternalServerError)
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
+func TestLibrariesReturnsConfiguredMovieAndTVFoldersWithoutProbingEmby(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		requests++
 	}))
 	defer server.Close()
 
-	libraries, err := NewClient(server.URL, "test-key", time.Second).Libraries(context.Background())
+	client := NewClient(server.URL, "test-key", time.Second)
+	client.Configure(RuntimeConfig{
+		BaseURL: server.URL, APIKey: "test-key",
+		MovieLibraryID: "library-movies", SeriesLibraryID: "library-shows",
+	})
+	libraries, err := client.Libraries(context.Background())
 	if err != nil {
 		t.Fatalf("read libraries: %v", err)
 	}
-	if len(libraries) != 2 || libraries[0].ID != "library-movies" || libraries[1].ID != "library-shows" {
+	if len(libraries) != 2 || libraries[0].ID != "library-movies" || libraries[0].Name != "115电影" ||
+		libraries[1].ID != "library-shows" || libraries[1].Name != "115电视剧" {
 		t.Fatalf("unexpected libraries: %#v", libraries)
+	}
+	if requests != 0 {
+		t.Fatalf("Emby requests=%d", requests)
 	}
 }

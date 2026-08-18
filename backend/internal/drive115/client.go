@@ -23,7 +23,7 @@ const (
 	userProfileEndpoint  = "https://my.115.com/?ct=ajax&ac=nav"
 	filesEndpoint        = "https://webapi.115.com/files"
 	fileInfoEndpoint     = "https://webapi.115.com/files/get_info"
-	downloadEndpoint     = "https://webapi.115.com/files/download"
+	downloadEndpoint     = "https://proapi.115.com/app/chrome/downurl"
 	folderAddEndpoint    = "https://webapi.115.com/files/add"
 	fileMoveEndpoint     = "https://webapi.115.com/files/move"
 	fileRenameEndpoint   = "https://webapi.115.com/files/batch_rename"

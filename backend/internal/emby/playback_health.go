@@ -3,7 +3,6 @@ package emby
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"media-hub/backend/internal/integration"
 )
@@ -19,19 +18,24 @@ func NewPlaybackChecker(client *Client) *PlaybackChecker {
 
 func (checker *PlaybackChecker) Check(ctx context.Context) integration.Health {
 	health := integration.Health{ID: "emby-playback", Label: "Media3 播放入口"}
-	if checker == nil || checker.client == nil || strings.TrimSpace(checker.client.playbackBaseURL) == "" {
+	if checker == nil || checker.client == nil {
 		health.Status = integration.StatusUnconfigured
 		health.Detail = "尚未配置 QMediaSync 播放入口"
 		return health
 	}
 	configuration := checker.client.configuration()
+	if configuration.playbackBaseURL == "" {
+		health.Status = integration.StatusUnconfigured
+		health.Detail = "尚未配置 QMediaSync 播放入口"
+		return health
+	}
 	if configuration.apiKey == "" {
 		health.Status = integration.StatusDegraded
 		health.Detail = "播放入口可用性未知，缺少 Emby API Key"
 		return health
 	}
 	playbackConfiguration := configuration
-	playbackConfiguration.baseURL = checker.client.playbackBaseURL
+	playbackConfiguration.baseURL = configuration.playbackBaseURL
 	if _, err := checker.client.readServerInfo(ctx, playbackConfiguration, "System/Info", true); err == nil {
 		health.Status = integration.StatusHealthy
 		health.Detail = "QMediaSync 播放入口在线"

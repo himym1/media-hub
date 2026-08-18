@@ -92,13 +92,12 @@ func run(logger *slog.Logger) error {
 		configuration.QMediaSync.APIKey,
 		configuration.ProbeTimeout,
 	)
-	embyClient := emby.NewClientWithPlayback(
-		configuration.Emby.BaseURL,
-		configuration.Emby.APIKey,
-		configuration.ProbeTimeout,
-		configuration.Emby.UserID,
-		configuration.EmbyPlaybackBaseURL,
-	)
+	embyClient := emby.NewConfiguredClient(emby.RuntimeConfig{
+		BaseURL: configuration.Emby.BaseURL, APIKey: configuration.Emby.APIKey,
+		UserID: configuration.Emby.UserID, PlaybackBaseURL: configuration.EmbyPlaybackBaseURL,
+		MovieLibraryID:  configuration.Workflow.Movie.EmbyLibraryID,
+		SeriesLibraryID: configuration.Workflow.Series.EmbyLibraryID,
+	}, configuration.ProbeTimeout)
 	drive115Client := drive115.NewClient("", configuration.ProbeTimeout)
 	drive115AuthService := drive115.NewAuthService(
 		dataStore, securePayloadCodec, drive115Client, configuration.ProbeTimeout,
@@ -126,7 +125,12 @@ func run(logger *slog.Logger) error {
 		dataStore, securePayloadCodec, settings.FromConfig(configuration),
 		func(value settings.Values) {
 			qmsClient.Configure(value.QMediaSync.BaseURL, value.QMediaSync.APIKey)
-			embyClient.Configure(value.Emby.BaseURL, value.Emby.APIKey, value.Emby.UserID)
+			embyClient.Configure(emby.RuntimeConfig{
+				BaseURL: value.Emby.BaseURL, APIKey: value.Emby.APIKey, UserID: value.Emby.UserID,
+				PlaybackBaseURL: configuration.EmbyPlaybackBaseURL,
+				MovieLibraryID:  value.Workflow.Movie.EmbyLibraryID,
+				SeriesLibraryID: value.Workflow.Series.EmbyLibraryID,
+			})
 			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
 			wecomClient.ConfigureDelivery(value.WeCom)
 			workflowService.Configure(value.Workflow)
