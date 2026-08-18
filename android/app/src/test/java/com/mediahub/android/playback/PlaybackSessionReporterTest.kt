@@ -26,4 +26,39 @@ class PlaybackSessionReporterTest {
             synchronized(events) { events.toList() },
         )
     }
+
+    @Test
+    fun trackerStopsAndFlushesOldSessionBeforeAttachingReplacement() = runBlocking {
+        val reports = mutableListOf<Pair<String, PlaybackSessionEvent>>()
+        val repository = object : PlaybackRepository {
+            override suspend fun createDescriptor(request: PlaybackRequest): PlaybackDescriptor = error("not used")
+            override suspend fun reportSession(sessionId: String, event: PlaybackSessionEvent, positionMs: Long, paused: Boolean) {
+                synchronized(reports) { reports += sessionId to event }
+            }
+        }
+        val reporter = PlaybackSessionReporter { repository }
+        var position = 10L
+        val tracker = PlaybackSessionTracker(this, reporter, { position }, { false })
+        val first = "a".repeat(48)
+        val second = "b".repeat(48)
+
+        tracker.attach(first)
+        tracker.onReady()
+        tracker.stopAndFlush()
+        position = 20L
+        tracker.attach(second)
+        tracker.onReady()
+        tracker.stopAndFlush()
+        reporter.close()
+
+        assertEquals(
+            listOf(
+                first to PlaybackSessionEvent.Started,
+                first to PlaybackSessionEvent.Stopped,
+                second to PlaybackSessionEvent.Started,
+                second to PlaybackSessionEvent.Stopped,
+            ),
+            synchronized(reports) { reports.toList() },
+        )
+    }
 }

@@ -74,12 +74,15 @@ class MediaHubPlaybackService : MediaSessionService() {
                     autoPlay = player.playWhenReady,
                 )
                 if (action == null) {
+                    player.playWhenReady = false
+                    sessionTracker.stop()
                     publishState(STATE_ERROR, "视频连接中断")
                     return
                 }
                 val command = ++commandGeneration
                 commandJob?.cancel()
                 commandJob = scope.launch {
+                    sessionTracker.stopAndFlush()
                     if (command != commandGeneration || currentRequest?.mediaId != action.request.mediaId) return@launch
                     resolveAndPlay(
                         action.request, action.positionMs, action.autoPlay, refresh = true, command = command,
