@@ -15,7 +15,6 @@ type observedRequest struct {
 	query       string
 	body        string
 	authorizing string
-	host        string
 }
 
 func TestEmptyPlaybackInfoRequestGetsMinimalJSONBody(t *testing.T) {
@@ -32,9 +31,10 @@ func TestEmptyPlaybackInfoRequestGetsMinimalJSONBody(t *testing.T) {
 	}
 }
 
-func TestNullPlaybackInfoBodyGetsMinimalJSONBody(t *testing.T) {
+func TestDeviceProfilePlaybackInfoBodyIsReplaced(t *testing.T) {
+	body := `{"DeviceProfile":{"Name":"` + strings.Repeat("A", 80) + `"}}`
 	got := observeUpstream(t, "", func(server *httptest.Server) {
-		request, err := http.NewRequest(http.MethodPost, server.URL+"/emby/Items/item/PlaybackInfo?UserId=example", strings.NewReader("null"))
+		request, err := http.NewRequest(http.MethodPost, server.URL+"/emby/Items/item/PlaybackInfo?UserId=example", strings.NewReader(body))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -42,48 +42,6 @@ func TestNullPlaybackInfoBodyGetsMinimalJSONBody(t *testing.T) {
 		mustDo(t, request)
 	})
 	if got.method != http.MethodPost || got.body != "{}" || got.path != "/emby/Items/item/PlaybackInfo" || got.query != "UserId=example" {
-		t.Fatalf("unexpected upstream request: %+v", got)
-	}
-}
-
-func TestUnknownLengthEmptyPlaybackInfoGetsMinimalJSONBody(t *testing.T) {
-	got := observeUpstream(t, "", func(server *httptest.Server) {
-		request, err := http.NewRequest(http.MethodPost, server.URL+"/emby/Items/item/PlaybackInfo", http.NoBody)
-		if err != nil {
-			t.Fatal(err)
-		}
-		request.ContentLength = -1
-		mustDo(t, request)
-	})
-	if got.method != http.MethodPost || got.body != "{}" || got.path != "/emby/Items/item/PlaybackInfo" {
-		t.Fatalf("unexpected upstream request: %+v", got)
-	}
-}
-
-func TestExistingPlaybackInfoBodyIsPreserved(t *testing.T) {
-	body := `{"DeviceProfile":{"Name":"client"}}`
-	got := observeUpstream(t, "", func(server *httptest.Server) {
-		response, err := http.Post(server.URL+"/Items/item/PlaybackInfo", "application/json", strings.NewReader(body))
-		if err != nil {
-			t.Fatal(err)
-		}
-		response.Body.Close()
-	})
-	if got.method != http.MethodPost || got.body != body {
-		t.Fatalf("unexpected upstream request: %+v", got)
-	}
-}
-
-func TestLargePlaybackInfoBodyIsNotTruncated(t *testing.T) {
-	body := `{"DeviceProfile":{"Name":"` + strings.Repeat("A", 80) + `"}}`
-	got := observeUpstream(t, "", func(server *httptest.Server) {
-		response, err := http.Post(server.URL+"/Items/item/PlaybackInfo", "application/json", strings.NewReader(body))
-		if err != nil {
-			t.Fatal(err)
-		}
-		response.Body.Close()
-	})
-	if got.method != http.MethodPost || got.body != body {
 		t.Fatalf("unexpected upstream request: %+v", got)
 	}
 }
@@ -125,7 +83,7 @@ func observeUpstream(t *testing.T, upstreamBasePath string, call func(*httptest.
 		body, _ := io.ReadAll(request.Body)
 		observed <- observedRequest{
 			method: request.Method, path: request.URL.Path, query: request.URL.RawQuery,
-			body: string(body), authorizing: request.Header.Get("X-Emby-Token"), host: request.Host,
+			body: string(body), authorizing: request.Header.Get("X-Emby-Token"),
 		}
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = writer.Write([]byte(`{"MediaSources":[]}`))

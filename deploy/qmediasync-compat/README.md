@@ -1,14 +1,14 @@
 # QMediaSync Emby Compatibility Proxy
 
-This sidecar is a narrow compatibility layer for QMediaSync `v0.14.23` and Emby servers that return a JSON error string when `Items/{id}/PlaybackInfo` is requested without a body.
+This sidecar is a narrow compatibility layer for QMediaSync `v0.14.23` and Emby servers that return a JSON error string for `Items/{id}/PlaybackInfo` when the body is empty, `null`, or a client `DeviceProfile`.
 
-It changes only `/PlaybackInfo` requests whose body is empty, `null`, or `""`:
+It rewrites every `/PlaybackInfo` request:
 
 - method becomes `POST`
 - body becomes `{}`
 - `Content-Type` becomes `application/json`
 
-Every other method, path, query, authorization header, request body, response, and media stream is passed through unchanged. Media Hub still consumes only external redirect headers and never proxies media bytes.
+Query parameters, authorization headers, non-PlaybackInfo requests, responses, and media streams are passed through unchanged. Media Hub still consumes only external redirect headers and never proxies media bytes.
 
 ## Path Contract
 
@@ -34,7 +34,7 @@ docker compose -f compose.yaml config --quiet
 QMS_EMBY_UPSTREAM=http://192.168.8.146:58096 docker compose -f compose.yaml build
 ```
 
-The tests require exact preservation of query parameters and `X-Emby-Token`, exact path joining, `{}` injection for empty/`null` PlaybackInfo requests, no truncation of larger existing bodies, and no changes to unrelated requests.
+The tests require exact preservation of query parameters and `X-Emby-Token`, exact path joining, `{}` replacement for empty and DeviceProfile PlaybackInfo bodies, and no changes to unrelated requests.
 
 ## Production Cutover
 

@@ -15,9 +15,8 @@ import (
 )
 
 const (
-	playbackInfoSuffix   = "/PlaybackInfo"
-	minimalJSONBody      = "{}"
-	maxRewritePeekBytes  = 16
+	playbackInfoSuffix = "/PlaybackInfo"
+	minimalJSONBody    = "{}"
 )
 
 func main() {
@@ -64,14 +63,14 @@ func newProxy(upstream *url.URL) http.Handler {
 			return
 		}
 		originalLength := request.ContentLength
-		kind, rewritten, err := rewritePlaybackInfoRequest(request)
-		if err != nil {
+		kind := classifyPlaybackInfoLength(originalLength)
+		if err := replacePlaybackInfoBody(request); err != nil {
 			log.Printf("playbackinfo body=%s rewritten=false prefix=%s err=%v", kind, playbackInfoPrefix(request.URL.Path), err)
 			return
 		}
 		log.Printf(
-			"playbackinfo method=%s orig_content_length=%d content_length=%d body=%s rewritten=%t prefix=%s",
-			request.Method, originalLength, request.ContentLength, kind, rewritten, playbackInfoPrefix(request.URL.Path),
+			"playbackinfo method=%s orig_content_length=%d content_length=%d body=%s rewritten=true prefix=%s",
+			request.Method, originalLength, request.ContentLength, kind, playbackInfoPrefix(request.URL.Path),
 		)
 	}
 	proxy.ModifyResponse = func(response *http.Response) error {
@@ -99,76 +98,30 @@ func isPlaybackInfoRequest(request *http.Request) bool {
 	return strings.HasSuffix(request.URL.Path, playbackInfoSuffix)
 }
 
-func rewritePlaybackInfoRequest(request *http.Request) (string, bool, error) {
-	kind, restore, err := inspectPlaybackInfoBody(request)
-	if err != nil {
-		return kind, false, err
-	}
-	if !shouldRewritePlaybackInfo(kind) {
-		restore()
-		return kind, false, nil
-	}
-	applyMinimalPlaybackInfoBody(request)
-	return kind, true, nil
-}
-
-func inspectPlaybackInfoBody(request *http.Request) (string, func(), error) {
-	if request.Body == nil || request.Body == http.NoBody || request.ContentLength == 0 {
-		return "empty", func() {}, nil
-	}
-	if request.ContentLength > maxRewritePeekBytes {
-		return "other", func() {}, nil
-	}
-	if request.ContentLength > 0 {
-		payload, err := io.ReadAll(io.LimitReader(request.Body, request.ContentLength))
-		_ = request.Body.Close()
-		if err != nil {
-			return "unreadable", func() {}, err
-		}
-		kind := classifyPlaybackInfoBody(payload)
-		return kind, func() { restoreRequestBody(request, payload) }, nil
-	}
-
-	prefix := make([]byte, maxRewritePeekBytes+1)
-	read, err := io.ReadFull(request.Body, prefix)
-	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-		_ = request.Body.Close()
-		return "unreadable", func() {}, err
-	}
-	prefix = prefix[:read]
-	if err == nil {
-		restoreUnreadPrefix(request, prefix)
-		return "other", func() {}, nil
-	}
-	kind := classifyPlaybackInfoBody(prefix)
-	if shouldRewritePlaybackInfo(kind) {
-		_ = request.Body.Close()
-		return kind, func() {}, nil
-	}
-	restoreUnreadPrefix(request, prefix)
-	return kind, func() {}, nil
-}
-
-func classifyPlaybackInfoBody(payload []byte) string {
-	switch strings.TrimSpace(string(payload)) {
-	case "":
+func classifyPlaybackInfoLength(contentLength int64) string {
+	switch {
+	case contentLength == 0:
 		return "empty"
-	case "null":
-		return "null"
-	case `""`:
-		return "string"
+	case contentLength < 0:
+		return "unknown"
+	case contentLength <= 16:
+		return "small"
+	default:
+		return "other"
 	}
-	if strings.HasPrefix(strings.TrimSpace(string(payload)), "{") {
-		return "object"
-	}
-	return "other"
 }
 
-func shouldRewritePlaybackInfo(kind string) bool {
-	return kind == "empty" || kind == "null" || kind == "string"
-}
-
-func applyMinimalPlaybackInfoBody(request *http.Request) {
+func replacePlaybackInfoBody(request *http.Request) error {
+	if request.Body != nil && request.Body != http.NoBody {
+		_, err := io.Copy(io.Discard, io.LimitReader(request.Body, 2<<20))
+		closeErr := request.Body.Close()
+		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
 	request.Method = http.MethodPost
 	request.Body = io.NopCloser(bytes.NewBufferString(minimalJSONBody))
 	request.GetBody = func() (io.ReadCloser, error) {
@@ -179,18 +132,7 @@ func applyMinimalPlaybackInfoBody(request *http.Request) {
 	request.Header.Del("Transfer-Encoding")
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Content-Length", "2")
-}
-
-func restoreRequestBody(request *http.Request, payload []byte) {
-	request.Body = io.NopCloser(bytes.NewReader(payload))
-	request.GetBody = func() (io.ReadCloser, error) {
-		return io.NopCloser(bytes.NewReader(payload)), nil
-	}
-	request.ContentLength = int64(len(payload))
-}
-
-func restoreUnreadPrefix(request *http.Request, prefix []byte) {
-	request.Body = io.NopCloser(io.MultiReader(bytes.NewReader(prefix), request.Body))
+	return nil
 }
 
 func playbackInfoPrefix(path string) string {

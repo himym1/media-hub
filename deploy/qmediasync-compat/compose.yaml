@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: himym/qms-emby-compat:0.1.1
+    image: himym/qms-emby-compat:0.1.2
     container_name: himym-qms-emby-compat
     restart: unless-stopped
     environment:
