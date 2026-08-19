@@ -12,6 +12,8 @@ jobs:
     runs-on: [self-hosted, linux, x64, media-hub]
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
       - name: Login to GHCR
         shell: bash
         env:
@@ -38,6 +40,8 @@ jobs:
       MEDIA_HUB_ANDROID_KEY_PASSWORD: ${{ secrets.MEDIA_HUB_ANDROID_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
       - name: Validate Android signing configuration
         shell: bash
         run: |
