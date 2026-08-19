@@ -5,7 +5,6 @@ on:
     tags: ['v*.*.*']
 
 permissions:
-  contents: write
   packages: write
 
 jobs:
@@ -13,31 +12,22 @@ jobs:
     runs-on: [self-hosted, linux, x64, media-hub]
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/metadata-action@v5
-        id: meta
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: VERSION=${{ github.ref_name }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          provenance: true
-          sbom: true
+      - name: Login to GHCR
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Build and push amd64 image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          version="${GITHUB_REF_NAME#v}"
+          major_minor="${version%.*}"
+          docker build --platform linux/amd64 --build-arg VERSION="$GITHUB_REF_NAME" -t "$image:$version" -t "$image:$major_minor" -t "$image:${GITHUB_SHA}" .
+          docker push "$image:$version"
+          docker push "$image:$major_minor"
+          docker push "$image:${GITHUB_SHA}"
 
   android:
     runs-on: [self-hosted, linux, x64, media-hub]
@@ -55,12 +45,15 @@ jobs:
           test -n "$MEDIA_HUB_ANDROID_KEYSTORE_PASSWORD"
           test -n "$MEDIA_HUB_ANDROID_KEY_ALIAS"
           test -n "$MEDIA_HUB_ANDROID_KEY_PASSWORD"
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-          cache: gradle
-      - uses: android-actions/setup-android@v3
+      - name: Verify preinstalled Android toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$JAVA_HOME/bin/java"
+          test -x "$ANDROID_SDK_ROOT/platform-tools/adb"
+          test -f "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
+          test -x "$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt2"
+          java -version
       - name: Derive release version
         id: version
         shell: bash
