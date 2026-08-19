@@ -5,41 +5,10 @@ on:
     tags: ['v*.*.*']
 
 permissions:
-  packages: write
+  contents: read
 
 jobs:
-  image:
-    runs-on: [self-hosted, linux, x64, media-hub]
-    steps:
-      - name: Download source archive
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          archive="$(mktemp)"
-          curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$archive"
-          rm -rf ./* ./.??* 2>/dev/null || true
-          tar -xzf "$archive" --strip-components=1
-          rm -f "$archive"
-      - name: Login to GHCR
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-      - name: Build and push amd64 image
-        shell: bash
-        run: |
-          set -euo pipefail
-          image="ghcr.io/${GITHUB_REPOSITORY,,}"
-          version="${GITHUB_REF_NAME#v}"
-          major_minor="${version%.*}"
-          docker build --platform linux/amd64 --build-arg VERSION="$GITHUB_REF_NAME" -t "$image:$version" -t "$image:$major_minor" -t "$image:${GITHUB_SHA}" .
-          docker push "$image:$version"
-          docker push "$image:$major_minor"
-          docker push "$image:${GITHUB_SHA}"
-
-  android:
+  release:
     runs-on: [self-hosted, linux, x64, media-hub]
     env:
       MEDIA_HUB_ANDROID_KEYSTORE_BASE64: ${{ secrets.MEDIA_HUB_ANDROID_KEYSTORE_BASE64 }}
@@ -47,32 +16,32 @@ jobs:
       MEDIA_HUB_ANDROID_KEY_ALIAS: ${{ secrets.MEDIA_HUB_ANDROID_KEY_ALIAS }}
       MEDIA_HUB_ANDROID_KEY_PASSWORD: ${{ secrets.MEDIA_HUB_ANDROID_KEY_PASSWORD }}
     steps:
-      - name: Download source archive
+      - name: Checkout with NAS deploy key
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          archive="$(mktemp)"
-          curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$archive"
-          rm -rf ./* ./.??* 2>/dev/null || true
-          tar -xzf "$archive" --strip-components=1
-          rm -f "$archive"
-      - name: Validate Android signing configuration
+          test "$PWD" = "$GITHUB_WORKSPACE"
+          rm -rf -- ./* ./.??* 2>/dev/null || true
+          git init -q .
+          git remote add origin "git@github.com:${GITHUB_REPOSITORY}.git"
+          GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" \
+            git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout -q --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Validate release environment
         shell: bash
         run: |
+          set -euo pipefail
           test -n "$MEDIA_HUB_ANDROID_KEYSTORE_BASE64"
           test -n "$MEDIA_HUB_ANDROID_KEYSTORE_PASSWORD"
           test -n "$MEDIA_HUB_ANDROID_KEY_ALIAS"
           test -n "$MEDIA_HUB_ANDROID_KEY_PASSWORD"
-      - name: Verify preinstalled Android toolchain
-        shell: bash
-        run: |
-          set -euo pipefail
           test -x "$JAVA_HOME/bin/java"
           test -x "$ANDROID_SDK_ROOT/platform-tools/adb"
           test -f "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
           test -x "$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt2"
+          test -w /volume1/docker/media-hub/releases
+          docker version >/dev/null
           java -version
       - name: Derive release version
         id: version
@@ -84,28 +53,34 @@ jobs:
           code=$((major * 1000000 + minor * 1000 + patch))
           echo "name=$version" >> "$GITHUB_OUTPUT"
           echo "code=$code" >> "$GITHUB_OUTPUT"
+      - name: Build amd64 image on NAS
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          docker build --platform linux/amd64 --build-arg VERSION="$GITHUB_REF_NAME" -t "$image:${{ steps.version.outputs.name }}" -t "$image:${GITHUB_SHA}" .
       - name: Build signed release APK
         working-directory: android
         run: ./gradlew :app:assembleRelease -PMEDIA_HUB_VERSION_NAME='${{ steps.version.outputs.name }}' -PMEDIA_HUB_VERSION_CODE='${{ steps.version.outputs.code }}'
-      - name: Build private release manifest
+      - name: Publish private Android release on NAS
         shell: bash
         run: |
+          set -euo pipefail
           apk=android/app/build/outputs/apk/release/app-release.apk
+          release_dir=/volume1/docker/media-hub/releases
           output="media-hub-${{ steps.version.outputs.code }}.apk"
-          cp "$apk" "$output"
-          sha=$(sha256sum "$output" | awk '{print $1}')
-          size=$(stat -c '%s' "$output")
+          apk_tmp="$release_dir/.$output.tmp"
+          manifest_tmp="$release_dir/.latest.json.tmp"
+          install -m 0444 "$apk" "$apk_tmp"
+          sha=$(sha256sum "$apk_tmp" | awk '{print $1}')
+          size=$(stat -c '%s' "$apk_tmp")
           jq -n \
             --argjson versionCode '${{ steps.version.outputs.code }}' \
             --arg versionName '${{ steps.version.outputs.name }}' \
             --arg sha256 "$sha" \
             --argjson sizeBytes "$size" \
             --arg publishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{versionCode:$versionCode,versionName:$versionName,minimumSupportedVersionCode:1,sha256:$sha256,sizeBytes:$sizeBytes,publishedAt:$publishedAt,notes:("Media Hub " + $versionName)}' > latest.json
-      - uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ github.token }}
-          generate_release_notes: true
-          files: |
-            media-hub-${{ steps.version.outputs.code }}.apk
-            latest.json
+            '{versionCode:$versionCode,versionName:$versionName,minimumSupportedVersionCode:1,sha256:$sha256,sizeBytes:$sizeBytes,publishedAt:$publishedAt,notes:("Media Hub " + $versionName)}' > "$manifest_tmp"
+          chmod 0444 "$manifest_tmp"
+          mv -f "$apk_tmp" "$release_dir/$output"
+          mv -f "$manifest_tmp" "$release_dir/latest.json"
