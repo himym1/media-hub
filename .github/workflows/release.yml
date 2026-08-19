@@ -11,9 +11,17 @@ jobs:
   image:
     runs-on: [self-hosted, linux, x64, media-hub]
     steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ github.token }}
+      - name: Download source archive
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive="$(mktemp)"
+          curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$archive"
+          rm -rf ./* ./.??* 2>/dev/null || true
+          tar -xzf "$archive" --strip-components=1
+          rm -f "$archive"
       - name: Login to GHCR
         shell: bash
         env:
@@ -39,9 +47,17 @@ jobs:
       MEDIA_HUB_ANDROID_KEY_ALIAS: ${{ secrets.MEDIA_HUB_ANDROID_KEY_ALIAS }}
       MEDIA_HUB_ANDROID_KEY_PASSWORD: ${{ secrets.MEDIA_HUB_ANDROID_KEY_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ github.token }}
+      - name: Download source archive
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive="$(mktemp)"
+          curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$archive"
+          rm -rf ./* ./.??* 2>/dev/null || true
+          tar -xzf "$archive" --strip-components=1
+          rm -f "$archive"
       - name: Validate Android signing configuration
         shell: bash
         run: |
@@ -88,6 +104,7 @@ jobs:
             '{versionCode:$versionCode,versionName:$versionName,minimumSupportedVersionCode:1,sha256:$sha256,sizeBytes:$sizeBytes,publishedAt:$publishedAt,notes:("Media Hub " + $versionName)}' > latest.json
       - uses: softprops/action-gh-release@v2
         with:
+          token: ${{ github.token }}
           generate_release_notes: true
           files: |
             media-hub-${{ steps.version.outputs.code }}.apk
