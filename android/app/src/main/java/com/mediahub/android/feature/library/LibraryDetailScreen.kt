@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,6 +41,7 @@ import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Trash2
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubColors
+import com.mediahub.android.core.designsystem.MediaHubConfirmDialog
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
@@ -54,8 +56,8 @@ import java.net.URI
 internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDetailActions, posterLoader: PosterLoader) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 36.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
             Row(
@@ -66,7 +68,7 @@ internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDeta
                 MediaHubText(
                     text = "媒体详情",
                     modifier = Modifier.weight(1f).padding(start = 4.dp),
-                    fontSize = 19.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
                 MediaHubIconButton(
@@ -107,16 +109,26 @@ internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDeta
                         label = playbackActionLabel(detail.item),
                         icon = Lucide.Play,
                         onClick = { actions.onPlayItem(detail.item, fallback) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                     )
                 }
             }
             item {
-                MediaHubText(
-                    text = detail.overview ?: "暂未提供简介。",
-                    color = MediaHubColors.TextSecondary,
-                    fontSize = 14.sp,
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MediaHubColors.Surface, RoundedCornerShape(10.dp))
+                        .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(10.dp))
+                        .padding(16.dp),
+                ) {
+                    MediaHubText(text = "剧情简介", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MediaHubColors.TextPrimary)
+                    Spacer(Modifier.height(8.dp))
+                    MediaHubText(
+                        text = detail.overview ?: "暂未提供简介。",
+                        color = MediaHubColors.TextSecondary,
+                        fontSize = 13.sp,
+                    )
+                }
             }
             item { TechnicalDetails(detail) }
             item { DeleteActions(state, actions) }
@@ -130,45 +142,82 @@ private fun DetailIdentity(detail: EmbyItemDetail, posterLoader: PosterLoader) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MediaHubColors.Surface, RoundedCornerShape(12.dp))
-            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(12.dp))
-            .padding(16.dp),
+            .background(MediaHubColors.Surface, RoundedCornerShape(14.dp))
+            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(14.dp))
+            .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        EmbyPoster(
-            itemId = detail.item.id,
-            loader = posterLoader,
-            contentDescription = "${detail.item.name} 封面",
-            modifier = Modifier.width(144.dp),
-        )
+        Box(
+            modifier = Modifier
+                .width(150.dp)
+                .background(MediaHubColors.SurfaceInput, RoundedCornerShape(8.dp))
+                .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp)),
+        ) {
+            EmbyPoster(
+                itemId = detail.item.id,
+                loader = posterLoader,
+                contentDescription = "${detail.item.name} 封面",
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             MediaHubText(
                 text = detail.item.name,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
+                color = MediaHubColors.TextPrimary,
             )
-            MediaHubText(
-                text = listOfNotNull(
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                listOfNotNull(
                     mediaTypeLabel(detail.item.type),
                     detail.item.year?.toString(),
                     detail.runtimeMinutes?.takeIf { it > 0 }?.let { "$it 分钟" },
-                    detail.communityRating?.let { "评分 %.1f".format(it) },
-                ).joinToString(" · "),
-                color = MediaHubColors.TextSecondary,
-                fontSize = 13.sp,
-            )
+                    detail.communityRating?.let { "★ %.1f".format(it) },
+                ).forEach { tag ->
+                    Box(
+                        modifier = Modifier
+                            .background(MediaHubColors.SurfaceInput, RoundedCornerShape(4.dp))
+                            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(4.dp))
+                            .padding(horizontal = 7.dp, vertical = 3.dp),
+                    ) {
+                        MediaHubText(
+                            text = tag,
+                            color = MediaHubColors.TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
+            }
             if (genres.isNotEmpty()) {
-                MediaHubText(
-                    text = genres.joinToString(" · "),
-                    color = MediaHubColors.Accent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    genres.forEach { genre ->
+                        Box(
+                            modifier = Modifier
+                                .background(MediaHubColors.SurfaceSelected, RoundedCornerShape(4.dp))
+                                .border(width = 1.dp, color = MediaHubColors.Accent.copy(alpha = 0.5f), shape = RoundedCornerShape(4.dp))
+                                .padding(horizontal = 7.dp, vertical = 3.dp),
+                        ) {
+                            MediaHubText(
+                                text = genre,
+                                color = MediaHubColors.Accent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -177,34 +226,24 @@ private fun DetailIdentity(detail: EmbyItemDetail, posterLoader: PosterLoader) {
 @Composable
 private fun DeleteActions(state: LibraryDetailState, actions: LibraryDetailActions) {
     val preview = state.deletePreview
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (preview == null) {
-            MediaHubSecondaryButton(
-                label = if (state.deleting) "正在读取删除预览…" else "从 Emby 删除",
-                icon = Lucide.Trash2,
-                enabled = !state.deleting && !state.refreshing,
-                onClick = actions.onDelete,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        } else {
-            MediaHubText(
-                text = "将从 Emby 删除「${preview.name}」${if (preview.type == "Series") "及全部分集" else ""}。NAS 上约 ${preview.fileCount} 个库文件可能被删掉，115 网盘文件不会删除。",
-                color = MediaHubColors.TextSecondary,
-                fontSize = 13.sp,
-            )
-            MediaHubButton(
-                label = if (state.deleting) "正在删除" else "确认删除",
-                onClick = actions.onConfirmDelete,
-                enabled = !state.deleting,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            MediaHubSecondaryButton(
-                label = "取消",
-                onClick = actions.onCancelDelete,
-                enabled = !state.deleting,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        MediaHubSecondaryButton(
+            label = if (state.deleting) "正在删除…" else "从 Emby 媒体库移除",
+            icon = Lucide.Trash2,
+            enabled = !state.deleting && !state.refreshing,
+            onClick = actions.onDelete,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        MediaHubConfirmDialog(
+            visible = preview != null,
+            title = "确认从 Emby 删除？",
+            message = if (preview != null) "将从 Emby 移除「${preview.name}」${if (preview.type == "Series") "及全部分集" else ""}。\n\nNAS 上约 ${preview.fileCount} 个 STRM 库文件将被清理，115 网盘上的原始文件不会被删除。" else "",
+            confirmLabel = if (state.deleting) "正在删除…" else "确认删除",
+            cancelLabel = "取消",
+            isDestructive = true,
+            onConfirm = actions.onConfirmDelete,
+            onDismiss = actions.onCancelDelete,
+        )
     }
 }
 

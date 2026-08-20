@@ -56,8 +56,10 @@ import com.composables.icons.lucide.Upload
 import com.composables.icons.lucide.Trash2
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubColors
+import com.mediahub.android.core.designsystem.MediaHubConfirmDialog
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextField
@@ -207,14 +209,14 @@ internal fun SubscriptionEditorScreen(
         if (existing) {
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MediaHubButton(
+                    MediaHubSecondaryButton(
                         label = if (editor.enabled) "暂停" else "恢复",
                         icon = if (editor.enabled) Lucide.Pause else Lucide.Play,
                         enabled = !state.saving,
                         onClick = onToggle,
                         modifier = Modifier.weight(1f),
                     )
-                    MediaHubButton(
+                    MediaHubSecondaryButton(
                         label = "立即运行",
                         icon = Lucide.Play,
                         enabled = !state.saving,
@@ -224,14 +226,25 @@ internal fun SubscriptionEditorScreen(
                 }
             }
             item {
-                if (confirmingDelete) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        MediaHubButton(label = "取消", onClick = { confirmingDelete = false }, modifier = Modifier.weight(1f))
-                        MediaHubButton(label = "确认删除", icon = Lucide.Trash2, enabled = !state.saving, onClick = onDelete, modifier = Modifier.weight(1f))
-                    }
-                } else {
-                    MediaHubButton(label = "删除订阅", icon = Lucide.Trash2, onClick = { confirmingDelete = true }, modifier = Modifier.fillMaxWidth())
-                }
+                MediaHubSecondaryButton(
+                    label = "删除订阅",
+                    icon = Lucide.Trash2,
+                    onClick = { confirmingDelete = true },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                MediaHubConfirmDialog(
+                    visible = confirmingDelete,
+                    title = "确认删除该订阅？",
+                    message = "删除后将停止自动监测和追更「${editor.title}」，已入库的媒体不受影响。",
+                    confirmLabel = "确认删除",
+                    cancelLabel = "取消",
+                    isDestructive = true,
+                    onConfirm = {
+                        confirmingDelete = false
+                        onDelete()
+                    },
+                    onDismiss = { confirmingDelete = false },
+                )
             }
             item {
                 MediaHubText(text = "运行历史", modifier = Modifier.padding(top = 18.dp), fontSize = 17.sp, fontWeight = FontWeight.Medium)

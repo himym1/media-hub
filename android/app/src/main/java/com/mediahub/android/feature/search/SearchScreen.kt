@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -219,42 +220,60 @@ internal fun SearchScreen(
 
 @Composable
 private fun TrendingItem(item: DiscoveryItem, onClick: () -> Unit) {
-    Row(
+    Column(
         modifier = Modifier
-            .width(160.dp)
-            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
-            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-            .heightIn(min = 52.dp)
+            .width(130.dp)
+            .background(MediaHubColors.Surface, RoundedCornerShape(10.dp))
+            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(10.dp))
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        MediaHubIcon(
-            imageVector = Lucide.Film,
-            contentDescription = null,
-            tint = MediaHubColors.Accent,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            MediaHubText(
-                text = item.title,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(84.dp)
+                .background(MediaHubColors.SurfaceInput, RoundedCornerShape(6.dp))
+                .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(6.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            MediaHubIcon(
+                imageVector = Lucide.Film,
+                contentDescription = null,
+                tint = MediaHubColors.Accent,
+                modifier = Modifier.size(28.dp),
             )
-            MediaHubText(
-                text = "${item.year.takeIf { it > 0 } ?: "年份未知"} · ${if (item.mediaType == "movie") "电影" else "剧集"}",
-                color = MediaHubColors.TextMuted,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+                    .background(MediaHubColors.SurfaceSelected, RoundedCornerShape(3.dp))
+                    .padding(horizontal = 5.dp, vertical = 2.dp),
+            ) {
+                MediaHubText(
+                    text = if (item.mediaType == "movie") "电影" else "剧集",
+                    color = MediaHubColors.Accent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
+        MediaHubText(
+            text = item.title,
+            color = MediaHubColors.TextPrimary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
+        MediaHubText(
+            text = item.year.takeIf { it > 0 }?.toString() ?: "",
+            color = MediaHubColors.TextMuted,
+            fontSize = 12.sp,
+            maxLines = 1,
+        )
     }
 }
-
 
 @Composable
 private fun StatusLine(

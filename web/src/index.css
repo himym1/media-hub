@@ -3,29 +3,29 @@
 :root {
   color-scheme: dark;
   font-family: "Inter Tight", "Helvetica Neue", Arial, sans-serif;
-  color: #edf1ef;
-  background: #111416;
+  color: #f8fafc;
+  background: #0e1114;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --canvas: #111416;
-  --bg: #111416;
-  --sidebar: #15191c;
-  --surface: #181d20;
-  --surface-raised: #20262a;
-  --surface-input: #20262a;
-  --surface-selected: #203029;
-  --border: #30363a;
-  --border-strong: #454d52;
-  --text: #edf1ef;
-  --text-secondary: #b7bfbc;
-  --text-muted: #8d9793;
-  --accent: #8fc7a3;
-  --accent-strong: #a8d9b8;
-  --accent-ink: #102118;
-  --info: #7eb6d8;
-  --warning: #e0b46e;
-  --error: #e07b75;
-  --success: #75bea0;
+  --canvas: #0e1114;
+  --bg: #0e1114;
+  --sidebar: #151c22;
+  --surface: #1b2228;
+  --surface-raised: #252e35;
+  --surface-input: #252e35;
+  --surface-selected: #183b2b;
+  --border: #2e3b46;
+  --border-strong: #475569;
+  --text: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --accent: #34d399;
+  --accent-strong: #6ee7b7;
+  --accent-ink: #064e3b;
+  --info: #60a5fa;
+  --warning: #fbbf24;
+  --error: #f87171;
+  --success: #34d399;
 }
 
 * { box-sizing: border-box; }

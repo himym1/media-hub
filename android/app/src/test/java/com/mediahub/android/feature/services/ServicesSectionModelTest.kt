@@ -8,9 +8,9 @@ class ServicesSectionModelTest {
     fun settingsKeepOverviewProvidersAndAccountAsSeparateSections() {
         assertEquals(
             listOf(
-                "overview" to "概览",
-                "providers" to "服务接入",
-                "account" to "账户",
+                "overview" to "状态概览",
+                "providers" to "服务配置",
+                "account" to "账户与更新",
             ),
             serviceSectionOptions,
         )

@@ -40,9 +40,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.composables.icons.lucide.ArrowRight
+import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.EyeOff
+import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.X
@@ -400,5 +412,164 @@ fun MediaHubPasswordField(
             onClick = onVisibilityChanged,
             enabled = enabled,
         )
+    }
+}
+
+@Composable
+fun MediaHubDestructiveButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
+) {
+    Row(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .alpha(if (enabled) 1f else 0.45f)
+            .background(MediaHubColors.Error, RoundedCornerShape(8.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            MediaHubIcon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MediaHubColors.Canvas,
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        MediaHubText(
+            text = label,
+            color = MediaHubColors.Canvas,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+enum class ToastType { Info, Success, Error, Warning }
+
+data class ToastMessage(
+    val id: Long = System.currentTimeMillis(),
+    val message: String,
+    val type: ToastType = ToastType.Info,
+)
+
+@Composable
+fun MediaHubToastHost(
+    currentToast: ToastMessage?,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedVisibility(
+        visible = currentToast != null,
+        enter = fadeIn() + slideInVertically { it },
+        exit = fadeOut() + slideOutVertically { it },
+        modifier = modifier,
+    ) {
+        if (currentToast != null) {
+            val (icon, tint) = when (currentToast.type) {
+                ToastType.Success -> Lucide.Check to MediaHubColors.Accent
+                ToastType.Error -> Lucide.CircleAlert to MediaHubColors.Error
+                ToastType.Warning -> Lucide.CircleAlert to MediaHubColors.Warning
+                ToastType.Info -> Lucide.Info to MediaHubColors.Source
+            }
+            Row(
+                modifier = Modifier
+                    .background(MediaHubColors.Surface, RoundedCornerShape(24.dp))
+                    .border(width = 1.dp, color = tint.copy(alpha = 0.6f), shape = RoundedCornerShape(24.dp))
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                MediaHubIcon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier.size(18.dp),
+                )
+                MediaHubText(
+                    text = currentToast.message,
+                    color = MediaHubColors.TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MediaHubConfirmDialog(
+    visible: Boolean,
+    title: String,
+    message: String,
+    confirmLabel: String = "确认",
+    cancelLabel: String = "取消",
+    isDestructive: Boolean = false,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    if (visible) {
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(usePlatformDefaultWidth = true, dismissOnBackPress = true, dismissOnClickOutside = true),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MediaHubColors.Surface)
+                    .border(
+                        width = 1.dp,
+                        color = if (isDestructive) MediaHubColors.Error.copy(alpha = 0.6f) else MediaHubColors.Border,
+                        shape = RoundedCornerShape(16.dp),
+                    )
+                    .padding(22.dp),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    MediaHubText(
+                        text = title,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDestructive) MediaHubColors.Error else MediaHubColors.TextPrimary,
+                    )
+                    MediaHubText(
+                        text = message,
+                        color = MediaHubColors.TextSecondary,
+                        fontSize = 13.sp,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        MediaHubSecondaryButton(
+                            label = cancelLabel,
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (isDestructive) {
+                            MediaHubDestructiveButton(
+                                label = confirmLabel,
+                                onClick = onConfirm,
+                                modifier = Modifier.weight(1f),
+                            )
+                        } else {
+                            MediaHubButton(
+                                label = confirmLabel,
+                                onClick = onConfirm,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

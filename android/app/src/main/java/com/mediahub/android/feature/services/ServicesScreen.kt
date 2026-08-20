@@ -6,6 +6,7 @@ import androidx.core.content.FileProvider
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,9 +56,9 @@ import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.OperationalStatistics
 
 internal val serviceSectionOptions = listOf(
-    "overview" to "概览",
-    "providers" to "服务接入",
-    "account" to "账户",
+    "overview" to "状态概览",
+    "providers" to "服务配置",
+    "account" to "账户与更新",
 )
 
 @Composable
@@ -322,9 +323,14 @@ private fun OperationalSummary(statistics: OperationalStatistics) {
 
 @Composable
 private fun Metric(label: String, value: Int, modifier: Modifier) {
-    Column(modifier = modifier.background(MediaHubColors.Surface, RoundedCornerShape(7.dp)).padding(10.dp)) {
-        MediaHubText(text = value.toString(), color = MediaHubColors.TextStrong, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-        MediaHubText(text = label, modifier = Modifier.padding(top = 3.dp), color = MediaHubColors.TextMuted, fontSize = 12.sp)
+    Column(
+        modifier = modifier
+            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
+            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
+            .padding(12.dp),
+    ) {
+        MediaHubText(text = value.toString(), color = MediaHubColors.TextStrong, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        MediaHubText(text = label, modifier = Modifier.padding(top = 2.dp), color = MediaHubColors.TextMuted, fontSize = 12.sp)
     }
 }
 
@@ -332,25 +338,28 @@ private fun Metric(label: String, value: Int, modifier: Modifier) {
 private fun ServiceRow(integration: IntegrationHealth) {
     Row(
         modifier = Modifier
-            .padding(horizontal = 2.dp, vertical = 13.dp),
+            .fillMaxWidth()
+            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
+            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Spacer(
             Modifier
-                .size(9.dp)
+                .size(8.dp)
                 .background(statusColor(integration.status), CircleShape),
         )
-        Spacer(Modifier.width(11.dp))
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            MediaHubText(text = integration.label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            MediaHubText(text = integration.label, color = MediaHubColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             MediaHubText(
                 text = integration.detail,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 2.dp),
                 color = MediaHubColors.TextMuted,
                 fontSize = 12.sp,
             )
         }
-        MediaHubText(text = statusLabel(integration.status), color = statusColor(integration.status), fontSize = 12.sp)
+        MediaHubText(text = statusLabel(integration.status), color = statusColor(integration.status), fontSize = 12.sp, fontWeight = FontWeight.Medium)
     }
 }
 

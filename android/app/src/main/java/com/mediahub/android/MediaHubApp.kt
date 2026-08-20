@@ -391,8 +391,8 @@ internal fun SystemSectionSwitcher(
 ) {
     MediaHubSegmentedControl(
         options = listOf(
-            MainDestination.Services.name to "服务接入",
-            MainDestination.Operations.name to "运维管理",
+            MainDestination.Services.name to "系统设置",
+            MainDestination.Operations.name to "高级运维",
         ),
         selected = destination.name,
         onSelected = { value ->

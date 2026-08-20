@@ -1,6 +1,7 @@
 package com.mediahub.android.feature.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -62,48 +63,64 @@ internal fun EpisodePicker(
                         val selected = season == selectedSeason
                         Box(
                             modifier = Modifier
-                                .heightIn(min = 48.dp)
+                                .heightIn(min = 40.dp)
                                 .background(
-                                    if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.SurfaceInput,
-                                    RoundedCornerShape(8.dp),
+                                    if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface,
+                                    RoundedCornerShape(20.dp),
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = if (selected) MediaHubColors.Accent else MediaHubColors.Border,
+                                    shape = RoundedCornerShape(20.dp),
                                 )
                                 .clickable(role = Role.Tab) { selectedSeason = season }
-                                .padding(horizontal = 14.dp),
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             MediaHubText(
                                 text = if (season > 0) "第 ${season} 季" else "特别篇",
-                                color = if (selected) MediaHubColors.Accent else MediaHubColors.TextSecondary,
+                                color = if (selected) MediaHubColors.TextPrimary else MediaHubColors.TextSecondary,
                                 fontSize = 13.sp,
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                             )
                         }
                     }
                 }
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     visibleEpisodes.forEach { episode ->
                         val progress = episodeProgressLabel(episode)
                         Row(
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = 4.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
+                                .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
+                                .clickable(role = Role.Button) { onPlay(episode) }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            MediaHubText(
-                                text = episodeLabel(episode),
-                                modifier = Modifier.weight(1f),
-                                color = MediaHubColors.TextStrong,
-                                fontSize = 13.sp,
-                            )
-                            if (progress.isNotEmpty()) {
-                                MediaHubText(progress, color = MediaHubColors.Accent, fontSize = 12.sp)
+                            Column(Modifier.weight(1f)) {
+                                MediaHubText(
+                                    text = episodeLabel(episode),
+                                    color = MediaHubColors.TextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                if (progress.isNotEmpty()) {
+                                    MediaHubText(
+                                        text = progress,
+                                        color = MediaHubColors.Accent,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(top = 2.dp),
+                                    )
+                                }
                             }
-                            Spacer(Modifier.width(8.dp))
-                            MediaHubIconButton(
+                            MediaHubIcon(
                                 imageVector = Lucide.Play,
-                                contentDescription = "${playbackActionLabel(episode.item)} ${episodeLabel(episode)}",
-                                onClick = { onPlay(episode) },
+                                contentDescription = null,
+                                tint = MediaHubColors.Accent,
+                                modifier = Modifier.size(18.dp),
                             )
                         }
-                        Box(Modifier.fillMaxWidth().height(1.dp).background(MediaHubColors.Border))
                     }
                 }
             }

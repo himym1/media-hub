@@ -8,21 +8,21 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 
 object MediaHubColors {
-    val Canvas = Color(0xFF111416)
-    val Surface = Color(0xFF181D20)
-    val SurfaceInput = Color(0xFF20262A)
-    val SurfaceSelected = Color(0xFF203029)
-    val Accent = Color(0xFF8FC7A3)
-    val TextPrimary = Color(0xFFEDF1EF)
-    val TextStrong = Color(0xFFDDE3E0)
-    val TextSecondary = Color(0xFFB7BFBC)
-    val TextMuted = Color(0xFF8D9793)
-    val TextFaint = Color(0xFF7A8580)
-    val Source = Color(0xFF7EB6D8)
-    val Success = Color(0xFF75BEA0)
-    val Error = Color(0xFFE07B75)
-    val Warning = Color(0xFFE0B46E)
-    val Border = Color(0xFF30363A)
+    val Canvas = Color(0xFF0E1114)
+    val Surface = Color(0xFF1B2228)
+    val SurfaceInput = Color(0xFF252E35)
+    val SurfaceSelected = Color(0xFF183B2B)
+    val Accent = Color(0xFF34D399)
+    val TextPrimary = Color(0xFFF8FAFC)
+    val TextStrong = Color(0xFFF1F5F9)
+    val TextSecondary = Color(0xFFCBD5E1)
+    val TextMuted = Color(0xFF94A3B8)
+    val TextFaint = Color(0xFF64748B)
+    val Source = Color(0xFF60A5FA)
+    val Success = Color(0xFF34D399)
+    val Error = Color(0xFFF87171)
+    val Warning = Color(0xFFFBBF24)
+    val Border = Color(0xFF2E3B46)
 }
 
 @Composable

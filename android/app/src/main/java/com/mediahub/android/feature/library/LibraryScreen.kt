@@ -5,20 +5,24 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,8 +32,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.BookOpen
@@ -132,37 +138,19 @@ internal fun LibraryScreen(
             .background(MediaHubColors.Canvas)
             .padding(horizontal = 16.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MediaHubText(
-                text = if (uiState.loadingLibraries) "正在读取媒体库…" else "${uiState.libraries.size} 个媒体库",
-                modifier = Modifier.weight(1f),
-                color = MediaHubColors.TextMuted,
-                fontSize = 13.sp,
-            )
-            MediaHubIconButton(
-                imageVector = Lucide.RefreshCw,
-                contentDescription = "刷新媒体库列表",
-                enabled = !uiState.loadingLibraries,
-                onClick = actions.onRefreshLibraries,
-            )
-        }
         if (uiState.libraries.isNotEmpty()) {
             LazyRow(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 12.dp),
             ) {
                 items(uiState.libraries, key = { it.id }) { library ->
                     val selected = library.id == uiState.selectedLibraryId
                     val collection = collectionLabel(library.collectionType)
                     Row(
                         modifier = Modifier
-                            .heightIn(min = 48.dp)
-                            .background(if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface, RoundedCornerShape(8.dp))
-                            .border(width = 1.dp, color = if (selected) MediaHubColors.Accent else MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
+                            .heightIn(min = 40.dp)
+                            .background(if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface, RoundedCornerShape(20.dp))
+                            .border(width = 1.dp, color = if (selected) MediaHubColors.Accent else MediaHubColors.Border, shape = RoundedCornerShape(20.dp))
                             .selectable(selected = selected, role = Role.RadioButton) { actions.onSelectLibrary(library.id) }
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -171,20 +159,15 @@ internal fun LibraryScreen(
                             imageVector = Lucide.LibraryBig,
                             contentDescription = null,
                             tint = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted,
-                            modifier = Modifier.size(17.dp),
+                            modifier = Modifier.size(15.dp),
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Column {
-                            MediaHubText(
-                                text = library.name,
-                                color = if (selected) MediaHubColors.TextPrimary else MediaHubColors.TextSecondary,
-                                fontSize = 13.sp,
-                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                            )
-                            if (!library.name.equals(collection, ignoreCase = true)) {
-                                MediaHubText(text = collection, color = MediaHubColors.TextMuted, fontSize = 12.sp)
-                            }
-                        }
+                        Spacer(Modifier.width(6.dp))
+                        MediaHubText(
+                            text = library.name,
+                            color = if (selected) MediaHubColors.TextPrimary else MediaHubColors.TextSecondary,
+                            fontSize = 13.sp,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        )
                     }
                 }
             }
@@ -199,48 +182,50 @@ internal fun LibraryScreen(
             },
             onSearch = actions.onSearch,
             enabled = !uiState.loadingItems,
-            placeholder = "搜索电影或剧集",
+            placeholder = "在媒体库中搜索",
             modifier = Modifier.fillMaxWidth(),
         )
         uiState.errorMessage?.let { ErrorLine(it) }
         uiState.actionMessage?.let {
-            MediaHubText(text = it, modifier = Modifier.padding(top = 10.dp), color = MediaHubColors.Source, fontSize = 12.sp)
+            MediaHubText(text = it, modifier = Modifier.padding(top = 8.dp), color = MediaHubColors.Source, fontSize = 12.sp)
         }
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             MediaHubText(
-                text = if (uiState.submittedQuery.isNotEmpty()) "搜索结果 ${uiState.total}" else "媒体内容 ${uiState.total}",
+                text = if (uiState.submittedQuery.isNotEmpty()) "搜索结果 (${uiState.total})" else "全部媒体 (${uiState.total})",
                 modifier = Modifier.weight(1f),
                 color = MediaHubColors.TextStrong,
                 fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.SemiBold,
             )
             if (uiState.submittedQuery.isEmpty() && uiState.selectedLibraryId != null) {
                 MediaHubIconButton(Lucide.RefreshCw, "刷新当前媒体库", actions.onRefreshSelectedLibrary, enabled = !uiState.refreshing)
             }
         }
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = 20.dp),
         ) {
             items(uiState.items, key = { it.id }) { item ->
-                EmbyItemRow(item = item, posterLoader = posterLoader, onClick = { actions.onSelectItem(item.id) })
+                EmbyPosterCard(item = item, posterLoader = posterLoader, onClick = { actions.onSelectItem(item.id) })
             }
             if (!uiState.loadingItems && uiState.items.isEmpty()) {
-                item(key = "empty") {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 36.dp)
-                            .background(MediaHubColors.Surface, RoundedCornerShape(10.dp))
-                            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(10.dp))
+                            .padding(vertical = 40.dp)
+                            .background(MediaHubColors.Surface, RoundedCornerShape(12.dp))
+                            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(12.dp))
                             .padding(vertical = 36.dp, horizontal = 20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        MediaHubIcon(Lucide.BookOpen, contentDescription = null, tint = MediaHubColors.TextMuted, modifier = Modifier.size(32.dp))
+                        MediaHubIcon(Lucide.BookOpen, contentDescription = null, tint = MediaHubColors.TextMuted, modifier = Modifier.size(36.dp))
                         MediaHubText(
                             text = if (uiState.submittedQuery.isNotEmpty()) "没有找到匹配的媒体内容" else "此媒体库暂无内容",
                             modifier = Modifier.padding(top = 14.dp),
@@ -258,7 +243,7 @@ internal fun LibraryScreen(
                 }
             }
             if (uiState.submittedQuery.isEmpty() && uiState.total > LibraryPageSize) {
-                item(key = "pagination") {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         horizontalArrangement = Arrangement.Center,
@@ -279,46 +264,71 @@ internal fun LibraryScreen(
     }
 }
 
-
 @Composable
-private fun EmbyItemRow(item: EmbyItem, posterLoader: PosterLoader, onClick: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
+private fun EmbyPosterCard(
+    item: EmbyItem,
+    posterLoader: PosterLoader,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(role = Role.Button, onClick = onClick),
+    ) {
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 76.dp)
-                .clickable(role = Role.Button, onClick = onClick)
-                .padding(horizontal = 4.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .aspectRatio(2f / 3f)
+                .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
+                .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(8.dp)),
         ) {
             EmbyPoster(
                 itemId = item.id,
                 loader = posterLoader,
-                contentDescription = "${item.name} 封面",
-                modifier = Modifier.width(48.dp),
+                contentDescription = "${item.name} 海报",
+                modifier = Modifier.fillMaxSize(),
             )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                MediaHubText(text = item.name, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                MediaHubText(
-                    text = listOfNotNull(
-                        mediaTypeLabel(item.type),
-                        item.year?.toString(),
-                        libraryPlaybackStatus(item),
-                    ).joinToString(" · "),
-                    modifier = Modifier.padding(top = 4.dp),
-                    color = MediaHubColors.TextMuted,
-                    fontSize = 12.sp,
-                )
+            libraryPlaybackStatus(item)?.let { status ->
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .background(
+                            if (item.played) MediaHubColors.Accent else MediaHubColors.Surface.copy(alpha = 0.92f),
+                            RoundedCornerShape(4.dp),
+                        )
+                        .padding(horizontal = 5.dp, vertical = 2.dp),
+                ) {
+                    MediaHubText(
+                        text = status,
+                        color = if (item.played) MediaHubColors.Canvas else MediaHubColors.TextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
-            MediaHubIcon(
-                imageVector = Lucide.ChevronRight,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MediaHubColors.TextFaint,
-            )
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(MediaHubColors.Border))
+        MediaHubText(
+            text = item.name,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = MediaHubColors.TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 5.dp, start = 2.dp, end = 2.dp),
+        )
+        MediaHubText(
+            text = listOfNotNull(
+                mediaTypeLabel(item.type),
+                item.year?.toString(),
+            ).joinToString(" · "),
+            fontSize = 12.sp,
+            color = MediaHubColors.TextMuted,
+            maxLines = 1,
+            modifier = Modifier.padding(top = 1.dp, start = 2.dp, end = 2.dp),
+        )
     }
 }
 

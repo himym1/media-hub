@@ -30,7 +30,7 @@ val mediaHubApiBaseUrl = providers.gradleProperty("MEDIA_HUB_API_BASE_URL")
 android {
     namespace = "com.mediahub.android"
     compileSdk = 37
-    buildToolsVersion = "37.0.0"
+    buildToolsVersion = "36.0.0"
 
     defaultConfig {
         applicationId = "com.mediahub.android"
