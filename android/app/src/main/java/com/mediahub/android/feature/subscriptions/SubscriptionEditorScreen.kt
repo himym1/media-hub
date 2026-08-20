@@ -1,11 +1,6 @@
 package com.mediahub.android.feature.subscriptions
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,60 +8,45 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ArrowLeft
-import com.composables.icons.lucide.ChevronDown
-import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.CircleAlert
-import com.composables.icons.lucide.Download
-import com.composables.icons.lucide.Clock3
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.EllipsisVertical
 import com.composables.icons.lucide.Pause
 import com.composables.icons.lucide.Play
-import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Save
-import com.composables.icons.lucide.Upload
 import com.composables.icons.lucide.Trash2
 import com.mediahub.android.core.designsystem.MediaHubButton
+import com.mediahub.android.core.designsystem.MediaHubCard
+import com.mediahub.android.core.designsystem.MediaHubCheckboxRow
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubConfirmDialog
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubListDivider
+import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
+import com.mediahub.android.core.designsystem.MediaHubSmallTitle
+import com.mediahub.android.core.designsystem.MediaHubSwitchRow
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextField
-import com.mediahub.android.core.network.SearchCandidate
 import com.mediahub.android.core.network.SubscriptionRun
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
 
 internal data class SubscriptionEditorActions(
     val editorChanged: (SubscriptionEditorState) -> Unit,
@@ -95,13 +75,13 @@ internal fun SubscriptionEditorScreen(
     var sourcesExpanded by remember(state.selectedId) { mutableStateOf(false) }
     var advancedExpanded by remember(state.selectedId) { mutableStateOf(false) }
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 MediaHubIconButton(
@@ -114,23 +94,29 @@ internal fun SubscriptionEditorScreen(
             }
             state.errorMessage?.let { ErrorLine(it) }
         }
-        item { LabeledField("标题", editor.title, { onEditorChanged(editor.copy(title = it.take(300))) }, "媒体标题") }
-        item { LabeledField("TMDB ID", editor.tmdbId, { onEditorChanged(editor.copy(tmdbId = it.take(20))) }, "数字 ID", KeyboardType.Number, enabled = !existing) }
+        item { MediaHubSmallTitle(text = "媒体身份") }
         item {
-            OptionGroup("类型", listOf("movie" to "电影", "series" to "剧集"), editor.mediaType, enabled = !existing) {
-                onEditorChanged(editor.copy(mediaType = it, season = if (it == "movie") "0" else editor.season))
+            MediaHubCard(insideMargin = PaddingValues(16.dp)) {
+                LabeledField("标题", editor.title, { onEditorChanged(editor.copy(title = it.take(300))) }, "媒体标题")
+                Spacer(Modifier.size(12.dp))
+                LabeledField("TMDB ID", editor.tmdbId, { onEditorChanged(editor.copy(tmdbId = it.take(20))) }, "数字 ID", KeyboardType.Number, enabled = !existing)
+                Spacer(Modifier.size(12.dp))
+                OptionGroup("类型", listOf("movie" to "电影", "series" to "剧集"), editor.mediaType, enabled = !existing) {
+                    onEditorChanged(editor.copy(mediaType = it, season = if (it == "movie") "0" else editor.season))
+                }
+                if (editor.mediaType == "series") {
+                    Spacer(Modifier.size(12.dp))
+                    LabeledField("季号", editor.season, { onEditorChanged(editor.copy(season = it.take(3))) }, "0 表示整部剧", KeyboardType.Number, enabled = !existing)
+                }
             }
         }
-        if (editor.mediaType == "series") {
-            item { LabeledField("季号", editor.season, { onEditorChanged(editor.copy(season = it.take(3))) }, "0 表示整部剧", KeyboardType.Number, enabled = !existing) }
-        }
+        item { MediaHubSmallTitle(text = "更新与质量") }
         item {
-            OptionGroup("更新策略", listOf("once" to "首次入库", "upgrade" to "持续升级"), editor.policy) {
-                onEditorChanged(editor.copy(policy = it))
-            }
-        }
-        item {
-            Column {
+            MediaHubCard(insideMargin = PaddingValues(16.dp)) {
+                OptionGroup("更新策略", listOf("once" to "首次入库", "upgrade" to "持续升级"), editor.policy) {
+                    onEditorChanged(editor.copy(policy = it))
+                }
+                Spacer(Modifier.size(12.dp))
                 MediaHubText(text = "质量预设", color = MediaHubColors.TextMuted, fontSize = 12.sp)
                 MediaHubSegmentedControl(
                     options = listOf("standard" to "标准", "space" to "省空间", "balanced" to "均衡", "quality" to "高质量", "custom" to "自定义"),
@@ -138,63 +124,93 @@ internal fun SubscriptionEditorScreen(
                     onSelected = { onEditorChanged(applyQualityPreset(editor, it)) },
                     modifier = Modifier.padding(top = 7.dp),
                     role = Role.RadioButton,
+                    raised = false,
                 )
                 if (editor.qualityPreset != "custom") {
                     MediaHubText(text = qualityPresetSummary(editor.qualityPreset), modifier = Modifier.padding(top = 7.dp), color = MediaHubColors.TextMuted, fontSize = 12.sp)
                 }
+                Spacer(Modifier.size(12.dp))
+                OptionGroup("检查频率", intervalOptions(editor.intervalMinutes), editor.intervalMinutes) {
+                    onEditorChanged(editor.copy(intervalMinutes = it))
+                }
             }
         }
         item {
-            OptionGroup("检查频率", intervalOptions(editor.intervalMinutes), editor.intervalMinutes) {
-                onEditorChanged(editor.copy(intervalMinutes = it))
-            }
-        }
-        item {
-            CollapsibleHeader(
-                label = "资源来源",
-                summary = if (editor.sourceIds.isEmpty()) "全部可用来源" else "已选择 ${editor.sourceIds.size} 个",
-                expanded = sourcesExpanded,
-                onClick = { sourcesExpanded = !sourcesExpanded },
-            )
-        }
-        if (sourcesExpanded) {
-            if (state.availableSources.isEmpty()) {
-                item { MediaHubText(text = "来源清单暂不可用；不选择时会搜索全部来源。", color = MediaHubColors.TextMuted, fontSize = 12.sp) }
-            } else {
-                items(state.availableSources, key = { "source-${it.id}" }) { source ->
-                    BooleanOption(source.label, editor.sourceIds.contains(source.id)) { checked ->
-                        val sources = if (checked) (editor.sourceIds + source.id).distinct() else editor.sourceIds - source.id
-                        onEditorChanged(editor.copy(sourceIds = sources))
+            MediaHubCard {
+                MediaHubPreferenceRow(
+                    title = "资源来源",
+                    summary = if (editor.sourceIds.isEmpty()) "全部可用来源" else "已选择 ${editor.sourceIds.size} 个",
+                    onClick = { sourcesExpanded = !sourcesExpanded },
+                )
+                if (sourcesExpanded) {
+                    MediaHubListDivider()
+                    if (state.availableSources.isEmpty()) {
+                        MediaHubText(
+                            text = "来源清单暂不可用；不选择时会搜索全部来源。",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            color = MediaHubColors.TextMuted,
+                            fontSize = 12.sp,
+                        )
+                    } else {
+                        state.availableSources.forEachIndexed { index, source ->
+                            if (index > 0) MediaHubListDivider()
+                            MediaHubCheckboxRow(
+                                title = source.label,
+                                checked = editor.sourceIds.contains(source.id),
+                                onCheckedChange = { checked ->
+                                    val sources = if (checked) (editor.sourceIds + source.id).distinct() else editor.sourceIds - source.id
+                                    onEditorChanged(editor.copy(sourceIds = sources))
+                                },
+                            )
+                        }
                     }
                 }
             }
         }
-        item { BooleanOption("启用自动运行", editor.enabled) { onEditorChanged(editor.copy(enabled = it)) } }
         item {
-            CollapsibleHeader(
-                label = "高级规则与媒体身份",
-                summary = "原始标题、年份与自定义筛选",
-                expanded = advancedExpanded,
-                onClick = { advancedExpanded = !advancedExpanded },
-            )
+            MediaHubCard {
+                MediaHubSwitchRow(
+                    title = "启用自动运行",
+                    checked = editor.enabled,
+                    onCheckedChange = { onEditorChanged(editor.copy(enabled = it)) },
+                )
+            }
         }
-        if (advancedExpanded) {
-            item { LabeledField("原始标题", editor.originalTitle, { onEditorChanged(editor.copy(originalTitle = it.take(300))) }, "可选") }
-            item { LabeledField("年份", editor.year, { onEditorChanged(editor.copy(year = it.take(4))) }, "0 表示未知", KeyboardType.Number) }
-            if (editor.qualityPreset == "custom") {
-                item { LabeledField("偏好来源顺序", editor.preferredSources, { onEditorChanged(editor.copy(preferredSources = it)) }, "framehdr, juying") }
-                item { LabeledField("分辨率", editor.resolutions, { onEditorChanged(editor.copy(resolutions = it)) }, "2160p, 1080p") }
-                item { LabeledField("视频编码", editor.videoCodecs, { onEditorChanged(editor.copy(videoCodecs = it)) }, "HEVC, AVC") }
-                item { LabeledField("动态范围", editor.dynamicRanges, { onEditorChanged(editor.copy(dynamicRanges = it)) }, "Dolby Vision, HDR10") }
-                item { LabeledField("必须包含的音轨", editor.audioContains, { onEditorChanged(editor.copy(audioContains = it)) }, "Atmos, TrueHD") }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.weight(1f)) { LabeledField("最小体积 GiB", editor.minSizeGiB, { onEditorChanged(editor.copy(minSizeGiB = it)) }, "0", KeyboardType.Decimal) }
-                        Column(Modifier.weight(1f)) { LabeledField("最大体积 GiB", editor.maxSizeGiB, { onEditorChanged(editor.copy(maxSizeGiB = it)) }, "0", KeyboardType.Decimal) }
+        item {
+            MediaHubCard {
+                MediaHubPreferenceRow(
+                    title = "高级规则与媒体身份",
+                    summary = "原始标题、年份与自定义筛选",
+                    onClick = { advancedExpanded = !advancedExpanded },
+                )
+                if (advancedExpanded) {
+                    MediaHubListDivider()
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LabeledField("原始标题", editor.originalTitle, { onEditorChanged(editor.copy(originalTitle = it.take(300))) }, "可选")
+                        LabeledField("年份", editor.year, { onEditorChanged(editor.copy(year = it.take(4))) }, "0 表示未知", KeyboardType.Number)
+                        if (editor.qualityPreset == "custom") {
+                            LabeledField("偏好来源顺序", editor.preferredSources, { onEditorChanged(editor.copy(preferredSources = it)) }, "framehdr, juying")
+                            LabeledField("分辨率", editor.resolutions, { onEditorChanged(editor.copy(resolutions = it)) }, "2160p, 1080p")
+                            LabeledField("视频编码", editor.videoCodecs, { onEditorChanged(editor.copy(videoCodecs = it)) }, "HEVC, AVC")
+                            LabeledField("动态范围", editor.dynamicRanges, { onEditorChanged(editor.copy(dynamicRanges = it)) }, "Dolby Vision, HDR10")
+                            LabeledField("必须包含的音轨", editor.audioContains, { onEditorChanged(editor.copy(audioContains = it)) }, "Atmos, TrueHD")
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Column(Modifier.weight(1f)) { LabeledField("最小体积 GiB", editor.minSizeGiB, { onEditorChanged(editor.copy(minSizeGiB = it)) }, "0", KeyboardType.Decimal) }
+                                Column(Modifier.weight(1f)) { LabeledField("最大体积 GiB", editor.maxSizeGiB, { onEditorChanged(editor.copy(maxSizeGiB = it)) }, "0", KeyboardType.Decimal) }
+                            }
+                            MediaHubCheckboxRow(
+                                title = "设定体积范围时允许未知体积",
+                                checked = editor.allowUnknownSize,
+                                onCheckedChange = { onEditorChanged(editor.copy(allowUnknownSize = it)) },
+                            )
+                            MediaHubCheckboxRow(
+                                title = "同分时优先较小版本",
+                                checked = editor.preferSmaller,
+                                onCheckedChange = { onEditorChanged(editor.copy(preferSmaller = it)) },
+                            )
+                        }
                     }
                 }
-                item { BooleanOption("设定体积范围时允许未知体积", editor.allowUnknownSize) { onEditorChanged(editor.copy(allowUnknownSize = it)) } }
-                item { BooleanOption("同分时优先较小版本", editor.preferSmaller) { onEditorChanged(editor.copy(preferSmaller = it)) } }
             }
         }
         item {
@@ -246,32 +262,20 @@ internal fun SubscriptionEditorScreen(
                     onDismiss = { confirmingDelete = false },
                 )
             }
-            item {
-                MediaHubText(text = "运行历史", modifier = Modifier.padding(top = 18.dp), fontSize = 17.sp, fontWeight = FontWeight.Medium)
+            item { MediaHubSmallTitle(text = "运行历史") }
+            if (state.runs.isEmpty()) {
+                item { MediaHubText(text = "还没有运行记录", color = MediaHubColors.TextMuted, fontSize = 12.sp) }
+            } else {
+                item {
+                    MediaHubCard {
+                        state.runs.forEachIndexed { index, run ->
+                            if (index > 0) MediaHubListDivider()
+                            RunRow(run)
+                        }
+                    }
+                }
             }
-            items(state.runs, key = { it.id }) { run -> RunRow(run) }
-            if (state.runs.isEmpty()) item { MediaHubText(text = "还没有运行记录", color = MediaHubColors.TextMuted, fontSize = 12.sp) }
         }
-    }
-}
-
-@Composable
-private fun CollapsibleHeader(label: String, summary: String, expanded: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 50.dp)
-            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
-            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            MediaHubText(text = label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            MediaHubText(text = summary, color = MediaHubColors.TextMuted, fontSize = 12.sp)
-        }
-        MediaHubIcon(if (expanded) Lucide.ChevronUp else Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -320,78 +324,38 @@ private fun OptionGroup(
 ) {
     Column {
         MediaHubText(text = label, color = MediaHubColors.TextMuted, fontSize = 12.sp)
-        Row(Modifier.fillMaxWidth().padding(top = 7.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            values.forEach { (value, display) ->
-                val isSelected = selected == value
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp)
-                        .background(if (isSelected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface, RoundedCornerShape(8.dp))
-                        .border(width = 1.dp, color = if (isSelected) MediaHubColors.Accent else MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-                        .selectable(selected = isSelected, enabled = enabled, role = Role.RadioButton) { onSelected(value) }
-                        .padding(horizontal = 8.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    MediaHubText(
-                        text = display,
-                        color = if (isSelected) MediaHubColors.TextPrimary else MediaHubColors.TextSecondary,
-                        fontSize = 13.sp,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BooleanOption(label: String, checked: Boolean, onChanged: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .toggleable(value = checked, role = Role.Checkbox) { onChanged(it) }
-            .background(if (checked) MediaHubColors.SurfaceSelected else MediaHubColors.Surface, RoundedCornerShape(8.dp))
-            .border(width = 1.dp, color = if (checked) MediaHubColors.Accent else MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Spacer(
-            Modifier
-                .size(18.dp)
-                .background(if (checked) MediaHubColors.Accent else Color.Transparent, RoundedCornerShape(4.dp))
-                .border(width = 1.dp, color = if (checked) MediaHubColors.Accent else MediaHubColors.Border, shape = RoundedCornerShape(4.dp))
-        )
-        Spacer(Modifier.width(12.dp))
-        MediaHubText(
-            text = label,
-            fontSize = 13.sp,
-            color = if (checked) MediaHubColors.TextPrimary else MediaHubColors.TextSecondary,
-            fontWeight = if (checked) FontWeight.Medium else FontWeight.Normal,
+        MediaHubSegmentedControl(
+            options = values,
+            selected = selected,
+            onSelected = { if (enabled) onSelected(it) },
+            modifier = Modifier.padding(top = 7.dp),
+            role = Role.RadioButton,
+            raised = false,
         )
     }
 }
 
 @Composable
 private fun RunRow(run: SubscriptionRun) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Spacer(
-            Modifier.size(7.dp).background(
-                when (run.state) {
-                    "completed" -> MediaHubColors.Source
-                    "failed", "needs_attention" -> MediaHubColors.Error
-                    else -> MediaHubColors.Accent
-                },
-                RoundedCornerShape(4.dp),
-            ),
-        )
-        Column(Modifier.padding(start = 11.dp)) {
-            MediaHubText(text = runStateLabel(run.state), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            MediaHubText(text = run.message ?: "无补充信息", color = MediaHubColors.TextMuted, fontSize = 12.sp)
-        }
-    }
+    MediaHubPreferenceRow(
+        title = runStateLabel(run.state),
+        summary = run.message ?: "无补充信息",
+        start = {
+            Spacer(
+                Modifier
+                    .padding(end = 12.dp)
+                    .size(7.dp)
+                    .background(
+                        when (run.state) {
+                            "completed" -> MediaHubColors.Source
+                            "failed", "needs_attention" -> MediaHubColors.Error
+                            else -> MediaHubColors.Accent
+                        },
+                        RoundedCornerShape(4.dp),
+                    ),
+            )
+        },
+    )
 }
 
 @Composable

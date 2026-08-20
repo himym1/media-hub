@@ -1,18 +1,13 @@
 package com.mediahub.android.feature.services
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,10 +28,15 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Save
 import com.composables.icons.lucide.ServerCog
 import com.mediahub.android.core.designsystem.MediaHubButton
+import com.mediahub.android.core.designsystem.MediaHubCard
+import com.mediahub.android.core.designsystem.MediaHubCheckboxRow
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
-import com.mediahub.android.core.designsystem.MediaHubText
+import com.mediahub.android.core.designsystem.MediaHubListDivider
+import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
+import com.mediahub.android.core.designsystem.MediaHubSmallTitle
+import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextField
 import com.mediahub.android.core.network.ProviderSettings
 import com.mediahub.android.core.network.ProviderSettingsUpdate
@@ -59,14 +59,10 @@ internal fun ProviderSettingsPanel(
     onTest: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            MediaHubIcon(imageVector = Lucide.ServerCog, contentDescription = null, tint = MediaHubColors.Accent)
-            Spacer(Modifier.width(9.dp))
-            MediaHubText("服务设置", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        }
+        MediaHubSmallTitle(text = "服务设置")
         MediaHubButton(
             label = if (expanded) "收起设置" else "编辑服务设置",
             icon = if (expanded) Lucide.ChevronUp else Lucide.ChevronDown,
@@ -188,31 +184,36 @@ private fun SettingsSection(
     content: @Composable () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(defaultExpanded) }
-    Column(
-        modifier = Modifier.fillMaxWidth().background(MediaHubColors.Surface, RoundedCornerShape(8.dp)).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(9.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .clickable(role = Role.Button) { expanded = !expanded }
-                .padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MediaHubIcon(imageVector = icon, contentDescription = null, tint = MediaHubColors.Accent, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                MediaHubText(text = title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                MediaHubText(text = subtitle, color = MediaHubColors.TextMuted, fontSize = 12.sp)
+    MediaHubCard {
+        MediaHubPreferenceRow(
+            title = title,
+            summary = subtitle,
+            onClick = { expanded = !expanded },
+            start = {
+                MediaHubIcon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MediaHubColors.Accent,
+                    modifier = Modifier.size(18.dp).padding(end = 12.dp),
+                )
+            },
+            end = {
+                MediaHubIcon(
+                    imageVector = if (expanded) Lucide.ChevronUp else Lucide.ChevronDown,
+                    contentDescription = if (expanded) "收起" else "展开",
+                    tint = MediaHubColors.TextMuted,
+                )
+            },
+        )
+        if (expanded) {
+            MediaHubListDivider()
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                content()
             }
-            MediaHubIcon(
-                imageVector = if (expanded) Lucide.ChevronUp else Lucide.ChevronDown,
-                contentDescription = if (expanded) "收起" else "展开",
-                tint = MediaHubColors.TextMuted,
-            )
         }
-        if (expanded) content()
     }
 }
 
@@ -223,6 +224,7 @@ private fun WeComModePicker(value: String, onChange: (String) -> Unit) {
         selected = value,
         onSelected = onChange,
         role = Role.RadioButton,
+        raised = false,
     )
 }
 
@@ -233,6 +235,7 @@ private fun AuthModePicker(value: String, onChange: (String) -> Unit) {
         selected = value,
         onSelected = onChange,
         role = Role.RadioButton,
+        raised = false,
     )
 }
 
@@ -259,17 +262,11 @@ private fun SecretField(label: String, status: SecretStatus, value: SecretUpdate
         password = true,
     ) { onChange(value.copy(value = it.take(4096), clear = false)) }
     if (status.configured) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .toggleable(value.clear, role = Role.Checkbox) { onChange(SecretUpdate(clear = it)) }
-                .background(MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp))
-                .padding(11.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MediaHubText(if (value.clear) "将清除已保存密钥" else "保留已保存密钥", color = if (value.clear) MediaHubColors.Error else MediaHubColors.TextMuted, fontSize = 12.sp)
-        }
+        MediaHubCheckboxRow(
+            title = if (value.clear) "将清除已保存密钥" else "保留已保存密钥",
+            checked = value.clear,
+            onCheckedChange = { onChange(SecretUpdate(clear = it)) },
+        )
     }
 }
 

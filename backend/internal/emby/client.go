@@ -23,6 +23,7 @@ var (
 	ErrMissingAPIKey    = errors.New("Emby API key is missing")
 	ErrUnauthorized     = errors.New("Emby rejected authentication")
 	ErrItemNotFound     = errors.New("Emby item was not found")
+	ErrDeleteRejected   = errors.New("Emby rejected the delete")
 	ErrUpstreamResponse = errors.New("Emby returned an invalid response")
 )
 
@@ -753,7 +754,7 @@ func (c *Client) getJSONResponse(
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "Media-Hub/emby")
 	if authenticated {
-		request.Header.Set("X-Emby-Token", configuration.apiKey)
+		applyEmbyAuth(request, configuration)
 	}
 
 	response, err := c.client.Do(request)
@@ -790,7 +791,7 @@ func (c *Client) postJSON(ctx context.Context, configuration clientConfig, endpo
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "Media-Hub/emby")
-	request.Header.Set("X-Emby-Token", configuration.apiKey)
+	applyEmbyAuth(request, configuration)
 	response, err := c.client.Do(request)
 	if err != nil {
 		return fmt.Errorf("request Emby: %w", err)
@@ -810,6 +811,32 @@ func (c *Client) postJSON(ctx context.Context, configuration clientConfig, endpo
 		return fmt.Errorf("decode Emby response: %w", err)
 	}
 	return nil
+}
+
+func applyEmbyAuth(request *http.Request, configuration clientConfig) {
+	request.Header.Set("X-Emby-Token", configuration.apiKey)
+	authorization := embyAuthorization(configuration)
+	request.Header.Set("X-Emby-Authorization", authorization)
+	request.Header.Set("Authorization", authorization)
+	if configuration.userID != "" {
+		request.Header.Set("X-Emby-UserId", configuration.userID)
+	}
+}
+
+func embyAuthorization(configuration clientConfig) string {
+	parts := []string{
+		`MediaBrowser Client="Media Hub"`,
+		`Device="MediaHub"`,
+		`DeviceId="media-hub"`,
+		`Version="1.0"`,
+	}
+	if configuration.userID != "" {
+		parts = append(parts, `UserId="`+configuration.userID+`"`)
+	}
+	if configuration.apiKey != "" {
+		parts = append(parts, `Token="`+configuration.apiKey+`"`)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func endpointURL(baseURL, endpointPath string, query url.Values) (string, error) {

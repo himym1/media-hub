@@ -25,6 +25,12 @@ type deleteInfoResponse struct {
 	LocalFileCount int      `json:"LocalFileCount"`
 }
 
+type deleteAttempt struct {
+	method       string
+	endpointPath string
+	ids          bool
+}
+
 func (c *Client) DeletePreview(ctx context.Context, itemID string) (DeletePreview, error) {
 	item, configuration, err := c.visibleItem(ctx, itemID)
 	if err != nil {
@@ -37,12 +43,8 @@ func (c *Client) DeletePreview(ctx context.Context, itemID string) (DeletePrevie
 }
 
 func deleteFileCount(c *Client, ctx context.Context, configuration clientConfig, itemID string) int {
-	query := url.Values{}
-	if configuration.userID != "" {
-		query.Set("UserId", configuration.userID)
-	}
 	var info deleteInfoResponse
-	if err := c.getJSONWithNotFound(ctx, configuration, path.Join("Items", itemID, "DeleteInfo"), query, true, &info); err != nil {
+	if err := c.getJSONWithNotFound(ctx, configuration, path.Join("Items", itemID, "DeleteInfo"), deleteQuery(configuration.userID, ""), true, &info); err != nil {
 		return 0
 	}
 	if info.LocalFileCount > len(info.Paths) {
@@ -56,11 +58,35 @@ func (c *Client) DeleteItem(ctx context.Context, itemID string) error {
 	if err != nil {
 		return err
 	}
-	query := url.Values{"Recursive": {"true"}}
-	if err := c.delete(ctx, configuration, path.Join("Items", item.ID), query); err == nil || errors.Is(err, ErrUnauthorized) {
-		return err
+	var last error
+	for _, attempt := range []deleteAttempt{
+		{http.MethodDelete, path.Join("Items", item.ID), false},
+		{http.MethodPost, path.Join("Items", item.ID, "Delete"), false},
+		{http.MethodPost, "Items/Delete", true},
+		{http.MethodDelete, "Items", true},
+	} {
+		query := deleteQuery(configuration.userID, "")
+		if attempt.ids {
+			query = deleteQuery(configuration.userID, item.ID)
+		}
+		err := c.delete(ctx, configuration, attempt.endpointPath, query, attempt.method)
+		if err == nil || errors.Is(err, ErrUnauthorized) {
+			return err
+		}
+		last = err
 	}
-	return c.delete(ctx, configuration, path.Join("Items", item.ID, "Delete"), query, http.MethodPost)
+	return last
+}
+
+func deleteQuery(userID, itemID string) url.Values {
+	query := url.Values{}
+	if itemID != "" {
+		query.Set("Ids", itemID)
+	}
+	if userID != "" {
+		query.Set("UserId", userID)
+	}
+	return query
 }
 
 func (c *Client) visibleItem(ctx context.Context, itemID string) (baseItem, clientConfig, error) {
@@ -81,7 +107,7 @@ func (c *Client) visibleItem(ctx context.Context, itemID string) (baseItem, clie
 	if err := c.getJSONWithNotFound(ctx, configuration, endpointPath, query, true, &item); err != nil {
 		return baseItem{}, configuration, err
 	}
-	if item.ID != itemID || item.Name == "" {
+	if !strings.EqualFold(item.ID, itemID) || item.Name == "" {
 		return baseItem{}, configuration, ErrItemNotFound
 	}
 	visible, err := c.cloudItemVisible(ctx, configuration, item)
@@ -94,29 +120,21 @@ func (c *Client) visibleItem(ctx context.Context, itemID string) (baseItem, clie
 	return item, configuration, nil
 }
 
-func (c *Client) delete(ctx context.Context, configuration clientConfig, endpointPath string, query url.Values, method ...string) error {
-	verb := http.MethodDelete
-	if len(method) > 0 && method[0] != "" {
-		verb = method[0]
+func (c *Client) delete(ctx context.Context, configuration clientConfig, endpointPath string, query url.Values, method string) error {
+	if method == "" {
+		method = http.MethodDelete
 	}
 	endpoint, err := endpointURL(configuration.baseURL, endpointPath, query)
 	if err != nil {
 		return err
 	}
-	var body io.Reader
-	if verb == http.MethodPost {
-		body = strings.NewReader("{}")
-	}
-	request, err := http.NewRequestWithContext(ctx, verb, endpoint, body)
+	request, err := http.NewRequestWithContext(ctx, method, endpoint, nil)
 	if err != nil {
 		return fmt.Errorf("create Emby request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "Media-Hub/emby")
-	request.Header.Set("X-Emby-Token", configuration.apiKey)
-	if verb == http.MethodPost {
-		request.Header.Set("Content-Type", "application/json")
-	}
+	applyEmbyAuth(request, configuration)
 	response, err := c.client.Do(request)
 	if err != nil {
 		return fmt.Errorf("request Emby: %w", err)
@@ -128,6 +146,9 @@ func (c *Client) delete(ctx context.Context, configuration clientConfig, endpoin
 	}
 	if response.StatusCode == http.StatusNotFound {
 		return ErrItemNotFound
+	}
+	if response.StatusCode == http.StatusBadRequest {
+		return ErrDeleteRejected
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return ErrUpstreamResponse

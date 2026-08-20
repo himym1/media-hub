@@ -3,9 +3,7 @@ package com.mediahub.android.feature.subscriptions
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,7 +13,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,9 +37,13 @@ import com.composables.icons.lucide.Pause
 import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Upload
+import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
+import com.mediahub.android.core.designsystem.MediaHubEmptyState
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubListDivider
+import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubText
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -94,8 +95,7 @@ internal fun SubscriptionListScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MediaHubColors.Canvas)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 12.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp),
@@ -111,128 +111,109 @@ internal fun SubscriptionListScreen(
             MediaHubIconButton(Lucide.Plus, "新建订阅", actions.create)
         }
         if (toolsExpanded) {
-            Column(
-                modifier = Modifier.fillMaxWidth().background(MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp)),
-            ) {
-                SubscriptionMenuAction(Lucide.Upload, "导入订阅") {
-                    toolsExpanded = false
-                    openDocument.launch(arrayOf("application/json", "text/json", "text/plain"))
-                }
-                SubscriptionMenuAction(Lucide.Download, "导出订阅") {
-                    toolsExpanded = false
-                    actions.export()
-                }
-                SubscriptionMenuAction(
-                    Lucide.Pause, "全部暂停", enabled = state.subscriptions.isNotEmpty() && !state.saving,
-                ) {
-                    toolsExpanded = false
-                    actions.setAllEnabled(false)
-                }
-                SubscriptionMenuAction(
-                    Lucide.Play, "全部启用", enabled = state.subscriptions.isNotEmpty() && !state.saving,
-                ) {
-                    toolsExpanded = false
-                    actions.setAllEnabled(true)
-                }
+            MediaHubCard(modifier = Modifier.padding(bottom = 8.dp)) {
+                MediaHubPreferenceRow(
+                    title = "导入订阅",
+                    onClick = {
+                        toolsExpanded = false
+                        openDocument.launch(arrayOf("application/json", "text/json", "text/plain"))
+                    },
+                    start = { MediaHubIcon(Lucide.Upload, contentDescription = null, modifier = Modifier.size(18.dp).padding(end = 12.dp)) },
+                )
+                MediaHubListDivider()
+                MediaHubPreferenceRow(
+                    title = "导出订阅",
+                    onClick = {
+                        toolsExpanded = false
+                        actions.export()
+                    },
+                    start = { MediaHubIcon(Lucide.Download, contentDescription = null, modifier = Modifier.size(18.dp).padding(end = 12.dp)) },
+                )
+                MediaHubListDivider()
+                MediaHubPreferenceRow(
+                    title = "全部暂停",
+                    enabled = state.subscriptions.isNotEmpty() && !state.saving,
+                    onClick = {
+                        toolsExpanded = false
+                        actions.setAllEnabled(false)
+                    },
+                    start = { MediaHubIcon(Lucide.Pause, contentDescription = null, modifier = Modifier.size(18.dp).padding(end = 12.dp)) },
+                )
+                MediaHubListDivider()
+                MediaHubPreferenceRow(
+                    title = "全部启用",
+                    enabled = state.subscriptions.isNotEmpty() && !state.saving,
+                    onClick = {
+                        toolsExpanded = false
+                        actions.setAllEnabled(true)
+                    },
+                    start = { MediaHubIcon(Lucide.Play, contentDescription = null, modifier = Modifier.size(18.dp).padding(end = 12.dp)) },
+                )
             }
         }
         state.errorMessage?.let { ErrorLine(it) }
         state.actionMessage?.let { MediaHubText(text = it, color = MediaHubColors.Source, fontSize = 12.sp) }
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(top = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(state.subscriptions, key = { it.id }) { item ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 52.dp)
-                        .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
-                        .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-                        .clickable(role = Role.Button) { actions.select(item.id) }
-                        .semantics { contentDescription = "打开订阅 ${item.title}" }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Spacer(
-                        Modifier
-                            .size(8.dp)
-                            .background(
-                                if (item.enabled) MediaHubColors.Accent else MediaHubColors.TextMuted,
-                                RoundedCornerShape(4.dp),
-                            ),
-                    )
-                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                        MediaHubText(
-                            text = item.title + if (item.season > 0) " · S${item.season}" else "",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        MediaHubText(
-                            text = "${if (item.mediaType == "movie") "电影" else "剧集"} · TMDB ${item.tmdbId}" +
-                                if (item.lastEpisode > 0) " · 已入库至 E${item.lastEpisode}" else "",
-                            modifier = Modifier.padding(top = 4.dp),
-                            color = MediaHubColors.TextMuted,
-                            fontSize = 12.sp,
-                        )
+            if (state.subscriptions.isNotEmpty()) {
+                item(key = "subscriptions") {
+                    MediaHubCard {
+                        state.subscriptions.forEachIndexed { index, item ->
+                            if (index > 0) MediaHubListDivider()
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 52.dp)
+                                    .clickable(role = Role.Button) { actions.select(item.id) }
+                                    .semantics { contentDescription = "打开订阅 ${item.title}" }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Spacer(
+                                    Modifier
+                                        .size(8.dp)
+                                        .background(
+                                            if (item.enabled) MediaHubColors.Accent else MediaHubColors.TextMuted,
+                                            RoundedCornerShape(4.dp),
+                                        ),
+                                )
+                                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                                    MediaHubText(
+                                        text = item.title + if (item.season > 0) " · S${item.season}" else "",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    MediaHubText(
+                                        text = "${if (item.mediaType == "movie") "电影" else "剧集"} · TMDB ${item.tmdbId}" +
+                                            if (item.lastEpisode > 0) " · 已入库至 E${item.lastEpisode}" else "",
+                                        modifier = Modifier.padding(top = 4.dp),
+                                        color = MediaHubColors.TextMuted,
+                                        fontSize = 12.sp,
+                                    )
+                                }
+                                MediaHubText(
+                                    text = if (item.enabled) "运行中" else "已暂停",
+                                    color = if (item.enabled) MediaHubColors.Success else MediaHubColors.TextMuted,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                        }
                     }
-                    MediaHubText(
-                        text = if (item.enabled) "运行中" else "已暂停",
-                        color = if (item.enabled) MediaHubColors.Success else MediaHubColors.TextMuted,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
                 }
             }
             if (!state.loading && state.subscriptions.isEmpty()) {
                 item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 36.dp)
-                            .background(MediaHubColors.Surface, RoundedCornerShape(10.dp))
-                            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(10.dp))
-                            .padding(vertical = 36.dp, horizontal = 20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        MediaHubIcon(Lucide.Clock3, contentDescription = null, tint = MediaHubColors.TextMuted, modifier = Modifier.size(32.dp))
-                        MediaHubText(
-                            text = "暂无自动追剧订阅",
-                            modifier = Modifier.padding(top = 14.dp),
-                            color = MediaHubColors.TextSecondary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        MediaHubText(
-                            text = "可在「发现」搜索页为剧集创建订阅，或点击右上角「+」手动新建",
-                            modifier = Modifier.padding(top = 6.dp),
-                            color = MediaHubColors.TextMuted,
-                            fontSize = 12.sp,
-                        )
-                    }
+                    MediaHubEmptyState(
+                        title = "暂无自动追剧订阅",
+                        message = "可在「发现」搜索页为剧集创建订阅，或点击右上角「+」手动新建",
+                        icon = Lucide.Clock3,
+                        modifier = Modifier.padding(vertical = 36.dp),
+                    )
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun SubscriptionMenuAction(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MediaHubIcon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-        MediaHubText(label, modifier = Modifier.padding(start = 11.dp), fontSize = 13.sp)
     }
 }
 

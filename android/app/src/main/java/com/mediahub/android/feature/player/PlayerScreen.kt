@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,7 +68,7 @@ internal fun PlayerScreen(
                 modifier = Modifier.align(Alignment.Center),
             )
             is PlayerUiState.Error -> Column(
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier.align(Alignment.Center).padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -76,33 +78,46 @@ internal fun PlayerScreen(
             PlayerUiState.Ready -> Unit
         }
         if (!isPictureInPicture) {
-            Row(
-                modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Black.copy(alpha = 0.62f), Color.Transparent),
+                        ),
+                    )
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
-                MediaHubIconButton(
-                    imageVector = Lucide.ArrowLeft,
-                    contentDescription = "返回",
-                    onClick = actions.onBack,
-                )
-                MediaHubText(
-                    title,
-                    color = Color.White,
-                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                MediaHubIconButton(
-                    imageVector = Lucide.RotateCw,
-                    contentDescription = "旋转屏幕",
-                    onClick = actions.onToggleOrientation,
-                )
-                MediaHubIconButton(
-                    imageVector = Lucide.PictureInPicture2,
-                    contentDescription = "进入画中画",
-                    onClick = actions.onEnterPictureInPicture,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    MediaHubIconButton(
+                        imageVector = Lucide.ArrowLeft,
+                        contentDescription = "返回",
+                        onClick = actions.onBack,
+                    )
+                    MediaHubText(
+                        title,
+                        color = Color.White,
+                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    MediaHubIconButton(
+                        imageVector = Lucide.RotateCw,
+                        contentDescription = "旋转屏幕",
+                        onClick = actions.onToggleOrientation,
+                    )
+                    MediaHubIconButton(
+                        imageVector = Lucide.PictureInPicture2,
+                        contentDescription = "进入画中画",
+                        onClick = actions.onEnterPictureInPicture,
+                    )
+                }
             }
         }
     }

@@ -18,10 +18,11 @@ Visual density: 6 / 10
 
 ## Visual Language
 
-- Base: neutral graphite, not blue-black.
+- Web base: neutral graphite, not blue-black.
+- Android base: HyperOS through Miuix defaults. Page background, raised white `surfaceContainer` cards, and the official SearchBar sit on the system gray canvas. Android primary follows the Miuix default HyperOS blue. No per-row stroke.
 - Primary text: paper white.
 - Secondary text: cool neutral gray with WCAG AA contrast.
-- Signal accent: citrus amber used for focus, progress, and primary actions.
+- Signal accent: citrus mint on Web; Android primary follows Miuix HyperOS blue.
 - Success, warning, and error keep semantic colors and do not reuse the accent.
 - Poster artwork supplies most chromatic variation.
 - No decorative gradients, glow orbs, nested cards, or glass on every surface.
@@ -38,9 +39,10 @@ Visual density: 6 / 10
 
 ### Android
 
-- Search remains the first screen; result rows form one continuous scanning surface and selected state carries the emphasis.
-- The workspace has one typed route. Main destinations show global top/bottom navigation; system and detail routes replace it instead of stacking another toolbar.
-- Services and Operations form one system layer with explicit back navigation. Operations shows one of 115 files, local upload, or archive organization at a time.
+- Visual language follows HyperOS through Miuix defaults: theme background, grouped cards, hairline dividers inside a card, large titles, SearchBar, labeled NavigationBar, and settings rows. Screens do not override Miuix surface colors and do not draw a bordered box around every row.
+- Search remains the first screen. Idle discovery uses a compact card strip; result rows sit in one grouped card and selected state carries the emphasis.
+- The workspace uses Miuix Scaffold, TopAppBar, and NavigationBar. Main destinations show global top/bottom navigation; system and detail routes replace the bottom bar instead of stacking another toolbar.
+- Services and Operations form one system layer with explicit back navigation. Settings use SmallTitle plus grouped preference rows. Operations shows one of 115 files, local upload, or archive organization at a time.
 - Library rows use stable 2:3 posters; movie details expose Media3 as the primary action, and series details require an episode selection.
 - Transfer status and subscription editing are independent detail routes with one toolbar and no bottom navigation.
 - Secondary subscription commands live behind one overflow control so 320 dp widths and large text retain room for the page title.
@@ -90,12 +92,20 @@ Feature screens may import only project-owned wrappers such as:
 ```text
 MediaHubTheme
 MediaHubScaffold
+MediaHubTopAppBar
 MediaHubSearchField
+MediaHubSearchBar
 MediaHubButton
+MediaHubCard
 MediaHubNavigationBar
 MediaHubBottomSheet
 MediaHubStatusBadge
 MediaHubPreferenceRow
+MediaHubSwitchRow
+MediaHubCheckboxRow
+MediaHubFilterChip
+MediaHubEmptyState
+MediaHubSmallTitle
 ```
 
 Direct Miuix imports are restricted to `core/designsystem`.

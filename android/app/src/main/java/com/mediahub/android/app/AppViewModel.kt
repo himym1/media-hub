@@ -10,13 +10,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-enum class MainDestination(val title: String) {
-    Search("发现"),
-    Subscriptions("订阅"),
-    Transfers("任务"),
-    Library("媒体库"),
-    Operations("运维"),
-    Services("服务与设置"),
+enum class MainDestination(val title: String, val subtitle: String) {
+    Search("发现", "搜索并转存"),
+    Subscriptions("订阅", "自动追剧"),
+    Transfers("任务", "转存进度"),
+    Library("媒体库", "已入库内容"),
+    Operations("运维", "115 与归档"),
+    Services("服务与设置", "账户与接入"),
 }
 
 val primaryDestinations = listOf(

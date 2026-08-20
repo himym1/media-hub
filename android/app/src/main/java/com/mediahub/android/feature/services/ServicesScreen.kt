@@ -6,7 +6,6 @@ import androidx.core.content.FileProvider
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -46,9 +44,13 @@ import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.QrCode
 import com.composables.icons.lucide.Server
 import com.mediahub.android.core.designsystem.MediaHubButton
+import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubListDivider
+import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
+import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextField
 import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
@@ -118,8 +120,7 @@ internal fun ServicesScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MediaHubColors.Canvas)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 12.dp),
     ) {
         MediaHubSegmentedControl(
             options = serviceSectionOptions,
@@ -140,50 +141,45 @@ internal fun ServicesScreen(
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(bottom = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             when (section.value) {
                 "overview" -> {
                     item(key = "summary") {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            MediaHubText(
-                                text = serviceSummary(uiState.loading, uiState.integrations),
-                                modifier = Modifier.weight(1f),
-                                color = MediaHubColors.TextMuted,
-                                fontSize = 13.sp,
-                            )
-                            MediaHubIconButton(
-                                imageVector = Lucide.RefreshCw,
-                                contentDescription = "刷新服务状态",
-                                enabled = !uiState.loading,
+                        MediaHubSmallTitle(text = "服务状态")
+                        MediaHubCard {
+                            MediaHubPreferenceRow(
+                                title = serviceSummary(uiState.loading, uiState.integrations),
+                                summary = "点按刷新各外部服务健康状态",
                                 onClick = onRefresh,
+                                end = {
+                                    MediaHubIconButton(
+                                        imageVector = Lucide.RefreshCw,
+                                        contentDescription = "刷新服务状态",
+                                        enabled = !uiState.loading,
+                                        onClick = onRefresh,
+                                    )
+                                },
                             )
+                            uiState.integrations.forEach { integration ->
+                                MediaHubListDivider()
+                                ServiceRow(integration)
+                            }
                         }
                     }
                     uiState.statistics?.let { statistics ->
                         item(key = "statistics") { OperationalSummary(statistics) }
                     }
-                    items(uiState.integrations, key = { it.id }) { integration -> ServiceRow(integration) }
                     item(key = "drive-authorization") {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                MediaHubIcon(imageVector = Lucide.QrCode, contentDescription = null, tint = MediaHubColors.Accent, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(9.dp))
-                                MediaHubText(text = "115 扫码授权", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            }
+                        MediaHubSmallTitle(text = "115 扫码授权")
+                        MediaHubCard(insideMargin = PaddingValues(16.dp)) {
                             val qrDataURL = uiState.driveAuthorization?.qrImage
                             val qrBitmap = remember(qrDataURL) { qrDataURL?.let(::decodeQRImage) }
                             if (qrBitmap != null) {
                                 Box(
                                     modifier = Modifier
-                                        .background(androidx.compose.ui.graphics.Color.White, RoundedCornerShape(12.dp))
+                                        .align(Alignment.CenterHorizontally)
+                                        .background(androidx.compose.ui.graphics.Color.White, RoundedCornerShape(16.dp))
                                         .padding(14.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
@@ -197,6 +193,7 @@ internal fun ServicesScreen(
                                         "expired" -> "二维码已过期"
                                         else -> "等待 115 客户端扫码确认"
                                     },
+                                    modifier = Modifier.padding(top = 12.dp),
                                     color = if (authorization.state == "confirmed") MediaHubColors.Source else MediaHubColors.TextMuted,
                                     fontSize = 12.sp,
                                 )
@@ -206,7 +203,7 @@ internal fun ServicesScreen(
                                 icon = Lucide.QrCode,
                                 enabled = !uiState.authorizingDrive,
                                 onClick = onStartDriveAuthorization,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                             )
                         }
                     }
@@ -230,15 +227,8 @@ internal fun ServicesScreen(
                 }
                 else -> {
                     item(key = "password") {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                MediaHubIcon(imageVector = Lucide.KeyRound, contentDescription = null, tint = MediaHubColors.Accent, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(9.dp))
-                                MediaHubText(text = "管理员密码", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            }
+                        MediaHubSmallTitle(text = "管理员密码")
+                        MediaHubCard(insideMargin = PaddingValues(16.dp)) {
                             MediaHubText(text = "修改密码后会撤销其他设备会话", color = MediaHubColors.TextMuted, fontSize = 12.sp)
                             MediaHubTextField(value = uiState.currentPassword, onValueChange = onCurrentPasswordChange, placeholder = "当前密码", keyboardType = KeyboardType.Password, password = true)
                             MediaHubTextField(value = uiState.newPassword, onValueChange = onNewPasswordChange, placeholder = "新密码（至少 12 位）", keyboardType = KeyboardType.Password, password = true)
@@ -251,21 +241,14 @@ internal fun ServicesScreen(
                                 icon = Lucide.KeyRound,
                                 enabled = !uiState.changingPassword && uiState.newPassword.length >= 12 && uiState.newPassword == uiState.confirmation && uiState.currentPassword != uiState.newPassword,
                                 onClick = onChangePassword,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             )
                         }
                     }
                     item(key = "android-update") {
                         val release = uiState.androidRelease
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                MediaHubIcon(imageVector = Lucide.Download, contentDescription = null, tint = MediaHubColors.Accent, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(9.dp))
-                                MediaHubText(text = "应用更新", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            }
+                        MediaHubSmallTitle(text = "应用更新")
+                        MediaHubCard(insideMargin = PaddingValues(16.dp)) {
                             MediaHubText(text = release?.let { "发现 ${it.versionName}，${it.notes}" } ?: "当前已是最新版本", color = MediaHubColors.TextMuted, fontSize = 12.sp)
                             MediaHubButton(
                                 label = when {
@@ -283,18 +266,30 @@ internal fun ServicesScreen(
                                     else if (release != null) onDownloadUpdate(release)
                                     else onCheckForUpdate()
                                 },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                             )
                         }
                     }
                     item(key = "server") {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            MediaHubText(text = "连接与会话", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            MediaHubButton(label = "更换服务器", icon = Lucide.Server, onClick = onChangeServer, modifier = Modifier.fillMaxWidth())
-                            MediaHubButton(label = "退出登录", icon = Lucide.LogOut, onClick = onLogout, modifier = Modifier.fillMaxWidth())
+                        MediaHubSmallTitle(text = "连接与会话")
+                        MediaHubCard {
+                            MediaHubPreferenceRow(
+                                title = "更换服务器",
+                                summary = "切换到另一套 Media Hub 部署",
+                                onClick = onChangeServer,
+                                start = {
+                                    MediaHubIcon(Lucide.Server, null, Modifier.size(18.dp).padding(end = 12.dp), MediaHubColors.TextSecondary)
+                                },
+                            )
+                            MediaHubListDivider()
+                            MediaHubPreferenceRow(
+                                title = "退出登录",
+                                summary = "撤销当前设备会话",
+                                onClick = onLogout,
+                                start = {
+                                    MediaHubIcon(Lucide.LogOut, null, Modifier.size(18.dp).padding(end = 12.dp), MediaHubColors.Error)
+                                },
+                            )
                         }
                     }
                 }
@@ -305,62 +300,38 @@ internal fun ServicesScreen(
 
 @Composable
 private fun OperationalSummary(statistics: OperationalStatistics) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        MediaHubText(text = "运营摘要", color = MediaHubColors.TextStrong, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Metric("进行中", statistics.transfersActive, Modifier.weight(1f))
-            Metric("需处理", statistics.transfersNeedsAttention + statistics.commandsNeedsAttention + statistics.notificationsNeedsAttention, Modifier.weight(1f))
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Metric("启用订阅", statistics.subscriptionsEnabled, Modifier.weight(1f))
-            Metric("失败运行", statistics.runsFailed, Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun Metric(label: String, value: Int, modifier: Modifier) {
-    Column(
-        modifier = modifier
-            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
-            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-            .padding(12.dp),
-    ) {
-        MediaHubText(text = value.toString(), color = MediaHubColors.TextStrong, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        MediaHubText(text = label, modifier = Modifier.padding(top = 2.dp), color = MediaHubColors.TextMuted, fontSize = 12.sp)
+    MediaHubSmallTitle(text = "运营摘要")
+    MediaHubCard {
+        MediaHubPreferenceRow(title = "进行中", summary = "${statistics.transfersActive}")
+        MediaHubListDivider()
+        MediaHubPreferenceRow(
+            title = "需处理",
+            summary = "${statistics.transfersNeedsAttention + statistics.commandsNeedsAttention + statistics.notificationsNeedsAttention}",
+        )
+        MediaHubListDivider()
+        MediaHubPreferenceRow(title = "启用订阅", summary = "${statistics.subscriptionsEnabled}")
+        MediaHubListDivider()
+        MediaHubPreferenceRow(title = "失败运行", summary = "${statistics.runsFailed}")
     }
 }
 
 @Composable
 private fun ServiceRow(integration: IntegrationHealth) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
-            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Spacer(
-            Modifier
-                .size(8.dp)
-                .background(statusColor(integration.status), CircleShape),
-        )
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            MediaHubText(text = integration.label, color = MediaHubColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            MediaHubText(
-                text = integration.detail,
-                modifier = Modifier.padding(top = 2.dp),
-                color = MediaHubColors.TextMuted,
-                fontSize = 12.sp,
+    MediaHubPreferenceRow(
+        title = integration.label,
+        summary = integration.detail,
+        start = {
+            Spacer(
+                Modifier
+                    .padding(end = 12.dp)
+                    .size(8.dp)
+                    .background(statusColor(integration.status), CircleShape),
             )
-        }
-        MediaHubText(text = statusLabel(integration.status), color = statusColor(integration.status), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-    }
+        },
+        end = {
+            MediaHubText(text = statusLabel(integration.status), color = statusColor(integration.status), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        },
+    )
 }
 
 private fun installUpdate(context: android.content.Context, file: java.io.File): Boolean {

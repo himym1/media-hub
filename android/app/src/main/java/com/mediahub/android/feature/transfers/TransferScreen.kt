@@ -2,7 +2,6 @@ package com.mediahub.android.feature.transfers
 import androidx.activity.compose.BackHandler
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,15 +9,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -40,10 +36,15 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.RotateCcw
 import com.mediahub.android.core.designsystem.MediaHubButton
+import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
+import com.mediahub.android.core.designsystem.MediaHubEmptyState
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubListDivider
+import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
+import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.network.TransferJob
 import com.mediahub.android.core.network.TransferNotification
@@ -132,8 +133,7 @@ internal fun TransferScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MediaHubColors.Canvas)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 12.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
@@ -176,33 +176,30 @@ internal fun TransferScreen(
         }
 
         if (!uiState.loading && uiState.jobs.isEmpty()) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                MediaHubIcon(imageVector = Lucide.ListTodo, contentDescription = null, modifier = Modifier.size(30.dp))
-                MediaHubText(
-                    text = if (uiState.archived) "还没有归档任务" else "还没有转存任务",
-                    modifier = Modifier.padding(top = 12.dp),
-                    color = MediaHubColors.TextMuted,
-                    fontSize = 13.sp,
-                )
-            }
+            MediaHubEmptyState(
+                title = if (uiState.archived) "还没有归档任务" else "还没有转存任务",
+                message = if (uiState.archived) "完成的任务可以归档到这里" else "在「发现」页搜索资源并创建转存任务",
+                icon = Lucide.ListTodo,
+                modifier = Modifier.padding(top = 36.dp),
+            )
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(uiState.jobs, key = { it.id }) { job ->
-                    TransferRow(
-                        job = job,
-                        selected = uiState.selectedId == job.id,
-                        onClick = { actions.select(job.id) },
-                    )
+                item(key = "jobs") {
+                    MediaHubCard {
+                        uiState.jobs.forEachIndexed { index, job ->
+                            if (index > 0) MediaHubListDivider()
+                            TransferRow(
+                                job = job,
+                                selected = uiState.selectedId == job.id,
+                                onClick = { actions.select(job.id) },
+                            )
+                        }
+                    }
                 }
-        }
+            }
         }
     }
 }
@@ -213,7 +210,7 @@ private fun TransferDetailPage(
     actions: TransferActions,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas).padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp),
@@ -255,14 +252,11 @@ private fun TransferDetailPage(
 
 @Composable
 private fun TransferRow(job: TransferJob, selected: Boolean, onClick: () -> Unit) {
-    val background = if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface
-    val border = if (selected) MediaHubColors.Accent else MediaHubColors.Border
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp)
-            .background(background, RoundedCornerShape(8.dp))
-            .border(width = 1.dp, color = border, shape = RoundedCornerShape(8.dp))
+            .background(if (selected) MediaHubColors.SurfaceSelected else androidx.compose.ui.graphics.Color.Transparent)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -305,49 +299,48 @@ private fun TransferDetail(
     onSetArchived: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        MediaHubText(text = "状态记录", color = MediaHubColors.TextStrong, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        MediaHubSmallTitle(text = "状态记录")
         job.errorMessage?.let { MediaHubText(text = it, color = MediaHubColors.Error, fontSize = 12.sp) }
-        job.events.forEach { event ->
-            Row(verticalAlignment = Alignment.Top) {
-                MediaHubIcon(
-                    imageVector = Lucide.Clock3,
-                    contentDescription = null,
-                    tint = stateColor(event.state),
-                    modifier = Modifier.size(15.dp),
+        MediaHubCard {
+            job.events.forEachIndexed { index, event ->
+                if (index > 0) MediaHubListDivider()
+                MediaHubPreferenceRow(
+                    title = stateLabel(event.state),
+                    summary = "${event.message.ifEmpty { "状态已更新" }} · ${formatTime(event.createdAt)}",
+                    start = {
+                        MediaHubIcon(
+                            imageVector = Lucide.Clock3,
+                            contentDescription = null,
+                            tint = stateColor(event.state),
+                            modifier = Modifier.size(15.dp).padding(end = 12.dp),
+                        )
+                    },
                 )
-                Spacer(Modifier.width(9.dp))
-                Column {
-                    MediaHubText(text = stateLabel(event.state), color = MediaHubColors.TextStrong, fontSize = 12.sp)
-                    MediaHubText(
-                        text = "${event.message.ifEmpty { "状态已更新" }} · ${formatTime(event.createdAt)}",
-                        modifier = Modifier.padding(top = 3.dp),
-                        color = MediaHubColors.TextMuted,
-                        fontSize = 12.sp,
-                    )
-                }
             }
         }
         notification?.let { item ->
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            MediaHubCard(insideMargin = PaddingValues(16.dp)) {
                 MediaHubText(
                     text = "企业微信通知结果未知",
                     color = MediaHubColors.Warning,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
-                MediaHubText(text = "再次发送可能产生重复消息。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+                MediaHubText(
+                    text = "再次发送可能产生重复消息。",
+                    modifier = Modifier.padding(top = 6.dp),
+                    color = MediaHubColors.TextMuted,
+                    fontSize = 12.sp,
+                )
                 MediaHubButton(
                     label = if (notificationRetrying) "正在提交" else "确认并重发通知",
                     icon = Lucide.RotateCcw,
                     enabled = !notificationRetrying,
                     onClick = { onRetryNotification(item) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 )
             }
         }

@@ -1,30 +1,28 @@
 package com.mediahub.android.feature.search
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -35,16 +33,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.BellPlus
-import com.composables.icons.lucide.Film
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Wifi
 import com.mediahub.android.core.designsystem.MediaHubButton
+import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
-import com.mediahub.android.core.designsystem.MediaHubSearchField
+import com.mediahub.android.core.designsystem.MediaHubListDivider
+import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
+import com.mediahub.android.core.designsystem.MediaHubSearchBar
+import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
+import com.mediahub.android.core.image.RemotePoster
 import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.DiscoveryItem
 import com.mediahub.android.core.network.SearchCandidate
@@ -93,126 +95,133 @@ internal fun SearchScreen(
     onSubscribe: (String) -> Unit,
 ) {
     val selectedCandidate = uiState.selectedCandidate
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MediaHubColors.Canvas)
-            .padding(horizontal = 16.dp),
-    ) {
-        MediaHubSearchField(
-            value = uiState.query,
-            onValueChange = onQueryChanged,
+    var expanded by remember {
+        mutableStateOf(uiState.submittedQuery.isNotBlank() || uiState.results.isNotEmpty())
+    }
+    LaunchedEffect(uiState.submittedQuery, uiState.searching, uiState.results.size) {
+        if (uiState.submittedQuery.isNotBlank() || uiState.searching || uiState.results.isNotEmpty()) {
+            expanded = true
+        }
+    }
+    Column(modifier = Modifier.fillMaxSize()) {
+        MediaHubSearchBar(
+            query = uiState.query,
+            onQueryChange = onQueryChanged,
             onSearch = onSearch,
+            expanded = expanded,
+            onExpandedChange = { expanded = it },
             enabled = !uiState.searching,
-            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-        )
-        StatusLine(
-            integrations = uiState.integrations,
-            refreshing = uiState.refreshingOverview,
-            onRefresh = onRefreshOverview,
-        )
-        if (uiState.submittedQuery.isBlank() && uiState.trending.isNotEmpty()) {
-            MediaHubText(
-                text = "本周热门",
-                modifier = Modifier.padding(top = 18.dp, bottom = 8.dp),
-                color = MediaHubColors.TextStrong,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-            )
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(uiState.trending, key = { "${it.mediaType}-${it.tmdbId}" }) { item ->
-                    TrendingItem(item = item, onClick = { onTrendingSelected(item) })
-                }
-            }
-        }
-        if (uiState.submittedQuery.isNotBlank() || uiState.searching) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MediaHubText(
-                    text = if (uiState.searching) "正在搜索…" else "搜索结果",
-                    color = MediaHubColors.TextStrong,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                MediaHubText(text = if (uiState.searching) "" else "${uiState.results.size}", color = MediaHubColors.Source, fontSize = 13.sp)
-            }
-        }
-        uiState.errorMessage?.let { message ->
-            StatusMessage(message, MediaHubColors.Error)
-        }
-        uiState.sourceMessage?.let { message ->
-            StatusMessage(message, MediaHubColors.Warning)
-        }
-        uiState.transferMessage?.let { message ->
-            StatusMessage(message, MediaHubColors.Error)
-        }
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = if (expanded) {
+                Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp)
+            } else {
+                Modifier.fillMaxWidth().padding(top = 4.dp)
+            },
         ) {
-            items(items = uiState.results, key = { it.id }) { candidate ->
-                ReleaseRow(
-                    candidate = candidate,
-                    selected = selectedCandidate?.id == candidate.id,
-                    onClick = { onCandidateSelected(candidate.id) },
-                )
-            }
-            if (uiState.recommendations.isNotEmpty()) {
-                item(key = "recommendations-heading") {
-                    MediaHubText(
-                        text = "相似内容",
-                        modifier = Modifier.padding(top = 12.dp),
-                        color = MediaHubColors.TextStrong,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
+            Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+                if (uiState.submittedQuery.isNotBlank() || uiState.searching) {
+                    MediaHubSmallTitle(text = if (uiState.searching) "正在搜索…" else "搜索结果 ${uiState.results.size}")
                 }
-                item(key = "recommendations") {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(uiState.recommendations, key = { "${it.mediaType}-${it.tmdbId}" }) { item ->
-                            TrendingItem(item = item, onClick = { onRecommendationSelected(item) })
+                uiState.errorMessage?.let { message ->
+                    StatusMessage(message, MediaHubColors.Error)
+                }
+                uiState.sourceMessage?.let { message ->
+                    StatusMessage(message, MediaHubColors.Warning)
+                }
+                uiState.transferMessage?.let { message ->
+                    StatusMessage(message, MediaHubColors.Error)
+                }
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (uiState.results.isNotEmpty()) {
+                        item(key = "results") {
+                            MediaHubCard {
+                                uiState.results.forEachIndexed { index, candidate ->
+                                    if (index > 0) MediaHubListDivider()
+                                    ReleaseRow(
+                                        candidate = candidate,
+                                        selected = selectedCandidate?.id == candidate.id,
+                                        onClick = { onCandidateSelected(candidate.id) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (uiState.recommendations.isNotEmpty()) {
+                        item(key = "recommendations-heading") {
+                            MediaHubSmallTitle(text = "相似内容")
+                        }
+                        item(key = "recommendations") {
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(uiState.recommendations, key = { "${it.mediaType}-${it.tmdbId}" }) { item ->
+                                    TrendingItem(item = item, onClick = { onRecommendationSelected(item) })
+                                }
+                            }
+                        }
+                    }
+                    if (!uiState.searching && uiState.submittedQuery.isNotBlank() && uiState.results.isEmpty() && uiState.errorMessage == null) {
+                        item {
+                            MediaHubText(
+                                text = "没有找到匹配资源",
+                                modifier = Modifier.padding(vertical = 28.dp),
+                                color = MediaHubColors.TextMuted,
+                                fontSize = 13.sp,
+                            )
                         }
                     }
                 }
-            }
-            if (!uiState.searching && uiState.submittedQuery.isNotBlank() && uiState.results.isEmpty() && uiState.errorMessage == null) {
-                item {
-                    MediaHubText(
-                        text = "没有找到匹配资源",
-                        modifier = Modifier.padding(vertical = 28.dp),
-                        color = MediaHubColors.TextMuted,
-                        fontSize = 13.sp,
-                    )
+                if (selectedCandidate != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        MediaHubButton(
+                            label = "订阅",
+                            icon = Lucide.BellPlus,
+                            enabled = selectedCandidate.tmdbId != null && selectedCandidate.transferState != "identity_required",
+                            modifier = Modifier.weight(0.35f),
+                            onClick = { onSubscribe(selectedCandidate.id) },
+                        )
+                        MediaHubButton(
+                            label = when {
+                                uiState.transferringCandidateId == selectedCandidate.id -> "正在创建…"
+                                selectedCandidate.transferState == "identity_required" -> "身份待确认"
+                                selectedCandidate.transferToken == null -> "不可转存"
+                                else -> "开始转存"
+                            },
+                            enabled = selectedCandidate.transferToken != null && uiState.transferringCandidateId == null,
+                            modifier = Modifier.weight(0.65f),
+                            onClick = { onTransfer(selectedCandidate.id) },
+                        )
+                    }
                 }
             }
         }
-        if (selectedCandidate != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+        if (!expanded) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
             ) {
-                MediaHubButton(
-                    label = "订阅",
-                    icon = Lucide.BellPlus,
-                    enabled = selectedCandidate.tmdbId != null && selectedCandidate.transferState != "identity_required",
-                    modifier = Modifier.weight(0.35f),
-                    onClick = { onSubscribe(selectedCandidate.id) },
+                StatusLine(
+                    integrations = uiState.integrations,
+                    refreshing = uiState.refreshingOverview,
+                    onRefresh = onRefreshOverview,
                 )
-                MediaHubButton(
-                    label = when {
-                        uiState.transferringCandidateId == selectedCandidate.id -> "正在创建…"
-                        selectedCandidate.transferState == "identity_required" -> "身份待确认"
-                        selectedCandidate.transferToken == null -> "不可转存"
-                        else -> "开始转存"
-                    },
-                    enabled = selectedCandidate.transferToken != null && uiState.transferringCandidateId == null,
-                    modifier = Modifier.weight(0.65f),
-                    onClick = { onTransfer(selectedCandidate.id) },
-                )
+                if (uiState.trending.isNotEmpty()) {
+                    MediaHubSmallTitle(text = "本周热门")
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(bottom = 8.dp),
+                    ) {
+                        items(uiState.trending, key = { "${it.mediaType}-${it.tmdbId}" }) { item ->
+                            TrendingItem(item = item, onClick = { onTrendingSelected(item) })
+                        }
+                    }
+                }
             }
         }
     }
@@ -220,54 +229,29 @@ internal fun SearchScreen(
 
 @Composable
 private fun TrendingItem(item: DiscoveryItem, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .width(130.dp)
-            .background(MediaHubColors.Surface, RoundedCornerShape(10.dp))
-            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(10.dp))
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(84.dp)
-                .background(MediaHubColors.SurfaceInput, RoundedCornerShape(6.dp))
-                .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(6.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            MediaHubIcon(
-                imageVector = Lucide.Film,
-                contentDescription = null,
-                tint = MediaHubColors.Accent,
-                modifier = Modifier.size(28.dp),
+    Column(modifier = Modifier.width(132.dp)) {
+        MediaHubCard(onClick = onClick) {
+            RemotePoster(
+                url = item.posterUrl,
+                contentDescription = item.title,
+                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
             )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .background(MediaHubColors.SurfaceSelected, RoundedCornerShape(3.dp))
-                    .padding(horizontal = 5.dp, vertical = 2.dp),
-            ) {
-                MediaHubText(
-                    text = if (item.mediaType == "movie") "电影" else "剧集",
-                    color = MediaHubColors.Accent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
         }
         MediaHubText(
             text = item.title,
+            modifier = Modifier.padding(top = 8.dp),
             color = MediaHubColors.TextPrimary,
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
-            maxLines = 1,
+            maxLines = 2,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         )
         MediaHubText(
-            text = item.year.takeIf { it > 0 }?.toString() ?: "",
+            text = buildString {
+                append(if (item.mediaType == "movie") "电影" else "剧集")
+                if (item.year > 0) append(" · ").append(item.year)
+            },
+            modifier = Modifier.padding(top = 2.dp),
             color = MediaHubColors.TextMuted,
             fontSize = 12.sp,
             maxLines = 1,
@@ -281,32 +265,29 @@ private fun StatusLine(
     refreshing: Boolean,
     onRefresh: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MediaHubIcon(
-            imageVector = Lucide.Wifi,
-            contentDescription = null,
-            tint = if (integrations.any { it.status == "healthy" }) MediaHubColors.Accent else MediaHubColors.TextMuted,
-            modifier = Modifier.size(16.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Column(Modifier.weight(1f)) {
-            MediaHubText(text = "服务状态", color = MediaHubColors.TextStrong, fontSize = 12.sp)
-            MediaHubText(
-                text = integrations.takeIf { it.isNotEmpty() }
-                    ?.joinToString(" · ") { "${it.label} ${statusLabel(it.status)}" }
-                    ?: "尚未读取",
-                color = MediaHubColors.TextMuted,
-                fontSize = 12.sp,
-            )
-        }
-        MediaHubIconButton(
-            imageVector = Lucide.RefreshCw,
-            contentDescription = "刷新服务状态",
+    MediaHubCard(modifier = Modifier.padding(top = 12.dp)) {
+        MediaHubPreferenceRow(
+            title = "服务状态",
+            summary = integrations.takeIf { it.isNotEmpty() }
+                ?.joinToString(" · ") { "${it.label} ${statusLabel(it.status)}" }
+                ?: "尚未读取",
             onClick = onRefresh,
-            enabled = !refreshing,
+            start = {
+                MediaHubIcon(
+                    imageVector = Lucide.Wifi,
+                    contentDescription = null,
+                    tint = if (integrations.any { it.status == "healthy" }) MediaHubColors.Accent else MediaHubColors.TextMuted,
+                    modifier = Modifier.size(18.dp).padding(end = 12.dp),
+                )
+            },
+            end = {
+                MediaHubIconButton(
+                    imageVector = Lucide.RefreshCw,
+                    contentDescription = "刷新服务状态",
+                    onClick = onRefresh,
+                    enabled = !refreshing,
+                )
+            },
         )
     }
 }
@@ -329,20 +310,16 @@ private fun ReleaseRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val background = if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface
-    val border = if (selected) MediaHubColors.Accent else MediaHubColors.Border
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp)
-            .background(background, RoundedCornerShape(8.dp))
-            .border(width = 1.dp, color = border, shape = RoundedCornerShape(8.dp))
             .selectable(
                 selected = selected,
                 onClick = onClick,
                 role = Role.RadioButton,
             )
-            .padding(14.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(

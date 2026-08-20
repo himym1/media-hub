@@ -123,7 +123,7 @@ class LibraryDetailViewModel(
     fun confirmDelete() {
         val itemId = _uiState.value.itemId ?: return
         val preview = _uiState.value.deletePreview ?: return
-        if (preview.id != itemId || _uiState.value.deleting) return
+        if (!preview.id.equals(itemId, ignoreCase = true) || _uiState.value.deleting) return
         deleteJob?.cancel()
         val requestGeneration = generation
         deleteJob = viewModelScope.launch {

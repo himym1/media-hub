@@ -32,3 +32,4 @@ android/app/build/release/
 # IDE
 .idea/
 .vscode/
+/android/top/

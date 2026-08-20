@@ -1,6 +1,5 @@
 package com.mediahub.android.feature.operations
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,6 +24,7 @@ import com.composables.icons.lucide.RefreshCw
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
+import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
 
 private val operationSections = listOf(
@@ -121,21 +121,18 @@ internal fun OperationsScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MediaHubColors.Canvas)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 12.dp),
         contentPadding = PaddingValues(bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MediaHubText(
+                MediaHubSmallTitle(
                     text = "115 文件操作、上传与归档",
                     modifier = Modifier.weight(1f),
-                    color = MediaHubColors.TextMuted,
-                    fontSize = 13.sp,
                 )
                 MediaHubIconButton(Lucide.RefreshCw, "刷新当前工具", refresh)
             }

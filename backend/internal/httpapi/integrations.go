@@ -309,6 +309,12 @@ func writeIntegrationProblem(w http.ResponseWriter, err error) {
 			Title: "外部服务鉴权失败", Status: http.StatusBadGateway,
 			Code: "integration_unauthorized",
 		})
+	case errors.Is(err, emby.ErrDeleteRejected):
+		writeProblem(w, problem{
+			Type:  "https://media-hub.local/problems/emby-delete-rejected",
+			Title: "Emby 拒绝删除该媒体", Status: http.StatusBadGateway,
+			Code: "emby_delete_rejected",
+		})
 	default:
 		writeProblem(w, problem{
 			Type:  "https://media-hub.local/problems/integration-unavailable",

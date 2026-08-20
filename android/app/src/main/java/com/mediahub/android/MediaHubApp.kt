@@ -1,21 +1,11 @@
 package com.mediahub.android
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -25,7 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,7 +22,6 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.ArrowLeft
-import com.composables.icons.lucide.Film
 import com.composables.icons.lucide.LibraryBig
 import com.composables.icons.lucide.ListPlus
 import com.composables.icons.lucide.ListTodo
@@ -51,14 +39,17 @@ import com.mediahub.android.app.primaryDestinations
 import com.mediahub.android.app.MediaHubViewModelFactory
 import com.mediahub.android.app.ServerViewModelStoreHolder
 import com.mediahub.android.core.designsystem.MediaHubButton
-import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubColors
-import com.mediahub.android.core.designsystem.MediaHubIcon
+import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubNavItem
+import com.mediahub.android.core.designsystem.MediaHubNavigationBar
+import com.mediahub.android.core.designsystem.MediaHubScaffold
 import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.image.PosterLoader
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTheme
+import com.mediahub.android.core.designsystem.MediaHubTopAppBar
 import com.mediahub.android.feature.auth.AuthRoute
 import com.mediahub.android.feature.auth.AuthViewModel
 import com.mediahub.android.feature.config.ServerConfigScreen
@@ -88,6 +79,7 @@ import com.mediahub.android.feature.transfers.TransferViewModel
 @Composable
 fun MediaHubApp() {
     MediaHubTheme {
+        MediaHubScaffold(consumeWindowInsets = false) {
         val applicationContext = LocalContext.current.applicationContext
         val container = remember { (applicationContext as MediaHubApplication).container }
         val serverStoreHolder = viewModel<ServerViewModelStoreHolder>()
@@ -103,7 +95,7 @@ fun MediaHubApp() {
                     configuredServerUrl.value = value
                 },
             )
-            return@MediaHubTheme
+            return@MediaHubScaffold
         }
         val dependenciesResult = remember(configuredServerUrl.value) {
             runCatching { container.configureServer(configuredServerUrl.value) }
@@ -124,7 +116,7 @@ fun MediaHubApp() {
                     configuredServerUrl.value = value
                 },
             )
-            return@MediaHubTheme
+            return@MediaHubScaffold
         }
         val repository = dependencies.repository
         val serverGeneration = dependencies.generation
@@ -164,6 +156,7 @@ fun MediaHubApp() {
                     onSecondary = changeServer,
                 )
             }
+        }
         }
     }
 }
@@ -301,27 +294,32 @@ internal fun WorkspaceShell(
     content: @Composable () -> Unit,
 ) {
     val inSystem = destination == MainDestination.Services || destination == MainDestination.Operations
-    Column(
-        modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas).statusBarsPadding(),
-    ) {
-        if (!detailOpen) {
-            Box(Modifier.testTag("workspace-top-bar")) {
-                WorkspaceTopBar(
-                    destination = destination,
-                    inSystem = inSystem,
-                    onBack = onSystemBack,
-                    onOpenSystem = onOpenSystem,
-                )
+    MediaHubScaffold(
+        topBar = {
+            if (!detailOpen) {
+                Box(Modifier.testTag("workspace-top-bar")) {
+                    WorkspaceTopBar(
+                        destination = destination,
+                        inSystem = inSystem,
+                        onBack = onSystemBack,
+                        onOpenSystem = onOpenSystem,
+                    )
+                }
             }
-        }
-        if (inSystem) {
-            SystemSectionSwitcher(destination = destination, onSelected = onSystemSelected)
-        }
-        Box(Modifier.weight(1f)) { content() }
-        if (!inSystem && !detailOpen) {
-            Box(Modifier.testTag("workspace-bottom-nav")) {
-                MainNavigationBar(selected = destination, onSelected = onPrimarySelected)
+        },
+        bottomBar = {
+            if (!inSystem && !detailOpen) {
+                Box(Modifier.testTag("workspace-bottom-nav")) {
+                    MainNavigationBar(selected = destination, onSelected = onPrimarySelected)
+                }
             }
+        },
+    ) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            if (inSystem) {
+                SystemSectionSwitcher(destination = destination, onSelected = onSystemSelected)
+            }
+            Box(Modifier.weight(1f)) { content() }
         }
     }
 }
@@ -333,55 +331,28 @@ internal fun WorkspaceTopBar(
     onBack: () -> Unit,
     onOpenSystem: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(64.dp)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (inSystem) {
-            MediaHubIconButton(
-                imageVector = Lucide.ArrowLeft,
-                contentDescription = "返回主页面",
-                onClick = onBack,
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .background(MediaHubColors.SurfaceSelected, androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                    .border(width = 1.dp, color = MediaHubColors.Accent, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                MediaHubIcon(
-                    imageVector = Lucide.Film,
-                    contentDescription = null,
-                    tint = MediaHubColors.Accent,
-                    modifier = Modifier.size(18.dp),
+    MediaHubTopAppBar(
+        title = if (inSystem) "系统" else destination.title,
+        subtitle = if (inSystem) destination.title else destination.subtitle,
+        navigationIcon = {
+            if (inSystem) {
+                MediaHubIconButton(
+                    imageVector = Lucide.ArrowLeft,
+                    contentDescription = "返回主页面",
+                    onClick = onBack,
                 )
             }
-        }
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-            MediaHubText(
-                text = if (inSystem) "系统" else destination.title,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            MediaHubText(
-                text = if (inSystem) destination.title else "Media Hub",
-                color = MediaHubColors.TextMuted,
-                fontSize = 12.sp,
-            )
-        }
-        if (!inSystem) {
-            MediaHubIconButton(
-                imageVector = Lucide.Settings2,
-                contentDescription = "打开系统",
-                onClick = onOpenSystem,
-            )
-        }
-    }
+        },
+        actions = {
+            if (!inSystem) {
+                MediaHubIconButton(
+                    imageVector = Lucide.Settings2,
+                    contentDescription = "打开系统",
+                    onClick = onOpenSystem,
+                )
+            }
+        },
+    )
 }
 
 @Composable
@@ -391,14 +362,14 @@ internal fun SystemSectionSwitcher(
 ) {
     MediaHubSegmentedControl(
         options = listOf(
-            MainDestination.Services.name to "系统设置",
-            MainDestination.Operations.name to "高级运维",
+            MainDestination.Services.name to "服务",
+            MainDestination.Operations.name to "运维",
         ),
         selected = destination.name,
         onSelected = { value ->
             MainDestination.entries.firstOrNull { it.name == value }?.let(onSelected)
         },
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
     )
 }
 
@@ -413,66 +384,15 @@ private fun destinationIcon(destination: MainDestination) = when (destination) {
 
 @Composable
 private fun MainNavigationBar(selected: MainDestination, onSelected: (MainDestination) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MediaHubColors.Surface)
-            .border(width = 1.dp, color = MediaHubColors.Border)
-            .navigationBarsPadding()
-            .height(68.dp),
-    ) {
-        primaryDestinations.forEach { destination ->
-            NavigationItem(
-                label = destination.title,
-                icon = destinationIcon(destination),
-                selected = selected == destination,
-                onClick = { onSelected(destination) },
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun NavigationItem(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .selectable(selected = selected, role = Role.Tab, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(horizontal = 6.dp, vertical = 4.dp)
-                .background(
-                    if (selected) MediaHubColors.SurfaceSelected else androidx.compose.ui.graphics.Color.Transparent,
-                    androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-                )
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            MediaHubIcon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted,
-                modifier = Modifier.size(20.dp),
-            )
-            MediaHubText(
-                text = label,
-                modifier = Modifier.padding(top = 3.dp),
-                color = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted,
-                fontSize = 12.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            )
-        }
-    }
+    MediaHubNavigationBar(
+        items = primaryDestinations.map { destination ->
+            MediaHubNavItem(destination.name, destination.title, destinationIcon(destination))
+        },
+        selectedKey = selected.name,
+        onSelected = { key ->
+            primaryDestinations.firstOrNull { it.name == key }?.let(onSelected)
+        },
+    )
 }
 
 @Composable
@@ -485,7 +405,7 @@ private fun AppMessageScreen(
     onSecondary: () -> Unit = {},
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas).padding(28.dp),
+        modifier = Modifier.fillMaxSize().padding(28.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

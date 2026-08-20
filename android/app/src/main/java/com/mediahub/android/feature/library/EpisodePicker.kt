@@ -1,22 +1,15 @@
 package com.mediahub.android.feature.library
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -25,15 +18,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Play
+import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
+import com.mediahub.android.core.designsystem.MediaHubFilterChip
 import com.mediahub.android.core.designsystem.MediaHubIcon
-import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubListDivider
+import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.network.EmbyEpisode
 
@@ -49,7 +47,7 @@ internal fun EpisodePicker(
     val visibleEpisodes = remember(episodes, selectedSeason) { episodes.filter { it.item.season == selectedSeason } }
 
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        MediaHubText(text = "选集", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        MediaHubSmallTitle(text = "选集")
         when {
             loading -> MediaHubText(text = "正在读取剧集列表…", color = MediaHubColors.TextMuted, fontSize = 13.sp)
             errorMessage != null -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -60,42 +58,26 @@ internal fun EpisodePicker(
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(seasons, key = { it }) { season ->
-                        val selected = season == selectedSeason
-                        Box(
-                            modifier = Modifier
-                                .heightIn(min = 40.dp)
-                                .background(
-                                    if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface,
-                                    RoundedCornerShape(20.dp),
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = if (selected) MediaHubColors.Accent else MediaHubColors.Border,
-                                    shape = RoundedCornerShape(20.dp),
-                                )
-                                .clickable(role = Role.Tab) { selectedSeason = season }
-                                .padding(horizontal = 14.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            MediaHubText(
-                                text = if (season > 0) "第 ${season} 季" else "特别篇",
-                                color = if (selected) MediaHubColors.TextPrimary else MediaHubColors.TextSecondary,
-                                fontSize = 13.sp,
-                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                            )
-                        }
+                        MediaHubFilterChip(
+                            label = if (season > 0) "第 ${season} 季" else "特别篇",
+                            selected = season == selectedSeason,
+                            onClick = { selectedSeason = season },
+                            role = Role.Tab,
+                        )
                     }
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    visibleEpisodes.forEach { episode ->
+                MediaHubCard {
+                    visibleEpisodes.forEachIndexed { index, episode ->
+                        if (index > 0) MediaHubListDivider()
                         val progress = episodeProgressLabel(episode)
+                        val playLabel = "${playbackActionLabel(episode.item)} ${episodeLabel(episode)}"
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
-                                .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
+                                .heightIn(min = 48.dp)
                                 .clickable(role = Role.Button) { onPlay(episode) }
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                .semantics { contentDescription = playLabel }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {

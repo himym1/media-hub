@@ -1,11 +1,7 @@
 package com.mediahub.android.feature.library
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -40,11 +36,15 @@ import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Trash2
 import com.mediahub.android.core.designsystem.MediaHubButton
+import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubConfirmDialog
+import com.mediahub.android.core.designsystem.MediaHubDestructiveButton
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
-import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
+import com.mediahub.android.core.designsystem.MediaHubListDivider
+import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
+import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.image.PosterLoader
 import com.mediahub.android.core.network.EmbyItemDetail
@@ -55,9 +55,9 @@ import java.net.URI
 @Composable
 internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDetailActions, posterLoader: PosterLoader) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 36.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             Row(
@@ -114,15 +114,8 @@ internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDeta
                 }
             }
             item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MediaHubColors.Surface, RoundedCornerShape(10.dp))
-                        .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(10.dp))
-                        .padding(16.dp),
-                ) {
-                    MediaHubText(text = "剧情简介", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MediaHubColors.TextPrimary)
-                    Spacer(Modifier.height(8.dp))
+                MediaHubSmallTitle(text = "剧情简介")
+                MediaHubCard(insideMargin = PaddingValues(16.dp)) {
                     MediaHubText(
                         text = detail.overview ?: "暂未提供简介。",
                         color = MediaHubColors.TextSecondary,
@@ -139,85 +132,45 @@ internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDeta
 @Composable
 private fun DetailIdentity(detail: EmbyItemDetail, posterLoader: PosterLoader) {
     val genres = detail.genres.map(::genreLabel).filter(String::isNotBlank).distinct()
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MediaHubColors.Surface, RoundedCornerShape(14.dp))
-            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(14.dp))
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            modifier = Modifier
-                .width(150.dp)
-                .background(MediaHubColors.SurfaceInput, RoundedCornerShape(8.dp))
-                .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp)),
+    val facts = listOfNotNull(
+        mediaTypeLabel(detail.item.type),
+        detail.item.year?.toString(),
+        detail.runtimeMinutes?.takeIf { it > 0 }?.let { "$it 分钟" },
+        detail.communityRating?.let { "★ %.1f".format(it) },
+    )
+    MediaHubCard(insideMargin = PaddingValues(18.dp)) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             EmbyPoster(
                 itemId = detail.item.id,
                 loader = posterLoader,
                 contentDescription = "${detail.item.name} 封面",
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.width(150.dp),
             )
-        }
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
             MediaHubText(
                 text = detail.item.name,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = MediaHubColors.TextPrimary,
             )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                listOfNotNull(
-                    mediaTypeLabel(detail.item.type),
-                    detail.item.year?.toString(),
-                    detail.runtimeMinutes?.takeIf { it > 0 }?.let { "$it 分钟" },
-                    detail.communityRating?.let { "★ %.1f".format(it) },
-                ).forEach { tag ->
-                    Box(
-                        modifier = Modifier
-                            .background(MediaHubColors.SurfaceInput, RoundedCornerShape(4.dp))
-                            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(4.dp))
-                            .padding(horizontal = 7.dp, vertical = 3.dp),
-                    ) {
-                        MediaHubText(
-                            text = tag,
-                            color = MediaHubColors.TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    }
-                }
+            if (facts.isNotEmpty()) {
+                MediaHubText(
+                    text = facts.joinToString(" · "),
+                    color = MediaHubColors.TextSecondary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
             }
             if (genres.isNotEmpty()) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    genres.forEach { genre ->
-                        Box(
-                            modifier = Modifier
-                                .background(MediaHubColors.SurfaceSelected, RoundedCornerShape(4.dp))
-                                .border(width = 1.dp, color = MediaHubColors.Accent.copy(alpha = 0.5f), shape = RoundedCornerShape(4.dp))
-                                .padding(horizontal = 7.dp, vertical = 3.dp),
-                        ) {
-                            MediaHubText(
-                                text = genre,
-                                color = MediaHubColors.Accent,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                    }
-                }
+                MediaHubText(
+                    text = genres.joinToString(" · "),
+                    color = MediaHubColors.Accent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }
@@ -227,8 +180,8 @@ private fun DetailIdentity(detail: EmbyItemDetail, posterLoader: PosterLoader) {
 private fun DeleteActions(state: LibraryDetailState, actions: LibraryDetailActions) {
     val preview = state.deletePreview
     Column(modifier = Modifier.fillMaxWidth()) {
-        MediaHubSecondaryButton(
-            label = if (state.deleting) "正在删除…" else "从 Emby 媒体库移除",
+        MediaHubDestructiveButton(
+            label = if (state.deleting) "正在删除…" else "从 Emby 删除",
             icon = Lucide.Trash2,
             enabled = !state.deleting && !state.refreshing,
             onClick = actions.onDelete,
@@ -250,22 +203,17 @@ private fun DeleteActions(state: LibraryDetailState, actions: LibraryDetailActio
 @Composable
 private fun TechnicalDetails(detail: EmbyItemDetail) {
     var expanded by remember(detail.item.id) { mutableStateOf(false) }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
-            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-    ) {
+    MediaHubCard {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 44.dp)
+                .heightIn(min = 48.dp)
                 .semantics { stateDescription = if (expanded) "已展开" else "已收起" }
-                .clickable(role = Role.Button) { expanded = !expanded },
+                .clickable(role = Role.Button) { expanded = !expanded }
+                .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MediaHubText(text = "媒体技术元数据", modifier = Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            MediaHubText(text = "媒体信息", modifier = Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
             MediaHubIcon(
                 if (expanded) Lucide.ChevronUp else Lucide.ChevronDown,
                 contentDescription = null,
@@ -273,21 +221,18 @@ private fun TechnicalDetails(detail: EmbyItemDetail) {
             )
         }
         if (expanded) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                visibleOriginalTitle(detail)?.let { DetailTechnicalLine("原名", it) }
-                DetailTechnicalLine("TMDB 编号", detail.item.tmdbId ?: "未绑定")
-                DetailTechnicalLine("媒体源", if (detail.item.type == "Series") "由分集提供" else "${detail.mediaSourceCount} 个")
-            }
+            MediaHubListDivider()
+            visibleOriginalTitle(detail)?.let { DetailTechnicalLine("原名", it) }
+            DetailTechnicalLine("TMDB 编号", detail.item.tmdbId ?: "未绑定")
+            DetailTechnicalLine("媒体源", if (detail.item.type == "Series") "由分集提供" else "${detail.mediaSourceCount} 个")
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
 
 @Composable
 private fun DetailTechnicalLine(label: String, value: String) {
-    MediaHubText(text = "$label：$value", color = MediaHubColors.TextSecondary, fontSize = 12.sp)
+    MediaHubPreferenceRow(title = "$label：$value")
 }
 
 @Composable

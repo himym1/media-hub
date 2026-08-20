@@ -24,6 +24,11 @@ func TestDeletePreviewOmitsFilesystemPathsAndKeepsCloud(t *testing.T) {
 		case "/Users/user-1/Items/item-1":
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"验收影片","Type":"Movie","Path":"/private/movie.strm","MediaSources":[{"Path":"/private/movie.strm"}]}`))
 		case "/Items/item-1/DeleteInfo":
+			if request.URL.Query().Get("UserId") != "user-1" ||
+				!strings.Contains(request.Header.Get("X-Emby-Authorization"), `UserId="user-1"`) {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			_, _ = w.Write([]byte(`{"Paths":["/private/movie.strm","/private/movie.nfo"],"LocalFileCount":2}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -48,14 +53,18 @@ func TestDeletePreviewOmitsFilesystemPathsAndKeepsCloud(t *testing.T) {
 	}
 }
 
-func TestDeleteItemUsesRecursiveDeleteWithoutExposingPaths(t *testing.T) {
+func TestDeleteItemSendsUserAuthorizationWithoutRecursiveQuery(t *testing.T) {
 	var deleted bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		switch {
-		case request.URL.Path == "/Items/item-1" && request.Method == http.MethodGet:
+		case request.URL.Path == "/Users/user-1/Items/item-1" && request.Method == http.MethodGet:
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
 		case request.URL.Path == "/Items/item-1" && request.Method == http.MethodDelete:
-			if request.URL.Query().Get("Recursive") != "true" || request.Header.Get("X-Emby-Token") != "emby-key" {
+			authorization := request.Header.Get("X-Emby-Authorization")
+			if request.URL.Query().Get("Recursive") != "" || request.URL.Query().Get("UserId") != "user-1" ||
+				request.Header.Get("X-Emby-Token") != "emby-key" ||
+				!strings.Contains(authorization, `UserId="user-1"`) ||
+				!strings.Contains(authorization, `Token="emby-key"`) {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -67,7 +76,7 @@ func TestDeleteItemUsesRecursiveDeleteWithoutExposingPaths(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if err := NewClient(server.URL, "emby-key", time.Second).DeleteItem(context.Background(), "item-1"); err != nil {
+	if err := NewClient(server.URL, "emby-key", time.Second, "user-1").DeleteItem(context.Background(), "item-1"); err != nil {
 		t.Fatal(err)
 	}
 	if !deleted {
@@ -117,7 +126,7 @@ func TestDeleteItemFallsBackToPostDelete(t *testing.T) {
 		case request.URL.Path == "/Items/item-1" && request.Method == http.MethodDelete:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		case request.URL.Path == "/Items/item-1/Delete" && request.Method == http.MethodPost:
-			if request.URL.Query().Get("Recursive") != "true" || request.Header.Get("X-Emby-Token") != "emby-key" {
+			if request.URL.Query().Get("Recursive") != "" || request.Header.Get("X-Emby-Token") != "emby-key" {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -151,6 +160,51 @@ func TestDeletePreviewAllowsMissingDeleteInfo(t *testing.T) {
 	}
 	if preview.FileCount != 0 || !preview.DeletesFiles || !preview.CloudKept {
 		t.Fatalf("preview=%#v", preview)
+	}
+}
+
+func TestDeleteItemFallsBackToIdsDelete(t *testing.T) {
+	var posted bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.URL.Path == "/Users/user-1/Items/item-1" && request.Method == http.MethodGet:
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
+		case request.URL.Path == "/Items/item-1" && request.Method == http.MethodDelete:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		case request.URL.Path == "/Items/item-1/Delete" && request.Method == http.MethodPost:
+			w.WriteHeader(http.StatusNotFound)
+		case request.URL.Path == "/Items/Delete" && request.Method == http.MethodPost:
+			if request.URL.Query().Get("Ids") != "item-1" || request.URL.Query().Get("UserId") != "user-1" ||
+				!strings.Contains(request.Header.Get("X-Emby-Authorization"), `UserId="user-1"`) {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			posted = true
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	if err := NewClient(server.URL, "emby-key", time.Second, "user-1").DeleteItem(context.Background(), "item-1"); err != nil {
+		t.Fatal(err)
+	}
+	if !posted {
+		t.Fatal("Emby Ids delete was not called")
+	}
+}
+
+func TestDeleteItemMapsBadRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer server.Close()
+	if err := NewClient(server.URL, "emby-key", time.Second).DeleteItem(context.Background(), "item-1"); !errors.Is(err, ErrDeleteRejected) {
+		t.Fatalf("error=%v", err)
 	}
 }
 

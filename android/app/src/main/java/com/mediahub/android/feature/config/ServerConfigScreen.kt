@@ -1,8 +1,8 @@
 package com.mediahub.android.feature.config
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Link
 import com.composables.icons.lucide.Lucide
 import com.mediahub.android.core.designsystem.MediaHubButton
+import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextField
@@ -27,22 +28,24 @@ fun ServerConfigScreen(
 ) {
     val value by viewModel.serverUrl.collectAsState()
     Column(
-        modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas).padding(28.dp),
+        modifier = Modifier.fillMaxSize().padding(28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
     ) {
         MediaHubText("Media Hub 服务器", fontSize = 22.sp)
         MediaHubText("填写私有部署的 HTTPS 地址", color = MediaHubColors.TextMuted, fontSize = 12.sp)
-        MediaHubTextField(
-            value = value,
-            onValueChange = viewModel::update,
-            placeholder = "https://media.example.com",
-        )
-        MediaHubButton(
-            label = "连接服务器",
-            icon = Lucide.Link,
-            enabled = value.isNotBlank(),
-            onClick = { viewModel.save()?.let(onConfigured) },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        MediaHubCard(insideMargin = PaddingValues(16.dp)) {
+            MediaHubTextField(
+                value = value,
+                onValueChange = viewModel::update,
+                placeholder = "https://media.example.com",
+            )
+            MediaHubButton(
+                label = "连接服务器",
+                icon = Lucide.Link,
+                enabled = value.isNotBlank(),
+                onClick = { viewModel.save()?.let(onConfigured) },
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            )
+        }
     }
 }

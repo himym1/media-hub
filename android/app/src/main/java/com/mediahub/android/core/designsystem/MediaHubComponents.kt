@@ -1,11 +1,15 @@
 package com.mediahub.android.core.designsystem
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,22 +19,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -40,15 +38,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.layout.Column
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.composables.icons.lucide.ArrowRight
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.CircleAlert
@@ -56,10 +45,20 @@ import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.X
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
+import top.yukonga.miuix.kmp.basic.IconButton as MiuixIconButton
+import top.yukonga.miuix.kmp.basic.InputField
+import top.yukonga.miuix.kmp.basic.SearchBar
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import top.yukonga.miuix.kmp.preference.CheckboxPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun MediaHubText(
@@ -105,28 +104,25 @@ fun MediaHubButton(
     enabled: Boolean = true,
     icon: ImageVector? = null,
 ) {
-    Row(
-        modifier = modifier
-            .heightIn(min = 48.dp)
-            .alpha(if (enabled) 1f else 0.45f)
-            .background(MediaHubColors.Accent, RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        minHeight = 48.dp,
+        colors = ButtonDefaults.buttonColorsPrimary(),
     ) {
         if (icon != null) {
             MediaHubIcon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = MediaHubColors.Canvas,
+                tint = MiuixTheme.colorScheme.onPrimary,
             )
             Spacer(Modifier.width(8.dp))
         }
         MediaHubText(
             text = label,
-            color = MediaHubColors.Canvas,
+            color = MiuixTheme.colorScheme.onPrimary,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
         )
@@ -141,29 +137,25 @@ fun MediaHubSecondaryButton(
     enabled: Boolean = true,
     icon: ImageVector? = null,
 ) {
-    Row(
-        modifier = modifier
-            .heightIn(min = 48.dp)
-            .alpha(if (enabled) 1f else 0.45f)
-            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
-            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        minHeight = 48.dp,
+        colors = ButtonDefaults.buttonColors(),
     ) {
         if (icon != null) {
             MediaHubIcon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = MediaHubColors.TextPrimary,
+                tint = MiuixTheme.colorScheme.onSecondaryVariant,
             )
             Spacer(Modifier.width(8.dp))
         }
         MediaHubText(
             text = label,
-            color = MediaHubColors.TextPrimary,
+            color = MiuixTheme.colorScheme.onSecondaryVariant,
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
         )
@@ -178,20 +170,12 @@ fun MediaHubIconButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Box(
-        modifier = modifier
-            .size(48.dp)
-            .alpha(if (enabled) 1f else 0.45f)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                enabled = enabled,
-                role = Role.Button,
-                onClickLabel = contentDescription,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
+    MiuixIconButton(
+        onClick = onClick,
+        modifier = modifier.semantics { this.contentDescription = contentDescription },
+        enabled = enabled,
+        minHeight = 48.dp,
+        minWidth = 48.dp,
     ) {
         MediaHubIcon(
             imageVector = imageVector,
@@ -209,39 +193,81 @@ fun MediaHubSegmentedControl(
     onSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
     role: Role = Role.Tab,
+    raised: Boolean = true,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .selectableGroup()
-            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
-            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        options.forEach { (value, label) ->
-            val active = value == selected
-            val pillBackground = if (active) MediaHubColors.SurfaceSelected else Color.Transparent
-            val pillBorder = if (active) MediaHubColors.Accent else Color.Transparent
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 44.dp)
-                    .background(pillBackground, RoundedCornerShape(6.dp))
-                    .border(width = if (active) 1.dp else 0.dp, color = pillBorder, shape = RoundedCornerShape(6.dp))
-                    .selectable(selected = active, role = role, onClick = { onSelected(value) })
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                MediaHubText(
-                    text = label,
-                    color = if (active) MediaHubColors.TextPrimary else MediaHubColors.TextMuted,
-                    fontSize = 13.sp,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                )
+    val content: @Composable () -> Unit = {
+        Row(
+            modifier = Modifier.fillMaxWidth().selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            options.forEach { (value, label) ->
+                val active = value == selected
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .selectable(selected = active, role = role, onClick = { onSelected(value) })
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    MediaHubText(
+                        text = label,
+                        color = if (active) MiuixTheme.colorScheme.primary else MediaHubColors.TextMuted,
+                        fontSize = 13.sp,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
             }
         }
     }
+    if (raised) {
+        MediaHubCard(modifier = modifier, insideMargin = PaddingValues(4.dp)) { content() }
+    } else {
+        Box(modifier) { content() }
+    }
+}
+
+@Composable
+private fun MediaHubSearchInput(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    placeholder: String,
+) {
+    InputField(
+        query = value,
+        onQueryChange = onValueChange,
+        onSearch = { onSearch() },
+        expanded = expanded,
+        onExpandedChange = onExpandedChange,
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .semantics { contentDescription = placeholder },
+        label = placeholder,
+        enabled = enabled,
+        trailingIcon = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (value.isNotEmpty()) {
+                    MediaHubIconButton(
+                        imageVector = Lucide.X,
+                        contentDescription = "清空输入",
+                        onClick = { onValueChange("") },
+                        enabled = enabled,
+                    )
+                }
+                MediaHubIconButton(
+                    imageVector = Lucide.ArrowRight,
+                    contentDescription = "提交搜索",
+                    onClick = onSearch,
+                    enabled = enabled && value.isNotBlank(),
+                )
+            }
+        },
+    )
 }
 
 @Composable
@@ -253,55 +279,50 @@ fun MediaHubSearchField(
     enabled: Boolean = true,
     placeholder: String = "搜索电影或电视剧",
 ) {
-    Row(
-        modifier = modifier
-            .background(MediaHubColors.SurfaceInput, RoundedCornerShape(8.dp))
-            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-            .padding(start = 14.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MediaHubIcon(
-            imageVector = Lucide.Search,
-            contentDescription = null,
-            tint = MediaHubColors.TextMuted,
-            modifier = Modifier.size(19.dp),
-        )
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            enabled = enabled,
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-            textStyle = TextStyle(color = MediaHubColors.TextPrimary, fontSize = 14.sp),
-            cursorBrush = SolidColor(MediaHubColors.Accent),
-            decorationBox = { innerTextField ->
-                Box(Modifier.padding(start = 10.dp)) {
-                    if (value.isEmpty()) {
-                        MediaHubText(text = placeholder, color = MediaHubColors.TextMuted, fontSize = 13.sp)
-                    }
-                    innerTextField()
-                }
-            },
-            modifier = Modifier
-                .weight(1f)
-                .semantics { contentDescription = placeholder },
-        )
-        if (value.isNotEmpty()) {
-            MediaHubIconButton(
-                imageVector = Lucide.X,
-                contentDescription = "清空输入",
-                onClick = { onValueChange("") },
+    MediaHubSearchInput(
+        value = value,
+        onValueChange = onValueChange,
+        onSearch = onSearch,
+        expanded = false,
+        onExpandedChange = {},
+        modifier = modifier,
+        enabled = enabled,
+        placeholder = placeholder,
+    )
+}
+
+@Composable
+fun MediaHubSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    placeholder: String = "搜索电影或电视剧",
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    SearchBar(
+        inputField = {
+            MediaHubSearchInput(
+                value = query,
+                onValueChange = onQueryChange,
+                onSearch = onSearch,
+                expanded = expanded,
+                onExpandedChange = onExpandedChange,
                 enabled = enabled,
+                placeholder = placeholder,
             )
-        }
-        MediaHubIconButton(
-            imageVector = Lucide.ArrowRight,
-            contentDescription = "提交搜索",
-            onClick = onSearch,
-            enabled = enabled && value.isNotBlank(),
-        )
-    }
+        },
+        onExpandedChange = onExpandedChange,
+        modifier = modifier,
+        expanded = expanded,
+        outsideEndAction = {
+            TextButton(text = "取消", onClick = { onExpandedChange(false) })
+        },
+        content = content,
+    )
 }
 
 @Composable
@@ -314,30 +335,16 @@ fun MediaHubTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     password: Boolean = false,
 ) {
-    BasicTextField(
+    TextField(
         value = value,
         onValueChange = onValueChange,
+        modifier = modifier.semantics { contentDescription = placeholder },
+        label = placeholder,
+        useLabelAsPlaceholder = true,
         enabled = enabled,
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-        textStyle = TextStyle(color = MediaHubColors.TextPrimary, fontSize = 14.sp),
-        cursorBrush = SolidColor(MediaHubColors.Accent),
-        decorationBox = { innerTextField ->
-            Box(
-                modifier = Modifier
-                    .heightIn(min = 48.dp)
-                    .background(MediaHubColors.SurfaceInput, RoundedCornerShape(8.dp))
-                    .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-            ) {
-                if (value.isEmpty()) {
-                    MediaHubText(text = placeholder, color = MediaHubColors.TextMuted, fontSize = 13.sp)
-                }
-                innerTextField()
-            }
-        },
-        modifier = modifier.semantics { contentDescription = placeholder },
     )
 }
 
@@ -349,28 +356,14 @@ fun MediaHubMultilineField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    BasicTextField(
+    TextField(
         value = value,
         onValueChange = onValueChange,
+        modifier = modifier.semantics { contentDescription = placeholder },
+        label = placeholder,
+        useLabelAsPlaceholder = true,
         enabled = enabled,
         minLines = 5,
-        textStyle = TextStyle(color = MediaHubColors.TextPrimary, fontSize = 13.sp),
-        cursorBrush = SolidColor(MediaHubColors.Accent),
-        decorationBox = { innerTextField ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MediaHubColors.SurfaceInput, RoundedCornerShape(8.dp))
-                    .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-            ) {
-                if (value.isEmpty()) {
-                    MediaHubText(text = placeholder, color = MediaHubColors.TextMuted, fontSize = 12.sp)
-                }
-                innerTextField()
-            }
-        },
-        modifier = modifier.semantics { contentDescription = placeholder },
     )
 }
 
@@ -384,35 +377,29 @@ fun MediaHubPasswordField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    Row(
-        modifier = modifier
-            .background(MediaHubColors.SurfaceInput, RoundedCornerShape(8.dp))
-            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
-            .padding(start = 14.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            enabled = enabled,
-            singleLine = true,
-            visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(onDone = { onSubmit() }),
-            textStyle = TextStyle(color = MediaHubColors.TextPrimary, fontSize = 14.sp),
-            cursorBrush = SolidColor(MediaHubColors.Accent),
-            modifier = Modifier.weight(1f),
-        )
-        MediaHubIconButton(
-            imageVector = if (visible) Lucide.EyeOff else Lucide.Eye,
-            contentDescription = if (visible) "隐藏密码" else "显示密码",
-            onClick = onVisibilityChanged,
-            enabled = enabled,
-        )
-    }
+    TextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        label = "密码",
+        useLabelAsPlaceholder = true,
+        enabled = enabled,
+        singleLine = true,
+        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Password,
+            imeAction = ImeAction.Done,
+        ),
+        keyboardActions = KeyboardActions(onDone = { onSubmit() }),
+        trailingIcon = {
+            MediaHubIconButton(
+                imageVector = if (visible) Lucide.EyeOff else Lucide.Eye,
+                contentDescription = if (visible) "隐藏密码" else "显示密码",
+                onClick = onVisibilityChanged,
+                enabled = enabled,
+            )
+        },
+    )
 }
 
 @Composable
@@ -423,28 +410,28 @@ fun MediaHubDestructiveButton(
     enabled: Boolean = true,
     icon: ImageVector? = null,
 ) {
-    Row(
-        modifier = modifier
-            .heightIn(min = 48.dp)
-            .alpha(if (enabled) 1f else 0.45f)
-            .background(MediaHubColors.Error, RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        minHeight = 48.dp,
+        colors = ButtonDefaults.buttonColors(
+            color = MediaHubColors.Error,
+            contentColor = MediaHubColors.OnAccent,
+        ),
     ) {
         if (icon != null) {
             MediaHubIcon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = MediaHubColors.Canvas,
+                tint = MediaHubColors.OnAccent,
             )
             Spacer(Modifier.width(8.dp))
         }
         MediaHubText(
             text = label,
-            color = MediaHubColors.Canvas,
+            color = MediaHubColors.OnAccent,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
         )
@@ -477,26 +464,27 @@ fun MediaHubToastHost(
                 ToastType.Warning -> Lucide.CircleAlert to MediaHubColors.Warning
                 ToastType.Info -> Lucide.Info to MediaHubColors.Source
             }
-            Row(
-                modifier = Modifier
-                    .background(MediaHubColors.Surface, RoundedCornerShape(24.dp))
-                    .border(width = 1.dp, color = tint.copy(alpha = 0.6f), shape = RoundedCornerShape(24.dp))
-                    .padding(horizontal = 18.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            MediaHubCard(
+                modifier = Modifier.padding(horizontal = 18.dp),
+                insideMargin = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
             ) {
-                MediaHubIcon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier.size(18.dp),
-                )
-                MediaHubText(
-                    text = currentToast.message,
-                    color = MediaHubColors.TextPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    MediaHubIcon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    MediaHubText(
+                        text = currentToast.message,
+                        color = MediaHubColors.TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
             }
         }
     }
@@ -513,63 +501,135 @@ fun MediaHubConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    if (visible) {
-        Dialog(
-            onDismissRequest = onDismiss,
-            properties = DialogProperties(usePlatformDefaultWidth = true, dismissOnBackPress = true, dismissOnClickOutside = true),
+    OverlayDialog(
+        show = visible,
+        title = title,
+        summary = message,
+        titleColor = if (isDestructive) MediaHubColors.Error else MiuixTheme.colorScheme.onSurface,
+        onDismissRequest = onDismiss,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MediaHubColors.Surface)
-                    .border(
-                        width = 1.dp,
-                        color = if (isDestructive) MediaHubColors.Error.copy(alpha = 0.6f) else MediaHubColors.Border,
-                        shape = RoundedCornerShape(16.dp),
-                    )
-                    .padding(22.dp),
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    MediaHubText(
-                        text = title,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDestructive) MediaHubColors.Error else MediaHubColors.TextPrimary,
-                    )
-                    MediaHubText(
-                        text = message,
-                        color = MediaHubColors.TextSecondary,
-                        fontSize = 13.sp,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        MediaHubSecondaryButton(
-                            label = cancelLabel,
-                            onClick = onDismiss,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (isDestructive) {
-                            MediaHubDestructiveButton(
-                                label = confirmLabel,
-                                onClick = onConfirm,
-                                modifier = Modifier.weight(1f),
-                            )
-                        } else {
-                            MediaHubButton(
-                                label = confirmLabel,
-                                onClick = onConfirm,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
-                }
-            }
+            TextButton(text = cancelLabel, onClick = onDismiss)
+            Spacer(Modifier.width(8.dp))
+            TextButton(
+                text = confirmLabel,
+                onClick = onConfirm,
+                colors = if (isDestructive) {
+                    ButtonDefaults.textButtonColors(textColor = MediaHubColors.Error)
+                } else {
+                    ButtonDefaults.textButtonColorsPrimary()
+                },
+            )
+        }
+    }
+}
+
+@Composable
+fun MediaHubFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    role: Role = Role.RadioButton,
+) {
+    MediaHubCard(
+        modifier = modifier,
+        insideMargin = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+        onClick = if (enabled) onClick else null,
+        color = if (selected) MediaHubColors.SurfaceSelected else Color.Unspecified,
+    ) {
+        Box(
+            modifier = Modifier
+                .heightIn(min = 48.dp)
+                .selectable(selected = selected, enabled = enabled, role = role, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            MediaHubText(
+                text = label,
+                color = if (selected) MiuixTheme.colorScheme.primary else MediaHubColors.TextSecondary,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            )
+        }
+    }
+}
+
+@Composable
+fun MediaHubSwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    enabled: Boolean = true,
+) {
+    SwitchPreference(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        title = title,
+        modifier = modifier.heightIn(min = 48.dp),
+        summary = summary,
+        enabled = enabled,
+    )
+}
+
+@Composable
+fun MediaHubCheckboxRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    enabled: Boolean = true,
+) {
+    CheckboxPreference(
+        title = title,
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = modifier.heightIn(min = 48.dp),
+        summary = summary,
+        enabled = enabled,
+    )
+}
+
+@Composable
+fun MediaHubEmptyState(
+    title: String,
+    message: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+) {
+    MediaHubCard(
+        modifier = modifier.fillMaxWidth(),
+        insideMargin = PaddingValues(vertical = 36.dp, horizontal = 20.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            MediaHubIcon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MediaHubColors.TextMuted,
+                modifier = Modifier.size(32.dp),
+            )
+            MediaHubText(
+                text = title,
+                modifier = Modifier.padding(top = 14.dp),
+                color = MediaHubColors.TextSecondary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            MediaHubText(
+                text = message,
+                modifier = Modifier.padding(top = 6.dp),
+                color = MediaHubColors.TextMuted,
+                fontSize = 12.sp,
+            )
         }
     }
 }
