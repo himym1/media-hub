@@ -53,27 +53,6 @@ jobs:
           code=$((major * 1000000 + minor * 1000 + patch))
           echo "name=$version" >> "$GITHUB_OUTPUT"
           echo "code=$code" >> "$GITHUB_OUTPUT"
-      - name: Build amd64 image on NAS
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("Dockerfile")
-          text = path.read_text()
-          old = "FROM gcr.io/distroless/static-debian12:nonroot\n"
-          new = (
-              "FROM alpine:3.20\n"
-              "RUN apk add --no-cache ca-certificates tzdata \\\n"
-              " && addgroup -g 65532 -S nonroot \\\n"
-              " && adduser -u 65532 -S -G nonroot -H -D nonroot\n"
-          )
-          if old not in text:
-              raise SystemExit("expected distroless base image was not found")
-          path.write_text(text.replace(old, new, 1))
-          PY
-          image="ghcr.io/${GITHUB_REPOSITORY,,}"
-          docker build --platform linux/amd64 --build-arg VERSION="$GITHUB_REF_NAME" --build-arg GOPROXY=https://goproxy.cn,direct -t "$image:${{ steps.version.outputs.name }}" -t "$image:${GITHUB_SHA}" .
       - name: Accept Android SDK licenses
         shell: bash
         run: |
@@ -106,3 +85,24 @@ jobs:
           chmod 0444 "$manifest_tmp"
           mv -f "$apk_tmp" "$release_dir/$output"
           mv -f "$manifest_tmp" "$release_dir/latest.json"
+      - name: Build amd64 image on NAS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("Dockerfile")
+          text = path.read_text()
+          old = "FROM gcr.io/distroless/static-debian12:nonroot\n"
+          new = (
+              "FROM alpine:3.20\n"
+              "RUN apk add --no-cache ca-certificates tzdata \\\n"
+              " && addgroup -g 65532 -S nonroot \\\n"
+              " && adduser -u 65532 -S -G nonroot -H -D nonroot\n"
+          )
+          if old not in text:
+              raise SystemExit("expected distroless base image was not found")
+          path.write_text(text.replace(old, new, 1))
+          PY
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          timeout 12m docker build --platform linux/amd64 --build-arg VERSION="$GITHUB_REF_NAME" --build-arg GOPROXY=https://goproxy.cn,direct -t "$image:${{ steps.version.outputs.name }}" -t "$image:${GITHUB_SHA}" .
