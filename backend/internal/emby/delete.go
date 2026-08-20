@@ -58,19 +58,37 @@ func (c *Client) DeleteItem(ctx context.Context, itemID string) error {
 	if err != nil {
 		return err
 	}
+	err = c.deleteItemWithSession(ctx, configuration, item.ID)
+	if !errors.Is(err, ErrUnauthorized) {
+		return err
+	}
+	c.clearSessionToken()
+	return c.deleteItemWithSession(ctx, configuration, item.ID)
+}
+
+func (c *Client) deleteItemWithSession(ctx context.Context, configuration clientConfig, itemID string) error {
+	token, err := c.userSessionToken(ctx, configuration)
+	if err != nil {
+		return err
+	}
+	session := configuration
+	session.apiKey = token
 	var last error
 	for _, attempt := range []deleteAttempt{
-		{http.MethodDelete, path.Join("Items", item.ID), false},
-		{http.MethodPost, path.Join("Items", item.ID, "Delete"), false},
+		{http.MethodDelete, path.Join("Items", itemID), false},
+		{http.MethodPost, path.Join("Items", itemID, "Delete"), false},
 		{http.MethodPost, "Items/Delete", true},
 		{http.MethodDelete, "Items", true},
 	} {
-		query := deleteQuery(configuration.userID, "")
+		query := deleteQuery(session.userID, "")
 		if attempt.ids {
-			query = deleteQuery(configuration.userID, item.ID)
+			query = deleteQuery(session.userID, itemID)
 		}
-		err := c.delete(ctx, configuration, attempt.endpointPath, query, attempt.method)
-		if err == nil || errors.Is(err, ErrUnauthorized) {
+		err := c.delete(ctx, session, attempt.endpointPath, query, attempt.method)
+		if err == nil {
+			return nil
+		}
+		if errors.Is(err, ErrUnauthorized) {
 			return err
 		}
 		last = err

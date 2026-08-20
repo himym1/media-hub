@@ -44,9 +44,10 @@ type QMediaSync struct {
 }
 
 type Emby struct {
-	BaseURL string
-	APIKey  string
-	UserID  string
+	BaseURL  string
+	APIKey   string
+	UserID   string
+	Password string
 }
 
 type Drive115 struct {
@@ -209,9 +210,10 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 
 	qms := QMediaSync{BaseURL: qmsURL, APIKey: secretValue(lookup, "MEDIA_HUB_QMS_API_KEY")}
 	emby := Emby{
-		BaseURL: embyURL,
-		APIKey:  secretValue(lookup, "MEDIA_HUB_EMBY_API_KEY"),
-		UserID:  stringValue(lookup, "MEDIA_HUB_EMBY_USER_ID", ""),
+		BaseURL:  embyURL,
+		APIKey:   secretValue(lookup, "MEDIA_HUB_EMBY_API_KEY"),
+		UserID:   stringValue(lookup, "MEDIA_HUB_EMBY_USER_ID", ""),
+		Password: secretValue(lookup, "MEDIA_HUB_EMBY_PASSWORD"),
 	}
 	drive115 := Drive115{
 		AccessToken: secretValue(lookup, "MEDIA_HUB_115_ACCESS_TOKEN"),

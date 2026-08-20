@@ -16,7 +16,6 @@ class NavigationModelTest {
             ),
             primaryDestinations,
         )
-        assertFalse(primaryDestinations.contains(MainDestination.Operations))
         assertFalse(primaryDestinations.contains(MainDestination.Services))
     }
 
@@ -26,7 +25,6 @@ class NavigationModelTest {
         assertEquals("任务", MainDestination.Transfers.title)
         assertEquals("订阅", MainDestination.Subscriptions.title)
         assertEquals("媒体库", MainDestination.Library.title)
-        assertEquals("运维", MainDestination.Operations.title)
         assertEquals("服务与设置", MainDestination.Services.title)
     }
 
@@ -36,7 +34,7 @@ class NavigationModelTest {
         for (primary in listOf(MainDestination.Transfers, MainDestination.Subscriptions, MainDestination.Library)) {
             assertEquals(primary, navigation.show(primary).destination)
             assertEquals(MainDestination.Services, navigation.openSystem().destination)
-            assertEquals(MainDestination.Operations, navigation.showSystem(MainDestination.Operations).destination)
+            assertEquals(MainDestination.Services, navigation.showSystem(MainDestination.Search).destination)
             assertEquals(primary, navigation.closeSystem().destination)
         }
     }

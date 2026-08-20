@@ -309,6 +309,12 @@ func writeIntegrationProblem(w http.ResponseWriter, err error) {
 			Title: "外部服务鉴权失败", Status: http.StatusBadGateway,
 			Code: "integration_unauthorized",
 		})
+	case errors.Is(err, emby.ErrDeleteNeedsUser):
+		writeProblem(w, problem{
+			Type:  "https://media-hub.local/problems/emby-delete-needs-user",
+			Title: "Emby 删除需要用户密码", Status: http.StatusConflict,
+			Code: "emby_delete_needs_user",
+		})
 	case errors.Is(err, emby.ErrDeleteRejected):
 		writeProblem(w, problem{
 			Type:  "https://media-hub.local/problems/emby-delete-rejected",

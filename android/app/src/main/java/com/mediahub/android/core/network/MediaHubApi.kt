@@ -706,6 +706,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
             embyBaseUrl = emby.getString("baseUrl"),
             embyApiKey = SecretStatus(emby.getJSONObject("apiKey").getBoolean("configured")),
             embyUserId = emby.getString("userId"),
+            embyPassword = SecretStatus(emby.optJSONObject("password")?.optBoolean("configured") == true),
             drive115ClientId = drive.getString("clientId"),
             tmdbBaseUrl = tmdb.getString("baseUrl"),
             tmdbAccessToken = SecretStatus(tmdb.getJSONObject("accessToken").getBoolean("configured")),
@@ -749,7 +750,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
 
     private fun providerSettingsBody(input: ProviderSettingsUpdate) = JSONObject()
         .put("qmediaSync", JSONObject().put("baseUrl", input.qmediaSyncBaseUrl).put("apiKey", secretBody(input.qmediaSyncApiKey)))
-        .put("emby", JSONObject().put("baseUrl", input.embyBaseUrl).put("apiKey", secretBody(input.embyApiKey)).put("userId", input.embyUserId))
+        .put("emby", JSONObject().put("baseUrl", input.embyBaseUrl).put("apiKey", secretBody(input.embyApiKey)).put("userId", input.embyUserId).put("password", secretBody(input.embyPassword)))
         .put("drive115", JSONObject().put("clientId", input.drive115ClientId))
         .put("tmdb", JSONObject().put("baseUrl", input.tmdbBaseUrl).put("accessToken", secretBody(input.tmdbAccessToken)))
         .put("wecom", JSONObject()

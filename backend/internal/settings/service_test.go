@@ -345,6 +345,26 @@ func TestMergeDefaultsOfficialWeComURL(t *testing.T) {
 	}
 }
 
+func TestMergeKeepsEmbyPasswordUnlessUpdated(t *testing.T) {
+	current := Values{Emby: config.Emby{Password: "saved-password"}}
+	kept := merge(current, Update{Emby: EmbyUpdate{}})
+	if kept.Emby.Password != "saved-password" {
+		t.Fatalf("omitted password was not preserved: %q", kept.Emby.Password)
+	}
+	updated := merge(current, Update{Emby: EmbyUpdate{Password: SecretUpdate{Value: "next-password"}}})
+	if updated.Emby.Password != "next-password" {
+		t.Fatalf("password was not updated: %q", updated.Emby.Password)
+	}
+	cleared := merge(current, Update{Emby: EmbyUpdate{Password: SecretUpdate{Clear: true}}})
+	if cleared.Emby.Password != "" {
+		t.Fatalf("password was not cleared: %q", cleared.Emby.Password)
+	}
+	view := publicView(Values{Emby: config.Emby{Password: "saved-password"}})
+	if !view.Emby.Password.Configured {
+		t.Fatal("saved password was not marked configured")
+	}
+}
+
 func TestReadinessCountsBuiltinSourcesWithoutURLs(t *testing.T) {
 	service := NewService(nil, nil, Values{Sources: configSources()}, nil)
 	_, nativeSources := service.ReadinessConfiguration()

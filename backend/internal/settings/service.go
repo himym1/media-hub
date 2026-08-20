@@ -141,6 +141,7 @@ func merge(current Values, input Update) Values {
 	current.Emby.BaseURL = strings.TrimSpace(input.Emby.BaseURL)
 	current.Emby.APIKey = mergeSecret(current.Emby.APIKey, input.Emby.APIKey)
 	current.Emby.UserID = strings.TrimSpace(input.Emby.UserID)
+	current.Emby.Password = mergeSecret(current.Emby.Password, input.Emby.Password)
 	current.Drive115.ClientID = strings.TrimSpace(input.Drive115.ClientID)
 	current.TMDB.BaseURL = strings.TrimSpace(input.TMDB.BaseURL)
 	current.TMDB.AccessToken = mergeSecret(current.TMDB.AccessToken, input.TMDB.AccessToken)
@@ -239,7 +240,7 @@ func validate(value Values) error {
 		return fmt.Errorf("%w: QMediaSync account ID is out of range", ErrInvalid)
 	}
 	if len(value.QMediaSync.BaseURL) > 2048 || len(value.QMediaSync.APIKey) > 4096 ||
-		len(value.Emby.BaseURL) > 2048 || len(value.Emby.APIKey) > 4096 || len(value.Emby.UserID) > 200 ||
+		len(value.Emby.BaseURL) > 2048 || len(value.Emby.APIKey) > 4096 || len(value.Emby.UserID) > 200 || len(value.Emby.Password) > 4096 ||
 		len(value.Drive115.ClientID) > 200 || len(value.TMDB.BaseURL) > 2048 || len(value.TMDB.AccessToken) > 4096 ||
 		len(value.WeCom.BaseURL) > 2048 || len(value.WeCom.CorpID) > 200 || len(value.WeCom.Secret) > 4096 || len(value.WeCom.SendMode) > 20 || len(value.WeCom.ToUser) > 200 || len(value.WeCom.ChatID) > 200 {
 		return fmt.Errorf("%w: provider setting is too long", ErrInvalid)
@@ -395,9 +396,12 @@ func publicView(value Values) View {
 	}
 	return View{
 		QMediaSync: QMediaSyncView{BaseURL: value.QMediaSync.BaseURL, APIKey: SecretStatus{Configured: value.QMediaSync.APIKey != ""}},
-		Emby:       EmbyView{BaseURL: value.Emby.BaseURL, APIKey: SecretStatus{Configured: value.Emby.APIKey != ""}, UserID: value.Emby.UserID},
-		Drive115:   Drive115View{ClientID: value.Drive115.ClientID},
-		TMDB:       TMDBView{BaseURL: value.TMDB.BaseURL, AccessToken: SecretStatus{Configured: value.TMDB.AccessToken != ""}},
+		Emby: EmbyView{
+			BaseURL: value.Emby.BaseURL, APIKey: SecretStatus{Configured: value.Emby.APIKey != ""},
+			UserID: value.Emby.UserID, Password: SecretStatus{Configured: value.Emby.Password != ""},
+		},
+		Drive115: Drive115View{ClientID: value.Drive115.ClientID},
+		TMDB:     TMDBView{BaseURL: value.TMDB.BaseURL, AccessToken: SecretStatus{Configured: value.TMDB.AccessToken != ""}},
 		WeCom: WeComView{
 			BaseURL: value.WeCom.BaseURL, CorpID: value.WeCom.CorpID, Secret: SecretStatus{Configured: value.WeCom.Secret != ""},
 			SendMode: value.WeCom.DeliveryMode(), AgentID: value.WeCom.AgentID, ToUser: value.WeCom.ToUser, ChatID: value.WeCom.ChatID,

@@ -5,16 +5,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -44,7 +43,6 @@ class SystemNavigationTest {
                     detailOpen = false,
                     onSystemBack = { destination = MainDestination.Library },
                     onOpenSystem = { destination = MainDestination.Services },
-                    onSystemSelected = { destination = it },
                     onPrimarySelected = { destination = it },
                 ) {
                     MediaHubText("系统内容")
@@ -54,10 +52,7 @@ class SystemNavigationTest {
 
         composeRule.onNodeWithContentDescription("返回主页面")
             .assertHasClickAction().assertHeightIsAtLeast(48.dp)
-        composeRule.onNodeWithText("服务").assertIsSelected().assertHeightIsAtLeast(48.dp)
-        composeRule.onNode(hasText("运维") and hasClickAction())
-            .assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
-        composeRule.onNode(hasText("运维") and hasClickAction()).assertIsSelected()
+        composeRule.onNode(hasText("运维") and hasClickAction()).assertDoesNotExist()
         composeRule.onNodeWithContentDescription("返回主页面").performClick()
         composeRule.runOnIdle { assertEquals(MainDestination.Library, destination) }
         composeRule.onNodeWithTag("workspace-bottom-nav").assertExists()
@@ -73,7 +68,6 @@ class SystemNavigationTest {
                     detailOpen = true,
                     onSystemBack = {},
                     onOpenSystem = {},
-                    onSystemSelected = {},
                     onPrimarySelected = {},
                 ) {
                     MediaHubText("媒体详情", modifier = androidx.compose.ui.Modifier.testTag("detail-title"))

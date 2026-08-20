@@ -14,7 +14,7 @@ export type SecretUpdate = { value: string; clear: boolean }
 export type WorkflowTargetSettings = { destinationId: string; qMediaSyncTargetPath: string; embyLibraryId: string }
 export type ProviderSettings = {
   qmediaSync: { baseUrl: string; apiKey: SecretStatus }
-  emby: { baseUrl: string; apiKey: SecretStatus; userId: string }
+  emby: { baseUrl: string; apiKey: SecretStatus; userId: string; password: SecretStatus }
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretStatus }
   wecom: { baseUrl: string; corpId: string; secret: SecretStatus; sendMode: 'app' | 'appchat'; agentId: number; toUser: string; chatId: string }
@@ -23,7 +23,7 @@ export type ProviderSettings = {
 }
 export type ProviderSettingsUpdate = {
   qmediaSync: { baseUrl: string; apiKey: SecretUpdate }
-  emby: { baseUrl: string; apiKey: SecretUpdate; userId: string }
+  emby: { baseUrl: string; apiKey: SecretUpdate; userId: string; password: SecretUpdate }
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretUpdate }
   wecom: { baseUrl: string; corpId: string; secret: SecretUpdate; sendMode: 'app' | 'appchat'; agentId: number; toUser: string; chatId: string }

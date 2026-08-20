@@ -40,7 +40,7 @@ const sources = ['mikan', 'sidhub', 'framehdr', 'juying', 'dian', 'guanying', 'g
 
 const providerSettings = {
   qmediaSync: { baseUrl: 'http://qmediasync.local', apiKey: { configured: true } },
-  emby: { baseUrl: 'http://emby.local', apiKey: { configured: true }, userId: 'user' },
+  emby: { baseUrl: 'http://emby.local', apiKey: { configured: true }, userId: 'user', password: { configured: false } },
   drive115: { clientId: '' },
   tmdb: { baseUrl: 'https://api.themoviedb.org/3', accessToken: { configured: true } },
   wecom: { baseUrl: 'https://qyapi.weixin.qq.com', corpId: '', secret: { configured: false }, sendMode: 'app', agentId: 0, toUser: '@all', chatId: '' },

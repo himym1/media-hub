@@ -94,7 +94,8 @@ func run(logger *slog.Logger) error {
 	)
 	embyClient := emby.NewConfiguredClient(emby.RuntimeConfig{
 		BaseURL: configuration.Emby.BaseURL, APIKey: configuration.Emby.APIKey,
-		UserID: configuration.Emby.UserID, PlaybackBaseURL: configuration.EmbyPlaybackBaseURL,
+		UserID: configuration.Emby.UserID, Password: configuration.Emby.Password,
+		PlaybackBaseURL: configuration.EmbyPlaybackBaseURL,
 		MovieLibraryID:  configuration.Workflow.Movie.EmbyLibraryID,
 		SeriesLibraryID: configuration.Workflow.Series.EmbyLibraryID,
 	}, configuration.ProbeTimeout)
@@ -126,7 +127,8 @@ func run(logger *slog.Logger) error {
 		func(value settings.Values) {
 			qmsClient.Configure(value.QMediaSync.BaseURL, value.QMediaSync.APIKey)
 			embyClient.Configure(emby.RuntimeConfig{
-				BaseURL: value.Emby.BaseURL, APIKey: value.Emby.APIKey, UserID: value.Emby.UserID,
+				BaseURL: value.Emby.BaseURL, APIKey: value.Emby.APIKey,
+				UserID: value.Emby.UserID, Password: value.Emby.Password,
 				PlaybackBaseURL: configuration.EmbyPlaybackBaseURL,
 				MovieLibraryID:  value.Workflow.Movie.EmbyLibraryID,
 				SeriesLibraryID: value.Workflow.Series.EmbyLibraryID,

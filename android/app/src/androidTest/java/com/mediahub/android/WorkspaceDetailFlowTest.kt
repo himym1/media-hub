@@ -59,7 +59,6 @@ class WorkspaceDetailFlowTest {
                     detailOpen = route.detail is WorkspaceDetail.Transfer,
                     onSystemBack = {},
                     onOpenSystem = {},
-                    onSystemSelected = {},
                     onPrimarySelected = {},
                 ) {
                     TransferScreen(
@@ -112,7 +111,6 @@ class WorkspaceDetailFlowTest {
                         detailOpen = route.detail is WorkspaceDetail.SubscriptionEditor,
                         onSystemBack = {},
                         onOpenSystem = {},
-                        onSystemSelected = {},
                         onPrimarySelected = {},
                     ) {
                         if (route.detail is WorkspaceDetail.SubscriptionEditor) {

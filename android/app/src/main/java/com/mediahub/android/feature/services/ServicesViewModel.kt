@@ -254,6 +254,7 @@ private fun ProviderSettings.toUpdate() = ProviderSettingsUpdate(
     embyBaseUrl = embyBaseUrl,
     embyApiKey = SecretUpdate(),
     embyUserId = embyUserId,
+    embyPassword = SecretUpdate(),
     drive115ClientId = drive115ClientId,
     tmdbBaseUrl = tmdbBaseUrl,
     tmdbAccessToken = SecretUpdate(),

@@ -53,9 +53,10 @@ type QMediaSyncUpdate struct {
 }
 
 type EmbyUpdate struct {
-	BaseURL string       `json:"baseUrl"`
-	APIKey  SecretUpdate `json:"apiKey"`
-	UserID  string       `json:"userId"`
+	BaseURL  string       `json:"baseUrl"`
+	APIKey   SecretUpdate `json:"apiKey"`
+	UserID   string       `json:"userId"`
+	Password SecretUpdate `json:"password"`
 }
 
 type Drive115Update struct {
@@ -105,9 +106,10 @@ type QMediaSyncView struct {
 }
 
 type EmbyView struct {
-	BaseURL string       `json:"baseUrl"`
-	APIKey  SecretStatus `json:"apiKey"`
-	UserID  string       `json:"userId"`
+	BaseURL  string       `json:"baseUrl"`
+	APIKey   SecretStatus `json:"apiKey"`
+	UserID   string       `json:"userId"`
+	Password SecretStatus `json:"password"`
 }
 
 type Drive115View struct {

@@ -53,18 +53,21 @@ func TestDeletePreviewOmitsFilesystemPathsAndKeepsCloud(t *testing.T) {
 	}
 }
 
-func TestDeleteItemSendsUserAuthorizationWithoutRecursiveQuery(t *testing.T) {
+func TestDeleteItemUsesUserSessionToken(t *testing.T) {
 	var deleted bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if serveUserSession(w, request) {
+			return
+		}
 		switch {
 		case request.URL.Path == "/Users/user-1/Items/item-1" && request.Method == http.MethodGet:
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
 		case request.URL.Path == "/Items/item-1" && request.Method == http.MethodDelete:
 			authorization := request.Header.Get("X-Emby-Authorization")
 			if request.URL.Query().Get("Recursive") != "" || request.URL.Query().Get("UserId") != "user-1" ||
-				request.Header.Get("X-Emby-Token") != "emby-key" ||
+				request.Header.Get("X-Emby-Token") != "user-token" ||
 				!strings.Contains(authorization, `UserId="user-1"`) ||
-				!strings.Contains(authorization, `Token="emby-key"`) {
+				!strings.Contains(authorization, `Token="user-token"`) {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -76,7 +79,7 @@ func TestDeleteItemSendsUserAuthorizationWithoutRecursiveQuery(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if err := NewClient(server.URL, "emby-key", time.Second, "user-1").DeleteItem(context.Background(), "item-1"); err != nil {
+	if err := deleteTestClient(server.URL).DeleteItem(context.Background(), "item-1"); err != nil {
 		t.Fatal(err)
 	}
 	if !deleted {
@@ -120,13 +123,16 @@ func TestDeletePreviewIgnoresUnusableDeleteInfo(t *testing.T) {
 func TestDeleteItemFallsBackToPostDelete(t *testing.T) {
 	var posted bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if serveUserSession(w, request) {
+			return
+		}
 		switch {
-		case request.URL.Path == "/Items/item-1" && request.Method == http.MethodGet:
+		case request.URL.Path == "/Users/user-1/Items/item-1" && request.Method == http.MethodGet:
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
 		case request.URL.Path == "/Items/item-1" && request.Method == http.MethodDelete:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		case request.URL.Path == "/Items/item-1/Delete" && request.Method == http.MethodPost:
-			if request.URL.Query().Get("Recursive") != "" || request.Header.Get("X-Emby-Token") != "emby-key" {
+			if request.URL.Query().Get("Recursive") != "" || request.Header.Get("X-Emby-Token") != "user-token" {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -137,7 +143,7 @@ func TestDeleteItemFallsBackToPostDelete(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	if err := NewClient(server.URL, "emby-key", time.Second).DeleteItem(context.Background(), "item-1"); err != nil {
+	if err := deleteTestClient(server.URL).DeleteItem(context.Background(), "item-1"); err != nil {
 		t.Fatal(err)
 	}
 	if !posted {
@@ -166,6 +172,9 @@ func TestDeletePreviewAllowsMissingDeleteInfo(t *testing.T) {
 func TestDeleteItemFallsBackToIdsDelete(t *testing.T) {
 	var posted bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if serveUserSession(w, request) {
+			return
+		}
 		switch {
 		case request.URL.Path == "/Users/user-1/Items/item-1" && request.Method == http.MethodGet:
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
@@ -175,6 +184,7 @@ func TestDeleteItemFallsBackToIdsDelete(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 		case request.URL.Path == "/Items/Delete" && request.Method == http.MethodPost:
 			if request.URL.Query().Get("Ids") != "item-1" || request.URL.Query().Get("UserId") != "user-1" ||
+				request.Header.Get("X-Emby-Token") != "user-token" ||
 				!strings.Contains(request.Header.Get("X-Emby-Authorization"), `UserId="user-1"`) {
 				w.WriteHeader(http.StatusBadRequest)
 				return
@@ -186,7 +196,7 @@ func TestDeleteItemFallsBackToIdsDelete(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	if err := NewClient(server.URL, "emby-key", time.Second, "user-1").DeleteItem(context.Background(), "item-1"); err != nil {
+	if err := deleteTestClient(server.URL).DeleteItem(context.Background(), "item-1"); err != nil {
 		t.Fatal(err)
 	}
 	if !posted {
@@ -196,6 +206,9 @@ func TestDeleteItemFallsBackToIdsDelete(t *testing.T) {
 
 func TestDeleteItemMapsBadRequest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if serveUserSession(w, request) {
+			return
+		}
 		if request.Method == http.MethodGet {
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
 			return
@@ -203,13 +216,16 @@ func TestDeleteItemMapsBadRequest(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 	defer server.Close()
-	if err := NewClient(server.URL, "emby-key", time.Second).DeleteItem(context.Background(), "item-1"); !errors.Is(err, ErrDeleteRejected) {
+	if err := deleteTestClient(server.URL).DeleteItem(context.Background(), "item-1"); !errors.Is(err, ErrDeleteRejected) {
 		t.Fatalf("error=%v", err)
 	}
 }
 
 func TestDeleteItemRejectsUnauthorized(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if serveUserSession(w, request) {
+			return
+		}
 		if request.Method == http.MethodGet {
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
 			return
@@ -218,7 +234,56 @@ func TestDeleteItemRejectsUnauthorized(t *testing.T) {
 		_, _ = io.WriteString(w, "no")
 	}))
 	defer server.Close()
-	if err := NewClient(server.URL, "emby-key", time.Second).DeleteItem(context.Background(), "item-1"); !errors.Is(err, ErrUnauthorized) {
+	if err := deleteTestClient(server.URL).DeleteItem(context.Background(), "item-1"); !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("error=%v", err)
 	}
+}
+
+func TestDeleteItemRequiresUserPassword(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodGet &&
+			(request.URL.Path == "/Items/item-1" || request.URL.Path == "/Users/user-1/Items/item-1") {
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+	if err := NewClient(server.URL, "emby-key", time.Second).DeleteItem(context.Background(), "item-1"); !errors.Is(err, ErrDeleteNeedsUser) {
+		t.Fatalf("error=%v", err)
+	}
+	if err := NewConfiguredClient(RuntimeConfig{
+		BaseURL: server.URL, APIKey: "emby-key", UserID: "user-1",
+	}, time.Second).DeleteItem(context.Background(), "item-1"); !errors.Is(err, ErrDeleteNeedsUser) {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+func deleteTestClient(baseURL string) *Client {
+	return NewConfiguredClient(RuntimeConfig{
+		BaseURL: baseURL, APIKey: "emby-key", UserID: "user-1", Password: "emby-pw",
+	}, time.Second)
+}
+
+func serveUserSession(w http.ResponseWriter, request *http.Request) bool {
+	switch {
+	case request.URL.Path == "/Users/user-1/Authenticate" && request.Method == http.MethodPost:
+		var body struct {
+			Pw string `json:"Pw"`
+		}
+		_ = json.NewDecoder(request.Body).Decode(&body)
+		if body.Pw != "emby-pw" || request.Header.Get("X-Emby-Token") != "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return true
+		}
+		_, _ = w.Write([]byte(`{"AccessToken":"user-token"}`))
+		return true
+	case request.URL.Path == "/Users/user-1" && request.Method == http.MethodGet:
+		_, _ = w.Write([]byte(`{"Id":"user-1","Name":"admin"}`))
+		return true
+	case request.URL.Path == "/Users/AuthenticateByName" && request.Method == http.MethodPost:
+		_, _ = w.Write([]byte(`{"AccessToken":"user-token"}`))
+		return true
+	}
+	return false
 }

@@ -24,6 +24,7 @@ var (
 	ErrUnauthorized     = errors.New("Emby rejected authentication")
 	ErrItemNotFound     = errors.New("Emby item was not found")
 	ErrDeleteRejected   = errors.New("Emby rejected the delete")
+	ErrDeleteNeedsUser  = errors.New("Emby delete requires a user password")
 	ErrUpstreamResponse = errors.New("Emby returned an invalid response")
 )
 
@@ -31,6 +32,7 @@ type RuntimeConfig struct {
 	BaseURL         string
 	APIKey          string
 	UserID          string
+	Password        string
 	PlaybackBaseURL string
 	MovieLibraryID  string
 	SeriesLibraryID string
@@ -40,15 +42,17 @@ type clientConfig struct {
 	baseURL         string
 	apiKey          string
 	userID          string
+	password        string
 	playbackBaseURL string
 	movieLibraryID  string
 	seriesLibraryID string
 }
 
 type Client struct {
-	mutex  sync.RWMutex
-	config clientConfig
-	client *http.Client
+	mutex        sync.RWMutex
+	config       clientConfig
+	client       *http.Client
+	sessionToken string
 }
 
 type ServerInfo struct {
@@ -170,6 +174,7 @@ func NewConfiguredClient(configuration RuntimeConfig, timeout time.Duration) *Cl
 func (c *Client) Configure(configuration RuntimeConfig) {
 	c.mutex.Lock()
 	c.config = runtimeClientConfig(configuration)
+	c.sessionToken = ""
 	c.mutex.Unlock()
 }
 
@@ -178,6 +183,7 @@ func runtimeClientConfig(configuration RuntimeConfig) clientConfig {
 		baseURL:         strings.TrimRight(strings.TrimSpace(configuration.BaseURL), "/"),
 		apiKey:          strings.TrimSpace(configuration.APIKey),
 		userID:          strings.TrimSpace(configuration.UserID),
+		password:        strings.TrimSpace(configuration.Password),
 		playbackBaseURL: strings.TrimRight(strings.TrimSpace(configuration.PlaybackBaseURL), "/"),
 		movieLibraryID:  strings.TrimSpace(configuration.MovieLibraryID),
 		seriesLibraryID: strings.TrimSpace(configuration.SeriesLibraryID),
@@ -821,6 +827,17 @@ func applyEmbyAuth(request *http.Request, configuration clientConfig) {
 	if configuration.userID != "" {
 		request.Header.Set("X-Emby-UserId", configuration.userID)
 	}
+}
+
+func applyEmbyClientAuth(request *http.Request) {
+	authorization := strings.Join([]string{
+		`MediaBrowser Client="Media Hub"`,
+		`Device="MediaHub"`,
+		`DeviceId="media-hub"`,
+		`Version="1.0"`,
+	}, ", ")
+	request.Header.Set("X-Emby-Authorization", authorization)
+	request.Header.Set("Authorization", authorization)
 }
 
 func embyAuthorization(configuration clientConfig) string {

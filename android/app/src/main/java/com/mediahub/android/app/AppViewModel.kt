@@ -15,7 +15,6 @@ enum class MainDestination(val title: String, val subtitle: String) {
     Subscriptions("订阅", "自动追剧"),
     Transfers("任务", "转存进度"),
     Library("媒体库", "已入库内容"),
-    Operations("运维", "115 与归档"),
     Services("服务与设置", "账户与接入"),
 }
 
@@ -55,8 +54,7 @@ internal class MainNavigationHistory(
     fun openSystem(): WorkspaceRoute = WorkspaceRoute(MainDestination.Services).also { current = it }
 
     fun showSystem(destination: MainDestination): WorkspaceRoute {
-        val target = destination.takeIf { it == MainDestination.Services || it == MainDestination.Operations }
-            ?: MainDestination.Services
+        val target = destination.takeIf { it == MainDestination.Services } ?: MainDestination.Services
         return WorkspaceRoute(target).also { current = it }
     }
 
@@ -145,10 +143,6 @@ class AppViewModel(
 
     fun openSystem() {
         _route.value = navigation.openSystem()
-    }
-
-    fun showSystemDestination(destination: MainDestination) {
-        _route.value = navigation.showSystem(destination)
     }
 
     fun closeSystem() {

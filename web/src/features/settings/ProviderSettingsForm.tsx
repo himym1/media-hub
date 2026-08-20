@@ -30,7 +30,7 @@ function secret(): SecretUpdate {
 function createDraft(settings: ProviderSettings): Draft {
   return {
     qmediaSync: { baseUrl: settings.qmediaSync.baseUrl, apiKey: secret() },
-    emby: { baseUrl: settings.emby.baseUrl, apiKey: secret(), userId: settings.emby.userId },
+    emby: { baseUrl: settings.emby.baseUrl, apiKey: secret(), userId: settings.emby.userId, password: secret() },
     drive115: { clientId: settings.drive115.clientId },
     tmdb: { baseUrl: settings.tmdb.baseUrl, accessToken: secret() },
     wecom: {
@@ -94,7 +94,10 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
             <label><span>服务地址</span><input {...machineFieldProps} name="emby-base-url" onChange={(event) => setDraft((current) => ({ ...current, emby: { ...current.emby, baseUrl: event.target.value } }))} type="url" value={draft.emby.baseUrl} /></label>
             <label><span>API Key · {secretHint(settings.emby.apiKey.configured)}</span><input {...machineFieldProps} autoComplete="new-password" name="emby-api-key" onChange={(event) => updateSecret('emby', 'apiKey', { ...draft.emby.apiKey, value: event.target.value })} type="password" value={draft.emby.apiKey.value} /></label>
             <label><span>用户 ID</span><input {...machineFieldProps} name="emby-user-id" onChange={(event) => setDraft((current) => ({ ...current, emby: { ...current.emby, userId: event.target.value } }))} value={draft.emby.userId} /></label>
+            <label><span>用户密码 · {secretHint(settings.emby.password.configured)}</span><input {...machineFieldProps} autoComplete="new-password" name="emby-password" onChange={(event) => setDraft((current) => ({ ...current, emby: { ...current.emby, password: { ...current.emby.password, value: event.target.value } } }))} type="password" value={draft.emby.password.value} /></label>
+            <p className="settings-note">从 Emby 删除媒体需要该用户的登录密码；仅 API Key 无法删除。</p>
             {settings.emby.apiKey.configured ? <label className="inline-check"><input checked={draft.emby.apiKey.clear} name="emby-clear-api-key" onChange={(event) => updateSecret('emby', 'apiKey', { value: '', clear: event.target.checked })} type="checkbox" />清除已保存 API Key</label> : null}
+            {settings.emby.password.configured ? <label className="inline-check"><input checked={draft.emby.password.clear} name="emby-clear-password" onChange={(event) => setDraft((current) => ({ ...current, emby: { ...current.emby, password: { value: '', clear: event.target.checked } } }))} type="checkbox" />清除已保存用户密码</label> : null}
           </fieldset>
 
           <fieldset>

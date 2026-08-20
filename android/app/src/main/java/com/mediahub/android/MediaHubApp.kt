@@ -30,7 +30,6 @@ import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.Settings2
-import com.composables.icons.lucide.SquareTerminal
 import com.mediahub.android.app.AppState
 import com.mediahub.android.app.AppViewModel
 import com.mediahub.android.app.MainDestination
@@ -45,7 +44,6 @@ import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubNavItem
 import com.mediahub.android.core.designsystem.MediaHubNavigationBar
 import com.mediahub.android.core.designsystem.MediaHubScaffold
-import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.image.PosterLoader
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTheme
@@ -57,12 +55,7 @@ import com.mediahub.android.feature.config.ServerConfigViewModel
 import com.mediahub.android.feature.library.LibraryRoute
 import com.mediahub.android.feature.library.LibraryDetailViewModel
 import com.mediahub.android.feature.library.LibraryViewModel
-import com.mediahub.android.feature.operations.ArchiveViewModel
-import com.mediahub.android.feature.operations.Drive115ViewModel
-import com.mediahub.android.feature.operations.LocalUploadViewModel
-import com.mediahub.android.feature.operations.OperationsRoute
 import com.mediahub.android.feature.player.PlayerActivity
-import com.mediahub.android.playback.Drive115Target
 import com.mediahub.android.playback.EmbyItemTarget
 import com.mediahub.android.playback.PlaybackRequest
 import com.mediahub.android.feature.search.SearchRoute
@@ -180,7 +173,7 @@ private fun AuthenticatedWorkspace(
     val destination = route.destination
     val detail = route.detail
     val subscriptionDraft by appViewModel.subscriptionDraft.collectAsState()
-    val inSystem = destination == MainDestination.Services || destination == MainDestination.Operations
+    val inSystem = destination == MainDestination.Services
     val detailOpen = detail != null
     BackHandler(enabled = inSystem, onBack = appViewModel::closeSystem)
     WorkspaceShell(
@@ -188,7 +181,6 @@ private fun AuthenticatedWorkspace(
         detailOpen = detailOpen,
         onSystemBack = appViewModel::closeSystem,
         onOpenSystem = appViewModel::openSystem,
-        onSystemSelected = appViewModel::showSystemDestination,
         onPrimarySelected = appViewModel::showDestination,
     ) {
             when (destination) {
@@ -250,24 +242,6 @@ private fun AuthenticatedWorkspace(
                         },
                     )
                 }
-                MainDestination.Operations -> {
-                    val driveViewModel = viewModel<Drive115ViewModel>(key = "operations-drive-$serverGeneration", factory = factory)
-                    val localUploadViewModel = viewModel<LocalUploadViewModel>(key = "operations-upload-$serverGeneration", factory = factory)
-                    val archiveViewModel = viewModel<ArchiveViewModel>(key = "operations-archive-$serverGeneration", factory = factory)
-                    OperationsRoute(
-                        driveViewModel = driveViewModel,
-                        localUploadViewModel = localUploadViewModel,
-                        archiveViewModel = archiveViewModel,
-                        onPlayDriveFile = { file, parentId ->
-                            context.startActivity(
-                                PlayerActivity.intent(
-                                    context,
-                                    PlaybackRequest(Drive115Target(parentId, file.id), file.name, serverIdentity),
-                                ),
-                            )
-                        },
-                    )
-                }
                 MainDestination.Services -> {
                     val servicesViewModel = viewModel<ServicesViewModel>(key = "services-$serverGeneration", factory = factory)
                     ServicesRoute(
@@ -289,11 +263,10 @@ internal fun WorkspaceShell(
     detailOpen: Boolean,
     onSystemBack: () -> Unit,
     onOpenSystem: () -> Unit,
-    onSystemSelected: (MainDestination) -> Unit,
     onPrimarySelected: (MainDestination) -> Unit,
     content: @Composable () -> Unit,
 ) {
-    val inSystem = destination == MainDestination.Services || destination == MainDestination.Operations
+    val inSystem = destination == MainDestination.Services
     MediaHubScaffold(
         topBar = {
             if (!detailOpen) {
@@ -316,9 +289,6 @@ internal fun WorkspaceShell(
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            if (inSystem) {
-                SystemSectionSwitcher(destination = destination, onSelected = onSystemSelected)
-            }
             Box(Modifier.weight(1f)) { content() }
         }
     }
@@ -355,30 +325,11 @@ internal fun WorkspaceTopBar(
     )
 }
 
-@Composable
-internal fun SystemSectionSwitcher(
-    destination: MainDestination,
-    onSelected: (MainDestination) -> Unit,
-) {
-    MediaHubSegmentedControl(
-        options = listOf(
-            MainDestination.Services.name to "服务",
-            MainDestination.Operations.name to "运维",
-        ),
-        selected = destination.name,
-        onSelected = { value ->
-            MainDestination.entries.firstOrNull { it.name == value }?.let(onSelected)
-        },
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-    )
-}
-
 private fun destinationIcon(destination: MainDestination) = when (destination) {
     MainDestination.Search -> Lucide.Search
     MainDestination.Transfers -> Lucide.ListTodo
     MainDestination.Subscriptions -> Lucide.ListPlus
     MainDestination.Library -> Lucide.LibraryBig
-    MainDestination.Operations -> Lucide.SquareTerminal
     MainDestination.Services -> Lucide.Settings2
 }
 

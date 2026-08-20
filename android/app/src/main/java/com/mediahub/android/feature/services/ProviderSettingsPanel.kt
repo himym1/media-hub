@@ -89,6 +89,10 @@ internal fun ProviderSettingsPanel(
                 onDraftChange(draft.copy(embyApiKey = it))
             }
             LabeledField("Emby 用户 ID", draft.embyUserId) { onDraftChange(draft.copy(embyUserId = it)) }
+            SecretField("Emby 用户密码", settings.embyPassword, draft.embyPassword) {
+                onDraftChange(draft.copy(embyPassword = it))
+            }
+            MediaHubText("从 Emby 删除媒体需要该用户的登录密码；仅 API Key 无法删除。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             MediaHubText("115 网盘请在「概览」页扫码授权，无需开放平台开发者账号。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
         }
 
