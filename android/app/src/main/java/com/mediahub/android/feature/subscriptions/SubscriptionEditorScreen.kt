@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -245,17 +247,18 @@ private fun CollapsibleHeader(label: String, summary: String, expanded: Boolean,
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)
+            .heightIn(min = 50.dp)
+            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
+            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
             .clickable(role = Role.Button, onClick = onClick)
-            .background(MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp))
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            MediaHubText(text = label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            MediaHubText(text = label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             MediaHubText(text = summary, color = MediaHubColors.TextMuted, fontSize = 12.sp)
         }
-        MediaHubIcon(if (expanded) Lucide.ChevronUp else Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(17.dp))
+        MediaHubIcon(if (expanded) Lucide.ChevronUp else Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -271,8 +274,6 @@ private fun qualityPresetSummary(preset: String) = when (preset) {
     "quality" -> "仅选择 2160p Dolby Vision / HDR10，最小 15 GiB。"
     else -> "不限制清晰度、编码和体积；体积未知的资源也可参与选择。"
 }
-
-
 
 @Composable
 private fun LabeledField(
@@ -308,16 +309,24 @@ private fun OptionGroup(
         MediaHubText(text = label, color = MediaHubColors.TextMuted, fontSize = 12.sp)
         Row(Modifier.fillMaxWidth().padding(top = 7.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             values.forEach { (value, display) ->
+                val isSelected = selected == value
                 Row(
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 48.dp)
-                        .background(if (selected == value) MediaHubColors.SurfaceSelected else MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp))
-                        .selectable(selected = selected == value, enabled = enabled, role = Role.RadioButton) { onSelected(value) }
-                        .padding(12.dp),
+                        .background(if (isSelected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface, RoundedCornerShape(8.dp))
+                        .border(width = 1.dp, color = if (isSelected) MediaHubColors.Accent else MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
+                        .selectable(selected = isSelected, enabled = enabled, role = Role.RadioButton) { onSelected(value) }
+                        .padding(horizontal = 8.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    MediaHubText(text = display, color = if (selected == value) MediaHubColors.Accent else MediaHubColors.TextSecondary, fontSize = 12.sp)
+                    MediaHubText(
+                        text = display,
+                        color = if (isSelected) MediaHubColors.TextPrimary else MediaHubColors.TextSecondary,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    )
                 }
             }
         }
@@ -331,13 +340,24 @@ private fun BooleanOption(label: String, checked: Boolean, onChanged: (Boolean) 
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .toggleable(value = checked, role = Role.Checkbox) { onChanged(it) }
-            .background(MediaHubColors.SurfaceInput, RoundedCornerShape(7.dp))
-            .padding(12.dp),
+            .background(if (checked) MediaHubColors.SurfaceSelected else MediaHubColors.Surface, RoundedCornerShape(8.dp))
+            .border(width = 1.dp, color = if (checked) MediaHubColors.Accent else MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Spacer(Modifier.size(16.dp).background(if (checked) MediaHubColors.Accent else MediaHubColors.Border, RoundedCornerShape(4.dp)))
-        Spacer(Modifier.width(10.dp))
-        MediaHubText(text = label, fontSize = 12.sp)
+        Spacer(
+            Modifier
+                .size(18.dp)
+                .background(if (checked) MediaHubColors.Accent else Color.Transparent, RoundedCornerShape(4.dp))
+                .border(width = 1.dp, color = if (checked) MediaHubColors.Accent else MediaHubColors.Border, shape = RoundedCornerShape(4.dp))
+        )
+        Spacer(Modifier.width(12.dp))
+        MediaHubText(
+            text = label,
+            fontSize = 13.sp,
+            color = if (checked) MediaHubColors.TextPrimary else MediaHubColors.TextSecondary,
+            fontWeight = if (checked) FontWeight.Medium else FontWeight.Normal,
+        )
     }
 }
 

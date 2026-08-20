@@ -2,6 +2,7 @@ package com.mediahub.android.feature.library
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -161,14 +162,25 @@ internal fun LibraryScreen(
                         modifier = Modifier
                             .heightIn(min = 48.dp)
                             .background(if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface, RoundedCornerShape(8.dp))
+                            .border(width = 1.dp, color = if (selected) MediaHubColors.Accent else MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
                             .selectable(selected = selected, role = Role.RadioButton) { actions.onSelectLibrary(library.id) }
-                            .padding(horizontal = 12.dp),
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        MediaHubIcon(Lucide.LibraryBig, contentDescription = null, modifier = Modifier.size(17.dp))
+                        MediaHubIcon(
+                            imageVector = Lucide.LibraryBig,
+                            contentDescription = null,
+                            tint = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted,
+                            modifier = Modifier.size(17.dp),
+                        )
                         Spacer(Modifier.width(8.dp))
                         Column {
-                            MediaHubText(text = library.name, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            MediaHubText(
+                                text = library.name,
+                                color = if (selected) MediaHubColors.TextPrimary else MediaHubColors.TextSecondary,
+                                fontSize = 13.sp,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                            )
                             if (!library.name.equals(collection, ignoreCase = true)) {
                                 MediaHubText(text = collection, color = MediaHubColors.TextMuted, fontSize = 12.sp)
                             }
@@ -220,15 +232,27 @@ internal fun LibraryScreen(
             if (!uiState.loadingItems && uiState.items.isEmpty()) {
                 item(key = "empty") {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 54.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 36.dp)
+                            .background(MediaHubColors.Surface, RoundedCornerShape(10.dp))
+                            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(10.dp))
+                            .padding(vertical = 36.dp, horizontal = 20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        MediaHubIcon(Lucide.BookOpen, contentDescription = null, modifier = Modifier.size(28.dp))
+                        MediaHubIcon(Lucide.BookOpen, contentDescription = null, tint = MediaHubColors.TextMuted, modifier = Modifier.size(32.dp))
                         MediaHubText(
-                            text = if (uiState.submittedQuery.isNotEmpty()) "没有匹配的媒体" else "此媒体库暂无内容",
-                            modifier = Modifier.padding(top = 12.dp),
+                            text = if (uiState.submittedQuery.isNotEmpty()) "没有找到匹配的媒体内容" else "此媒体库暂无内容",
+                            modifier = Modifier.padding(top = 14.dp),
+                            color = MediaHubColors.TextSecondary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        MediaHubText(
+                            text = if (uiState.submittedQuery.isNotEmpty()) "尝试缩短或更换搜索关键词" else "可在「发现」页搜索并转存新内容到此媒体库",
+                            modifier = Modifier.padding(top = 6.dp),
                             color = MediaHubColors.TextMuted,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                         )
                     }
                 }

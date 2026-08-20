@@ -1,6 +1,7 @@
 package com.mediahub.android.feature.services
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronUp
+import com.composables.icons.lucide.Film
 import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Save
@@ -76,7 +79,7 @@ internal fun ProviderSettingsPanel(
             return@Column
         }
 
-        SettingsSection("核心服务") {
+        SettingsSection("核心媒体服务", "TMDB、QMediaSync 与 Emby 连接配置", Lucide.Film, defaultExpanded = true) {
             LabeledField("TMDB API 地址", draft.tmdbBaseUrl) { onDraftChange(draft.copy(tmdbBaseUrl = it)) }
             SecretField("TMDB Read Access Token", settings.tmdbAccessToken, draft.tmdbAccessToken) {
                 onDraftChange(draft.copy(tmdbAccessToken = it))
@@ -90,7 +93,22 @@ internal fun ProviderSettingsPanel(
                 onDraftChange(draft.copy(embyApiKey = it))
             }
             LabeledField("Emby 用户 ID", draft.embyUserId) { onDraftChange(draft.copy(embyUserId = it)) }
-            MediaHubText("用 115 App 在本页上方扫码授权。不需要开放平台开发者账号。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+            MediaHubText("115 网盘请在「概览」页扫码授权，无需开放平台开发者账号。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+        }
+
+        SettingsSection("工作流目录映射", "QMediaSync 映射账号及媒体库目标路径", Lucide.ServerCog) {
+            LabeledField("QMediaSync Account ID", draft.workflow.qMediaSyncAccountId.toString(), KeyboardType.Number) {
+                onDraftChange(draft.copy(workflow = draft.workflow.copy(qMediaSyncAccountId = it.toIntOrNull() ?: 0)))
+            }
+            WorkflowTargetEditor("电影", draft.workflow.movie) {
+                onDraftChange(draft.copy(workflow = draft.workflow.copy(movie = it)))
+            }
+            WorkflowTargetEditor("剧集", draft.workflow.series) {
+                onDraftChange(draft.copy(workflow = draft.workflow.copy(series = it)))
+            }
+        }
+
+        SettingsSection("消息通知", "企业微信推送通知与消息卡片", Lucide.ServerCog) {
             WeComModePicker(draft.wecom.sendMode) { nextMode ->
                 onDraftChange(draft.copy(wecom = draft.wecom.copy(
                     sendMode = nextMode, agentId = 0, toUser = if (nextMode == "app") "@all" else "", chatId = "",
@@ -110,7 +128,7 @@ internal fun ProviderSettingsPanel(
                 LabeledField("企业微信 Chat ID", draft.wecom.chatId) { onDraftChange(draft.copy(wecom = draft.wecom.copy(chatId = it))) }
             }
             MediaHubButton(
-                label = if (testing) "正在发送" else "测试已保存配置",
+                label = if (testing) "正在发送…" else "发送测试通知",
                 icon = Lucide.ServerCog,
                 enabled = settings.wecom.secret.configured && !saving && !testing,
                 onClick = onTest,
@@ -119,19 +137,7 @@ internal fun ProviderSettingsPanel(
             if (tested) MediaHubText("测试通知已提交", color = MediaHubColors.Source, fontSize = 12.sp)
         }
 
-        SettingsSection("工作流目标") {
-            LabeledField("QMediaSync Account ID", draft.workflow.qMediaSyncAccountId.toString(), KeyboardType.Number) {
-                onDraftChange(draft.copy(workflow = draft.workflow.copy(qMediaSyncAccountId = it.toIntOrNull() ?: 0)))
-            }
-            WorkflowTargetEditor("电影", draft.workflow.movie) {
-                onDraftChange(draft.copy(workflow = draft.workflow.copy(movie = it)))
-            }
-            WorkflowTargetEditor("剧集", draft.workflow.series) {
-                onDraftChange(draft.copy(workflow = draft.workflow.copy(series = it)))
-            }
-        }
-
-        SettingsSection("原生资源源") {
+        SettingsSection("资源搜索源", "8 个内置媒体搜索适配器配置", Lucide.ServerCog) {
             MediaHubText("蜜柑和 Sidhub 使用内置匿名适配器；帧影使用站点账号；聚影可选择网页登录或开发者 API。癫影当前仍使用合同适配器。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             settings.sources.forEachIndexed { index, source ->
                 val item = draft.sources[index]
@@ -174,18 +180,38 @@ internal fun ProviderSettingsPanel(
 }
 
 @Composable
-private fun SettingsSection(title: String, content: @Composable () -> Unit) {
-    var expanded by remember { mutableStateOf(title == "核心服务") }
+private fun SettingsSection(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    defaultExpanded: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(defaultExpanded) }
     Column(
         modifier = Modifier.fillMaxWidth().background(MediaHubColors.Surface, RoundedCornerShape(8.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {
-        MediaHubButton(
-            label = if (expanded) "$title · 收起" else title,
-            icon = if (expanded) Lucide.ChevronUp else Lucide.ChevronDown,
-            onClick = { expanded = !expanded },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable(role = Role.Button) { expanded = !expanded }
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MediaHubIcon(imageVector = icon, contentDescription = null, tint = MediaHubColors.Accent, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                MediaHubText(text = title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                MediaHubText(text = subtitle, color = MediaHubColors.TextMuted, fontSize = 12.sp)
+            }
+            MediaHubIcon(
+                imageVector = if (expanded) Lucide.ChevronUp else Lucide.ChevronDown,
+                contentDescription = if (expanded) "收起" else "展开",
+                tint = MediaHubColors.TextMuted,
+            )
+        }
         if (expanded) content()
     }
 }

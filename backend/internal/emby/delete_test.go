@@ -90,6 +90,52 @@ func TestDeletePreviewRejectsLocalOnlyItems(t *testing.T) {
 	}
 }
 
+func TestDeletePreviewIgnoresUnusableDeleteInfo(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/Items/item-1" {
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer server.Close()
+	preview, err := NewClient(server.URL, "emby-key", time.Second).DeletePreview(context.Background(), "item-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.FileCount != 0 || !preview.DeletesFiles || !preview.CloudKept {
+		t.Fatalf("preview=%#v", preview)
+	}
+}
+
+func TestDeleteItemFallsBackToPostDelete(t *testing.T) {
+	var posted bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.URL.Path == "/Items/item-1" && request.Method == http.MethodGet:
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
+		case request.URL.Path == "/Items/item-1" && request.Method == http.MethodDelete:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		case request.URL.Path == "/Items/item-1/Delete" && request.Method == http.MethodPost:
+			if request.URL.Query().Get("Recursive") != "true" || request.Header.Get("X-Emby-Token") != "emby-key" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			posted = true
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	if err := NewClient(server.URL, "emby-key", time.Second).DeleteItem(context.Background(), "item-1"); err != nil {
+		t.Fatal(err)
+	}
+	if !posted {
+		t.Fatal("Emby POST delete was not called")
+	}
+}
+
 func TestDeletePreviewAllowsMissingDeleteInfo(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path == "/Items/item-1" {

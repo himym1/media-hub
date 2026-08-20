@@ -34,6 +34,7 @@
         <activity
             android:name=".feature.player.PlayerActivity"
             android:exported="false"
+            android:screenOrientation="sensorLandscape"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:supportsPictureInPicture="true" />
         <service

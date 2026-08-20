@@ -47,6 +47,7 @@ class PlayerActivity : ComponentActivity() {
             return
         }
         request = decodedRequest
+        requestedOrientation = PlayerLandscapeOrientation
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
@@ -102,11 +103,7 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun toggleOrientation() {
-        requestedOrientation = if (requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE) {
-            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        } else {
-            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        }
+        requestedOrientation = nextPlayerOrientation(requestedOrientation)
     }
 
     private fun enterPictureInPicture() {
@@ -185,5 +182,14 @@ private fun Bundle.playerUiState(): PlayerUiState = when (getString(MediaHubPlay
     )
     else -> PlayerUiState.Loading
 }
+
+internal const val PlayerLandscapeOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+
+internal fun nextPlayerOrientation(current: Int): Int =
+    if (current == PlayerLandscapeOrientation) {
+        ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    } else {
+        PlayerLandscapeOrientation
+    }
 
 internal fun validRequest(request: PlaybackRequest): Boolean = PlaybackRequestIntentCodec.valid(request)

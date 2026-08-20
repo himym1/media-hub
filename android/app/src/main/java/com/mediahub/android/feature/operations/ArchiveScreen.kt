@@ -1,6 +1,7 @@
 package com.mediahub.android.feature.operations
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,12 +88,16 @@ internal fun ArchiveScreen(state: ArchiveState, actions: ArchiveActions) {
         }
         state.plans.forEach { plan ->
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
+                    .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    MediaHubText(plan.state, color = commandStateColor(plan.state), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    MediaHubText(plan.state, color = commandStateColor(plan.state), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     MediaHubText(
                         "${plan.stepIndex} / ${plan.stepTotal} 步 · ${plan.id}",
                         color = MediaHubColors.TextSecondary,

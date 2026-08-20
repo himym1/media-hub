@@ -30,22 +30,25 @@ func (c *Client) DeletePreview(ctx context.Context, itemID string) (DeletePrevie
 	if err != nil {
 		return DeletePreview{}, err
 	}
-	fileCount := 0
-	var info deleteInfoResponse
-	if err := c.getJSONWithNotFound(ctx, configuration, path.Join("Items", item.ID, "DeleteInfo"), nil, true, &info); err != nil {
-		if !isItemNotFound(err) {
-			return DeletePreview{}, err
-		}
-	} else {
-		fileCount = info.LocalFileCount
-		if fileCount < len(info.Paths) {
-			fileCount = len(info.Paths)
-		}
-	}
 	return DeletePreview{
 		ID: item.ID, Name: item.Name, Type: item.Type,
-		FileCount: fileCount, DeletesFiles: true, CloudKept: true,
+		FileCount: deleteFileCount(c, ctx, configuration, item.ID), DeletesFiles: true, CloudKept: true,
 	}, nil
+}
+
+func deleteFileCount(c *Client, ctx context.Context, configuration clientConfig, itemID string) int {
+	query := url.Values{}
+	if configuration.userID != "" {
+		query.Set("UserId", configuration.userID)
+	}
+	var info deleteInfoResponse
+	if err := c.getJSONWithNotFound(ctx, configuration, path.Join("Items", itemID, "DeleteInfo"), query, true, &info); err != nil {
+		return 0
+	}
+	if info.LocalFileCount > len(info.Paths) {
+		return info.LocalFileCount
+	}
+	return len(info.Paths)
 }
 
 func (c *Client) DeleteItem(ctx context.Context, itemID string) error {
@@ -54,7 +57,10 @@ func (c *Client) DeleteItem(ctx context.Context, itemID string) error {
 		return err
 	}
 	query := url.Values{"Recursive": {"true"}}
-	return c.delete(ctx, configuration, path.Join("Items", item.ID), query)
+	if err := c.delete(ctx, configuration, path.Join("Items", item.ID), query); err == nil || errors.Is(err, ErrUnauthorized) {
+		return err
+	}
+	return c.delete(ctx, configuration, path.Join("Items", item.ID, "Delete"), query, http.MethodPost)
 }
 
 func (c *Client) visibleItem(ctx context.Context, itemID string) (baseItem, clientConfig, error) {
@@ -88,18 +94,29 @@ func (c *Client) visibleItem(ctx context.Context, itemID string) (baseItem, clie
 	return item, configuration, nil
 }
 
-func (c *Client) delete(ctx context.Context, configuration clientConfig, endpointPath string, query url.Values) error {
+func (c *Client) delete(ctx context.Context, configuration clientConfig, endpointPath string, query url.Values, method ...string) error {
+	verb := http.MethodDelete
+	if len(method) > 0 && method[0] != "" {
+		verb = method[0]
+	}
 	endpoint, err := endpointURL(configuration.baseURL, endpointPath, query)
 	if err != nil {
 		return err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
+	var body io.Reader
+	if verb == http.MethodPost {
+		body = strings.NewReader("{}")
+	}
+	request, err := http.NewRequestWithContext(ctx, verb, endpoint, body)
 	if err != nil {
 		return fmt.Errorf("create Emby request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "Media-Hub/emby")
 	request.Header.Set("X-Emby-Token", configuration.apiKey)
+	if verb == http.MethodPost {
+		request.Header.Set("Content-Type", "application/json")
+	}
 	response, err := c.client.Do(request)
 	if err != nil {
 		return fmt.Errorf("request Emby: %w", err)
@@ -116,8 +133,4 @@ func (c *Client) delete(ctx context.Context, configuration clientConfig, endpoin
 		return ErrUpstreamResponse
 	}
 	return nil
-}
-
-func isItemNotFound(err error) bool {
-	return errors.Is(err, ErrItemNotFound)
 }

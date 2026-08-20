@@ -53,11 +53,11 @@ const providerSettings = {
 }
 
 type FixtureOptions = { authenticated?: boolean; withSubscription?: boolean }
-type FixtureState = { transferArchived: boolean }
+type FixtureState = { transferArchived: boolean; itemDeleted: boolean }
 
 export async function installApiFixtures(page: Page, options: FixtureOptions = {}) {
   const authenticated = options.authenticated ?? true
-  const state: FixtureState = { transferArchived: false }
+  const state: FixtureState = { transferArchived: false, itemDeleted: false }
   await page.route('**/api/v1/**', async (route) => respond(route, authenticated, state, options))
 }
 
@@ -106,8 +106,18 @@ async function respond(route: Route, authenticated: boolean, state: FixtureState
   if (path === '/api/v1/integrations/qmediasync/status') return json(route, { version: '0.14.23', totalSyncs: 1, recentSyncs: [] })
   if (path === '/api/v1/integrations/115/status') return json(route, { authorized: true, usedBytes: 1_000_000, totalBytes: 2_000_000 })
   if (path === '/api/v1/integrations/emby/libraries') return json(route, { libraries: [{ id: 'movie', name: '电影', collectionType: 'movies' }] })
-  if (path === '/api/v1/integrations/emby/libraries/movie/items') return json(route, { items: [{ id: 'item-1', name: '验收影片', type: 'Movie', year: 2026, providerIds: { Tmdb: '100' } }], total: 1 })
-  if (path === '/api/v1/integrations/emby/items/item-1' && request.method() === 'GET') return json(route, { id: 'item-1', name: '验收影片', originalTitle: 'Acceptance Movie', overview: '用于验证媒体库详情。', type: 'Movie', year: 2026, providerIds: { Tmdb: '100' }, communityRating: 8.2, runtimeMinutes: 118, genres: ['Drama', 'Science Fiction'], mediaSourceCount: 1, externalUrl: 'https://emby.example/web/index.html#!/item?id=item-1', appUrl: 'emby://items/server-1/item-1' })
+  if (path === '/api/v1/integrations/emby/libraries/movie/items') return json(route, { items: state.itemDeleted ? [] : [{ id: 'item-1', name: '验收影片', type: 'Movie', year: 2026, providerIds: { Tmdb: '100' } }], total: state.itemDeleted ? 0 : 1 })
+  if (path === '/api/v1/integrations/emby/items/item-1' && request.method() === 'GET') {
+    if (state.itemDeleted) return json(route, { code: 'not_found', title: '媒体不存在' }, 404)
+    return json(route, { id: 'item-1', name: '验收影片', originalTitle: 'Acceptance Movie', overview: '用于验证媒体库详情。', type: 'Movie', year: 2026, providerIds: { Tmdb: '100' }, communityRating: 8.2, runtimeMinutes: 118, genres: ['Drama', 'Science Fiction'], mediaSourceCount: 1, externalUrl: 'https://emby.example/web/index.html#!/item?id=item-1', appUrl: 'emby://items/server-1/item-1' })
+  }
+  if (path === '/api/v1/integrations/emby/items/item-1/delete-preview' && request.method() === 'GET') return json(route, { id: 'item-1', name: '验收影片', type: 'Movie', fileCount: 1, deletesFiles: true, cloudKept: true })
+  if (path === '/api/v1/integrations/emby/items/item-1/delete' && request.method() === 'POST') {
+    const confirmation = JSON.parse(request.postData() ?? '{}').confirmation
+    if (confirmation !== 'item-1') return json(route, { code: 'invalid_confirmation', title: '删除确认无效' }, 400)
+    state.itemDeleted = true
+    return json(route, { status: 'deleted' })
+  }
   if ((path === '/api/v1/integrations/emby/libraries/movie/refresh' || path === '/api/v1/integrations/emby/items/item-1/refresh') && request.method() === 'POST') return json(route, { status: 'accepted' }, 202)
   if (path === '/api/v1/settings/providers') return json(route, providerSettings)
   if (path === '/api/v1/subscriptions') return json(route, { subscriptions: options.withSubscription ? [subscription] : [] })

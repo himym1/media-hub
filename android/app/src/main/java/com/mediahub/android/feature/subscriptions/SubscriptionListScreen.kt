@@ -3,7 +3,9 @@ package com.mediahub.android.feature.subscriptions
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -136,20 +138,25 @@ internal fun SubscriptionListScreen(
         }
         state.errorMessage?.let { ErrorLine(it) }
         state.actionMessage?.let { MediaHubText(text = it, color = MediaHubColors.Source, fontSize = 12.sp) }
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(top = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             items(state.subscriptions, key = { it.id }) { item ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 48.dp)
+                        .heightIn(min = 52.dp)
+                        .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
+                        .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
                         .clickable(role = Role.Button) { actions.select(item.id) }
                         .semantics { contentDescription = "打开订阅 ${item.title}" }
-                        .padding(vertical = 15.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Spacer(
                         Modifier
-                            .size(7.dp)
+                            .size(8.dp)
                             .background(
                                 if (item.enabled) MediaHubColors.Accent else MediaHubColors.TextMuted,
                                 RoundedCornerShape(4.dp),
@@ -159,33 +166,46 @@ internal fun SubscriptionListScreen(
                         MediaHubText(
                             text = item.title + if (item.season > 0) " · S${item.season}" else "",
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
+                            fontWeight = FontWeight.SemiBold,
                         )
                         MediaHubText(
                             text = "${if (item.mediaType == "movie") "电影" else "剧集"} · TMDB ${item.tmdbId}" +
                                 if (item.lastEpisode > 0) " · 已入库至 E${item.lastEpisode}" else "",
-                            modifier = Modifier.padding(top = 5.dp),
+                            modifier = Modifier.padding(top = 4.dp),
                             color = MediaHubColors.TextMuted,
                             fontSize = 12.sp,
                         )
                     }
                     MediaHubText(
                         text = if (item.enabled) "运行中" else "已暂停",
-                        color = if (item.enabled) MediaHubColors.Accent else MediaHubColors.TextMuted,
+                        color = if (item.enabled) MediaHubColors.Success else MediaHubColors.TextMuted,
                         fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
                     )
                 }
             }
             if (!state.loading && state.subscriptions.isEmpty()) {
                 item {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 36.dp)
+                            .background(MediaHubColors.Surface, RoundedCornerShape(10.dp))
+                            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(10.dp))
+                            .padding(vertical = 36.dp, horizontal = 20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        MediaHubIcon(Lucide.Clock3, contentDescription = null, modifier = Modifier.size(28.dp))
+                        MediaHubIcon(Lucide.Clock3, contentDescription = null, tint = MediaHubColors.TextMuted, modifier = Modifier.size(32.dp))
                         MediaHubText(
-                            text = "还没有订阅",
-                            modifier = Modifier.padding(top = 12.dp),
+                            text = "暂无自动追剧订阅",
+                            modifier = Modifier.padding(top = 14.dp),
+                            color = MediaHubColors.TextSecondary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        MediaHubText(
+                            text = "可在「发现」搜索页为剧集创建订阅，或点击右上角「+」手动新建",
+                            modifier = Modifier.padding(top = 6.dp),
                             color = MediaHubColors.TextMuted,
                             fontSize = 12.sp,
                         )

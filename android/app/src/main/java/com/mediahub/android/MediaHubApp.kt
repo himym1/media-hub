@@ -40,6 +40,7 @@ import com.composables.icons.lucide.ListTodo
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.Settings2
 import com.composables.icons.lucide.SquareTerminal
 import com.mediahub.android.app.AppState
@@ -50,6 +51,7 @@ import com.mediahub.android.app.primaryDestinations
 import com.mediahub.android.app.MediaHubViewModelFactory
 import com.mediahub.android.app.ServerViewModelStoreHolder
 import com.mediahub.android.core.designsystem.MediaHubButton
+import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
@@ -107,6 +109,12 @@ fun MediaHubApp() {
             runCatching { container.configureServer(configuredServerUrl.value) }
         }
         val dependencies = dependenciesResult.getOrNull()
+        val changeServer = {
+            applicationContext.startService(MediaHubPlaybackService.invalidateIntent(applicationContext))
+            serverStoreHolder.clearServerScope()
+            container.clearConfiguration()
+            configuredServerUrl.value = ""
+        }
         if (dependencies == null) {
             val configViewModel = remember { ServerConfigViewModel(serverUrlStore, configuredServerUrl.value) }
             ServerConfigScreen(
@@ -132,7 +140,12 @@ fun MediaHubApp() {
                 AppState.Loading -> AppMessageScreen(title = "MEDIA HUB", message = "正在连接…")
                 AppState.Unauthenticated -> {
                     val authViewModel = viewModel<AuthViewModel>(key = "auth-$serverGeneration", factory = factory)
-                    AuthRoute(viewModel = authViewModel, onAuthenticated = appViewModel::onAuthenticated)
+                    AuthRoute(
+                        viewModel = authViewModel,
+                        serverUrl = dependencies.serverUrl,
+                        onAuthenticated = appViewModel::onAuthenticated,
+                        onChangeServer = changeServer,
+                    )
                 }
                 AppState.Authenticated -> AuthenticatedWorkspace(
                     appViewModel = appViewModel,
@@ -140,18 +153,15 @@ fun MediaHubApp() {
                     serverGeneration = serverGeneration,
                     serverIdentity = serverIdentity,
                     posterLoader = dependencies.posterLoader,
-                    onChangeServer = {
-                        applicationContext.startService(MediaHubPlaybackService.invalidateIntent(applicationContext))
-                        serverStoreHolder.clearServerScope()
-                        container.clearConfiguration()
-                        configuredServerUrl.value = ""
-                    },
+                    onChangeServer = changeServer,
                 )
                 is AppState.Error -> AppMessageScreen(
                     title = "连接失败",
                     message = currentState.message,
                     actionLabel = "重试",
                     onAction = appViewModel::restoreSession,
+                    secondaryLabel = "更换服务器",
+                    onSecondary = changeServer,
                 )
             }
         }
@@ -324,7 +334,10 @@ internal fun WorkspaceTopBar(
     onOpenSystem: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (inSystem) {
@@ -334,17 +347,25 @@ internal fun WorkspaceTopBar(
                 onClick = onBack,
             )
         } else {
-            MediaHubIcon(
-                imageVector = Lucide.Film,
-                contentDescription = null,
-                tint = MediaHubColors.Accent,
-                modifier = Modifier.size(22.dp),
-            )
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(MediaHubColors.SurfaceSelected, androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .border(width = 1.dp, color = MediaHubColors.Accent, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                MediaHubIcon(
+                    imageVector = Lucide.Film,
+                    contentDescription = null,
+                    tint = MediaHubColors.Accent,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
-        Column(modifier = Modifier.weight(1f).padding(start = if (inSystem) 4.dp else 11.dp)) {
+        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
             MediaHubText(
                 text = if (inSystem) "系统" else destination.title,
-                fontSize = 19.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
             )
             MediaHubText(
@@ -370,8 +391,8 @@ internal fun SystemSectionSwitcher(
 ) {
     MediaHubSegmentedControl(
         options = listOf(
-            MainDestination.Services.name to "服务",
-            MainDestination.Operations.name to "运维",
+            MainDestination.Services.name to "服务接入",
+            MainDestination.Operations.name to "运维管理",
         ),
         selected = destination.name,
         onSelected = { value ->
@@ -398,7 +419,7 @@ private fun MainNavigationBar(selected: MainDestination, onSelected: (MainDestin
             .background(MediaHubColors.Surface)
             .border(width = 1.dp, color = MediaHubColors.Border)
             .navigationBarsPadding()
-            .height(66.dp),
+            .height(68.dp),
     ) {
         primaryDestinations.forEach { destination ->
             NavigationItem(
@@ -420,13 +441,37 @@ private fun NavigationItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.fillMaxHeight().selectable(selected = selected, role = Role.Tab, onClick = onClick),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        MediaHubIcon(imageVector = icon, contentDescription = null, tint = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted)
-        MediaHubText(text = label, modifier = Modifier.padding(top = 4.dp), color = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted, fontSize = 12.sp)
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 6.dp, vertical = 4.dp)
+                .background(
+                    if (selected) MediaHubColors.SurfaceSelected else androidx.compose.ui.graphics.Color.Transparent,
+                    androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                )
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            MediaHubIcon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted,
+                modifier = Modifier.size(20.dp),
+            )
+            MediaHubText(
+                text = label,
+                modifier = Modifier.padding(top = 3.dp),
+                color = if (selected) MediaHubColors.Accent else MediaHubColors.TextMuted,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            )
+        }
     }
 }
 
@@ -436,6 +481,8 @@ private fun AppMessageScreen(
     message: String,
     actionLabel: String? = null,
     onAction: () -> Unit = {},
+    secondaryLabel: String? = null,
+    onSecondary: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier.fillMaxSize().background(MediaHubColors.Canvas).padding(28.dp),
@@ -446,6 +493,14 @@ private fun AppMessageScreen(
         MediaHubText(text = message, modifier = Modifier.padding(top = 10.dp), color = MediaHubColors.TextSecondary, fontSize = 13.sp)
         if (actionLabel != null) {
             MediaHubButton(label = actionLabel, icon = Lucide.RefreshCw, onClick = onAction, modifier = Modifier.padding(top = 22.dp))
+        }
+        if (secondaryLabel != null) {
+            MediaHubSecondaryButton(
+                label = secondaryLabel,
+                icon = Lucide.Server,
+                onClick = onSecondary,
+                modifier = Modifier.padding(top = 12.dp),
+            )
         }
     }
 }

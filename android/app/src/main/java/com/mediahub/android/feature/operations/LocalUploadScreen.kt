@@ -1,6 +1,7 @@
 package com.mediahub.android.feature.operations
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -10,7 +11,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,23 +77,26 @@ internal fun LocalUploadScreen(state: LocalUploadState, actions: LocalUploadActi
             MediaHubButton("返回上级", onClick = { actions.pathChanged(state.path.substringBeforeLast('/', "")) })
         }
         state.entries.take(50).forEach { entry ->
+            val isSelected = state.selectedFile == entry.path
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
+                    .background(if (isSelected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface, RoundedCornerShape(8.dp))
+                    .border(width = 1.dp, color = if (isSelected) MediaHubColors.Accent else MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
                     .clickable(role = Role.Button) { actions.entrySelected(entry) }
-                    .background(if (state.selectedFile == entry.path) MediaHubColors.SurfaceSelected else MediaHubColors.Canvas)
-                    .padding(vertical = 9.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 MediaHubIcon(
-                    Lucide.FolderOpen,
+                    imageVector = Lucide.FolderOpen,
                     contentDescription = null,
                     tint = if (entry.directory) MediaHubColors.Accent else MediaHubColors.TextMuted,
+                    modifier = Modifier.size(18.dp),
                 )
-                Spacer(Modifier.padding(horizontal = 5.dp))
+                Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    MediaHubText(entry.name, fontSize = 12.sp)
+                    MediaHubText(entry.name, color = MediaHubColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     MediaHubText(
                         if (entry.directory) "目录" else formatBytes(entry.size),
                         color = MediaHubColors.TextMuted,
@@ -115,12 +122,16 @@ internal fun LocalUploadScreen(state: LocalUploadState, actions: LocalUploadActi
         )
         state.uploads.take(8).forEach { upload ->
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
+                    .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    MediaHubText(upload.path, fontSize = 12.sp)
+                    MediaHubText(upload.path, color = MediaHubColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     MediaHubText(
                         if (upload.bytesTotal > 0) "${upload.bytesDone * 100 / upload.bytesTotal}% · ${formatBytes(upload.bytesTotal)}" else upload.id,
                         color = MediaHubColors.TextMuted,

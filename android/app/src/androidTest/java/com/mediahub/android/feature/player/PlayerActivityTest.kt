@@ -54,9 +54,12 @@ class PlayerActivityTest {
         scenario = ActivityScenario.launch(PlayerActivity.intent(application, request))
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithContentDescription("旋转屏幕").performClick()
         scenario?.onActivity { activity ->
             assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE, activity.requestedOrientation)
+        }
+        composeRule.onNodeWithContentDescription("旋转屏幕").performClick()
+        scenario?.onActivity { activity ->
+            assertEquals(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, activity.requestedOrientation)
             activity.onBackPressedDispatcher.onBackPressed()
             assertTrue(activity.isFinishing)
         }

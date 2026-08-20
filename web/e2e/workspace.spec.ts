@@ -120,7 +120,6 @@ test('library supports browsing item details and safe Emby actions', async ({ pa
   await expect(page.getByText('Acceptance Movie', { exact: true })).toBeVisible()
   await expect(page.getByText('TMDB 编号', { exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: '打开 Emby 网页' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /删除/ })).toHaveCount(0)
   await page.getByRole('button', { name: '刷新元数据' }).click()
   await expectNoSeriousAccessibilityViolations(page)
   await attachScreenshot(page, testInfo, 'library-detail')
@@ -135,6 +134,24 @@ test('library supports browsing item details and safe Emby actions', async ({ pa
     await page.getByRole('button', { name: '返回媒体列表' }).click()
     await expect(page.getByRole('button', { name: /验收影片/ })).toBeVisible()
   }
+})
+
+test('library previews and confirms Emby delete without touching 115 files', async ({ page }, testInfo) => {
+  await installApiFixtures(page)
+  await page.goto('/?view=library')
+  await page.getByRole('button', { name: /验收影片/ }).click()
+  await page.getByRole('button', { name: '从 Emby 删除' }).click()
+  await expect(page.getByText('将从 Emby 删除「验收影片」。NAS 上约 1 个库文件可能被删掉，115 网盘文件不会删除。')).toBeVisible()
+  await expectNoSeriousAccessibilityViolations(page)
+  await attachScreenshot(page, testInfo, 'library-delete-preview')
+  await page.getByRole('button', { name: '取消' }).click()
+  await expect(page.getByRole('button', { name: '从 Emby 删除' })).toBeVisible()
+  await page.getByRole('button', { name: '从 Emby 删除' }).click()
+  await page.getByRole('button', { name: '确认删除' }).click()
+  await expect(page.getByRole('heading', { name: '验收影片', level: 2 })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /验收影片/ })).toHaveCount(0)
+  await expect(page).not.toHaveURL(/media=item-1/)
+  await expect(page.getByText('此媒体库暂无可浏览内容')).toBeVisible()
 })
 
 test('subscription editor keeps advanced rules collapsed behind useful presets', async ({ page }, testInfo) => {

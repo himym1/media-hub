@@ -1,7 +1,9 @@
 package com.mediahub.android.feature.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -125,15 +127,31 @@ internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDeta
 @Composable
 private fun DetailIdentity(detail: EmbyItemDetail, posterLoader: PosterLoader) {
     val genres = detail.genres.map(::genreLabel).filter(String::isNotBlank).distinct()
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MediaHubColors.Surface, RoundedCornerShape(12.dp))
+            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(12.dp))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         EmbyPoster(
             itemId = detail.item.id,
             loader = posterLoader,
             contentDescription = "${detail.item.name} 封面",
-            modifier = Modifier.width(144.dp).align(Alignment.CenterHorizontally),
+            modifier = Modifier.width(144.dp),
         )
-        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            MediaHubText(text = detail.item.name, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            MediaHubText(
+                text = detail.item.name,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
             MediaHubText(
                 text = listOfNotNull(
                     mediaTypeLabel(detail.item.type),
@@ -145,7 +163,12 @@ private fun DetailIdentity(detail: EmbyItemDetail, posterLoader: PosterLoader) {
                 fontSize = 13.sp,
             )
             if (genres.isNotEmpty()) {
-                MediaHubText(text = genres.joinToString(" · "), color = MediaHubColors.Accent, fontSize = 12.sp)
+                MediaHubText(
+                    text = genres.joinToString(" · "),
+                    color = MediaHubColors.Accent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                )
             }
         }
     }
@@ -188,17 +211,22 @@ private fun DeleteActions(state: LibraryDetailState, actions: LibraryDetailActio
 @Composable
 private fun TechnicalDetails(detail: EmbyItemDetail) {
     var expanded by remember(detail.item.id) { mutableStateOf(false) }
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(MediaHubColors.Border))
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
+            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 48.dp)
+                .heightIn(min = 44.dp)
                 .semantics { stateDescription = if (expanded) "已展开" else "已收起" }
                 .clickable(role = Role.Button) { expanded = !expanded },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MediaHubText(text = "媒体信息", modifier = Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            MediaHubText(text = "媒体技术元数据", modifier = Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
             MediaHubIcon(
                 if (expanded) Lucide.ChevronUp else Lucide.ChevronDown,
                 contentDescription = null,
@@ -207,7 +235,7 @@ private fun TechnicalDetails(detail: EmbyItemDetail) {
         }
         if (expanded) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 visibleOriginalTitle(detail)?.let { DetailTechnicalLine("原名", it) }
@@ -215,7 +243,6 @@ private fun TechnicalDetails(detail: EmbyItemDetail) {
                 DetailTechnicalLine("媒体源", if (detail.item.type == "Series") "由分集提供" else "${detail.mediaSourceCount} 个")
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(MediaHubColors.Border))
     }
 }
 

@@ -1,6 +1,7 @@
 package com.mediahub.android.feature.search
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -220,26 +221,35 @@ internal fun SearchScreen(
 private fun TrendingItem(item: DiscoveryItem, onClick: () -> Unit) {
     Row(
         modifier = Modifier
-            .width(150.dp)
-            .background(MediaHubColors.Surface, RoundedCornerShape(7.dp))
-            .heightIn(min = 48.dp)
+            .width(160.dp)
+            .background(MediaHubColors.Surface, RoundedCornerShape(8.dp))
+            .border(width = 1.dp, color = MediaHubColors.Border, shape = RoundedCornerShape(8.dp))
+            .heightIn(min = 52.dp)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(10.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         MediaHubIcon(
             imageVector = Lucide.Film,
             contentDescription = null,
-            tint = MediaHubColors.Source,
-            modifier = Modifier.size(18.dp),
+            tint = MediaHubColors.Accent,
+            modifier = Modifier.size(20.dp),
         )
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            MediaHubText(text = item.title, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            MediaHubText(
+                text = item.title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
             MediaHubText(
                 text = "${item.year.takeIf { it > 0 } ?: "年份未知"} · ${if (item.mediaType == "movie") "电影" else "剧集"}",
                 color = MediaHubColors.TextMuted,
                 fontSize = 12.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
         }
     }
@@ -300,12 +310,14 @@ private fun ReleaseRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val background = if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Canvas
+    val background = if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface
+    val border = if (selected) MediaHubColors.Accent else MediaHubColors.Border
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .background(background, RoundedCornerShape(6.dp))
+            .heightIn(min = 52.dp)
+            .background(background, RoundedCornerShape(8.dp))
+            .border(width = 1.dp, color = border, shape = RoundedCornerShape(8.dp))
             .selectable(
                 selected = selected,
                 onClick = onClick,
@@ -326,7 +338,12 @@ private fun ReleaseRow(
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
             )
-            MediaHubText(text = candidate.provider ?: candidate.source, color = MediaHubColors.Source, fontSize = 12.sp)
+            MediaHubText(
+                text = candidate.provider ?: candidate.source,
+                color = MediaHubColors.Source,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
         }
         MediaHubText(
             text = buildString {
@@ -339,11 +356,34 @@ private fun ReleaseRow(
             color = MediaHubColors.TextSecondary,
             fontSize = 12.sp,
         )
-        MediaHubText(
-            text = formatBytes(candidate.release.sizeBytes),
-            color = MediaHubColors.TextFaint,
-            fontSize = 12.sp,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MediaHubText(
+                text = formatBytes(candidate.release.sizeBytes),
+                color = MediaHubColors.TextMuted,
+                fontSize = 12.sp,
+            )
+            if (candidate.transferState.isNotEmpty() && candidate.transferState != "unknown") {
+                MediaHubText(
+                    text = when (candidate.transferState) {
+                        "available" -> "可转存"
+                        "transferring" -> "转存中"
+                        "transferred" -> "已转存"
+                        "identity_required" -> "身份待确认"
+                        else -> candidate.transferState
+                    },
+                    color = when (candidate.transferState) {
+                        "available", "transferred" -> MediaHubColors.Success
+                        "identity_required" -> MediaHubColors.Warning
+                        else -> MediaHubColors.TextMuted
+                    },
+                    fontSize = 12.sp,
+                )
+            }
+        }
     }
 }
 

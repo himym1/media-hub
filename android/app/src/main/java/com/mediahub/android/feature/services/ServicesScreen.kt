@@ -8,6 +8,7 @@ import android.util.Base64
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -176,9 +177,16 @@ internal fun ServicesScreen(
                                 Spacer(Modifier.width(9.dp))
                                 MediaHubText(text = "115 扫码授权", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                             }
-                            uiState.driveAuthorization?.qrImage?.let { dataURL ->
-                                remember(dataURL) { decodeQRImage(dataURL) }?.let { image ->
-                                    Image(bitmap = image, contentDescription = "115 扫码授权二维码", modifier = Modifier.size(180.dp))
+                            val qrDataURL = uiState.driveAuthorization?.qrImage
+                            val qrBitmap = remember(qrDataURL) { qrDataURL?.let(::decodeQRImage) }
+                            if (qrBitmap != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(androidx.compose.ui.graphics.Color.White, RoundedCornerShape(12.dp))
+                                        .padding(14.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Image(bitmap = qrBitmap, contentDescription = "115 扫码授权二维码", modifier = Modifier.size(180.dp))
                                 }
                             }
                             uiState.driveAuthorization?.let { authorization ->

@@ -2,6 +2,7 @@ package com.mediahub.android.feature.transfers
 import androidx.activity.compose.BackHandler
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -254,11 +255,14 @@ private fun TransferDetailPage(
 
 @Composable
 private fun TransferRow(job: TransferJob, selected: Boolean, onClick: () -> Unit) {
+    val background = if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Surface
+    val border = if (selected) MediaHubColors.Accent else MediaHubColors.Border
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .background(if (selected) MediaHubColors.SurfaceSelected else MediaHubColors.Canvas, RoundedCornerShape(6.dp))
+            .heightIn(min = 52.dp)
+            .background(background, RoundedCornerShape(8.dp))
+            .border(width = 1.dp, color = border, shape = RoundedCornerShape(8.dp))
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -267,19 +271,24 @@ private fun TransferRow(job: TransferJob, selected: Boolean, onClick: () -> Unit
             imageVector = if (job.state == "failed" || job.state == "needs_attention") Lucide.CircleAlert else Lucide.Clock3,
             contentDescription = null,
             tint = stateColor(job.state),
-            modifier = Modifier.size(17.dp),
+            modifier = Modifier.size(18.dp),
         )
-        Spacer(Modifier.width(11.dp))
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             MediaHubText(text = transferTitle(job), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             MediaHubText(
                 text = "${job.source} · ${formatTime(job.updatedAt)}",
-                modifier = Modifier.padding(top = 5.dp),
+                modifier = Modifier.padding(top = 4.dp),
                 color = MediaHubColors.TextMuted,
                 fontSize = 12.sp,
             )
         }
-        MediaHubText(text = stateLabel(job.state), color = stateColor(job.state), fontSize = 12.sp)
+        MediaHubText(
+            text = stateLabel(job.state),
+            color = stateColor(job.state),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 

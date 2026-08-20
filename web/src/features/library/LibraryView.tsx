@@ -1,13 +1,16 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, ChevronLeft, ChevronRight, CircleAlert, Film, FolderOpen, RefreshCw, Search, X } from 'lucide-react'
+import { BookOpen, ChevronLeft, ChevronRight, CircleAlert, Film, FolderOpen, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import {
+  deleteEmbyItem,
   getEmbyItem,
   getEmbyLibraries,
   getEmbyLibraryItems,
+  previewEmbyItemDelete,
   refreshEmbyItem,
   refreshEmbyLibrary,
   searchEmbyItems,
+  type EmbyDeletePreview,
   type EmbyItem,
   type EmbyItemDetail,
 } from '../../shared/api/mediaHub'
@@ -193,16 +196,30 @@ export function LibraryView() {
           {!itemId ? <div className="library-detail-empty"><Film size={28} /><strong>选择一个媒体</strong><span>查看简介、年份和播放信息。</span></div> : null}
           {detail.isLoading ? <div className="status-loading">正在读取媒体详情…</div> : null}
           {detail.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>详情读取失败</strong><span>{detail.error.message}</span></div><button onClick={() => void detail.refetch()} type="button">重试</button></div> : null}
-          {detail.data ? <LibraryItemDetail key={detail.data.id} item={detail.data} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} /> : null}
+          {detail.data ? <LibraryItemDetail key={detail.data.id} item={detail.data} onDeleted={closeItem} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} /> : null}
         </aside>
       </div>
     </section>
   )
 }
 
-function LibraryItemDetail({ item, onRefresh, refreshing }: { item: EmbyItemDetail; onRefresh: (id: string) => void; refreshing: boolean }) {
+function LibraryItemDetail({ item, onDeleted, onRefresh, refreshing }: { item: EmbyItemDetail; onDeleted: () => void; onRefresh: (id: string) => void; refreshing: boolean }) {
+  const queryClient = useQueryClient()
   const originalTitle = visibleOriginalTitle(item)
   const genres = localizedGenres(item.genres ?? [])
+  const previewDelete = useMutation({ mutationFn: () => previewEmbyItemDelete(item.id) })
+  const confirmDelete = useMutation({
+    mutationFn: () => deleteEmbyItem(item.id),
+    onSuccess: async () => {
+      onDeleted()
+      queryClient.removeQueries({ queryKey: ['emby-item', item.id] })
+      await queryClient.invalidateQueries({ queryKey: ['emby-library-items'] })
+      await queryClient.invalidateQueries({ queryKey: ['emby-search'] })
+    },
+  })
+  const preview = previewDelete.data
+  const busy = previewDelete.isPending || confirmDelete.isPending || refreshing
+  const deleteError = previewDelete.error ?? confirmDelete.error
 
   return <>
     <div className="library-detail-heading"><div><h2>{item.name}</h2></div><span className="media-type-chip">{mediaTypeLabel(item.type)}</span></div>
@@ -223,9 +240,25 @@ function LibraryItemDetail({ item, onRefresh, refreshing }: { item: EmbyItemDeta
       </dl>
     </details>
     <div className="library-detail-actions">
-      <button className="secondary-command" disabled={refreshing} onClick={() => onRefresh(item.id)} type="button"><RefreshCw size={16} />{refreshing ? '已提交…' : '刷新元数据'}</button>
+      <button className="secondary-command" disabled={busy} onClick={() => onRefresh(item.id)} type="button"><RefreshCw size={16} />{refreshing ? '已提交…' : '刷新元数据'}</button>
+      {preview ? null : <button className="danger-button" disabled={busy} onClick={() => previewDelete.mutate()} type="button"><Trash2 size={16} />{previewDelete.isPending ? '正在读取删除预览…' : '从 Emby 删除'}</button>}
     </div>
+    {preview ? (
+      <div className="library-delete-confirm">
+        <p>{deletePreviewCopy(preview)}</p>
+        {deleteError ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{deleteError.message}</span></div> : null}
+        <div className="library-detail-actions">
+          <button className="danger-button" disabled={confirmDelete.isPending} onClick={() => confirmDelete.mutate()} type="button">{confirmDelete.isPending ? '正在删除' : '确认删除'}</button>
+          <button className="secondary-command" disabled={confirmDelete.isPending} onClick={() => previewDelete.reset()} type="button">取消</button>
+        </div>
+      </div>
+    ) : deleteError ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{deleteError.message}</span></div> : null}
   </>
+}
+
+function deletePreviewCopy(preview: EmbyDeletePreview) {
+  const series = preview.type === 'Series' ? '及全部分集' : ''
+  return `将从 Emby 删除「${preview.name}」${series}。NAS 上约 ${preview.fileCount} 个库文件可能被删掉，115 网盘文件不会删除。`
 }
 
 function LibraryItemButton({ item, selected, onSelect }: { item: EmbyItem; selected: boolean; onSelect: (id: string) => void }) {
