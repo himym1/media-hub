@@ -74,6 +74,13 @@ jobs:
           PY
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
           docker build --platform linux/amd64 --build-arg VERSION="$GITHUB_REF_NAME" --build-arg GOPROXY=https://goproxy.cn,direct -t "$image:${{ steps.version.outputs.name }}" -t "$image:${GITHUB_SHA}" .
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ANDROID_SDK_ROOT/licenses"
+          printf '%s\n' '24333f8a63b6825ea9c5514f83c2829b004d1fee' > "$ANDROID_SDK_ROOT/licenses/android-sdk-license"
+          printf '%s\n' '84831b9409646161cecb50b75fc18d2b' > "$ANDROID_SDK_ROOT/licenses/android-sdk-preview-license"
       - name: Build signed release APK
         working-directory: android
         run: ./gradlew :app:assembleRelease -PMEDIA_HUB_VERSION_NAME='${{ steps.version.outputs.name }}' -PMEDIA_HUB_VERSION_CODE='${{ steps.version.outputs.code }}'
