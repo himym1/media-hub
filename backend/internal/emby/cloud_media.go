@@ -79,16 +79,40 @@ func pickCodeFromValue(value string) string {
 	if trimmed == "" {
 		return ""
 	}
-	if parsed, err := url.Parse(trimmed); err == nil && parsed.Host != "" {
-		query := parsed.Query()
-		if code := validPickCode(firstNonEmpty(query.Get("pickcode"), query.Get("pick_code"))); code != "" {
-			return code
-		}
-	}
 	if index := strings.IndexAny(trimmed, "\r\n"); index >= 0 {
 		trimmed = strings.TrimSpace(trimmed[:index])
 	}
+	if code := strings.TrimPrefix(trimmed, "115://"); code != trimmed {
+		return validPickCode(code)
+	}
+	if parsed, err := url.Parse(trimmed); err == nil && parsed.Host != "" {
+		query := parsed.Query()
+		if code := validPickCode(firstNonEmpty(query.Get("pickcode"), query.Get("pick_code"), query.Get("pc"), query.Get("pickCode"))); code != "" {
+			return code
+		}
+	}
 	return validPickCode(trimmed)
+}
+
+func playbackURLFromValue(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if index := strings.IndexAny(trimmed, "\r\n"); index >= 0 {
+		trimmed = strings.TrimSpace(trimmed[:index])
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+		return ""
+	}
+	if !is115CDNHost(parsed.Host) || strings.Contains(parsed.Path, "/s/") {
+		return ""
+	}
+	return parsed.String()
+}
+
+func is115CDNHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	return strings.Contains(host, "115cdn") || strings.Contains(host, "115vod") ||
+		host == "115.com" || strings.HasSuffix(host, ".115.com")
 }
 
 func validPickCode(value string) string {

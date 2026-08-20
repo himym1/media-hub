@@ -203,7 +203,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
   return (
     <section className="subscription-page">
       <header className="view-header">
-        <div><p className="eyebrow">AUTOMATION</p><h1>订阅</h1><p>按身份和版本规则持续查找，符合条件后进入同一条可恢复工作流。</p></div>
+        <div><h1>订阅</h1><p>按身份和版本规则持续查找，符合条件后进入同一条可恢复工作流。</p></div>
         <div className="view-header-actions">
           <input ref={importInput} aria-label="选择订阅备份文件" className="sr-only" type="file" accept="application/json,.json" onChange={(event) => void readBackup(event)} />
           <IconButton label="导入订阅备份" onClick={() => importInput.current?.click()}><Upload size={16} /></IconButton>
@@ -232,7 +232,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
 
         <div className="subscription-editor">
           <form onSubmit={submit}>
-            <div className="editor-heading"><div><p className="eyebrow">RULES</p><h2>{selected ? '编辑订阅' : '新建订阅'}</h2></div>{selected ? <span>{selected.enabled ? '运行中' : '已暂停'}</span> : null}</div>
+            <div className="editor-heading"><div><h2>{selected ? '编辑订阅' : '新建订阅'}</h2></div>{selected ? <span>{selected.enabled ? '运行中' : '已暂停'}</span> : null}</div>
             <div className="form-grid subscription-common-fields">
               <label><span>标题</span><input maxLength={300} required value={editor.title} onChange={(event) => setField(setEditor, 'title', event.target.value)} /></label>
               <label><span>TMDB ID</span><input disabled={Boolean(selected)} inputMode="numeric" required value={editor.tmdbId} onChange={(event) => setField(setEditor, 'tmdbId', event.target.value)} /></label>
@@ -275,7 +275,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
             </div>
           </form>
 
-          {selected ? <div className="subscription-runs"><div className="section-heading"><div><p className="eyebrow">RUN HISTORY</p><h2>运行历史<span>{runs.data?.runs.length ?? 0}</span></h2></div></div>{runs.data?.runs.map((run) => <div className="subscription-run" key={run.id}><span className={`run-state ${run.state}`} /> <div><strong>{runLabels[run.state]}</strong><small>{run.message || '无补充信息'} · {formatTime(run.startedAt)}</small></div>{run.transferJobId ? <code>{run.transferJobId.slice(0, 8)}</code> : null}</div>)}{!runs.isLoading && runs.data?.runs.length === 0 ? <div className="empty-inline">还没有运行记录</div> : null}</div> : null}
+          {selected ? <div className="subscription-runs"><div className="section-heading"><div><h2>运行历史<span>{runs.data?.runs.length ?? 0}</span></h2></div></div>{runs.data?.runs.map((run) => <div className="subscription-run" key={run.id}><span className={`run-state ${run.state}`} /> <div><strong>{runLabels[run.state]}</strong><small>{run.message || '无补充信息'} · {formatTime(run.startedAt)}</small></div>{run.transferJobId ? <code>{run.transferJobId.slice(0, 8)}</code> : null}</div>)}{!runs.isLoading && runs.data?.runs.length === 0 ? <div className="empty-inline">还没有运行记录</div> : null}</div> : null}
         </div>
       </div>
     </section>

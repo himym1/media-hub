@@ -202,6 +202,87 @@ func TestResolveEmbyItemExtractsPickCodeFromQMSRedirect(t *testing.T) {
 	}
 }
 
+func TestResolveEmbyItemUses115CDNRedirectWithoutPickCode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Items/item-1":
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
+		case "/Items/item-1/PlaybackInfo":
+			_, _ = w.Write([]byte(`{"PlaySessionId":"session-1","MediaSources":[{"Id":"source-1","Path":"/library/movie.strm","Container":"strm"}]}`))
+		case "/Videos/item-1/stream.strm":
+			w.Header().Set("Location", "https://cdnfhnfile.115.com/video.mkv?t=1")
+			w.WriteHeader(http.StatusTemporaryRedirect)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "emby-key", time.Second)
+	media, err := client.ResolveEmbyItem(context.Background(), playback.EmbyItemTarget{ItemID: "item-1"}, "player-ua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if media.URL != "https://cdnfhnfile.115.com/video.mkv?t=1" || media.PickCode != "" {
+		t.Fatalf("media=%#v", media)
+	}
+}
+
+func TestResolveEmbyItemFollowsUnsignedSecondHopForPickCode(t *testing.T) {
+	var hopAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		hopAuth = request.Header.Get("X-Emby-Token")
+		w.Header().Set("Location", "http://qms.local/115/url/video.mkv?pickcode=abcd1234")
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer upstream.Close()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Items/item-1":
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
+		case "/Items/item-1/PlaybackInfo":
+			_, _ = w.Write([]byte(`{"MediaSources":[{"Id":"source-1","Path":"/library/movie.strm","Container":"strm"}]}`))
+		case "/Videos/item-1/stream.strm":
+			w.Header().Set("Location", upstream.URL+"/next")
+			w.WriteHeader(http.StatusTemporaryRedirect)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "emby-key", time.Second)
+	media, err := client.ResolveEmbyItem(context.Background(), playback.EmbyItemTarget{ItemID: "item-1"}, "player-ua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if media.PickCode != "abcd1234" || hopAuth != "" {
+		t.Fatalf("media=%#v hopAuth=%q", media, hopAuth)
+	}
+}
+
+func TestResolveEmbyItemReadsPickCodeFromStrmScheme(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Items/item-1":
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
+		case "/Items/item-1/PlaybackInfo":
+			_, _ = w.Write([]byte(`{"MediaSources":[{"Id":"source-1","Path":"/library/movie.strm","Container":"strm"}]}`))
+		case "/Items/item-1/Download":
+			_, _ = w.Write([]byte("115://abcd1234\n"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "emby-key", time.Second)
+	media, err := client.ResolveEmbyItem(context.Background(), playback.EmbyItemTarget{ItemID: "item-1"}, "player-ua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if media.PickCode != "abcd1234" {
+		t.Fatalf("media=%#v", media)
+	}
+}
+
 func TestResolveEmbyItemRejectsHTTPSWithoutPickCode(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {

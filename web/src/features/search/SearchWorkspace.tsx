@@ -145,7 +145,7 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
       <aside className="sidebar">
         <div className="brand-lockup">
           <div className="brand-mark"><Film size={19} strokeWidth={2.2} /></div>
-          <div><strong>MEDIA HUB</strong><span>PRIVATE MEDIA CONTROL</span></div>
+          <div><strong>MEDIA HUB</strong><span>媒体自动化控制</span></div>
         </div>
 
         <nav className="primary-nav" aria-label="主导航">

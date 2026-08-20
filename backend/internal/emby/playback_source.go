@@ -70,10 +70,10 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 		if err != nil {
 			return playback.SourceMedia{}, playback.ErrUnavailable
 		}
-		code, err := c.resolveCloudSource(ctx, configuration, target.ItemID, item, source, playSessionID, playbackUserAgent)
-		if code != "" {
+		resolved, err := c.resolveCloudSource(ctx, configuration, target.ItemID, item, source, playSessionID, playbackUserAgent)
+		if resolved.pickCode != "" || resolved.url != "" {
 			return playback.SourceMedia{
-				Name: item.Name, PickCode: code, Session: session,
+				Name: item.Name, PickCode: resolved.pickCode, URL: resolved.url, Session: session,
 				StartPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
 			}, nil
 		}
@@ -91,6 +91,11 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 	return playback.SourceMedia{}, playback.ErrUnavailable
 }
 
+type cloudPlayback struct {
+	pickCode string
+	url      string
+}
+
 func (c *Client) resolveCloudSource(
 	ctx context.Context,
 	configuration clientConfig,
@@ -99,23 +104,29 @@ func (c *Client) resolveCloudSource(
 	source mediaSource,
 	playSessionID string,
 	playbackUserAgent string,
-) (string, error) {
-	if code := firstNonEmpty(pickCodeFromValue(source.DirectStreamURL), pickCodeFromValue(source.Path), pickCodeFromValue(item.Path)); code != "" {
-		return code, nil
+) (cloudPlayback, error) {
+	for _, value := range []string{source.DirectStreamURL, source.Path, item.Path} {
+		if resolved := cloudPlaybackFromValue(value); resolved.pickCode != "" || resolved.url != "" {
+			return resolved, nil
+		}
 	}
 	if body, err := c.readStrmBody(ctx, configuration, itemID); err == nil {
-		if code := pickCodeFromValue(body); code != "" {
-			return code, nil
+		if resolved := cloudPlaybackFromValue(body); resolved.pickCode != "" || resolved.url != "" {
+			return resolved, nil
 		}
 	}
 	redirect, err := c.resolveExternalStreamRedirect(ctx, configuration, itemID, source, playSessionID, playbackUserAgent)
-	if code := pickCodeFromValue(redirect); code != "" {
-		return code, nil
+	if resolved := cloudPlaybackFromValue(redirect); resolved.pickCode != "" || resolved.url != "" {
+		return resolved, nil
 	}
 	if err != nil {
-		return "", err
+		return cloudPlayback{}, err
 	}
-	return "", errNoExternalPlayback
+	return cloudPlayback{}, errNoExternalPlayback
+}
+
+func cloudPlaybackFromValue(value string) cloudPlayback {
+	return cloudPlayback{pickCode: pickCodeFromValue(value), url: playbackURLFromValue(value)}
 }
 
 func (c *Client) playbackSession(itemID, mediaSourceID, playSessionID string) (*playback.SourceSession, error) {
@@ -228,11 +239,43 @@ func (c *Client) resolveExternalStreamRedirect(
 	// Range requests make some Emby versions proxy remote STRM content instead of returning the configured redirect.
 	request.Header.Set("User-Agent", playbackUserAgent)
 	request.Header.Set("X-Emby-Token", configuration.apiKey)
-	response, err := c.client.Do(request)
+	location, err := readRedirectLocation(c.client, request)
+	if err != nil {
+		return "", err
+	}
+	if cloudPlaybackFromValue(location).pickCode != "" || cloudPlaybackFromValue(location).url != "" {
+		return location, nil
+	}
+	if hop, hopErr := c.followUnsignedRedirect(ctx, location, playbackUserAgent); hopErr == nil {
+		return hop, nil
+	}
+	if !safeExternalPlaybackURL(location, configuration.baseURL, playbackBaseURL) {
+		return location, errNoExternalPlayback
+	}
+	return location, nil
+}
+
+func (c *Client) followUnsignedRedirect(ctx context.Context, rawURL, playbackUserAgent string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Host == "" || parsed.User != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", errNoExternalPlayback
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("Accept", "*/*")
+	request.Header.Set("User-Agent", playbackUserAgent)
+	return readRedirectLocation(c.client, request)
+}
+
+func readRedirectLocation(client *http.Client, request *http.Request) (string, error) {
+	response, err := client.Do(request)
 	if err != nil {
 		return "", err
 	}
 	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 		return "", playback.ErrSourceUnauthorized
 	}
@@ -242,9 +285,6 @@ func (c *Client) resolveExternalStreamRedirect(
 	location, err := response.Location()
 	if err != nil {
 		return "", errNoExternalPlayback
-	}
-	if !safeExternalPlaybackURL(location.String(), configuration.baseURL, playbackBaseURL) {
-		return location.String(), errNoExternalPlayback
 	}
 	return location.String(), nil
 }

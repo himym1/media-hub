@@ -64,6 +64,9 @@ data class LibraryDetailActions(
     val onClose: () -> Unit,
     val onRefresh: () -> Unit,
     val onPlayItem: (EmbyItem, PlaybackFallback) -> Unit,
+    val onDelete: () -> Unit = {},
+    val onConfirmDelete: () -> Unit = {},
+    val onCancelDelete: () -> Unit = {},
 )
 
 @Composable
@@ -79,6 +82,13 @@ internal fun LibraryRoute(
     val detailState by detailViewModel.uiState.collectAsState()
     LaunchedEffect(browseViewModel) { browseViewModel.refreshLibraries() }
     LaunchedEffect(selectedItemId) { selectedItemId?.let(detailViewModel::load) }
+    LaunchedEffect(detailState.deleted) {
+        if (detailState.deleted) {
+            browseViewModel.reloadItems()
+            onSelectedItemChanged(null)
+            detailViewModel.clear()
+        }
+    }
     val closeDetail = {
         onSelectedItemChanged(null)
         detailViewModel.clear()
@@ -98,6 +108,9 @@ internal fun LibraryRoute(
         onClose = closeDetail,
         onRefresh = detailViewModel::refresh,
         onPlayItem = onPlayItem,
+        onDelete = detailViewModel::requestDelete,
+        onConfirmDelete = detailViewModel::confirmDelete,
+        onCancelDelete = detailViewModel::cancelDelete,
     )
     if (selectedItemId != null) {
         LibraryDetailScreen(state = detailState, actions = detailActions, posterLoader = posterLoader)
@@ -164,20 +177,19 @@ internal fun LibraryScreen(
                 }
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            MediaHubSearchField(
-                value = uiState.query,
-                onValueChange = actions.onQueryChanged,
-                onSearch = actions.onSearch,
-                enabled = !uiState.loadingItems,
-                placeholder = "搜索电影或剧集",
-                modifier = Modifier.weight(1f),
-            )
-            if (uiState.submittedQuery.isNotEmpty()) {
-                Spacer(Modifier.width(8.dp))
-                MediaHubIconButton(Lucide.X, "清除搜索", actions.onClearSearch)
-            }
-        }
+        MediaHubSearchField(
+            value = uiState.query,
+            onValueChange = {
+                actions.onQueryChanged(it)
+                if (it.isEmpty() && uiState.submittedQuery.isNotEmpty()) {
+                    actions.onClearSearch()
+                }
+            },
+            onSearch = actions.onSearch,
+            enabled = !uiState.loadingItems,
+            placeholder = "搜索电影或剧集",
+            modifier = Modifier.fillMaxWidth(),
+        )
         uiState.errorMessage?.let { ErrorLine(it) }
         uiState.actionMessage?.let {
             MediaHubText(text = it, modifier = Modifier.padding(top = 10.dp), color = MediaHubColors.Source, fontSize = 12.sp)

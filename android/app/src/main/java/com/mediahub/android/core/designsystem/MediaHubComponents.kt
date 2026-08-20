@@ -43,6 +43,7 @@ import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.X
 import top.yukonga.miuix.kmp.basic.Button as MiuixButton
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
@@ -250,6 +251,14 @@ fun MediaHubSearchField(
                 .weight(1f)
                 .semantics { contentDescription = placeholder },
         )
+        if (value.isNotEmpty()) {
+            MediaHubIconButton(
+                imageVector = Lucide.X,
+                contentDescription = "清空输入",
+                onClick = { onValueChange("") },
+                enabled = enabled,
+            )
+        }
         MediaHubIconButton(
             imageVector = Lucide.ArrowRight,
             contentDescription = "提交搜索",

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.19.3
+  version: 0.19.10
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -489,6 +489,56 @@ paths:
         '400': { $ref: '#/components/responses/ProblemResponse' }
         '401': { $ref: '#/components/responses/ProblemResponse' }
         '403': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+        '504': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/emby/items/{id}/delete-preview:
+    get:
+      operationId: previewEmbyItemDelete
+      summary: Preview an Emby library delete without exposing filesystem paths
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
+      responses:
+        '200':
+          description: Safe delete preview; 115 cloud files are never included
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmbyDeletePreview' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+        '504': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/emby/items/{id}/delete:
+    post:
+      operationId: deleteEmbyItem
+      summary: Delete one Emby item from the library and NAS files after ID confirmation
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
+        - { $ref: '#/components/parameters/CSRFToken' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirmation]
+              properties:
+                confirmation: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' }
+      responses:
+        '200':
+          description: Emby item deleted; 115 cloud files are unchanged
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmbyDeleteResponse' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
         '502': { $ref: '#/components/responses/ProblemResponse' }
         '503': { $ref: '#/components/responses/ProblemResponse' }
         '504': { $ref: '#/components/responses/ProblemResponse' }
@@ -1833,6 +1883,23 @@ components:
       additionalProperties: false
       properties:
         status: { type: string, enum: [accepted] }
+    EmbyDeletePreview:
+      type: object
+      additionalProperties: false
+      required: [id, name, type, fileCount, deletesFiles, cloudKept]
+      properties:
+        id: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' }
+        name: { type: string }
+        type: { type: string }
+        fileCount: { type: integer, minimum: 0 }
+        deletesFiles: { type: boolean }
+        cloudKept: { type: boolean }
+    EmbyDeleteResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [deleted] }
     Drive115DeviceAuthorization:
       type: object
       required: [id, state, expiresAt]

@@ -246,7 +246,9 @@
 .drive-command-form button { min-height: 44px; }
 .drive-command-list { display: grid; margin-top: 14px; border-top: 1px solid #2a2d30; }
 .drive-command-list > div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; min-height: 50px; border-bottom: 1px solid #25282a; }
-.danger-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 12px; color: #f2b4ab; background: #341d1b; border: 1px solid #71403b; border-radius: 4px; }
+.danger-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 12px; color: #f2b4ab; background: #341d1b; border: 1px solid #71403b; border-radius: 6px; transition: background-color .18s ease, border-color .18s ease, transform .18s ease; }
+.danger-button:hover:not(:disabled) { background: #422320; border-color: #8c4e47; }
+.danger-button:active:not(:disabled) { transform: scale(0.975); }
 .danger-button:disabled { opacity: .5; }
 .task-state.awaiting_confirmation { color: #e4bd78; border-color: #705d38; }
 @media (max-width: 900px) { .drive-files { grid-template-columns: repeat(2, minmax(0, 1fr)); } .drive-command-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -300,7 +302,7 @@
 .operation-console, .operation-history { background: var(--surface); border-color: var(--border); border-radius: 7px; }
 .command-row, .drive-command-list, .local-upload-jobs, .archive-suggestion, .migration-command-list { border-color: var(--border); }
 .command-row.active strong { color: var(--accent); }
-.json-result { background: var(--bg); border-color: var(--border); }
+.json-result { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; padding: 14px 16px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3); overflow-x: auto; }
 .drive-files, .local-files { background: var(--border); border-color: var(--border); }
 .drive-files button, .local-files button { color: var(--text-secondary); background: var(--surface); }
 .drive-files button:not(:disabled):hover, .local-files button.active { color: var(--text); background: var(--surface-selected); }

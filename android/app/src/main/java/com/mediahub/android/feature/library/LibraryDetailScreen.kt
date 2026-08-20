@@ -35,10 +35,12 @@ import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.Trash2
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.image.PosterLoader
 import com.mediahub.android.core.network.EmbyItemDetail
@@ -115,6 +117,7 @@ internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDeta
                 )
             }
             item { TechnicalDetails(detail) }
+            item { DeleteActions(state, actions) }
         }
     }
 }
@@ -144,6 +147,40 @@ private fun DetailIdentity(detail: EmbyItemDetail, posterLoader: PosterLoader) {
             if (genres.isNotEmpty()) {
                 MediaHubText(text = genres.joinToString(" · "), color = MediaHubColors.Accent, fontSize = 12.sp)
             }
+        }
+    }
+}
+
+@Composable
+private fun DeleteActions(state: LibraryDetailState, actions: LibraryDetailActions) {
+    val preview = state.deletePreview
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (preview == null) {
+            MediaHubSecondaryButton(
+                label = if (state.deleting) "正在读取删除预览…" else "从 Emby 删除",
+                icon = Lucide.Trash2,
+                enabled = !state.deleting && !state.refreshing,
+                onClick = actions.onDelete,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            MediaHubText(
+                text = "将从 Emby 删除「${preview.name}」${if (preview.type == "Series") "及全部分集" else ""}。NAS 上约 ${preview.fileCount} 个库文件可能被删掉，115 网盘文件不会删除。",
+                color = MediaHubColors.TextSecondary,
+                fontSize = 13.sp,
+            )
+            MediaHubButton(
+                label = if (state.deleting) "正在删除" else "确认删除",
+                onClick = actions.onConfirmDelete,
+                enabled = !state.deleting,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            MediaHubSecondaryButton(
+                label = "取消",
+                onClick = actions.onCancelDelete,
+                enabled = !state.deleting,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

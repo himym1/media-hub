@@ -64,7 +64,11 @@ export function DiscoveryView({
 
   useEffect(() => {
     const focusSearch = (event: KeyboardEvent) => {
+      const isInput = document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA' || document.activeElement?.tagName === 'SELECT'
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        inputRef.current?.focus()
+      } else if (event.key === '/' && !isInput) {
         event.preventDefault()
         inputRef.current?.focus()
       }
@@ -113,7 +117,7 @@ export function DiscoveryView({
   return (
     <section className="discovery-view">
       <header className="view-header discovery-header">
-        <div><p className="eyebrow">DISCOVER</p><h1>发现</h1><p>搜索资源、核对版本并加入自动转存流程。</p></div>
+        <div><h1>发现</h1><p>搜索资源、核对版本并加入自动转存流程。</p></div>
         <button aria-label={integrationsLoading ? '正在检查服务状态' : `刷新服务状态，${healthyCount}/${integrations.length} 个服务在线`} className="health-summary" disabled={integrationsLoading} onClick={onRefreshIntegrations} type="button"><span className={healthyCount > 0 ? 'healthy' : ''} /><strong>{integrationsLoading ? '检查中…' : `${healthyCount}/${integrations.length} 服务在线`}</strong><RefreshCw aria-hidden="true" size={15} /></button>
       </header>
 
@@ -131,6 +135,21 @@ export function DiscoveryView({
             ref={inputRef}
             value={query}
           />
+          {query ? (
+            <button
+              aria-label="清空搜索内容"
+              className="search-clear-button"
+              onClick={() => {
+                setQuery('')
+                inputRef.current?.focus()
+              }}
+              type="button"
+            >
+              <X aria-hidden="true" size={16} />
+            </button>
+          ) : (
+            <kbd aria-hidden="true" className="search-shortcut">⌘K</kbd>
+          )}
           <button disabled={!query.trim() || search.isFetching} type="submit">{search.isFetching ? '搜索中…' : '搜索'}</button>
         </form>
         <div className="search-meta"><span>{sourceIntegration?.detail ?? '资源源尚未配置'}</span>{submittedQuery ? <><span>·</span><span>{search.data?.partial ? '部分结果' : '搜索完成'}</span></> : null}</div>
@@ -138,7 +157,7 @@ export function DiscoveryView({
 
       {!submittedQuery && trending.data?.items.length ? (
         <section className="trending-band" aria-label="本周热门">
-          <div className="section-heading"><div><p className="eyebrow">TRENDING</p><h2>本周热门</h2></div></div>
+          <div className="section-heading"><div><h2>本周热门</h2></div></div>
           <div className="trending-list">
             {trending.data.items.map((item) => (
               <button key={`${item.mediaType}-${item.tmdbId}`} onClick={() => searchDiscoveryItem(item.title)} type="button">
@@ -156,7 +175,7 @@ export function DiscoveryView({
       {submittedQuery ? (
         <div className={selected ? 'content-grid has-detail' : 'content-grid'}>
           <section className="results-column">
-            <div className="section-heading"><div><p className="eyebrow">RESULTS</p><h2>{search.data?.query ?? submittedQuery}<span>{search.data?.results.length ?? 0}</span></h2></div></div>
+            <div className="section-heading"><div><h2>{search.data?.query ?? submittedQuery}<span>{search.data?.results.length ?? 0}</span></h2></div></div>
             {search.isLoading ? <div className="result-loading"><div /><div /><div /></div> : null}
             {search.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>搜索暂时不可用</strong><span>{search.error.message}</span></div><button onClick={() => void search.refetch()} type="button">重试</button></div> : null}
             {!search.isLoading && !search.isError && search.data?.results.length === 0 ? <div className="empty-state"><Film size={26} /><span>没有找到匹配资源</span></div> : null}
@@ -180,7 +199,7 @@ export function DiscoveryView({
           </section>
 
           {selected ? <aside className="detail-panel" aria-label="资源详情">
-            <div className="detail-header"><div><p className="eyebrow">VERSION</p><h2>{selected.title}</h2></div><IconButton label="关闭详情" onClick={() => setSelected(null)} subtle><X size={17} /></IconButton></div>
+            <div className="detail-header"><div><h2>{selected.title}</h2></div><IconButton label="关闭详情" onClick={() => setSelected(null)} subtle><X size={17} /></IconButton></div>
             <div className="detail-poster">{selected.posterUrl ? <img alt={`${selected.title} 海报`} height="270" src={selected.posterUrl} width="360" /> : <div className="poster-placeholder"><Film size={34} /></div>}<div className="poster-overlay"><span>{selected.provider ?? selected.source}</span><strong>{selected.release.resolution}</strong></div></div>
             <div className="detail-facts"><div><span>视频</span><strong>{selected.release.videoCodec}{selected.release.dynamicRange ? ` · ${selected.release.dynamicRange}` : ''}</strong></div><div><span>音频</span><strong>{selected.release.audio ?? '未知'}</strong></div><div><span>体积</span><strong>{formatSize(selected.release.sizeBytes)}</strong></div><div><span>目标</span><strong>{selected.mediaType === 'movie' ? '115 / 电影' : '115 / 电视剧'}</strong></div></div>
             {recommendations.data?.items.length ? <div className="recommendation-links"><span>相似内容</span>{recommendations.data.items.slice(0, 4).map((item) => <button key={`${item.mediaType}-${item.tmdbId}`} onClick={() => searchDiscoveryItem(item.title)} type="button">{item.title}</button>)}</div> : null}

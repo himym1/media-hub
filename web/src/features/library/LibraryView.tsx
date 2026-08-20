@@ -147,11 +147,29 @@ export function LibraryView() {
 
       <div className="library-toolbar">
         <form className="library-search" onSubmit={submitSearch}>
-          <Search size={17} aria-hidden="true" />
+          <Search size={19} aria-hidden="true" />
           <label className="sr-only" htmlFor="library-query">搜索 Emby 媒体</label>
-          <input id="library-query" maxLength={120} onChange={(event) => setQueryText(event.target.value)} placeholder="搜索电影或剧集" type="search" value={queryText} />
-          {submittedQuery ? <IconButton label="清除搜索" onClick={clearSearch} subtle><X size={16} /></IconButton> : null}
-          <button className="primary-action compact" disabled={!queryText.trim()} type="submit">搜索</button>
+          <input
+            autoComplete="off"
+            id="library-query"
+            maxLength={120}
+            name="library-query"
+            onChange={(event) => setQueryText(event.target.value)}
+            placeholder="搜索电影或剧集…"
+            type="search"
+            value={queryText}
+          />
+          {queryText ? (
+            <button
+              aria-label="清空搜索内容"
+              className="search-clear-button"
+              onClick={clearSearch}
+              type="button"
+            >
+              <X aria-hidden="true" size={16} />
+            </button>
+          ) : null}
+          <button disabled={!queryText.trim()} type="submit">搜索</button>
         </form>
         {selectedLibrary && !submittedQuery ? <button className="secondary-command" disabled={refreshLibrary.isPending} onClick={() => refreshLibrary.mutate(selectedLibrary.id)} type="button"><RefreshCw size={16} />{refreshLibrary.isPending ? '已提交…' : '刷新此库'}</button> : null}
       </div>
@@ -175,7 +193,7 @@ export function LibraryView() {
           {!itemId ? <div className="library-detail-empty"><Film size={28} /><strong>选择一个媒体</strong><span>查看简介、年份和播放信息。</span></div> : null}
           {detail.isLoading ? <div className="status-loading">正在读取媒体详情…</div> : null}
           {detail.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>详情读取失败</strong><span>{detail.error.message}</span></div><button onClick={() => void detail.refetch()} type="button">重试</button></div> : null}
-          {detail.data ? <LibraryItemDetail item={detail.data} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} /> : null}
+          {detail.data ? <LibraryItemDetail key={detail.data.id} item={detail.data} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} /> : null}
         </aside>
       </div>
     </section>

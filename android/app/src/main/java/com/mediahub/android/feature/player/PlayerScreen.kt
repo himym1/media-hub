@@ -38,7 +38,6 @@ internal data class PlayerActions(
     val onBack: () -> Unit,
     val onToggleOrientation: () -> Unit,
     val onEnterPictureInPicture: () -> Unit,
-    val onFallback: (() -> Unit)? = null,
 )
 
 @Composable

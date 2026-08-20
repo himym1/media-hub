@@ -31,7 +31,6 @@ export function OperationsView() {
     <section className="operations-view" aria-label="运营工具">
       <header className="view-heading">
         <div>
-          <span className="eyebrow">OPERATIONS</span>
           <h1>运营工具</h1>
         </div>
         <span className="service-state unconfigured">原生模式</span>

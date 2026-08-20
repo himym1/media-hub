@@ -307,6 +307,27 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         request("/api/v1/integrations/emby/items/${encode(itemId)}/refresh", method = "POST", token = token)
     }
 
+    suspend fun previewItemDelete(token: String, itemId: String): EmbyDeletePreview {
+        val payload = JSONObject(request("/api/v1/integrations/emby/items/${encode(itemId)}/delete-preview", token = token))
+        return EmbyDeletePreview(
+            id = payload.getString("id"),
+            name = payload.getString("name"),
+            type = payload.getString("type"),
+            fileCount = payload.getInt("fileCount"),
+            deletesFiles = payload.getBoolean("deletesFiles"),
+            cloudKept = payload.getBoolean("cloudKept"),
+        )
+    }
+
+    suspend fun deleteItem(token: String, itemId: String) {
+        request(
+            "/api/v1/integrations/emby/items/${encode(itemId)}/delete",
+            method = "POST",
+            token = token,
+            body = JSONObject().put("confirmation", itemId).toString(),
+        )
+    }
+
 
     suspend fun search(token: String, query: String): SearchResponse {
         val encodedQuery = URLEncoder.encode(query, Charsets.UTF_8.name())

@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -163,6 +165,52 @@ func (h *handler) refreshEmbyLibrary(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) refreshEmbyItem(w http.ResponseWriter, r *http.Request) {
 	h.refreshEmbyObject(w, r, false)
+}
+
+func (h *handler) previewEmbyItemDelete(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Emby == nil {
+		writeIntegrationUnavailable(w)
+		return
+	}
+	id := r.PathValue("id")
+	if !embyIDPattern.MatchString(id) {
+		writeInvalidEmbyID(w)
+		return
+	}
+	preview, err := h.dependencies.Emby.DeletePreview(r.Context(), id)
+	if err != nil {
+		writeIntegrationProblem(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
+}
+
+func (h *handler) deleteEmbyItem(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Emby == nil {
+		writeIntegrationUnavailable(w)
+		return
+	}
+	id := r.PathValue("id")
+	if !embyIDPattern.MatchString(id) {
+		writeInvalidEmbyID(w)
+		return
+	}
+	var input struct {
+		Confirmation string `json:"confirmation"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&input); err != nil || strings.TrimSpace(input.Confirmation) != id {
+		writeProblem(w, problem{
+			Type:  "https://media-hub.local/problems/invalid-confirmation",
+			Title: "删除确认无效", Status: http.StatusBadRequest,
+			Code: "invalid_confirmation",
+		})
+		return
+	}
+	if err := h.dependencies.Emby.DeleteItem(r.Context(), id); err != nil {
+		writeIntegrationProblem(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (h *handler) refreshEmbyObject(w http.ResponseWriter, r *http.Request, library bool) {

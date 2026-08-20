@@ -172,7 +172,7 @@ test('settings tabs support arrow keys and protect unsaved provider changes', as
   await overviewTab.focus()
   await page.keyboard.press('ArrowRight')
   await expect(page).toHaveURL(/settings=providers/)
-  await expect(page.getByRole('tab', { name: 'Provider' })).toBeFocused()
+  await expect(page.getByRole('tab', { name: '服务接入' })).toBeFocused()
 
   const tmdbUrl = page.getByRole('textbox', { name: 'API 地址' }).first()
   await tmdbUrl.fill('https://tmdb.example/3')
@@ -180,7 +180,7 @@ test('settings tabs support arrow keys and protect unsaved provider changes', as
 
   page.once('dialog', async (dialog) => dialog.dismiss())
   await page.getByRole('tab', { name: '账户' }).click()
-  await expect(page.getByRole('tab', { name: /Provider/ })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('tab', { name: /服务接入/ })).toHaveAttribute('aria-selected', 'true')
 
   page.once('dialog', async (dialog) => dialog.dismiss())
   await page.goBack()

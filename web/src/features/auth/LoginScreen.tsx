@@ -41,12 +41,11 @@ export function LoginScreen({ onAuthenticated, serviceError }: LoginScreenProps)
     <main className="auth-shell">
       <header className="auth-brand">
         <span className="auth-brand-mark"><Film size={19} strokeWidth={2.4} /></span>
-        <span><strong>MEDIA HUB</strong><small>HOME MEDIA CONTROL</small></span>
+        <span><strong>MEDIA HUB</strong><small>媒体自动化控制</small></span>
       </header>
 
       <section className="auth-panel" aria-labelledby="login-title">
         <span className="auth-lock"><LockKeyhole size={21} /></span>
-        <p className="auth-eyebrow">PRIVATE CONTROL PLANE</p>
         <h1 id="login-title">管理员登录</h1>
         <form onSubmit={handleSubmit}>
           <label htmlFor="admin-password">密码</label>
@@ -84,7 +83,7 @@ export function LoginScreen({ onAuthenticated, serviceError }: LoginScreenProps)
         </div>
       </section>
 
-      <footer className="auth-footer"><span>MEDIA HUB / PRIVATE</span><span>API v1</span></footer>
+      <footer className="auth-footer"><span>MEDIA HUB</span><span>API v1</span></footer>
     </main>
   )
 }

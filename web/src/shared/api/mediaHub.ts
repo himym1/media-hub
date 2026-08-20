@@ -264,6 +264,15 @@ export type EmbyItemDetail = EmbyItem & {
   appUrl?: string
 }
 
+export type EmbyDeletePreview = {
+  id: string
+  name: string
+  type: string
+  fileCount: number
+  deletesFiles: boolean
+  cloudKept: boolean
+}
+
 export type Drive115Status = {
   authorized: boolean
   usedBytes?: number
@@ -466,6 +475,18 @@ export function refreshEmbyLibrary(id: string) {
 export function refreshEmbyItem(id: string) {
   return requestJSON<{ status: 'accepted' }>(`/api/v1/integrations/emby/items/${encodeURIComponent(id)}/refresh`, {
     method: 'POST', headers: writeHeaders(false),
+  })
+}
+
+export function previewEmbyItemDelete(id: string) {
+  return requestJSON<EmbyDeletePreview>(`/api/v1/integrations/emby/items/${encodeURIComponent(id)}/delete-preview`)
+}
+
+export function deleteEmbyItem(id: string) {
+  return requestJSON<{ status: 'deleted' }>(`/api/v1/integrations/emby/items/${encodeURIComponent(id)}/delete`, {
+    method: 'POST',
+    headers: writeHeaders(),
+    body: JSON.stringify({ confirmation: id }),
   })
 }
 

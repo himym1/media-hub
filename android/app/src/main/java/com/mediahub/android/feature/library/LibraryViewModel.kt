@@ -118,6 +118,17 @@ class LibraryViewModel(
         contentJob = viewModelScope.launch { loadLibraryPage(libraryId, page) }
     }
 
+    fun reloadItems() {
+        val submitted = _uiState.value.submittedQuery
+        if (submitted.isNotEmpty()) {
+            search()
+            return
+        }
+        val libraryId = _uiState.value.selectedLibraryId ?: return
+        contentJob?.cancel()
+        contentJob = viewModelScope.launch { loadLibraryPage(libraryId, _uiState.value.page) }
+    }
+
     fun refreshSelectedLibrary() {
         val id = _uiState.value.selectedLibraryId ?: return
         if (_uiState.value.refreshing) return

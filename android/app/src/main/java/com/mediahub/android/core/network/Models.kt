@@ -322,6 +322,15 @@ data class EmbyItemDetail(
     val appUrl: String? = null,
 )
 
+data class EmbyDeletePreview(
+    val id: String,
+    val name: String,
+    val type: String,
+    val fileCount: Int,
+    val deletesFiles: Boolean,
+    val cloudKept: Boolean,
+)
+
 
 class ApiException(
     val status: Int,

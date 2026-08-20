@@ -175,6 +175,10 @@ class MediaHubRepository(
 
     suspend fun refreshItem(itemId: String) = authenticated { token -> api.refreshItem(token, itemId) }
 
+    suspend fun previewItemDelete(itemId: String) = authenticated { token -> api.previewItemDelete(token, itemId) }
+
+    suspend fun deleteItem(itemId: String) = authenticated { token -> api.deleteItem(token, itemId) }
+
     suspend fun providerSettings(): ProviderSettings = authenticated(api::providerSettings)
     suspend fun updateProviderSettings(input: ProviderSettingsUpdate): ProviderSettings = authenticated { api.updateProviderSettings(it, input) }
     suspend fun testWeComNotification() = authenticated(api::testWeComNotification)

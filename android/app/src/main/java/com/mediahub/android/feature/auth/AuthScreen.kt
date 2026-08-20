@@ -86,7 +86,7 @@ private fun LoginScreen(
             Spacer(Modifier.width(11.dp))
             Column {
                 MediaHubText(text = "MEDIA HUB", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                MediaHubText(text = "HOME MEDIA CONTROL", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+                MediaHubText(text = "媒体自动化控制", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             }
         }
 
@@ -137,7 +137,7 @@ private fun LoginScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             MediaHubText(text = "单用户控制台", color = MediaHubColors.TextFaint, fontSize = 12.sp)
-            MediaHubText(text = "ANDROID", color = MediaHubColors.TextFaint, fontSize = 12.sp)
+            MediaHubText(text = "Android 客户端", color = MediaHubColors.TextFaint, fontSize = 12.sp)
         }
     }
 }

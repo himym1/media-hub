@@ -55,7 +55,7 @@ import com.mediahub.android.core.network.OperationalStatistics
 
 internal val serviceSectionOptions = listOf(
     "overview" to "概览",
-    "providers" to "Provider",
+    "providers" to "服务接入",
     "account" to "账户",
 )
 

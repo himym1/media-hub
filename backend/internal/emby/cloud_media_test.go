@@ -9,6 +9,8 @@ func TestPickCodeFromValue(t *testing.T) {
 		want  string
 	}{
 		{"query", "http://qms.local/115/url/video.mkv?pickcode=Abcd1234", "Abcd1234"},
+		{"pc query", "http://qms.local/115/url?pc=Abcd1234", "Abcd1234"},
+		{"scheme", "115://Abcd1234", "Abcd1234"},
 		{"strm path", "/library/Movie.strm", ""},
 		{"bare code", "abcd1234", "abcd1234"},
 		{"https cdn", "https://cdn.example/movie.mkv?token=1", ""},
@@ -20,6 +22,18 @@ func TestPickCodeFromValue(t *testing.T) {
 				t.Fatalf("got %q want %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestPlaybackURLFromValueAccepts115CDNOnly(t *testing.T) {
+	if got := playbackURLFromValue("https://cdnfhnfile.115.com/video.mkv?t=1"); got == "" {
+		t.Fatal("expected 115 CDN URL")
+	}
+	if got := playbackURLFromValue("https://115.com/s/abc?password=1"); got != "" {
+		t.Fatalf("share page should be rejected: %q", got)
+	}
+	if got := playbackURLFromValue("https://other.example/video.mkv"); got != "" {
+		t.Fatalf("foreign host should be rejected: %q", got)
 	}
 }
 

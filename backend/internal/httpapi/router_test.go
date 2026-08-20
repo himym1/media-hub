@@ -97,6 +97,7 @@ func (*workflowStub) RetryNotification(context.Context, int64, string, string, s
 type embyStub struct {
 	refreshedLibrary string
 	refreshedItem    string
+	deletedItem      string
 }
 
 func (*embyStub) Libraries(context.Context) ([]emby.Library, error) {
@@ -131,6 +132,15 @@ func (stub *embyStub) RefreshLibrary(_ context.Context, id string) error {
 }
 func (stub *embyStub) RefreshItem(_ context.Context, id string) error {
 	stub.refreshedItem = id
+	return nil
+}
+func (stub *embyStub) DeletePreview(_ context.Context, id string) (emby.DeletePreview, error) {
+	return emby.DeletePreview{
+		ID: id, Name: "Movie", Type: "Movie", FileCount: 1, DeletesFiles: true, CloudKept: true,
+	}, nil
+}
+func (stub *embyStub) DeleteItem(_ context.Context, id string) error {
+	stub.deletedItem = id
 	return nil
 }
 
@@ -418,6 +428,28 @@ func TestEmbyBrowseDetailAndRefreshRoutes(t *testing.T) {
 	}
 	if provider.refreshedLibrary != "library-1" || provider.refreshedItem != "item-1" {
 		t.Fatalf("refresh library=%q item=%q", provider.refreshedLibrary, provider.refreshedItem)
+	}
+	previewRecorder := httptest.NewRecorder()
+	router.ServeHTTP(previewRecorder, authenticatedRequest(http.MethodGet, "/api/v1/integrations/emby/items/item-1/delete-preview"))
+	if previewRecorder.Code != http.StatusOK || !strings.Contains(previewRecorder.Body.String(), `"cloudKept":true`) ||
+		strings.Contains(previewRecorder.Body.String(), "/private") {
+		t.Fatalf("delete preview status=%d body=%s", previewRecorder.Code, previewRecorder.Body.String())
+	}
+	deleteRecorder := httptest.NewRecorder()
+	deleteRequest := httptest.NewRequest(http.MethodPost, "/api/v1/integrations/emby/items/item-1/delete", strings.NewReader(`{"confirmation":"item-1"}`))
+	deleteRequest.Header.Set("Authorization", "Bearer valid-session")
+	deleteRequest.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(deleteRecorder, deleteRequest)
+	if deleteRecorder.Code != http.StatusOK || !strings.Contains(deleteRecorder.Body.String(), `"deleted"`) || provider.deletedItem != "item-1" {
+		t.Fatalf("delete status=%d body=%s deleted=%q", deleteRecorder.Code, deleteRecorder.Body.String(), provider.deletedItem)
+	}
+	mismatch := httptest.NewRecorder()
+	mismatchRequest := httptest.NewRequest(http.MethodPost, "/api/v1/integrations/emby/items/item-1/delete", strings.NewReader(`{"confirmation":"other"}`))
+	mismatchRequest.Header.Set("Authorization", "Bearer valid-session")
+	mismatchRequest.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(mismatch, mismatchRequest)
+	if mismatch.Code != http.StatusBadRequest {
+		t.Fatalf("mismatch status=%d", mismatch.Code)
 	}
 }
 

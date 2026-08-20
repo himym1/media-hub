@@ -95,7 +95,7 @@ class LibraryScreenTest {
         }
 
         composeRule.onNodeWithText("继续播放").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
-        composeRule.onNodeWithText("在 Emby 网页中播放").assertHasClickAction().assertHeightIsAtLeast(48.dp)
+        composeRule.onNodeWithText("从 Emby 删除").assertHasClickAction().assertHeightIsAtLeast(48.dp)
         composeRule.runOnIdle {
             assertEquals("item-1", played?.first?.id)
             assertEquals("https://emby.example/item-1", played?.second?.webUrl)

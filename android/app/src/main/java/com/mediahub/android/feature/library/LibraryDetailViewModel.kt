@@ -3,6 +3,7 @@ package com.mediahub.android.feature.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mediahub.android.core.network.ApiException
+import com.mediahub.android.core.network.EmbyDeletePreview
 import com.mediahub.android.core.network.EmbyItem
 import com.mediahub.android.core.network.EmbyEpisode
 import com.mediahub.android.core.network.EmbyItemDetail
@@ -20,6 +21,9 @@ data class LibraryDetailState(
     val loading: Boolean = false,
     val loadingEpisodes: Boolean = false,
     val refreshing: Boolean = false,
+    val deleting: Boolean = false,
+    val deletePreview: EmbyDeletePreview? = null,
+    val deleted: Boolean = false,
     val errorMessage: String? = null,
     val episodesError: String? = null,
     val actionMessage: String? = null,
@@ -32,12 +36,14 @@ class LibraryDetailViewModel(
     val uiState: StateFlow<LibraryDetailState> = _uiState.asStateFlow()
     private var loadJob: Job? = null
     private var refreshJob: Job? = null
+    private var deleteJob: Job? = null
     private var generation = 0L
 
     fun load(itemId: String) {
         if (_uiState.value.itemId == itemId && _uiState.value.item != null) return
         loadJob?.cancel()
         refreshJob?.cancel()
+        deleteJob?.cancel()
         val requestGeneration = ++generation
         loadJob = viewModelScope.launch {
             _uiState.value = LibraryDetailState(itemId = itemId, loading = true)
@@ -90,10 +96,65 @@ class LibraryDetailViewModel(
         }
     }
 
+    fun requestDelete() {
+        val itemId = _uiState.value.itemId ?: return
+        if (_uiState.value.deleting || _uiState.value.deletePreview != null) return
+        deleteJob?.cancel()
+        val requestGeneration = generation
+        deleteJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(deleting = true, errorMessage = null, actionMessage = null)
+            try {
+                val preview = repository.previewItemDelete(itemId)
+                if (_uiState.value.itemId == itemId && generation == requestGeneration) {
+                    _uiState.value = _uiState.value.copy(deleting = false, deletePreview = preview)
+                }
+            } catch (error: ApiException) {
+                if (_uiState.value.itemId == itemId && generation == requestGeneration) {
+                    _uiState.value = _uiState.value.copy(deleting = false, errorMessage = error.message ?: "无法预览删除")
+                }
+            } catch (_: Exception) {
+                if (_uiState.value.itemId == itemId && generation == requestGeneration) {
+                    _uiState.value = _uiState.value.copy(deleting = false, errorMessage = "无法预览 Emby 删除")
+                }
+            }
+        }
+    }
+
+    fun confirmDelete() {
+        val itemId = _uiState.value.itemId ?: return
+        val preview = _uiState.value.deletePreview ?: return
+        if (preview.id != itemId || _uiState.value.deleting) return
+        deleteJob?.cancel()
+        val requestGeneration = generation
+        deleteJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(deleting = true, errorMessage = null)
+            try {
+                repository.deleteItem(itemId)
+                if (_uiState.value.itemId == itemId && generation == requestGeneration) {
+                    _uiState.value = _uiState.value.copy(deleting = false, deleted = true, deletePreview = null)
+                }
+            } catch (error: ApiException) {
+                if (_uiState.value.itemId == itemId && generation == requestGeneration) {
+                    _uiState.value = _uiState.value.copy(deleting = false, errorMessage = error.message ?: "删除失败")
+                }
+            } catch (_: Exception) {
+                if (_uiState.value.itemId == itemId && generation == requestGeneration) {
+                    _uiState.value = _uiState.value.copy(deleting = false, errorMessage = "无法从 Emby 删除")
+                }
+            }
+        }
+    }
+
+    fun cancelDelete() {
+        deleteJob?.cancel()
+        _uiState.value = _uiState.value.copy(deleting = false, deletePreview = null)
+    }
+
     fun clear() {
         generation++
         loadJob?.cancel()
         refreshJob?.cancel()
+        deleteJob?.cancel()
         _uiState.value = LibraryDetailState()
     }
 

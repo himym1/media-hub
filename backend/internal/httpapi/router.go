@@ -65,6 +65,8 @@ type EmbyReader interface {
 	ItemDetails(context.Context, string) (emby.ItemDetail, error)
 	RefreshLibrary(context.Context, string) error
 	RefreshItem(context.Context, string) error
+	DeletePreview(context.Context, string) (emby.DeletePreview, error)
+	DeleteItem(context.Context, string) error
 	Episodes(context.Context, string) ([]emby.Episode, error)
 	PrimaryImage(context.Context, string, int) (emby.PrimaryImage, error)
 }
@@ -213,6 +215,8 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/integrations/emby/items/{id}/episodes", h.protected(h.getEmbyEpisodes))
 	mux.Handle("GET /api/v1/integrations/emby/items/{id}/primary-image", h.protected(h.getEmbyPrimaryImage))
 	mux.Handle("POST /api/v1/integrations/emby/items/{id}/refresh", h.protected(h.refreshEmbyItem))
+	mux.Handle("GET /api/v1/integrations/emby/items/{id}/delete-preview", h.protected(h.previewEmbyItemDelete))
+	mux.Handle("POST /api/v1/integrations/emby/items/{id}/delete", h.protected(h.deleteEmbyItem))
 	mux.Handle("POST /api/v1/integrations/wecom/test", h.protected(h.testWeComNotification))
 	mux.Handle("POST /api/v1/playback/sessions/{id}/events", h.protected(h.reportPlaybackSession))
 	mux.Handle("GET /api/v1/integrations/115/status", h.protected(h.getDrive115Status))

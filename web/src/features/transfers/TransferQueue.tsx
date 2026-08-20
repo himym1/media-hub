@@ -132,7 +132,7 @@ export function TransferQueue({ query }: TransferQueueProps) {
   return (
     <section className="workspace-view">
       <header className="view-header compact-view-header">
-        <div><p className="eyebrow">WORKFLOW</p><h1>任务</h1><p>查看当前进度，失败恢复和技术事件按需展开。</p></div>
+        <div><h1>任务</h1><p>查看当前进度，失败恢复和技术事件按需展开。</p></div>
         <div className="view-header-actions">
           <div className="task-scope-toggle" aria-label="任务范围" role="group">
             <button aria-pressed={!showArchived} onClick={() => selectScope(false)} type="button">当前</button>
@@ -158,7 +158,7 @@ export function TransferQueue({ query }: TransferQueueProps) {
           <aside className="task-detail" aria-label="任务详情">
             {detail.isLoading ? <div className="status-loading">正在读取…</div> : null}
             {detail.data ? <>
-              <div className="task-detail-heading"><div><p className="eyebrow">DETAIL</p><h2>{detail.data.title}</h2></div><span className={`state-chip ${detail.data.state}`}>{stateLabel[detail.data.state]}</span></div>
+              <div className="task-detail-heading"><div><h2>{detail.data.title}</h2></div><span className={`state-chip ${detail.data.state}`}>{stateLabel[detail.data.state]}</span></div>
               {detail.data.errorMessage ? <div className="task-error" role="alert"><CircleAlert size={17} /><span>{detail.data.errorMessage}</span></div> : null}
               <dl className="task-facts"><div><dt>类型</dt><dd>{detail.data.mediaType === 'movie' ? '电影' : '剧集'}</dd></div><div><dt>来源</dt><dd>{detail.data.source}</dd></div><div><dt>创建</dt><dd>{timeFormatter.format(new Date(detail.data.createdAt))}</dd></div></dl>
               <div className="task-progress-heading"><strong>最近进度</strong><span>{detail.data.events.length} 条记录</span></div>

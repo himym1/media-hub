@@ -48,18 +48,20 @@
   margin: 36px auto;
   padding: 32px;
   border: 1px solid #343839;
-  border-radius: 8px;
+  border-radius: 12px;
   background: #16191a;
-  box-shadow: 0 20px 70px #0006;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05), 0 24px 72px rgba(0, 0, 0, 0.45);
 }
 
 .auth-lock {
   width: 38px;
   height: 38px;
   margin-bottom: 26px;
-  color: #d7f36a;
-  border: 1px solid #4a5b32;
-  background: #242b22;
+  color: #101214;
+  border: 0;
+  background: #d7f36a;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(215, 243, 106, 0.2);
 }
 
 .auth-eyebrow {
@@ -98,11 +100,13 @@
   border: 1px solid #404645;
   border-radius: 8px;
   background: #101314;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: border-color .18s ease, box-shadow .18s ease;
 }
 
 .password-field:focus-within {
   border-color: #a4bd55;
-  box-shadow: 0 0 0 3px #d7f36a14;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25), 0 0 0 3px #d7f36a18;
 }
 
 .password-field input {
@@ -121,6 +125,7 @@
   color: #8b908e;
   border: 0;
   background: transparent;
+  transition: color .18s ease;
 }
 
 .password-field button:hover {
@@ -139,10 +144,17 @@
   border-radius: 8px;
   background: #d7f36a;
   font-weight: 700;
+  transition: background-color .18s ease, transform .18s ease, box-shadow .18s ease;
 }
 
 .login-button:hover:not(:disabled) {
   background: #e2fa88;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(215, 243, 106, 0.25);
+}
+
+.login-button:active:not(:disabled) {
+  transform: scale(0.975);
 }
 
 .login-button:disabled,

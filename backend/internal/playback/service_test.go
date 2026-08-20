@@ -176,6 +176,32 @@ func TestCreatingSessionRemovesExpiredEntries(t *testing.T) {
 	}
 }
 
+func TestCreateEmbyItemFallsBackToHTTPSWhenPickCodeResolveFails(t *testing.T) {
+	drive := &driveResolverStub{err: errors.New("115 downurl failed")}
+	emby := &embyResolverStub{media: SourceMedia{Name: "Movie", PickCode: "abcd1234", URL: "https://cdnfhnfile.115.com/video.mkv?t=1"}}
+	service := NewService(drive, emby)
+	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.StreamURL != emby.media.URL || drive.pickCode != "abcd1234" {
+		t.Fatalf("descriptor=%#v pick=%q", value, drive.pickCode)
+	}
+}
+
+func TestCreateEmbyItemUsesDirectHTTPSWhenPickCodeMissing(t *testing.T) {
+	drive := &driveResolverStub{err: errors.New("pick code should not be used")}
+	emby := &embyResolverStub{media: SourceMedia{Name: "Movie", URL: "https://cdnfhnfile.115.com/video.mkv?t=1"}}
+	service := NewService(drive, emby)
+	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.StreamURL != emby.media.URL || value.Title != "Movie" || drive.pickCode != "" {
+		t.Fatalf("descriptor=%#v pick=%q", value, drive.pickCode)
+	}
+}
+
 func TestCreateEmbyItemResolves115PickCodeToHTTPS(t *testing.T) {
 	drive := &driveResolverStub{media: SourceMedia{URL: "https://cdn.example/video.mkv?token=short", Name: "Movie.mkv"}}
 	emby := &embyResolverStub{media: SourceMedia{Name: "Movie", PickCode: "abcd1234"}}
