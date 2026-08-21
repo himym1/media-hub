@@ -126,6 +126,12 @@ func run(logger *slog.Logger) error {
 	workflowService := workflow.NewService(
 		dataStore, searchService, selectionCodec, qmsClient, embyClient, wecomClient, configuration.Workflow,
 		drive115AuthService.FolderPath,
+		func(ctx context.Context, fileID, name string) error {
+			return drive115AuthService.ExecuteFileCommand(ctx, "rename", map[string]any{
+				"fileId": fileID,
+				"name":   name,
+			})
+		},
 	)
 	checkinService := checkin.NewService(dataStore, searchService, wecomClient)
 	settingsService := settings.NewService(

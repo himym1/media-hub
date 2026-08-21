@@ -42,6 +42,10 @@ type Notifier interface {
 
 type SourcePathResolver func(context.Context, string) (string, error)
 
+// SourceRenamer renames a 115 file or folder before QMediaSync so STRM directories
+// inherit a stable Title (Year) name instead of release watermarks.
+type SourceRenamer func(context.Context, string, string) error
+
 type Service struct {
 	store             *store.Store
 	search            *search.Service
@@ -50,6 +54,7 @@ type Service struct {
 	emby              *emby.Client
 	notifier          Notifier
 	resolveSourcePath SourcePathResolver
+	renameSource      SourceRenamer
 	mutex             sync.RWMutex
 	workflow          config.Workflow
 	now               func() time.Time
@@ -66,10 +71,12 @@ func NewService(
 	notifier Notifier,
 	workflowConfig config.Workflow,
 	resolveSourcePath SourcePathResolver,
+	renameSource SourceRenamer,
 ) *Service {
 	return &Service{
 		store: dataStore, search: searchService, codec: codec, qms: qmsClient, emby: embyClient,
-		notifier: notifier, workflow: workflowConfig, resolveSourcePath: resolveSourcePath, now: time.Now,
+		notifier: notifier, workflow: workflowConfig, resolveSourcePath: resolveSourcePath,
+		renameSource: renameSource, now: time.Now,
 		wake: make(chan struct{}, 1), done: make(chan struct{}),
 	}
 }

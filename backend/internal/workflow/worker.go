@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
+	"strings"
 	"time"
 
 	"media-hub/backend/internal/qms"
@@ -270,6 +272,33 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 	}
 	if sourcePath == "" {
 		return s.fail(ctx, &job, "transferred", "provider_state_invalid", "资源转存结果无法解密", false, "")
+	}
+	desiredName := libraryEntryName(job.Title, job.Year, isFile, sourcePath)
+	if s.renameSource != nil && needsLibraryRename(sourcePath, desiredName) {
+		if err := s.renameSource(ctx, provider.FileID, desiredName); err != nil {
+			if saveErr := s.save(ctx, &job, "transferred", "标准化目录名失败，继续同步"); saveErr != nil {
+				return saveErr
+			}
+		} else {
+			if s.resolveSourcePath != nil {
+				if refreshed, refreshErr := s.resolveSourcePath(ctx, provider.FileID); refreshErr == nil && refreshed != "" {
+					sourcePath = refreshed
+					isFile = false
+				} else {
+					sourcePath = path.Join(path.Dir(strings.TrimRight(sourcePath, "/")), desiredName)
+				}
+			} else {
+				sourcePath = path.Join(path.Dir(strings.TrimRight(sourcePath, "/")), desiredName)
+			}
+			provider.Path = sourcePath
+			provider.IsFile = isFile
+			if token, encodeErr := s.codec.EncodeProvider(provider); encodeErr == nil {
+				job.ProviderToken = token
+			}
+			if saveErr := s.save(ctx, &job, "transferred", "已标准化网盘目录名"); saveErr != nil {
+				return saveErr
+			}
+		}
 	}
 	job.State = "submitting_sync"
 	job.ErrorCode = ""
