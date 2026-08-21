@@ -268,6 +268,7 @@ func (s *Service) work(ctx context.Context) error {
 		if err := s.process(ctx, source, false); err != nil {
 			return err
 		}
+		s.retryNotify(ctx, source.ID())
 	}
 	return nil
 }
@@ -336,6 +337,18 @@ func (s *Service) applyFailure(row *store.SourceCheckIn, err error, day string, 
 	row.NextAttemptAt = now.UTC().Add(checkInBackoff(row.Attempts)).Unix()
 }
 
+func (s *Service) retryNotify(ctx context.Context, sourceID string) {
+	row, err := s.store.SourceCheckIn(ctx, sourceID)
+	if err != nil {
+		return
+	}
+	day := checkInDay(s.now())
+	if row.LastDay != day {
+		return
+	}
+	s.notifyResult(ctx, row, day)
+}
+
 func (s *Service) notifyResult(ctx context.Context, row store.SourceCheckIn, day string) {
 	if s.notify == nil || !s.notify.Configured() {
 		return
@@ -347,7 +360,9 @@ func (s *Service) notifyResult(ctx context.Context, row store.SourceCheckIn, day
 	if row.NotifiedDay == day && row.NotifiedState == row.State {
 		return
 	}
-	if unknown, err := s.notify.Send(ctx, message); err != nil || unknown {
+	sendCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+	defer cancel()
+	if unknown, err := s.notify.Send(sendCtx, message); err != nil || unknown {
 		return
 	}
 	_ = s.store.MarkSourceCheckInNotified(ctx, row.SourceID, day, row.State, s.now())

@@ -2,6 +2,7 @@ package com.mediahub.android.feature.library
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -35,6 +36,10 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Trash2
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import com.mediahub.android.core.designsystem.BadgeVariant
+import com.mediahub.android.core.designsystem.MediaHubBadge
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
@@ -136,41 +141,63 @@ private fun DetailIdentity(detail: EmbyItemDetail, posterLoader: PosterLoader) {
         mediaTypeLabel(detail.item.type),
         detail.item.year?.toString(),
         detail.runtimeMinutes?.takeIf { it > 0 }?.let { "$it 分钟" },
-        detail.communityRating?.let { "★ %.1f".format(it) },
     )
-    MediaHubCard(insideMargin = PaddingValues(18.dp)) {
+    val rating = detail.communityRating?.takeIf { it > 0.0 }
+    MediaHubCard(insideMargin = PaddingValues(20.dp)) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            EmbyPoster(
-                itemId = detail.item.id,
-                loader = posterLoader,
-                contentDescription = "${detail.item.name} 封面",
-                modifier = Modifier.width(150.dp),
-            )
-            MediaHubText(
-                text = detail.item.name,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = MediaHubColors.TextPrimary,
-            )
-            if (facts.isNotEmpty()) {
-                MediaHubText(
-                    text = facts.joinToString(" · "),
-                    color = MediaHubColors.TextSecondary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
+            Box(
+                modifier = Modifier
+                    .width(150.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+            ) {
+                EmbyPoster(
+                    itemId = detail.item.id,
+                    loader = posterLoader,
+                    contentDescription = "${detail.item.name} 封面",
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
+            MediaHubText(
+                text = detail.item.name,
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Bold,
+                color = MediaHubColors.TextStrong,
+            )
+            if (facts.isNotEmpty() || rating != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (rating != null) {
+                        MediaHubBadge(
+                            text = "★ %.1f".format(rating),
+                            variant = BadgeVariant.Warning,
+                        )
+                    }
+                    facts.forEach { fact ->
+                        MediaHubBadge(
+                            text = fact,
+                            variant = BadgeVariant.Neutral,
+                        )
+                    }
+                }
+            }
             if (genres.isNotEmpty()) {
-                MediaHubText(
-                    text = genres.joinToString(" · "),
-                    color = MediaHubColors.Accent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    genres.take(3).forEach { genre ->
+                        MediaHubBadge(
+                            text = genre,
+                            variant = BadgeVariant.Primary,
+                        )
+                    }
+                }
             }
         }
     }

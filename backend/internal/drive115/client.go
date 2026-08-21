@@ -315,6 +315,103 @@ func (c *Client) FolderPath(ctx context.Context, folderID string) (string, error
 	return strings.Join(parts, "/"), nil
 }
 
+func (c *Client) EnsureFolder(ctx context.Context, parentID, name string) (string, error) {
+	parentID = strings.TrimSpace(parentID)
+	if parentID == "" {
+		parentID = "0"
+	}
+	name = sanitizeFolderName(name)
+	if !numericIDPattern.MatchString(parentID) || name == "" {
+		return "", &WriteError{Code: "invalid_request", Err: ErrUpstreamResponse}
+	}
+	for offset := 0; offset < 1000; {
+		items, total, err := c.ListFiles(ctx, parentID, 100, offset)
+		if err != nil {
+			return "", err
+		}
+		for _, item := range items {
+			if item.Kind == "folder" && item.Name == name {
+				return item.ID, nil
+			}
+		}
+		offset += len(items)
+		if len(items) == 0 || offset >= total {
+			break
+		}
+	}
+	return c.CreateFolder(ctx, parentID, name)
+}
+
+func (c *Client) CreateFolder(ctx context.Context, parentID, name string) (string, error) {
+	parentID = strings.TrimSpace(parentID)
+	if parentID == "" {
+		parentID = "0"
+	}
+	name = sanitizeFolderName(name)
+	if !numericIDPattern.MatchString(parentID) || name == "" {
+		return "", &WriteError{Code: "invalid_request", Err: ErrUpstreamResponse}
+	}
+	cookie := c.session()
+	if cookie == "" {
+		return "", ErrNotConfigured
+	}
+	values := url.Values{"pid": {parentID}, "cname": {name}}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.folderAddURL, strings.NewReader(values.Encode()))
+	if err != nil {
+		return "", &WriteError{Code: "invalid_request", Err: err}
+	}
+	c.applyAuth(request, cookie)
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response, err := c.client.Do(request)
+	if err != nil {
+		return "", &WriteError{Uncertain: true, Code: "uncertain_result", Err: fmt.Errorf("create 115 folder: %w", err)}
+	}
+	defer response.Body.Close()
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		return "", ErrUnauthorized
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return "", &WriteError{Code: "provider_rejected", Err: ErrUpstreamResponse}
+	}
+	var payload struct {
+		State bool            `json:"state"`
+		CID   json.RawMessage `json:"cid"`
+		Error string          `json:"error"`
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&payload); err != nil {
+		return "", &WriteError{Uncertain: true, Code: "invalid_response", Err: err}
+	}
+	if !payload.State {
+		return "", &WriteError{Code: "provider_rejected", Err: ErrUpstreamResponse}
+	}
+	folderID := strings.Trim(strings.TrimSpace(string(payload.CID)), `"`)
+	if !numericIDPattern.MatchString(folderID) || folderID == "0" {
+		return "", &WriteError{Uncertain: true, Code: "invalid_response", Err: ErrUpstreamResponse}
+	}
+	return folderID, nil
+}
+
+func sanitizeFolderName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	cleaned := strings.Map(func(character rune) rune {
+		switch character {
+		case '/', '\\', 0:
+			return -1
+		default:
+			return character
+		}
+	}, name)
+	cleaned = strings.TrimSpace(cleaned)
+	runes := []rune(cleaned)
+	if len(runes) > 200 {
+		cleaned = string(runes[:200])
+	}
+	return strings.TrimSpace(cleaned)
+}
+
 type WriteError struct {
 	Uncertain bool
 	Code      string

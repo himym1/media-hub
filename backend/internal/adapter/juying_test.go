@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,19 +17,37 @@ import (
 type juyingTransferTarget struct {
 	shareCode       string
 	receiveCode     string
+	destinationID   string
 	shareFileIDs    []string
 	magnets         []string
 	shareVideoNames []string
 	shareRootIDs    []string
+	folders         map[string]string
 	inspectErr      error
 	inspectCalls    int
+	ensureCalls     int
 }
 
-func (t *juyingTransferTarget) ReceiveShare(_ context.Context, _ string, shareCode, receiveCode string, fileIDs []string) error {
+func (t *juyingTransferTarget) ReceiveShare(_ context.Context, destinationID, shareCode, receiveCode string, fileIDs []string) error {
+	t.destinationID = destinationID
 	t.shareCode = shareCode
 	t.receiveCode = receiveCode
 	t.shareFileIDs = append([]string(nil), fileIDs...)
 	return nil
+}
+
+func (t *juyingTransferTarget) EnsureFolder(_ context.Context, parentID, name string) (string, error) {
+	t.ensureCalls++
+	if t.folders == nil {
+		t.folders = map[string]string{}
+	}
+	key := parentID + "|" + name
+	if id, ok := t.folders[key]; ok {
+		return id, nil
+	}
+	id := "folder-" + strconv.Itoa(t.ensureCalls)
+	t.folders[key] = id
+	return id, nil
 }
 
 func (t *juyingTransferTarget) InspectShare(_ context.Context, _, _ string) ([]string, []string, error) {
@@ -95,10 +114,16 @@ func TestJuyingSearchAndTransfersSupportedResources(t *testing.T) {
 	if strings.Contains(results[0].SourceRef, "115.com") || strings.Contains(results[0].SourceRef, "app-key") {
 		t.Fatalf("reference contains upstream URL or credential: %s", results[0].SourceRef)
 	}
-	if _, err := source.StartTransfer(context.Background(), search.TransferRequest{Reference: results[0].SourceRef, DestinationID: "dest", IdempotencyKey: "share-op"}); err != nil {
+	result, err := source.StartTransfer(context.Background(), search.TransferRequest{
+		Title: "范海辛", Reference: results[0].SourceRef, DestinationID: "dest", IdempotencyKey: "share-op",
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if target.shareCode != "shareABC123" || target.receiveCode != "WENG" || len(target.shareFileIDs) != 1 || target.shareFileIDs[0] != "10" {
+	if result.FileID != "folder-1" || result.Path != "范海辛" {
+		t.Fatalf("result = %+v", result)
+	}
+	if target.ensureCalls != 1 || target.destinationID != "folder-1" || target.shareCode != "shareABC123" || target.receiveCode != "WENG" || len(target.shareFileIDs) != 0 {
 		t.Fatalf("share target = %+v", target)
 	}
 	if results[1].SourceRef != "" || results[1].TransferState != "unavailable" {
@@ -131,19 +156,23 @@ func TestJuyingRejectsUnverifiableMagnetBeforeOffline(t *testing.T) {
 	}
 }
 
-func TestJuyingRejectsShareIdentityMismatchBeforeReceive(t *testing.T) {
-	target := &juyingTransferTarget{shareVideoNames: []string{"Wrong.Movie.2020.2160p.mkv"}}
+func TestJuyingStoresChineseFolderWithoutShareTitleGate(t *testing.T) {
+	target := &juyingTransferTarget{shareVideoNames: []string{"Green.Lantern.Emerald.Knights.2011.1080p.mkv"}}
 	source := NewJuying("https://www.jying.top", "app-id", "app-key", time.Second, target, target, nil)
-	reference, err := json.Marshal(juyingReference{Kind: "share", Title: "Van.Helsing.2004.2160p", ShareCode: "shareABC123", ReceiveCode: "WENG"})
+	reference, err := json.Marshal(juyingReference{Kind: "share", Title: "绿灯侠：绿灯长明 (2022)", ShareCode: "shareABC123", ReceiveCode: "WENG"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = source.StartTransfer(context.Background(), search.TransferRequest{Reference: string(reference), DestinationID: "dest", IdempotencyKey: "op"})
-	var failure search.Failure
-	if !errors.As(err, &failure) || failure.Code != "source_identity_mismatch" || failure.Retryable {
-		t.Fatalf("failure = %#v", err)
+	result, err := source.StartTransfer(context.Background(), search.TransferRequest{
+		Title: "绿灯侠：绿灯长明", Reference: string(reference), DestinationID: "dest", IdempotencyKey: "op",
+	})
+	if err != nil {
+		t.Fatalf("transfer rejected: %v", err)
 	}
-	if target.inspectCalls != 1 || target.shareCode != "" {
+	if result.Path != "绿灯侠：绿灯长明" || result.FileID != "folder-1" {
+		t.Fatalf("result = %+v", result)
+	}
+	if target.ensureCalls != 1 || target.destinationID != "folder-1" || target.shareCode != "shareABC123" || target.inspectCalls != 0 {
 		t.Fatalf("target = %+v", target)
 	}
 }

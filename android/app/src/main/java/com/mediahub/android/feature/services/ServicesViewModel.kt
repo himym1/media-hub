@@ -293,6 +293,6 @@ private fun com.mediahub.android.core.network.WeComSettings.toUpdate() = com.med
     corpId = corpId,
     sendMode = sendMode,
     agentId = agentId,
-    toUser = toUser.ifBlank { "@all" },
+    toUser = if (sendMode == "appchat") toUser else toUser.ifBlank { "@all" },
     chatId = chatId,
 )

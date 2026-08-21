@@ -3,12 +3,14 @@ package workflow
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/selection"
 	"media-hub/backend/internal/store"
+	"media-hub/backend/internal/wecom"
 )
 
 const (
@@ -101,7 +103,14 @@ func (s *Service) processNotification(ctx context.Context, item store.TransferNo
 			ctx, item, s.now().UTC().Add(backoff(item.Attempts+1)), s.now(),
 		)
 	}
-	return s.store.FinishTransferNotification(ctx, item, "needs_attention", "企业微信通知发送失败", s.now())
+	return s.store.FinishTransferNotification(ctx, item, "needs_attention", wecomFailureMessage(sendErr), s.now())
+}
+
+func wecomFailureMessage(err error) string {
+	if code := wecom.ErrorCode(err); code != 0 {
+		return fmt.Sprintf("企业微信通知发送失败（%d）", code)
+	}
+	return "企业微信通知发送失败"
 }
 
 func notificationMessage(item store.TransferNotification) string {
@@ -182,7 +191,7 @@ func (s *Service) processTransfer(ctx context.Context, job store.TransferJob) er
 	var result search.TransferResult
 	if provider.OperationID == "" {
 		result, err = source.StartTransfer(ctx, search.TransferRequest{
-			UserID: job.UserID, Reference: payload.Reference, DestinationID: target.DestinationID,
+			UserID: job.UserID, Title: job.Title, Reference: payload.Reference, DestinationID: target.DestinationID,
 			IdempotencyKey: job.ID + "_transfer",
 		})
 	} else {

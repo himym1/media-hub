@@ -73,6 +73,46 @@ func TestFolderPathUsesValidated115Breadcrumbs(t *testing.T) {
 	}
 }
 
+func TestEnsureFolderReusesExistingThenCreates(t *testing.T) {
+	listCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Cookie") != "UID=uid; CID=cid; SEID=seid" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch {
+		case request.Method == http.MethodGet:
+			listCalls++
+			if listCalls == 1 {
+				_, _ = w.Write([]byte(`{"state":true,"count":1,"data":[{"cid":"88","n":"绿灯侠：绿灯长明","pid":"10"}]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"state":true,"count":0,"data":[]}`))
+		case request.Method == http.MethodPost:
+			_ = request.ParseForm()
+			if request.FormValue("pid") != "10" || request.FormValue("cname") != "新片名" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_, _ = w.Write([]byte(`{"state":true,"cid":"99"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	client := NewClient("UID=uid; CID=cid; SEID=seid", time.Second)
+	client.filesURL = server.URL
+	client.folderAddURL = server.URL
+	existing, err := client.EnsureFolder(context.Background(), "10", "绿灯侠：绿灯长明")
+	if err != nil || existing != "88" {
+		t.Fatalf("reuse=%q err=%v", existing, err)
+	}
+	created, err := client.EnsureFolder(context.Background(), "10", "新片名")
+	if err != nil || created != "99" {
+		t.Fatalf("create=%q err=%v", created, err)
+	}
+}
+
 func TestExecuteRenameUsesWebBatchRenameForm(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/files/batch_rename" || request.Header.Get("Cookie") != "UID=uid; CID=cid; SEID=seid" {

@@ -31,6 +31,8 @@ import com.composables.icons.lucide.Pause
 import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.Save
 import com.composables.icons.lucide.Trash2
+import com.mediahub.android.core.designsystem.BadgeVariant
+import com.mediahub.android.core.designsystem.MediaHubBadge
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubCheckboxRow
@@ -337,23 +339,18 @@ private fun OptionGroup(
 
 @Composable
 private fun RunRow(run: SubscriptionRun) {
+    val variant = when (run.state) {
+        "completed" -> BadgeVariant.Success
+        "failed", "needs_attention" -> BadgeVariant.Error
+        "searching" -> BadgeVariant.Primary
+        "duplicate", "no_match" -> BadgeVariant.Neutral
+        else -> BadgeVariant.Warning
+    }
     MediaHubPreferenceRow(
         title = runStateLabel(run.state),
         summary = run.message ?: "无补充信息",
-        start = {
-            Spacer(
-                Modifier
-                    .padding(end = 12.dp)
-                    .size(7.dp)
-                    .background(
-                        when (run.state) {
-                            "completed" -> MediaHubColors.Source
-                            "failed", "needs_attention" -> MediaHubColors.Error
-                            else -> MediaHubColors.Accent
-                        },
-                        RoundedCornerShape(4.dp),
-                    ),
-            )
+        end = {
+            MediaHubBadge(text = runStateLabel(run.state), variant = variant)
         },
     )
 }

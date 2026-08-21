@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"media-hub/backend/internal/drive115"
 	"media-hub/backend/internal/emby"
@@ -223,7 +224,18 @@ func (h *handler) notifyLibraryDelete(ctx context.Context, preview emby.DeletePr
 	if h.dependencies.WeComTester == nil || !h.dependencies.WeComTester.Configured() {
 		return
 	}
-	_, _ = h.dependencies.WeComTester.Send(ctx, libraryDeleteNotification(preview))
+	sendCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+	defer cancel()
+	message := libraryDeleteNotification(preview)
+	for attempt := 0; attempt < 3; attempt++ {
+		unknown, err := h.dependencies.WeComTester.Send(sendCtx, message)
+		if err == nil && !unknown {
+			return
+		}
+		if unknown || sendCtx.Err() != nil {
+			return
+		}
+	}
 }
 
 func libraryDeleteNotification(preview emby.DeletePreview) string {

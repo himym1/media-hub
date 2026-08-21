@@ -301,6 +301,47 @@ func TestDeleteItemRemovesRelatedVersions(t *testing.T) {
 	}
 }
 
+func TestDeleteItemFindsRelatedVersionsWithoutLibraryIDs(t *testing.T) {
+	var deleted []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if serveUserSession(w, request) {
+			return
+		}
+		switch {
+		case request.URL.Path == "/Users/user-1/Items/item-1" && request.Method == http.MethodGet:
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","ProductionYear":2012,"ProviderIds":{"Tmdb":"1930"},"Path":"/library/a/movie.strm"}`))
+		case request.URL.Path == "/Items" && request.Method == http.MethodGet:
+			if request.URL.Query().Get("ParentId") != "" || request.URL.Query().Get("SearchTerm") != "Movie" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_, _ = w.Write([]byte(`{"Items":[
+				{"Id":"item-1","Name":"Movie","Type":"Movie","ProductionYear":2012,"ProviderIds":{"Tmdb":"1930"},"Path":"/library/a/movie.strm"},
+				{"Id":"item-2","Name":"Movie","Type":"Movie","ProductionYear":2012,"ProviderIds":{"Tmdb":"1930"},"Path":"/library/b/movie.strm"}
+			]}`))
+		case strings.HasPrefix(request.URL.Path, "/Items/item-") && request.Method == http.MethodDelete:
+			deleted = append(deleted, strings.TrimPrefix(request.URL.Path, "/Items/"))
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	client := NewConfiguredClient(RuntimeConfig{
+		BaseURL: server.URL, APIKey: "emby-key", UserID: "user-1", Password: "emby-pw",
+	}, time.Second)
+	preview, err := client.DeletePreview(context.Background(), "item-1")
+	if err != nil || preview.VersionCount != 2 {
+		t.Fatalf("preview=%#v err=%v", preview, err)
+	}
+	if err := client.DeleteItem(context.Background(), "item-1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(deleted) != 2 || deleted[0] != "item-1" || deleted[1] != "item-2" {
+		t.Fatalf("deleted=%v", deleted)
+	}
+}
+
 func deleteTestClient(baseURL string) *Client {
 	return NewConfiguredClient(RuntimeConfig{
 		BaseURL: baseURL, APIKey: "emby-key", UserID: "user-1", Password: "emby-pw",

@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,6 +29,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -237,7 +241,8 @@ private fun EmbyPosterCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(2f / 3f),
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(8.dp)),
             ) {
                 EmbyPoster(
                     itemId = item.id,
@@ -251,16 +256,32 @@ private fun EmbyPosterCard(
                             .align(Alignment.TopEnd)
                             .padding(6.dp)
                             .background(
-                                if (item.played) MediaHubColors.Accent else MediaHubColors.Surface.copy(alpha = 0.92f),
+                                if (item.played) MediaHubColors.Success else Color(0xD90F172A),
                                 RoundedCornerShape(6.dp),
                             )
-                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         MediaHubText(
                             text = status,
-                            color = if (item.played) MediaHubColors.OnAccent else MediaHubColors.TextPrimary,
-                            fontSize = 12.sp,
+                            color = Color.White,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                if (!item.played && item.playbackPositionMs >= 30_000L) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(Color(0x66000000)),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(0.55f)
+                                .background(MediaHubColors.Accent),
                         )
                     }
                 }
@@ -269,17 +290,16 @@ private fun EmbyPosterCard(
         MediaHubText(
             text = item.name,
             fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = MediaHubColors.TextPrimary,
+            fontWeight = FontWeight.SemiBold,
+            color = MediaHubColors.TextStrong,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 5.dp, start = 2.dp, end = 2.dp),
+            modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp),
         )
         MediaHubText(
             text = listOfNotNull(
                 mediaTypeLabel(item.type),
                 item.year?.toString(),
-                libraryPlaybackStatus(item),
             ).joinToString(" · "),
             fontSize = 12.sp,
             color = MediaHubColors.TextMuted,

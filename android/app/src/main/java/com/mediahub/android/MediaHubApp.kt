@@ -201,6 +201,7 @@ private fun AuthenticatedWorkspace(
                         viewModel = searchViewModel,
                         onTransferCreated = { appViewModel.showDestination(MainDestination.Transfers) },
                         onSubscriptionRequested = appViewModel::prepareSubscription,
+                        onOpenServices = appViewModel::openSystem,
                     )
                 }
                 MainDestination.Transfers -> {

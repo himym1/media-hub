@@ -1,22 +1,36 @@
 package com.mediahub.android.core.designsystem
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardActions
@@ -24,6 +38,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -169,6 +184,7 @@ fun MediaHubIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    tint: Color = Color.Unspecified,
 ) {
     MiuixIconButton(
         onClick = onClick,
@@ -177,11 +193,18 @@ fun MediaHubIconButton(
         minHeight = 48.dp,
         minWidth = 48.dp,
     ) {
+        val iconTint = if (tint != Color.Unspecified) {
+            tint
+        } else if (enabled) {
+            MediaHubColors.TextPrimary
+        } else {
+            MediaHubColors.TextMuted
+        }
         MediaHubIcon(
             imageVector = imageVector,
             contentDescription = contentDescription,
             modifier = Modifier.size(20.dp),
-            tint = if (enabled) MediaHubColors.TextPrimary else MediaHubColors.TextMuted,
+            tint = iconTint,
         )
     }
 }
@@ -605,24 +628,31 @@ fun MediaHubEmptyState(
 ) {
     MediaHubCard(
         modifier = modifier.fillMaxWidth(),
-        insideMargin = PaddingValues(vertical = 36.dp, horizontal = 20.dp),
+        insideMargin = PaddingValues(vertical = 40.dp, horizontal = 24.dp),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            MediaHubIcon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MediaHubColors.TextMuted,
-                modifier = Modifier.size(32.dp),
-            )
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(MediaHubColors.NeutralContainer, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                MediaHubIcon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MediaHubColors.TextSecondary,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
             MediaHubText(
                 text = title,
-                modifier = Modifier.padding(top = 14.dp),
-                color = MediaHubColors.TextSecondary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(top = 16.dp),
+                color = MediaHubColors.TextStrong,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
             )
             MediaHubText(
                 text = message,
@@ -633,3 +663,196 @@ fun MediaHubEmptyState(
         }
     }
 }
+
+enum class BadgeVariant { Primary, Success, Warning, Error, Source, Info, Neutral }
+
+@Composable
+fun MediaHubBadge(
+    text: String,
+    modifier: Modifier = Modifier,
+    variant: BadgeVariant = BadgeVariant.Neutral,
+    icon: ImageVector? = null,
+) {
+    val (bgColor, contentColor) = when (variant) {
+        BadgeVariant.Primary -> MediaHubColors.AccentLight to MediaHubColors.Accent
+        BadgeVariant.Success -> MediaHubColors.SuccessContainer to MediaHubColors.Success
+        BadgeVariant.Warning -> MediaHubColors.WarningContainer to MediaHubColors.Warning
+        BadgeVariant.Error -> MediaHubColors.ErrorContainer to MediaHubColors.Error
+        BadgeVariant.Source -> MediaHubColors.SourceContainer to MediaHubColors.Source
+        BadgeVariant.Info -> MediaHubColors.AccentLight to MediaHubColors.Accent
+        BadgeVariant.Neutral -> MediaHubColors.NeutralContainer to MediaHubColors.TextSecondary
+    }
+
+    Row(
+        modifier = modifier
+            .background(bgColor, RoundedCornerShape(6.dp))
+            .padding(horizontal = 7.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (icon != null) {
+            MediaHubIcon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(11.dp),
+                tint = contentColor,
+            )
+        }
+        MediaHubText(
+            text = text,
+            color = contentColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+fun MediaHubLinearProgress(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    color: Color = MediaHubColors.Accent,
+    trackColor: Color = MediaHubColors.NeutralContainer,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(4.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(trackColor),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .clip(RoundedCornerShape(2.dp))
+                .background(color),
+        )
+    }
+}
+
+data class PipelineStepItem(
+    val key: String,
+    val label: String,
+    val isCompleted: Boolean,
+    val isCurrent: Boolean,
+    val isFailed: Boolean = false,
+)
+
+@Composable
+fun MediaHubPipelineStepper(
+    steps: List<PipelineStepItem>,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        steps.forEachIndexed { index, step ->
+            if (index > 0) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(2.dp)
+                        .background(
+                            when {
+                                step.isCompleted || step.isCurrent -> MediaHubColors.Accent
+                                step.isFailed -> MediaHubColors.Error
+                                else -> MediaHubColors.Border
+                            },
+                        ),
+                )
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .background(
+                            when {
+                                step.isFailed -> MediaHubColors.ErrorContainer
+                                step.isCompleted -> MediaHubColors.SuccessContainer
+                                step.isCurrent -> MediaHubColors.AccentLight
+                                else -> MediaHubColors.NeutralContainer
+                            },
+                            CircleShape,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val dotColor = when {
+                        step.isFailed -> MediaHubColors.Error
+                        step.isCompleted -> MediaHubColors.Success
+                        step.isCurrent -> MediaHubColors.Accent
+                        else -> MediaHubColors.TextMuted
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(dotColor, CircleShape),
+                    )
+                }
+                MediaHubText(
+                    text = step.label,
+                    fontSize = 11.sp,
+                    color = when {
+                        step.isFailed -> MediaHubColors.Error
+                        step.isCurrent -> MediaHubColors.Accent
+                        step.isCompleted -> MediaHubColors.TextPrimary
+                        else -> MediaHubColors.TextMuted
+                    },
+                    fontWeight = if (step.isCurrent) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun mediaHubShimmerBrush(showShimmer: Boolean = true, targetValue: Float = 1200f): Brush {
+    return if (showShimmer) {
+        val shimmerColors = listOf(
+            MediaHubColors.CardBackground.copy(alpha = 0.6f),
+            MediaHubColors.SurfaceHigh.copy(alpha = 0.9f),
+            MediaHubColors.CardBackground.copy(alpha = 0.6f),
+        )
+
+        val transition = rememberInfiniteTransition(label = "shimmerTransition")
+        val translateAnimation = transition.animateFloat(
+            initialValue = 0f,
+            targetValue = targetValue,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "shimmerTranslate",
+        )
+        Brush.linearGradient(
+            colors = shimmerColors,
+            start = Offset.Zero,
+            end = Offset(x = translateAnimation.value, y = translateAnimation.value),
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(Color.Transparent, Color.Transparent),
+            start = Offset.Zero,
+            end = Offset.Zero,
+        )
+    }
+}
+
+@Composable
+fun MediaHubShimmerBox(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(8.dp),
+) {
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(mediaHubShimmerBrush()),
+    )
+}
+

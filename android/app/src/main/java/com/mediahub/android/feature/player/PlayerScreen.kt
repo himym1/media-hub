@@ -104,6 +104,7 @@ internal fun PlayerScreen(
                         imageVector = Lucide.ArrowLeft,
                         contentDescription = "返回",
                         onClick = actions.onBack,
+                        tint = Color.White,
                     )
                     MediaHubText(
                         title,
@@ -116,11 +117,13 @@ internal fun PlayerScreen(
                         imageVector = Lucide.RotateCw,
                         contentDescription = "旋转屏幕",
                         onClick = actions.onToggleOrientation,
+                        tint = Color.White,
                     )
                     MediaHubIconButton(
                         imageVector = Lucide.PictureInPicture2,
                         contentDescription = "进入画中画",
                         onClick = actions.onEnterPictureInPicture,
+                        tint = Color.White,
                     )
                 }
             }

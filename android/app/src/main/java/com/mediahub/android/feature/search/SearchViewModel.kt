@@ -21,12 +21,15 @@ data class SearchUiState(
     val submittedQuery: String = "",
     val results: List<SearchCandidate> = emptyList(),
     val trending: List<DiscoveryItem> = emptyList(),
+    val libraryRecommendations: List<DiscoveryItem> = emptyList(),
+    val libraryRecommendationSeed: String? = null,
     val recommendations: List<DiscoveryItem> = emptyList(),
     val integrations: List<IntegrationHealth> = emptyList(),
+    val selectedCategory: String = "all",
     val selectedCandidateId: String? = null,
     val searching: Boolean = false,
-    val trendingLoading: Boolean = false,
-    val refreshingOverview: Boolean = false,
+    val initialLoading: Boolean = false,
+    val refreshing: Boolean = false,
     val errorMessage: String? = null,
     val sourceMessage: String? = null,
     val transferringCandidateId: String? = null,
@@ -34,6 +37,15 @@ data class SearchUiState(
 ) {
     val selectedCandidate: SearchCandidate?
         get() = results.firstOrNull { it.id == selectedCandidateId }
+
+    val heroItems: List<DiscoveryItem>
+        get() = trending.take(5)
+
+    val trendingMovies: List<DiscoveryItem>
+        get() = trending.filter { it.mediaType == "movie" }
+
+    val trendingSeries: List<DiscoveryItem>
+        get() = trending.filter { it.mediaType == "tv" || it.mediaType == "series" }
 }
 
 sealed interface SearchEvent {
@@ -51,13 +63,104 @@ class SearchViewModel(
     val events: SharedFlow<SearchEvent> = _events.asSharedFlow()
 
     private var searchJob: Job? = null
-    private var overviewJob: Job? = null
-    private var trendingJob: Job? = null
+    private var loadJob: Job? = null
     private var recommendationJob: Job? = null
 
+    fun loadInitialData() {
+        if (_uiState.value.trending.isNotEmpty() || _uiState.value.integrations.isNotEmpty()) {
+            return
+        }
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(initialLoading = true)
+            fetchDiscoveryData()
+            _uiState.value = _uiState.value.copy(initialLoading = false)
+        }
+    }
+
     fun refreshAll() {
-        refreshOverview()
-        refreshTrending()
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(refreshing = true)
+            fetchDiscoveryData()
+            _uiState.value = _uiState.value.copy(refreshing = false)
+        }
+    }
+
+    private fun normalizeMediaType(raw: String): String =
+        if (raw.equals("tv", ignoreCase = true) ||
+            raw.equals("series", ignoreCase = true) ||
+            raw.equals("Season", ignoreCase = true) ||
+            raw.equals("Episode", ignoreCase = true)
+        ) "series" else "movie"
+
+    private suspend fun fetchDiscoveryData() {
+        // 1. Fetch overview health
+        try {
+            val integrations = repository.overview()
+            _uiState.value = _uiState.value.copy(integrations = integrations)
+        } catch (_: Exception) {}
+
+        // 2. Fetch trending items
+        var trendingItems: List<DiscoveryItem> = emptyList()
+        try {
+            trendingItems = repository.trending()
+            _uiState.value = _uiState.value.copy(trending = trendingItems)
+        } catch (_: Exception) {}
+
+        // 3. Fetch library-based or seed recommendations
+        try {
+            var seedTitle: String? = null
+            var recs: List<DiscoveryItem> = emptyList()
+
+            // Try to find a movie/show in user's Emby library
+            val libraries = runCatching { repository.libraries() }.getOrNull().orEmpty()
+            for (library in libraries) {
+                if (recs.isNotEmpty()) break
+                val page = runCatching { repository.libraryItems(library.id, 0, 20) }.getOrNull()
+                val seedItem = page?.items?.firstOrNull { it.tmdbId != null && it.tmdbId.isNotBlank() }
+                if (seedItem != null && seedItem.tmdbId != null) {
+                    val mediaType = normalizeMediaType(seedItem.type)
+                    val result = runCatching { repository.recommendations(mediaType, seedItem.tmdbId) }.getOrNull().orEmpty()
+                    if (result.isNotEmpty()) {
+                        recs = result
+                        seedTitle = seedItem.name
+                    }
+                }
+            }
+
+            // Fallback to top trending items if library recommendation is empty
+            if (recs.isEmpty() && trendingItems.isNotEmpty()) {
+                for (topItem in trendingItems.take(3)) {
+                    if (recs.isNotEmpty()) break
+                    if (topItem.tmdbId.isNotBlank()) {
+                        val mediaType = normalizeMediaType(topItem.mediaType)
+                        val result = runCatching { repository.recommendations(mediaType, topItem.tmdbId) }.getOrNull().orEmpty()
+                        if (result.isNotEmpty()) {
+                            recs = result
+                            seedTitle = topItem.title
+                        }
+                    }
+                }
+            }
+
+            // Curated fallback if TMDB upstream recommendation endpoint is unavailable or returns empty
+            if (recs.isEmpty() && trendingItems.size >= 2) {
+                recs = trendingItems.shuffled().take(8)
+                seedTitle = "全网热播精选"
+            }
+
+            if (recs.isNotEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    libraryRecommendations = recs,
+                    libraryRecommendationSeed = seedTitle,
+                )
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun onCategorySelected(category: String) {
+        _uiState.value = _uiState.value.copy(selectedCategory = category)
     }
 
     fun onQueryChanged(query: String) {
@@ -100,36 +203,9 @@ class SearchViewModel(
         }
     }
 
-    fun refreshOverview() {
-        overviewJob?.cancel()
-        overviewJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(refreshingOverview = true)
-            try {
-                val integrations = repository.overview()
-                _uiState.value = _uiState.value.copy(
-                    refreshingOverview = false,
-                    integrations = integrations,
-                )
-            } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(refreshingOverview = false)
-            }
-        }
-    }
+    fun refreshOverview() = refreshAll()
 
-    fun refreshTrending() {
-        trendingJob?.cancel()
-        trendingJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(trendingLoading = true)
-            try {
-                _uiState.value = _uiState.value.copy(
-                    trending = repository.trending(),
-                    trendingLoading = false,
-                )
-            } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(trendingLoading = false)
-            }
-        }
-    }
+    fun refreshTrending() = refreshAll()
 
     fun searchTrending(item: DiscoveryItem) {
         _uiState.value = _uiState.value.copy(query = item.title)

@@ -32,9 +32,13 @@ func (h *handler) testWeComNotification(w http.ResponseWriter, r *http.Request) 
 			})
 			return
 		}
+		title := "企业微信拒绝了测试通知"
+		if code := wecom.ErrorCode(err); code != 0 {
+			title = fmt.Sprintf("企业微信拒绝了测试通知（%d）", code)
+		}
 		writeProblem(w, problem{
 			Type:  "https://media-hub.local/problems/notification-rejected",
-			Title: "企业微信拒绝了测试通知", Status: http.StatusBadGateway,
+			Title: title, Status: http.StatusBadGateway,
 			Code: "notification_rejected",
 		})
 		return

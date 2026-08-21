@@ -18,11 +18,13 @@ type notificationTesterStub struct {
 	unknown    bool
 	err        error
 	content    string
+	ctxErr     error
 }
 
 func (stub *notificationTesterStub) Configured() bool { return stub.configured }
-func (stub *notificationTesterStub) Send(_ context.Context, content string) (bool, error) {
+func (stub *notificationTesterStub) Send(ctx context.Context, content string) (bool, error) {
 	stub.content = content
+	stub.ctxErr = ctx.Err()
 	return stub.unknown, stub.err
 }
 
@@ -81,6 +83,19 @@ func TestWeComNotificationTestReportsUnknownResult(t *testing.T) {
 	}
 }
 
+func TestWeComNotificationTestIncludesRejectedErrorCode(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := authenticatedWebRequest(http.MethodPost, "/api/v1/integrations/wecom/test")
+	request.Header.Set("X-CSRF-Token", "valid-csrf")
+	tester := &notificationTesterStub{configured: true, err: wecom.SubmissionError{Code: 60020, Err: wecom.ErrRejected}}
+
+	NewRouter("test-version", Dependencies{Auth: authStub{}, WeComTester: tester}).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadGateway || !strings.Contains(recorder.Body.String(), "60020") {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestDeleteEmbyItemSendsWeComNotification(t *testing.T) {
 	provider := &embyStub{}
 	tester := &notificationTesterStub{configured: true}
@@ -91,6 +106,19 @@ func TestDeleteEmbyItemSendsWeComNotification(t *testing.T) {
 	}
 	if tester.content != "Media Hub\n《Movie》已从片库删除\n115 云盘文件已保留" {
 		t.Fatalf("content=%q", tester.content)
+	}
+}
+
+func TestDeleteEmbyItemNotifiesAfterCanceledRequest(t *testing.T) {
+	provider := &embyStub{}
+	tester := &notificationTesterStub{configured: true}
+	request := deleteEmbyItemRequest("item-1")
+	ctx, cancel := context.WithCancel(request.Context())
+	cancel()
+	recorder := httptest.NewRecorder()
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Emby: provider, WeComTester: tester}).ServeHTTP(recorder, request.WithContext(ctx))
+	if recorder.Code != http.StatusOK || tester.content == "" || tester.ctxErr != nil {
+		t.Fatalf("status=%d content=%q ctxErr=%v", recorder.Code, tester.content, tester.ctxErr)
 	}
 }
 

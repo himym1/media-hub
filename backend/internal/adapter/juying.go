@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"media-hub/backend/internal/search"
 )
@@ -283,24 +282,23 @@ func (s *Juying) StartTransfer(ctx context.Context, input search.TransferRequest
 		if s.receiver == nil {
 			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "115 分享接收器不可用", Retryable: false}
 		}
-		inspector, ok := s.receiver.(ShareInspector)
-		if !ok {
-			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "115 分享内容校验不可用", Retryable: false}
+		storageTitle := juyingStorageTitle(input.Title, reference.Title)
+		destinationID := input.DestinationID
+		if ensurer, ok := s.receiver.(FolderEnsurer); ok {
+			folderID, err := ensurer.EnsureFolder(ctx, input.DestinationID, storageTitle)
+			if err != nil {
+				return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "无法创建中文片名目录", Retryable: automaticWriteRetryAllowed(err)}
+			}
+			destinationID = folderID
 		}
-		videoNames, rootIDs, err := inspector.InspectShare(ctx, reference.ShareCode, reference.ReceiveCode)
-		if err != nil {
-			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "无法校验 115 分享内容", Retryable: true}
-		}
-		if !juyingShareMatchesResource(videoNames, reference.Title) {
-			return search.TransferResult{}, search.Failure{Code: "source_identity_mismatch", Message: "115 分享文件与聚影资源标题不一致", Retryable: false}
-		}
-		if err := s.receiver.ReceiveShare(ctx, input.DestinationID, reference.ShareCode, reference.ReceiveCode, rootIDs); err != nil {
+		if err := s.receiver.ReceiveShare(ctx, destinationID, reference.ShareCode, reference.ReceiveCode, nil); err != nil {
 			var uncertain interface{ SubmissionUncertain() bool }
 			if errors.As(err, &uncertain) && uncertain.SubmissionUncertain() {
 				return search.TransferResult{}, search.Failure{Code: "source_submission_unknown", Message: "115 分享接收结果未知，需要人工确认", Retryable: true}
 			}
 			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "聚影资源接收到 115 失败", Retryable: automaticWriteRetryAllowed(err)}
 		}
+		return search.TransferResult{OperationID: input.IdempotencyKey, Status: "completed", FileID: destinationID, Path: storageTitle, IsFile: false}, nil
 	case "magnet":
 		if _, err := validateMagnetURI(reference.Magnet); err != nil {
 			return search.TransferResult{}, search.Failure{Code: "invalid_selection", Message: "资源引用无效", Retryable: false}
@@ -309,7 +307,27 @@ func (s *Juying) StartTransfer(ctx context.Context, input search.TransferRequest
 	default:
 		return search.TransferResult{}, search.Failure{Code: "invalid_selection", Message: "资源引用无效", Retryable: false}
 	}
-	return search.TransferResult{OperationID: input.IdempotencyKey, Status: "completed", FileID: input.DestinationID, Path: reference.Title, IsFile: false}, nil
+}
+
+func juyingStorageTitle(preferred, fallback string) string {
+	title := strings.TrimSpace(preferred)
+	if title == "" {
+		title = strings.TrimSpace(fallback)
+	}
+	title = strings.Map(func(character rune) rune {
+		switch character {
+		case '/', '\\', 0:
+			return -1
+		default:
+			return character
+		}
+	}, title)
+	title = strings.TrimSpace(title)
+	runes := []rune(title)
+	if len(runes) > 200 {
+		title = string(runes[:200])
+	}
+	return strings.TrimSpace(title)
 }
 
 func (s *Juying) TransferStatus(_ context.Context, _ int64, operationID string) (search.TransferResult, error) {
@@ -424,86 +442,6 @@ func validateMagnetURI(raw string) (string, error) {
 
 func juyingResourceTitle(resource juyingResource, fallback string) string {
 	return strings.TrimSpace(firstNonEmptyString(resource.Title, resource.Description, resource.ResourceDescription, fallback))
-}
-
-func juyingShareMatchesResource(videoNames []string, releaseTitle string) bool {
-	for _, name := range videoNames {
-		if juyingTextIdentityMatch(name, releaseTitle) {
-			return true
-		}
-	}
-	return false
-}
-
-func juyingTextIdentityMatch(actual, expected string) bool {
-	expectedTokens := juyingIdentityTokens(expected)
-	for token := range juyingIdentityTokens(actual) {
-		if _, ok := expectedTokens[token]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-func juyingIdentityTokens(value string) map[string]struct{} {
-	tokens := make(map[string]struct{})
-	for _, token := range strings.FieldsFunc(strings.ToLower(value), func(character rune) bool {
-		return !unicode.IsLetter(character) && !unicode.IsDigit(character)
-	}) {
-		if juyingTechnicalToken(token) {
-			continue
-		}
-		runes := []rune(token)
-		ascii := true
-		for _, character := range runes {
-			if character > unicode.MaxASCII {
-				ascii = false
-				break
-			}
-		}
-		if (ascii && len(runes) < 3) || (!ascii && len(runes) < 2) {
-			continue
-		}
-		tokens[token] = struct{}{}
-	}
-	return tokens
-}
-
-func juyingTechnicalToken(token string) bool {
-	if token == "" {
-		return true
-	}
-	digits := true
-	for _, character := range token {
-		if !unicode.IsDigit(character) {
-			digits = false
-			break
-		}
-	}
-	if digits {
-		return true
-	}
-	if strings.HasSuffix(token, "p") {
-		resolution := strings.TrimSuffix(token, "p")
-		if resolution != "" {
-			allDigits := true
-			for _, character := range resolution {
-				if !unicode.IsDigit(character) {
-					allDigits = false
-					break
-				}
-			}
-			if allDigits {
-				return true
-			}
-		}
-	}
-	switch token {
-	case "aac", "atmos", "avc", "bdrip", "bluray", "complete", "ddp", "dolby", "dts", "dv", "flac", "h264", "h265", "hdr", "hdr10", "hevc", "mkv", "movie", "movies", "mp4", "proper", "remux", "repack", "uhd", "web", "webdl", "webrip", "x264", "x265":
-		return true
-	default:
-		return false
-	}
 }
 
 func firstNonEmptyString(values ...string) string {

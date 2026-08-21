@@ -34,6 +34,7 @@ function checkInTimeValue(hour: number, minute: number) {
 }
 
 function createDraft(settings: ProviderSettings): Draft {
+  const wecomSendMode = settings.wecom.sendMode || (settings.wecom.chatId ? 'appchat' : 'app')
   return {
     qmediaSync: { baseUrl: settings.qmediaSync.baseUrl, apiKey: secret() },
     emby: { baseUrl: settings.emby.baseUrl, apiKey: secret(), userId: settings.emby.userId, password: secret() },
@@ -43,9 +44,9 @@ function createDraft(settings: ProviderSettings): Draft {
       baseUrl: settings.wecom.baseUrl,
       corpId: settings.wecom.corpId,
       secret: secret(),
-      sendMode: settings.wecom.sendMode || (settings.wecom.chatId ? 'appchat' : 'app'),
+      sendMode: wecomSendMode,
       agentId: settings.wecom.agentId,
-      toUser: settings.wecom.toUser || '@all',
+      toUser: wecomSendMode === 'appchat' ? settings.wecom.toUser : (settings.wecom.toUser || '@all'),
       chatId: settings.wecom.chatId,
     },
     workflow: structuredClone(settings.workflow),

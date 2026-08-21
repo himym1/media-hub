@@ -46,6 +46,8 @@ import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.QrCode
 import com.composables.icons.lucide.Server
 import com.mediahub.android.app.LocalTwoPane
+import com.mediahub.android.core.designsystem.BadgeVariant
+import com.mediahub.android.core.designsystem.MediaHubBadge
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
@@ -505,6 +507,12 @@ private fun OperationalSummary(statistics: OperationalStatistics) {
 
 @Composable
 private fun ServiceRow(integration: IntegrationHealth) {
+    val variant = when (integration.status) {
+        "healthy" -> BadgeVariant.Success
+        "degraded" -> BadgeVariant.Warning
+        "unavailable" -> BadgeVariant.Error
+        else -> BadgeVariant.Neutral
+    }
     MediaHubPreferenceRow(
         title = integration.label,
         summary = integration.detail,
@@ -517,7 +525,7 @@ private fun ServiceRow(integration: IntegrationHealth) {
             )
         },
         end = {
-            MediaHubText(text = statusLabel(integration.status), color = statusColor(integration.status), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            MediaHubBadge(text = statusLabel(integration.status), variant = variant)
         },
     )
 }

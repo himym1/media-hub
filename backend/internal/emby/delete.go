@@ -147,29 +147,42 @@ func (c *Client) relatedVersionIDs(ctx context.Context, configuration clientConf
 }
 
 func (c *Client) findRelatedItems(ctx context.Context, configuration clientConfig, item baseItem) []baseItem {
+	libraryIDs := configuredLibraryIDs(configuration)
+	if len(libraryIDs) == 0 {
+		return c.searchRelatedItems(ctx, configuration, item, "")
+	}
 	var items []baseItem
-	for _, libraryID := range configuredLibraryIDs(configuration) {
-		query := url.Values{
-			"Fields":           {"ProviderIds,MediaSources,Path"},
-			"IncludeItemTypes": {item.Type},
-			"Limit":            {"50"},
-			"ParentId":         {libraryID},
-			"Recursive":        {"true"},
-			"SearchTerm":       {item.Name},
-		}
-		if configuration.userID != "" {
-			query.Set("UserId", configuration.userID)
-		}
-		if item.ProductionYear > 0 {
-			query.Set("Years", strconv.Itoa(item.ProductionYear))
-		}
-		var response itemResponse
-		if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
-			continue
-		}
-		items = append(items, response.Items...)
+	for _, libraryID := range libraryIDs {
+		items = append(items, c.searchRelatedItems(ctx, configuration, item, libraryID)...)
 	}
 	return items
+}
+
+func (c *Client) searchRelatedItems(ctx context.Context, configuration clientConfig, item baseItem, libraryID string) []baseItem {
+	if strings.TrimSpace(item.Name) == "" {
+		return nil
+	}
+	query := url.Values{
+		"Fields":           {"ProviderIds,MediaSources,Path"},
+		"IncludeItemTypes": {item.Type},
+		"Limit":            {"50"},
+		"Recursive":        {"true"},
+		"SearchTerm":       {item.Name},
+	}
+	if libraryID != "" {
+		query.Set("ParentId", libraryID)
+	}
+	if configuration.userID != "" {
+		query.Set("UserId", configuration.userID)
+	}
+	if item.ProductionYear > 0 {
+		query.Set("Years", strconv.Itoa(item.ProductionYear))
+	}
+	var response itemResponse
+	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
+		return nil
+	}
+	return response.Items
 }
 
 func sameLibraryVersion(item, candidate baseItem) bool {
@@ -216,7 +229,7 @@ func (c *Client) visibleItem(ctx context.Context, itemID string) (baseItem, clie
 	if itemID == "" {
 		return baseItem{}, configuration, ErrUpstreamResponse
 	}
-	query := url.Values{"Fields": {"MediaSources,Path"}}
+	query := url.Values{"Fields": {"ProviderIds,MediaSources,Path"}}
 	endpointPath := path.Join("Items", itemID)
 	if configuration.userID != "" {
 		endpointPath = path.Join("Users", configuration.userID, "Items", itemID)

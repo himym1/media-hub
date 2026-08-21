@@ -117,7 +117,11 @@ func run(logger *slog.Logger) error {
 		configuration.TMDB.AccessToken,
 		configuration.ProbeTimeout,
 	)
-	wecomClient := wecom.NewConfiguredClient(configuration.WeCom, configuration.ProbeTimeout)
+	wecomTimeout := configuration.ProbeTimeout
+	if wecomTimeout < 10*time.Second {
+		wecomTimeout = 10 * time.Second
+	}
+	wecomClient := wecom.NewConfiguredClient(configuration.WeCom, wecomTimeout)
 	searchService := search.NewServiceWithIdentity(tmdbClient)
 	workflowService := workflow.NewService(
 		dataStore, searchService, selectionCodec, qmsClient, embyClient, wecomClient, configuration.Workflow,
@@ -152,6 +156,7 @@ func run(logger *slog.Logger) error {
 		if err := settingsService.Load(startupContext, admin.ID); err != nil {
 			return fmt.Errorf("load encrypted runtime settings: %w", err)
 		}
+		logger.Info("wecom delivery ready", "configured", wecomClient.Configured(), "mode", settingsService.Values().WeCom.DeliveryMode())
 	}
 	subscriptionService := subscription.NewService(dataStore, searchService, workflowService, embyClient)
 	overview := integration.NewOverviewService(

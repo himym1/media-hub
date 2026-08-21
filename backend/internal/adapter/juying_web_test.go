@@ -97,10 +97,12 @@ func TestJuyingWebSearchDefersAccessUntilTransfer(t *testing.T) {
 		t.Fatalf("search called access endpoint %d times", accessCalls)
 	}
 	mu.Unlock()
-	if _, err := source.StartTransfer(context.Background(), search.TransferRequest{Reference: results[0].SourceRef, DestinationID: "dest", IdempotencyKey: "op"}); err != nil {
+	if _, err := source.StartTransfer(context.Background(), search.TransferRequest{
+		Title: "Van Helsing", Reference: results[0].SourceRef, DestinationID: "dest", IdempotencyKey: "op",
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if target.shareCode != "shareABC123" || target.receiveCode != "WENG" || len(target.magnets) != 0 {
+	if target.destinationID != "folder-1" || target.shareCode != "shareABC123" || target.receiveCode != "WENG" || len(target.magnets) != 0 {
 		t.Fatalf("target = %+v", target)
 	}
 	mu.Lock()

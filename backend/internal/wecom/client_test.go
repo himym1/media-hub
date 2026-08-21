@@ -56,6 +56,25 @@ func TestSendRefreshesRejectedAccessToken(t *testing.T) {
 	}
 }
 
+func TestSendRecordsRejectedErrorCode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/cgi-bin/gettoken":
+			_, _ = w.Write([]byte(`{"errcode":0,"access_token":"token","expires_in":7200}`))
+		case "/cgi-bin/appchat/send":
+			_, _ = w.Write([]byte(`{"errcode":60020,"errmsg":"not allow to access from your ip"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	_, err := NewClient(server.URL, "corp", "secret", "chat", time.Second).Send(context.Background(), "完成")
+	if ErrorCode(err) != 60020 {
+		t.Fatalf("error=%v code=%d", err, ErrorCode(err))
+	}
+}
+
 func TestConfigureUpdatesCredentialsAndClearsCachedToken(t *testing.T) {
 	tokenCalls := 0
 	seen := make([][2]string, 0, 2)

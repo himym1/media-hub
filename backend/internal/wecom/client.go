@@ -26,7 +26,16 @@ var (
 
 type SubmissionError struct {
 	Unknown bool
+	Code    int
 	Err     error
+}
+
+func ErrorCode(err error) int {
+	var failure SubmissionError
+	if errors.As(err, &failure) {
+		return failure.Code
+	}
+	return 0
 }
 
 func (failure SubmissionError) Error() string { return failure.Err.Error() }
@@ -151,6 +160,10 @@ func (c *Client) Send(ctx context.Context, content string) (bool, error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		token, err := c.accessToken(ctx, configuration)
 		if err != nil {
+			var failure SubmissionError
+			if errors.As(err, &failure) {
+				return failure.Unknown, failure
+			}
 			return false, SubmissionError{Err: err}
 		}
 		errorCode, err := c.send(ctx, configuration, token, content)
@@ -168,7 +181,7 @@ func (c *Client) Send(ctx context.Context, content string) (bool, error) {
 			c.invalidateTokenFor(configuration)
 			continue
 		}
-		return false, SubmissionError{Err: ErrRejected}
+		return false, SubmissionError{Code: errorCode, Err: ErrRejected}
 	}
 	return false, SubmissionError{Err: ErrRejected}
 }
@@ -194,7 +207,7 @@ func (c *Client) accessToken(ctx context.Context, configuration clientConfig) (s
 		return "", err
 	}
 	if response.ErrorCode != 0 || response.AccessToken == "" || response.ExpiresIn < 60 {
-		return "", ErrRejected
+		return "", SubmissionError{Code: response.ErrorCode, Err: ErrRejected}
 	}
 	expires := time.Now().UTC().Add(time.Duration(response.ExpiresIn) * time.Second)
 	if c.configuration() == configuration {

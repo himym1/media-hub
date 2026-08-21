@@ -21,6 +21,11 @@ type ShareReceiver interface {
 	ReceiveShare(ctx context.Context, destinationID, shareCode, receiveCode string, fileIDs []string) error
 }
 
+// FolderEnsurer creates or reuses a destination folder by name.
+type FolderEnsurer interface {
+	EnsureFolder(ctx context.Context, parentID, name string) (string, error)
+}
+
 // ShareInspector validates media names and returns the top-level entries to import.
 type ShareInspector interface {
 	InspectShare(ctx context.Context, shareCode, receiveCode string) (videoNames, rootIDs []string, err error)

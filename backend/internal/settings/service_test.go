@@ -224,6 +224,21 @@ func TestMergeWeComSecretPreserveAndClear(t *testing.T) {
 	}
 }
 
+func TestMergeWeComAppChatIgnoresDefaultAppRecipient(t *testing.T) {
+	current := Values{WeCom: config.WeCom{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp", Secret: "secret", SendMode: "appchat", ChatID: "chat"}}
+	recipient := "@all"
+	mode := "appchat"
+	merged := merge(current, Update{WeCom: &WeComUpdate{
+		BaseURL: current.WeCom.BaseURL, CorpID: current.WeCom.CorpID, SendMode: &mode, ToUser: &recipient, ChatID: "chat",
+	}})
+	if merged.WeCom.ChatID != "chat" || merged.WeCom.ToUser != "" || merged.WeCom.AgentID != 0 {
+		t.Fatalf("appchat fields were not sanitized: %+v", merged.WeCom)
+	}
+	if err := validate(Values{WeCom: merged.WeCom, Sources: configSources()}); err != nil {
+		t.Fatalf("sanitized appchat was rejected: %v", err)
+	}
+}
+
 func TestMergeWeComPreservesNewFieldsForOlderClients(t *testing.T) {
 	current := Values{WeCom: config.WeCom{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp", Secret: "secret", SendMode: "app", AgentID: 1000005, ToUser: "@all"}}
 	merged := merge(current, Update{WeCom: &WeComUpdate{BaseURL: current.WeCom.BaseURL, CorpID: current.WeCom.CorpID}})

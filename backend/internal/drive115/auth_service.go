@@ -431,6 +431,13 @@ func (s *AuthService) FolderPath(ctx context.Context, folderID string) (string, 
 	return s.drive.FolderPath(ctx, folderID)
 }
 
+func (s *AuthService) EnsureFolder(ctx context.Context, parentID, name string) (string, error) {
+	if err := s.prepareSession(ctx); err != nil {
+		return "", err
+	}
+	return s.drive.EnsureFolder(ctx, parentID, name)
+}
+
 func (s *AuthService) ExecuteFileCommand(ctx context.Context, operation string, input map[string]any) error {
 	if err := s.prepareSession(ctx); err != nil {
 		return err

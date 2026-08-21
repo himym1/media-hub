@@ -2,6 +2,7 @@ package checkin
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -9,6 +10,8 @@ import (
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/store"
 )
+
+var errNotificationRejected = errors.New("notification rejected")
 
 type checkInStub struct {
 	id      string
@@ -65,6 +68,40 @@ func TestSuccessfulCheckInNotifiesOnce(t *testing.T) {
 	if notifier.messages[0] != "Media Hub\n帧影今日签到成功" {
 		t.Fatalf("message=%q", notifier.messages[0])
 	}
+}
+
+func TestCheckInRetriesNotificationAfterSendFailure(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	source := &checkInStub{id: "framehdr", label: "帧影", result: search.CheckInResult{State: "completed", Message: "签到成功"}}
+	notifier := &flakyNotifier{failLeft: 1}
+	service := NewService(dataStore, sourceFinderStub{sources: []search.CheckInSource{source}}, notifier)
+	service.now = func() time.Time { return time.Date(2026, 8, 21, 11, 0, 0, 0, checkInLocation) }
+	if err := service.work(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if source.calls != 1 || len(notifier.messages) != 1 {
+		t.Fatalf("calls=%d messages=%#v failLeft=%d", source.calls, notifier.messages, notifier.failLeft)
+	}
+}
+
+type flakyNotifier struct {
+	failLeft int
+	messages []string
+}
+
+func (n *flakyNotifier) Configured() bool { return true }
+func (n *flakyNotifier) Send(_ context.Context, message string) (bool, error) {
+	if n.failLeft > 0 {
+		n.failLeft--
+		return false, errNotificationRejected
+	}
+	n.messages = append(n.messages, message)
+	return false, nil
 }
 
 func TestAlreadyCheckedInNotifiesOnce(t *testing.T) {

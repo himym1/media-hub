@@ -35,6 +35,8 @@ import com.composables.icons.lucide.ListTodo
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.RotateCcw
+import com.mediahub.android.core.designsystem.BadgeVariant
+import com.mediahub.android.core.designsystem.MediaHubBadge
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
@@ -43,9 +45,11 @@ import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubListDetail
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubListDivider
+import com.mediahub.android.core.designsystem.MediaHubPipelineStepper
 import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
+import com.mediahub.android.core.designsystem.PipelineStepItem
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.network.TransferJob
 import com.mediahub.android.core.network.TransferNotification
@@ -273,17 +277,24 @@ private fun TransferRow(job: TransferJob, selected: Boolean, onClick: () -> Unit
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaHubIcon(
-            imageVector = if (job.state == "failed" || job.state == "needs_attention") Lucide.CircleAlert else Lucide.Clock3,
-            contentDescription = null,
-            tint = stateColor(job.state),
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            MediaHubText(text = transferTitle(job), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                MediaHubText(
+                    text = transferTitle(job),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MediaHubColors.TextStrong,
+                )
+                MediaHubBadge(
+                    text = job.source.uppercase(),
+                    variant = BadgeVariant.Source,
+                )
+            }
             MediaHubText(
-                text = "${job.source} · ${formatTime(job.updatedAt)}",
+                text = formatTime(job.updatedAt),
                 modifier = Modifier.padding(top = 4.dp),
                 color = MediaHubColors.TextMuted,
                 fontSize = 12.sp,
@@ -297,11 +308,9 @@ private fun TransferRow(job: TransferJob, selected: Boolean, onClick: () -> Unit
                 )
             }
         }
-        MediaHubText(
+        MediaHubBadge(
             text = stateLabel(job.state),
-            color = stateColor(job.state),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
+            variant = stateBadgeVariant(job.state),
         )
     }
 }
@@ -322,6 +331,10 @@ private fun TransferDetail(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        MediaHubCard(insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
+            MediaHubPipelineStepper(steps = transferPipelineSteps(job))
+        }
+
         MediaHubSmallTitle(text = "状态记录")
         job.errorMessage?.let { MediaHubText(text = it, color = MediaHubColors.Error, fontSize = 12.sp) }
         MediaHubCard {
@@ -383,6 +396,33 @@ private fun TransferDetail(
             )
         }
     }
+}
+
+private fun transferPipelineSteps(job: TransferJob): List<PipelineStepItem> {
+    val state = job.state
+    val isFailed = state == "failed" || state == "needs_attention"
+    val stageIndex = when (state) {
+        "queued" -> 0
+        "transferring", "retry_wait" -> 1
+        "transferred", "submitting_sync", "syncing" -> 2
+        "refreshing_emby", "indexing_emby" -> 3
+        "verifying_playback", "completed" -> 4
+        else -> if (isFailed) 1 else 0
+    }
+    return listOf(
+        PipelineStepItem("queued", "排队", stageIndex > 0, stageIndex == 0 && !isFailed, isFailed && stageIndex == 0),
+        PipelineStepItem("transfer", "转存", stageIndex > 1, stageIndex == 1 && !isFailed, isFailed && stageIndex == 1),
+        PipelineStepItem("strm", "生成STRM", stageIndex > 2, stageIndex == 2 && !isFailed, isFailed && stageIndex == 2),
+        PipelineStepItem("emby", "刷新Emby", stageIndex > 3, stageIndex == 3 && !isFailed, isFailed && stageIndex == 3),
+        PipelineStepItem("completed", "完成", stageIndex >= 4 && !isFailed, stageIndex == 4 && !isFailed, isFailed && stageIndex == 4),
+    )
+}
+
+private fun stateBadgeVariant(state: String): BadgeVariant = when (state) {
+    "completed" -> BadgeVariant.Success
+    "failed", "needs_attention" -> BadgeVariant.Error
+    "retry_wait" -> BadgeVariant.Warning
+    else -> BadgeVariant.Primary
 }
 
 private fun stateLabel(state: String): String = when (state) {

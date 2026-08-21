@@ -171,6 +171,7 @@ func merge(current Values, input Update) Values {
 		if current.WeCom.BaseURL == "" && (current.WeCom.CorpID != "" || current.WeCom.Secret != "" || current.WeCom.AgentID != 0 || current.WeCom.ToUser != "" || current.WeCom.ChatID != "") {
 			current.WeCom.BaseURL = "https://qyapi.weixin.qq.com"
 		}
+		sanitizeWeComDelivery(&current.WeCom)
 	}
 	current.Workflow = input.Workflow.Config()
 	if input.CheckIn != nil {
@@ -215,6 +216,19 @@ func merge(current Values, input Update) Values {
 	}
 	current.Sources = updated
 	return current
+}
+
+func sanitizeWeComDelivery(value *config.WeCom) {
+	if value == nil {
+		return
+	}
+	switch value.DeliveryMode() {
+	case config.WeComSendModeApp:
+		value.ChatID = ""
+	case config.WeComSendModeAppChat:
+		value.AgentID = 0
+		value.ToUser = ""
+	}
 }
 
 func mergeSecret(current string, update SecretUpdate) string {

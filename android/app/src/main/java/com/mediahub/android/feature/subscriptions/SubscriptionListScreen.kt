@@ -37,6 +37,9 @@ import com.composables.icons.lucide.Pause
 import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Upload
+import androidx.compose.foundation.layout.Arrangement
+import com.mediahub.android.core.designsystem.BadgeVariant
+import com.mediahub.android.core.designsystem.MediaHubBadge
 import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubEmptyState
@@ -170,33 +173,43 @@ internal fun SubscriptionListScreen(
                                     .padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Spacer(
-                                    Modifier
-                                        .size(8.dp)
-                                        .background(
-                                            if (item.enabled) MediaHubColors.Accent else MediaHubColors.TextMuted,
-                                            RoundedCornerShape(4.dp),
-                                        ),
-                                )
-                                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                                    MediaHubText(
-                                        text = item.title + if (item.season > 0) " · S${item.season}" else "",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    MediaHubText(
-                                        text = "${if (item.mediaType == "movie") "电影" else "剧集"} · TMDB ${item.tmdbId}" +
-                                            if (item.lastEpisode > 0) " · 已入库至 E${item.lastEpisode}" else "",
+                                Column(Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        MediaHubText(
+                                            text = item.title + if (item.season > 0) " · S${item.season}" else "",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MediaHubColors.TextStrong,
+                                        )
+                                        MediaHubBadge(
+                                            text = if (item.mediaType == "movie") "电影" else "剧集",
+                                            variant = BadgeVariant.Neutral,
+                                        )
+                                    }
+                                    Row(
                                         modifier = Modifier.padding(top = 4.dp),
-                                        color = MediaHubColors.TextMuted,
-                                        fontSize = 12.sp,
-                                    )
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        MediaHubText(
+                                            text = "TMDB ${item.tmdbId}",
+                                            color = MediaHubColors.TextMuted,
+                                            fontSize = 12.sp,
+                                        )
+                                        if (item.lastEpisode > 0) {
+                                            MediaHubBadge(
+                                                text = "已入库至 E${item.lastEpisode}",
+                                                variant = BadgeVariant.Primary,
+                                            )
+                                        }
+                                    }
                                 }
-                                MediaHubText(
+                                MediaHubBadge(
                                     text = if (item.enabled) "运行中" else "已暂停",
-                                    color = if (item.enabled) MediaHubColors.Success else MediaHubColors.TextMuted,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    variant = if (item.enabled) BadgeVariant.Success else BadgeVariant.Neutral,
                                 )
                             }
                         }

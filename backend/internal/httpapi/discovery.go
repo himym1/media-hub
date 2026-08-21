@@ -35,7 +35,10 @@ func (h *handler) getRecommendations(w http.ResponseWriter, r *http.Request) {
 		h.writeDiscovery(w, nil, tmdb.ErrNotConfigured)
 		return
 	}
-	mediaType := r.PathValue("mediaType")
+	mediaType := strings.ToLower(strings.TrimSpace(r.PathValue("mediaType")))
+	if mediaType == "tv" {
+		mediaType = "series"
+	}
 	tmdbID := r.PathValue("tmdbId")
 	if (mediaType != "movie" && mediaType != "series") || !positiveID(tmdbID) {
 		writeProblem(w, problem{Type: "https://media-hub.local/problems/invalid-media-identity", Title: "TMDB 身份无效", Status: http.StatusBadRequest, Code: "invalid_media_identity"})
