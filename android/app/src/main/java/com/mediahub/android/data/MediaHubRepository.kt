@@ -115,8 +115,8 @@ class MediaHubRepository(
 
     suspend fun trending(): List<DiscoveryItem> = authenticated { api.trending(it) }
 
-    suspend fun recommendations(mediaType: String, tmdbId: String): List<DiscoveryItem> =
-        authenticated { api.recommendations(it, mediaType, tmdbId) }
+    suspend fun recommendations(mediaType: String, tmdbId: String, limit: Int = 24): List<DiscoveryItem> =
+        authenticated { api.recommendations(it, mediaType, tmdbId, limit) }
 
     suspend fun createTransfer(transferToken: String): TransferJob = authenticated { token ->
         api.createTransfer(token, transferToken, UUID.randomUUID().toString())

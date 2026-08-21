@@ -23,6 +23,7 @@ data class SearchUiState(
     val trending: List<DiscoveryItem> = emptyList(),
     val libraryRecommendations: List<DiscoveryItem> = emptyList(),
     val libraryRecommendationSeed: String? = null,
+    val shufflingRecommendations: Boolean = false,
     val recommendations: List<DiscoveryItem> = emptyList(),
     val integrations: List<IntegrationHealth> = emptyList(),
     val selectedCategory: String = "all",
@@ -53,6 +54,12 @@ sealed interface SearchEvent {
     data class SubscriptionRequested(val candidate: SearchCandidate) : SearchEvent
 }
 
+private data class RecommendationSeed(
+    val mediaType: String,
+    val tmdbId: String,
+    val title: String,
+)
+
 class SearchViewModel(
     private val repository: MediaHubRepository,
 ) : ViewModel() {
@@ -65,6 +72,12 @@ class SearchViewModel(
     private var searchJob: Job? = null
     private var loadJob: Job? = null
     private var recommendationJob: Job? = null
+    private var shuffleJob: Job? = null
+
+    private var recommendationSeeds: List<RecommendationSeed> = emptyList()
+    private var recommendationSeedIndex: Int = 0
+    private var recommendationPool: List<DiscoveryItem> = emptyList()
+    private var recommendationPage: Int = 0
 
     fun loadInitialData() {
         if (_uiState.value.trending.isNotEmpty() || _uiState.value.integrations.isNotEmpty()) {
@@ -92,71 +105,160 @@ class SearchViewModel(
             raw.equals("series", ignoreCase = true) ||
             raw.equals("Season", ignoreCase = true) ||
             raw.equals("Episode", ignoreCase = true)
-        ) "series" else "movie"
+        ) {
+            "series"
+        } else {
+            "movie"
+        }
 
     private suspend fun fetchDiscoveryData() {
-        // 1. Fetch overview health
         try {
             val integrations = repository.overview()
             _uiState.value = _uiState.value.copy(integrations = integrations)
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
 
-        // 2. Fetch trending items
         var trendingItems: List<DiscoveryItem> = emptyList()
         try {
             trendingItems = repository.trending()
             _uiState.value = _uiState.value.copy(trending = trendingItems)
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
 
-        // 3. Fetch library-based or seed recommendations
         try {
-            var seedTitle: String? = null
-            var recs: List<DiscoveryItem> = emptyList()
+            val seeds = mutableListOf<RecommendationSeed>()
+            val seen = mutableSetOf<String>()
 
-            // Try to find a movie/show in user's Emby library
             val libraries = runCatching { repository.libraries() }.getOrNull().orEmpty()
             for (library in libraries) {
-                if (recs.isNotEmpty()) break
-                val page = runCatching { repository.libraryItems(library.id, 0, 20) }.getOrNull()
-                val seedItem = page?.items?.firstOrNull { it.tmdbId != null && it.tmdbId.isNotBlank() }
-                if (seedItem != null && seedItem.tmdbId != null) {
-                    val mediaType = normalizeMediaType(seedItem.type)
-                    val result = runCatching { repository.recommendations(mediaType, seedItem.tmdbId) }.getOrNull().orEmpty()
-                    if (result.isNotEmpty()) {
-                        recs = result
-                        seedTitle = seedItem.name
-                    }
+                val page = runCatching { repository.libraryItems(library.id, 0, 40) }.getOrNull() ?: continue
+                for (item in page.items) {
+                    val tmdbId = item.tmdbId?.takeIf { it.isNotBlank() } ?: continue
+                    val key = "${normalizeMediaType(item.type)}:$tmdbId"
+                    if (!seen.add(key)) continue
+                    seeds += RecommendationSeed(
+                        mediaType = normalizeMediaType(item.type),
+                        tmdbId = tmdbId,
+                        title = item.name,
+                    )
+                    if (seeds.size >= 12) break
+                }
+                if (seeds.size >= 12) break
+            }
+
+            if (seeds.isEmpty()) {
+                for (topItem in trendingItems) {
+                    if (topItem.tmdbId.isBlank()) continue
+                    val mediaType = normalizeMediaType(topItem.mediaType)
+                    val key = "$mediaType:${topItem.tmdbId}"
+                    if (!seen.add(key)) continue
+                    seeds += RecommendationSeed(mediaType, topItem.tmdbId, topItem.title)
+                    if (seeds.size >= 8) break
                 }
             }
 
-            // Fallback to top trending items if library recommendation is empty
-            if (recs.isEmpty() && trendingItems.isNotEmpty()) {
-                for (topItem in trendingItems.take(3)) {
-                    if (recs.isNotEmpty()) break
-                    if (topItem.tmdbId.isNotBlank()) {
-                        val mediaType = normalizeMediaType(topItem.mediaType)
-                        val result = runCatching { repository.recommendations(mediaType, topItem.tmdbId) }.getOrNull().orEmpty()
-                        if (result.isNotEmpty()) {
-                            recs = result
-                            seedTitle = topItem.title
-                        }
-                    }
-                }
-            }
+            recommendationSeeds = seeds.shuffled()
+            recommendationSeedIndex = 0
+            recommendationPool = emptyList()
+            recommendationPage = 0
 
-            // Curated fallback if TMDB upstream recommendation endpoint is unavailable or returns empty
-            if (recs.isEmpty() && trendingItems.size >= 2) {
-                recs = trendingItems.shuffled().take(8)
-                seedTitle = "全网热播精选"
-            }
-
-            if (recs.isNotEmpty()) {
-                _uiState.value = _uiState.value.copy(
-                    libraryRecommendations = recs,
-                    libraryRecommendationSeed = seedTitle,
+            if (recommendationSeeds.isNotEmpty()) {
+                loadRecommendationBatch(resetSeed = false)
+            } else if (trendingItems.size >= 2) {
+                publishRecommendationPage(
+                    pool = trendingItems.shuffled(),
+                    seedTitle = "全网热播精选",
+                    page = 0,
                 )
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
+    }
+
+    fun shuffleRecommendations() {
+        if (_uiState.value.shufflingRecommendations) return
+        if (recommendationPool.isEmpty() && recommendationSeeds.isEmpty()) {
+            refreshAll()
+            return
+        }
+        shuffleJob?.cancel()
+        shuffleJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(shufflingRecommendations = true)
+            try {
+                val nextPage = recommendationPage + 1
+                val pageStart = nextPage * RECOMMENDATION_PAGE_SIZE
+                when {
+                    recommendationPool.size > pageStart -> {
+                        publishRecommendationPage(
+                            pool = recommendationPool,
+                            seedTitle = _uiState.value.libraryRecommendationSeed,
+                            page = nextPage,
+                        )
+                    }
+                    recommendationSeeds.size > 1 -> {
+                        recommendationSeedIndex = (recommendationSeedIndex + 1) % recommendationSeeds.size
+                        recommendationPage = 0
+                        loadRecommendationBatch(resetSeed = false)
+                    }
+                    recommendationPool.size > RECOMMENDATION_PAGE_SIZE -> {
+                        publishRecommendationPage(
+                            pool = recommendationPool.shuffled(),
+                            seedTitle = _uiState.value.libraryRecommendationSeed,
+                            page = 0,
+                        )
+                    }
+                    else -> loadRecommendationBatch(resetSeed = true)
+                }
+            } finally {
+                _uiState.value = _uiState.value.copy(shufflingRecommendations = false)
+            }
+        }
+    }
+
+    private suspend fun loadRecommendationBatch(resetSeed: Boolean) {
+        if (recommendationSeeds.isEmpty()) return
+        if (resetSeed) {
+            recommendationSeeds = recommendationSeeds.shuffled()
+            recommendationSeedIndex = 0
+        }
+        val start = recommendationSeedIndex
+        for (offset in recommendationSeeds.indices) {
+            val seed = recommendationSeeds[(start + offset) % recommendationSeeds.size]
+            val result = runCatching {
+                repository.recommendations(seed.mediaType, seed.tmdbId)
+            }.getOrNull().orEmpty()
+            if (result.isEmpty()) continue
+            recommendationSeedIndex = (start + offset) % recommendationSeeds.size
+            publishRecommendationPage(pool = result, seedTitle = seed.title, page = 0)
+            return
+        }
+        val trendingFallback = _uiState.value.trending
+        if (trendingFallback.size >= 2) {
+            publishRecommendationPage(
+                pool = trendingFallback.shuffled(),
+                seedTitle = "全网热播精选",
+                page = 0,
+            )
+        }
+    }
+
+    private fun publishRecommendationPage(
+        pool: List<DiscoveryItem>,
+        seedTitle: String?,
+        page: Int,
+    ) {
+        recommendationPool = pool
+        recommendationPage = page
+        val start = page * RECOMMENDATION_PAGE_SIZE
+        val visible = pool.drop(start).take(RECOMMENDATION_PAGE_SIZE).ifEmpty {
+            recommendationPage = 0
+            pool.take(RECOMMENDATION_PAGE_SIZE)
+        }
+        if (visible.isEmpty()) return
+        _uiState.value = _uiState.value.copy(
+            libraryRecommendations = visible,
+            libraryRecommendationSeed = seedTitle,
+        )
     }
 
     fun onCategorySelected(category: String) {
@@ -268,5 +370,9 @@ class SearchViewModel(
                 )
             }
         }
+    }
+
+    companion object {
+        private const val RECOMMENDATION_PAGE_SIZE = 8
     }
 }

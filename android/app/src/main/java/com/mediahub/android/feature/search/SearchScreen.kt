@@ -111,6 +111,7 @@ internal fun SearchRoute(
         onTrendingSelected = viewModel::searchTrending,
         onCandidateSelected = viewModel::onCandidateSelected,
         onRecommendationSelected = viewModel::searchRecommendation,
+        onShuffleRecommendations = viewModel::shuffleRecommendations,
         onCategorySelected = viewModel::onCategorySelected,
         onOpenServices = onOpenServices,
         onTransfer = viewModel::createTransfer,
@@ -127,6 +128,7 @@ internal fun SearchScreen(
     onTrendingSelected: (DiscoveryItem) -> Unit,
     onCandidateSelected: (String) -> Unit,
     onRecommendationSelected: (DiscoveryItem) -> Unit,
+    onShuffleRecommendations: () -> Unit = {},
     onCategorySelected: (String) -> Unit = {},
     onOpenServices: () -> Unit = {},
     onTransfer: (String) -> Unit = {},
@@ -156,6 +158,7 @@ internal fun SearchScreen(
             onTrendingSelected = onTrendingSelected,
             onCandidateSelected = onCandidateSelected,
             onRecommendationSelected = onRecommendationSelected,
+            onShuffleRecommendations = onShuffleRecommendations,
             onCategorySelected = onCategorySelected,
             onOpenServices = onOpenServices,
             onOpenHealthDetail = { showHealthDialog = true },
@@ -330,6 +333,9 @@ internal fun SearchScreen(
                                     icon = Lucide.Sparkles,
                                     items = uiState.libraryRecommendations,
                                     onSelect = onRecommendationSelected,
+                                    actionLabel = if (uiState.shufflingRecommendations) "换一批…" else "换一批",
+                                    onAction = onShuffleRecommendations,
+                                    actionEnabled = !uiState.shufflingRecommendations,
                                 )
                             }
                         } else if (uiState.selectedCategory == "recommended") {
@@ -803,6 +809,9 @@ private fun DiscoveryGallerySection(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     items: List<DiscoveryItem>,
     onSelect: (DiscoveryItem) -> Unit,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    actionEnabled: Boolean = true,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -815,28 +824,54 @@ private fun DiscoveryGallerySection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                MediaHubIcon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MediaHubColors.Accent,
-                    modifier = Modifier.size(16.dp),
-                )
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    MediaHubIcon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MediaHubColors.Accent,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    MediaHubText(
+                        text = title,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MediaHubColors.TextStrong,
+                    )
+                }
                 MediaHubText(
-                    text = title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MediaHubColors.TextStrong,
+                    text = subtitle,
+                    modifier = Modifier.padding(top = 2.dp),
+                    fontSize = 12.sp,
+                    color = MediaHubColors.TextMuted,
                 )
             }
-            MediaHubText(
-                text = subtitle,
-                fontSize = 12.sp,
-                color = MediaHubColors.TextMuted,
-            )
+            if (actionLabel != null && onAction != null) {
+                Row(
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .clickable(enabled = actionEnabled, onClick = onAction)
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    MediaHubIcon(
+                        imageVector = Lucide.RefreshCw,
+                        contentDescription = null,
+                        tint = if (actionEnabled) MediaHubColors.Accent else MediaHubColors.TextMuted,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    MediaHubText(
+                        text = actionLabel,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (actionEnabled) MediaHubColors.Accent else MediaHubColors.TextMuted,
+                    )
+                }
+            }
         }
 
         LazyRow(
@@ -981,6 +1016,7 @@ private fun SearchTwoPane(
     onTrendingSelected: (DiscoveryItem) -> Unit,
     onCandidateSelected: (String) -> Unit,
     onRecommendationSelected: (DiscoveryItem) -> Unit,
+    onShuffleRecommendations: () -> Unit = {},
     onCategorySelected: (String) -> Unit = {},
     onOpenServices: () -> Unit = {},
     onOpenHealthDetail: () -> Unit = {},
@@ -1052,6 +1088,7 @@ private fun SearchTwoPane(
                         onRefresh = onRefreshOverview,
                         onOpenDetail = onOpenHealthDetail,
                         onSelect = onTrendingSelected,
+                        onShuffleRecommendations = onShuffleRecommendations,
                         onCategorySelected = onCategorySelected,
                     )
                 }
@@ -1077,6 +1114,7 @@ private fun SearchIdleOverview(
     onRefresh: () -> Unit,
     onOpenDetail: () -> Unit,
     onSelect: (DiscoveryItem) -> Unit,
+    onShuffleRecommendations: () -> Unit,
     onCategorySelected: (String) -> Unit,
 ) {
     LazyColumn(
@@ -1108,6 +1146,9 @@ private fun SearchIdleOverview(
                     icon = Lucide.Sparkles,
                     items = uiState.libraryRecommendations,
                     onSelect = onSelect,
+                    actionLabel = if (uiState.shufflingRecommendations) "换一批…" else "换一批",
+                    onAction = onShuffleRecommendations,
+                    actionEnabled = !uiState.shufflingRecommendations,
                 )
             }
         }
