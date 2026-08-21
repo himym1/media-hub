@@ -314,6 +314,8 @@ h1 em { color: #d7f36a; font-style: normal; }
 .provider-settings input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
 .provider-settings input[type='checkbox'] { width: 16px; height: 16px; padding: 0; accent-color: var(--accent); }
 .inline-check { display: inline-flex; align-items: center; gap: 7px; margin-top: 11px; color: var(--text-secondary); font-size: 12px; }
+.checkin-source-toggles { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 4px; }
+.provider-settings input:disabled { opacity: .55; }
 .settings-note { color: var(--text-muted); font-size: 12px; line-height: 1.55; }
 .workflow-settings { display: grid; grid-template-columns: minmax(180px, .45fr) repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
 .workflow-target { display: grid; gap: 2px; padding-left: 15px; border-left: 1px solid var(--border); }

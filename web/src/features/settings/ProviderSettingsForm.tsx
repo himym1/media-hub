@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Film, KeyRound, MessageSquare, Save, Search, ServerCog, Waypoints } from 'lucide-react'
+import { CalendarCheck, Film, KeyRound, MessageSquare, Save, Search, ServerCog, Waypoints } from 'lucide-react'
 import type { ProviderSettings, ProviderSettingsUpdate, SecretUpdate } from '../../shared/api/mediaHub'
 
 type Props = {
@@ -27,6 +27,12 @@ function secret(): SecretUpdate {
   return { value: '', clear: false }
 }
 
+const defaultCheckIn = { enabled: true, hour: 0, minute: 5, sources: ['framehdr', 'juying'] as Array<'framehdr' | 'juying'> }
+
+function checkInTimeValue(hour: number, minute: number) {
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
 function createDraft(settings: ProviderSettings): Draft {
   return {
     qmediaSync: { baseUrl: settings.qmediaSync.baseUrl, apiKey: secret() },
@@ -43,6 +49,7 @@ function createDraft(settings: ProviderSettings): Draft {
       chatId: settings.wecom.chatId,
     },
     workflow: structuredClone(settings.workflow),
+    checkIn: settings.checkIn ?? defaultCheckIn,
     sources: settings.sources.map((source) => ({
       id: source.id,
       baseUrl: source.baseUrl,
@@ -187,6 +194,58 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
               {credential && source.token.configured ? <label className="inline-check"><input checked={item.token.clear} name={`${source.id}-clear-secret`} onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, token: { value: '', clear: event.target.checked } } : value) }))} type="checkbox" />清除已保存 {credential.secret}</label> : <span />}
             </div>
           })}
+        </fieldset>
+      </section>
+
+      <section className="settings-group" aria-labelledby="checkin-settings-heading">
+        <div className="settings-group-header">
+          <h3 id="checkin-settings-heading"><CalendarCheck size={17} />每日签到</h3>
+          <p>按北京时间每天签一次。关闭自动签到后仍可在概览手动签到。</p>
+        </div>
+        <fieldset>
+          <legend>签到计划</legend>
+          <label className="inline-check">
+            <input checked={draft.checkIn.enabled} name="checkin-enabled" onChange={(event) => setDraft((current) => ({ ...current, checkIn: { ...current.checkIn, enabled: event.target.checked } }))} type="checkbox" />
+            自动签到
+          </label>
+          <label>
+            <span>签到时间（北京时间）</span>
+            <input
+              disabled={!draft.checkIn.enabled}
+              name="checkin-time"
+              onChange={(event) => {
+                const [hourText = '0', minuteText = '0'] = event.target.value.split(':')
+                setDraft((current) => ({ ...current, checkIn: { ...current.checkIn, hour: Number(hourText) || 0, minute: Number(minuteText) || 0 } }))
+              }}
+              type="time"
+              value={checkInTimeValue(draft.checkIn.hour, draft.checkIn.minute)}
+            />
+          </label>
+          <div className="checkin-source-toggles" role="group" aria-label="自动签到来源">
+            {([
+              { id: 'framehdr', label: '帧影' },
+              { id: 'juying', label: '聚影' },
+            ] as const).map((source) => (
+              <label className="inline-check" key={source.id}>
+                <input
+                  checked={draft.checkIn.sources.includes(source.id)}
+                  disabled={!draft.checkIn.enabled}
+                  name={`checkin-source-${source.id}`}
+                  onChange={(event) => setDraft((current) => ({
+                    ...current,
+                    checkIn: {
+                      ...current.checkIn,
+                      sources: event.target.checked
+                        ? [...current.checkIn.sources.filter((id) => id !== source.id), source.id]
+                        : current.checkIn.sources.filter((id) => id !== source.id),
+                    },
+                  }))}
+                  type="checkbox"
+                />
+                {source.label}
+              </label>
+            ))}
+          </div>
         </fieldset>
       </section>
 

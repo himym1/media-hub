@@ -183,6 +183,25 @@ func configSources() []config.SearchSource {
 	return result
 }
 
+func TestMergePreservesCheckInForOlderClients(t *testing.T) {
+	enabled := DefaultCheckIn()
+	enabled.Enabled = false
+	enabled.Hour = 8
+	current := Values{CheckIn: &enabled, Sources: configSources()}
+	merged := merge(current, Update{Sources: sourceUpdates("", "")})
+	if merged.CheckIn == nil || merged.CheckIn.Enabled || merged.CheckIn.Hour != 8 {
+		t.Fatalf("check-in settings changed without an explicit update: %+v", merged.CheckIn)
+	}
+}
+
+func TestMergeCheckInReplacesSchedule(t *testing.T) {
+	current := Values{CheckIn: &CheckInSettings{Enabled: true, Hour: 0, Minute: 5, Sources: []string{"framehdr"}}, Sources: configSources()}
+	merged := merge(current, Update{CheckIn: &CheckInSettings{Enabled: false, Hour: 9, Minute: 30, Sources: []string{"juying"}}, Sources: sourceUpdates("", "")})
+	if merged.CheckIn == nil || merged.CheckIn.Enabled || merged.CheckIn.Hour != 9 || merged.CheckIn.Minute != 30 || len(merged.CheckIn.Sources) != 1 || merged.CheckIn.Sources[0] != "juying" {
+		t.Fatalf("check-in merge = %+v", merged.CheckIn)
+	}
+}
+
 func TestMergePreservesWeComForOlderClients(t *testing.T) {
 	current := Values{WeCom: config.WeCom{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp", Secret: "secret", ChatID: "chat"}}
 	merged := merge(current, Update{Sources: sourceUpdates("", "")})

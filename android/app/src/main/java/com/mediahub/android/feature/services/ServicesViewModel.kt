@@ -284,6 +284,7 @@ private fun ProviderSettings.toUpdate() = ProviderSettingsUpdate(
     tmdbAccessToken = SecretUpdate(),
     wecom = wecom.toUpdate(),
     workflow = workflow,
+    checkIn = checkIn,
     sources = sources.map { ProviderSourceSettingsUpdate(id = it.id, baseUrl = it.baseUrl, account = it.account, authMode = it.authMode) },
 )
 

@@ -50,6 +50,7 @@ const providerSettings = {
     movie: { destinationId: '1', qMediaSyncTargetPath: '/movie', embyLibraryId: 'movie' },
     series: { destinationId: '2', qMediaSyncTargetPath: '/series', embyLibraryId: 'series' },
   },
+  checkIn: { enabled: true, hour: 0, minute: 5, sources: ['framehdr', 'juying'] },
   sources,
 }
 

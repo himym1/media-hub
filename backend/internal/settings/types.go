@@ -1,6 +1,10 @@
 package settings
 
-import "media-hub/backend/internal/config"
+import (
+	"strings"
+
+	"media-hub/backend/internal/config"
+)
 
 const ProviderKey = "media-hub-runtime-settings"
 
@@ -11,7 +15,15 @@ type Values struct {
 	TMDB       config.TMDB           `json:"tmdb"`
 	WeCom      config.WeCom          `json:"wecom"`
 	Workflow   config.Workflow       `json:"workflow"`
+	CheckIn    *CheckInSettings      `json:"checkIn,omitempty"`
 	Sources    []config.SearchSource `json:"sources"`
+}
+
+type CheckInSettings struct {
+	Enabled bool     `json:"enabled"`
+	Hour    int      `json:"hour"`
+	Minute  int      `json:"minute"`
+	Sources []string `json:"sources"`
 }
 
 type WorkflowTarget struct {
@@ -93,6 +105,7 @@ type Update struct {
 	TMDB       TMDBUpdate       `json:"tmdb"`
 	WeCom      *WeComUpdate     `json:"wecom"`
 	Workflow   Workflow         `json:"workflow"`
+	CheckIn    *CheckInSettings `json:"checkIn,omitempty"`
 	Sources    []SourceUpdate   `json:"sources"`
 }
 
@@ -141,18 +154,53 @@ type WeComView struct {
 }
 
 type View struct {
-	QMediaSync QMediaSyncView `json:"qmediaSync"`
-	Emby       EmbyView       `json:"emby"`
-	Drive115   Drive115View   `json:"drive115"`
-	TMDB       TMDBView       `json:"tmdb"`
-	WeCom      WeComView      `json:"wecom"`
-	Workflow   Workflow       `json:"workflow"`
-	Sources    []SourceView   `json:"sources"`
+	QMediaSync QMediaSyncView   `json:"qmediaSync"`
+	Emby       EmbyView         `json:"emby"`
+	Drive115   Drive115View     `json:"drive115"`
+	TMDB       TMDBView         `json:"tmdb"`
+	WeCom      WeComView        `json:"wecom"`
+	Workflow   Workflow         `json:"workflow"`
+	CheckIn    CheckInSettings  `json:"checkIn"`
+	Sources    []SourceView     `json:"sources"`
 }
 
 var sourceLabels = map[string]string{
 	"dian": "点点", "framehdr": "帧影", "gimy": "Gimy", "guanying": "观影",
 	"hdhive": "HDHive", "juying": "聚影", "mikan": "蜜柑", "sidhub": "Sidhub",
+}
+
+func DefaultCheckIn() CheckInSettings {
+	return CheckInSettings{Enabled: true, Hour: 0, Minute: 5, Sources: []string{"framehdr", "juying"}}
+}
+
+func NormalizeCheckIn(value *CheckInSettings) CheckInSettings {
+	if value == nil {
+		return DefaultCheckIn()
+	}
+	normalized := *value
+	normalized.Sources = normalizeCheckInSources(normalized.Sources)
+	return normalized
+}
+
+func normalizeCheckInSources(values []string) []string {
+	if values == nil {
+		return []string{"framehdr", "juying"}
+	}
+	allowed := map[string]struct{}{"framehdr": {}, "juying": {}}
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		id := strings.TrimSpace(value)
+		if _, ok := allowed[id]; !ok {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	return result
 }
 
 func FromConfig(value config.Config) Values {

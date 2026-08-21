@@ -55,8 +55,16 @@ data class ProviderSettings(
     val tmdbAccessToken: SecretStatus,
     val wecom: WeComSettings,
     val workflow: WorkflowSettings,
+    val checkIn: CheckInSettings,
     val sources: List<ProviderSourceSettings>,
  )
+
+data class CheckInSettings(
+    val enabled: Boolean = true,
+    val hour: Int = 0,
+    val minute: Int = 5,
+    val sources: List<String> = listOf("framehdr", "juying"),
+)
 data class ProviderSourceSettingsUpdate(val id: String, val baseUrl: String, val account: String, val authMode: String, val token: SecretUpdate = SecretUpdate())
 data class ProviderSettingsUpdate(
     val qmediaSyncBaseUrl: String,
@@ -70,6 +78,7 @@ data class ProviderSettingsUpdate(
     val tmdbAccessToken: SecretUpdate,
     val wecom: WeComSettingsUpdate,
     val workflow: WorkflowSettings,
+    val checkIn: CheckInSettings,
     val sources: List<ProviderSourceSettingsUpdate>,
  )
 

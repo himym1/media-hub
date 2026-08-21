@@ -3,7 +3,9 @@ package checkin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"media-hub/backend/internal/integration"
@@ -61,20 +63,43 @@ type Status struct {
 	Items []Item `json:"items"`
 }
 
+type Schedule struct {
+	Enabled bool
+	Hour    int
+	Minute  int
+	Sources []string
+}
+
 type Service struct {
-	store  *store.Store
-	search SourceFinder
-	notify Notifier
-	now    func() time.Time
-	wake   chan struct{}
-	done   chan struct{}
+	store    *store.Store
+	search   SourceFinder
+	notify   Notifier
+	now      func() time.Time
+	wake     chan struct{}
+	done     chan struct{}
+	mutex    sync.RWMutex
+	schedule Schedule
 }
 
 func NewService(dataStore *store.Store, sources SourceFinder, notifier Notifier) *Service {
 	return &Service{
 		store: dataStore, search: sources, notify: notifier,
 		now: time.Now, wake: make(chan struct{}, 1), done: make(chan struct{}),
+		schedule: Schedule{Enabled: true, Hour: 0, Minute: 5, Sources: []string{"framehdr", "juying"}},
 	}
+}
+
+func (s *Service) Configure(schedule Schedule) {
+	if s == nil {
+		return
+	}
+	s.mutex.Lock()
+	s.schedule = Schedule{
+		Enabled: schedule.Enabled, Hour: schedule.Hour, Minute: schedule.Minute,
+		Sources: append([]string(nil), schedule.Sources...),
+	}
+	s.mutex.Unlock()
+	s.requestWake()
 }
 
 func (s *Service) Start(ctx context.Context) error {
@@ -112,11 +137,12 @@ func (s *Service) Status(ctx context.Context) (Status, error) {
 	for _, row := range rows {
 		byID[row.SourceID] = row
 	}
+	schedule := s.currentSchedule()
 	items := make([]Item, 0)
 	for _, source := range s.checkInSources() {
 		item := Item{
 			SourceID: source.ID(), Label: source.Label(), State: "idle",
-			Message: "等待今日自动签到", UpdatedAt: s.now().UTC(),
+			Message: idleCheckInMessage(schedule, source.ID()), UpdatedAt: s.now().UTC(),
 		}
 		if row, ok := byID[source.ID()]; ok {
 			item = publicCheckIn(row)
@@ -143,14 +169,23 @@ func (s *Service) Retry(ctx context.Context, sourceID string) (Item, error) {
 	if !found {
 		return Item{}, store.ErrCheckInNotFound
 	}
-	row, err := s.store.RetrySourceCheckIn(ctx, sourceID, s.now())
-	if err != nil && !errors.Is(err, store.ErrCheckInNotFound) {
+	if _, err := s.store.RetrySourceCheckIn(ctx, sourceID, s.now()); err != nil && !errors.Is(err, store.ErrCheckInNotFound) {
 		return Item{}, err
 	}
-	if errors.Is(err, store.ErrCheckInNotFound) {
-		row = store.SourceCheckIn{SourceID: sourceID, State: "idle", Message: "等待重新签到", UpdatedAt: s.now().UTC().Unix()}
+	var selected search.CheckInSource
+	for _, source := range s.checkInSources() {
+		if source.ID() == sourceID {
+			selected = source
+			break
+		}
 	}
-	s.requestWake()
+	if err := s.process(ctx, selected, true); err != nil {
+		return Item{}, err
+	}
+	row, err := s.store.SourceCheckIn(ctx, sourceID)
+	if err != nil {
+		return Item{}, err
+	}
 	return publicCheckIn(row), nil
 }
 
@@ -161,10 +196,16 @@ func (s *Service) Check(ctx context.Context) integration.Health {
 		health.Detail = "签到服务未配置"
 		return health
 	}
+	schedule := s.currentSchedule()
 	sources := s.checkInSources()
 	if len(sources) == 0 {
 		health.Status = integration.StatusUnconfigured
 		health.Detail = "尚未配置可签到的资源源"
+		return health
+	}
+	if !schedule.Enabled {
+		health.Status = integration.StatusHealthy
+		health.Detail = "自动签到已关闭，可手动签到"
 		return health
 	}
 	status, err := s.Status(ctx)
@@ -216,7 +257,14 @@ func (s *Service) run(ctx context.Context) {
 }
 
 func (s *Service) work(ctx context.Context) error {
+	schedule := s.currentSchedule()
+	if !schedule.Enabled || !afterScheduledTime(s.now(), schedule) {
+		return nil
+	}
 	for _, source := range s.checkInSources() {
+		if !scheduleAllows(schedule, source.ID()) {
+			continue
+		}
 		if err := s.process(ctx, source, false); err != nil {
 			return err
 		}
@@ -329,6 +377,43 @@ func (s *Service) checkInSources() []search.CheckInSource {
 		return nil
 	}
 	return s.search.CheckInSources()
+}
+
+func (s *Service) currentSchedule() Schedule {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return Schedule{
+		Enabled: s.schedule.Enabled, Hour: s.schedule.Hour, Minute: s.schedule.Minute,
+		Sources: append([]string(nil), s.schedule.Sources...),
+	}
+}
+
+func afterScheduledTime(now time.Time, schedule Schedule) bool {
+	local := now.In(checkInLocation)
+	scheduled := time.Date(local.Year(), local.Month(), local.Day(), schedule.Hour, schedule.Minute, 0, 0, checkInLocation)
+	return !local.Before(scheduled)
+}
+
+func idleCheckInMessage(schedule Schedule, sourceID string) string {
+	if !schedule.Enabled {
+		return "自动签到已关闭，可手动签到"
+	}
+	if !scheduleAllows(schedule, sourceID) {
+		return "未加入自动签到，可手动签到"
+	}
+	return fmt.Sprintf("等待今日 %02d:%02d 自动签到", schedule.Hour, schedule.Minute)
+}
+
+func scheduleAllows(schedule Schedule, sourceID string) bool {
+	if len(schedule.Sources) == 0 {
+		return false
+	}
+	for _, candidate := range schedule.Sources {
+		if candidate == sourceID {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) requestWake() {

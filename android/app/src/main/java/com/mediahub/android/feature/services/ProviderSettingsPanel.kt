@@ -38,6 +38,7 @@ import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextField
+import com.mediahub.android.core.network.CheckInSettings
 import com.mediahub.android.core.network.ProviderSettings
 import com.mediahub.android.core.network.ProviderSettingsUpdate
 import com.mediahub.android.core.network.SecretStatus
@@ -163,6 +164,30 @@ internal fun ProviderSettingsPanel(
             }
         }
 
+        SettingsSection("每日签到", "按北京时间每天签一次；关闭后仍可在概览手动签到", Lucide.ServerCog) {
+            MediaHubCheckboxRow(
+                title = "自动签到",
+                checked = draft.checkIn.enabled,
+                onCheckedChange = { onDraftChange(draft.copy(checkIn = draft.checkIn.copy(enabled = it))) },
+            )
+            LabeledField("签到时间（北京时间 HH:mm）", formatCheckInTime(draft.checkIn.hour, draft.checkIn.minute)) { value ->
+                val (hour, minute) = parseCheckInTime(value)
+                onDraftChange(draft.copy(checkIn = draft.checkIn.copy(hour = hour, minute = minute)))
+            }
+            MediaHubCheckboxRow(
+                title = "帧影",
+                checked = draft.checkIn.sources.contains("framehdr"),
+                enabled = draft.checkIn.enabled,
+                onCheckedChange = { onDraftChange(draft.copy(checkIn = draft.checkIn.toggleSource("framehdr", it))) },
+            )
+            MediaHubCheckboxRow(
+                title = "聚影",
+                checked = draft.checkIn.sources.contains("juying"),
+                enabled = draft.checkIn.enabled,
+                onCheckedChange = { onDraftChange(draft.copy(checkIn = draft.checkIn.toggleSource("juying", it))) },
+            )
+        }
+
         if (saved) MediaHubText("设置已加密保存并立即应用", color = MediaHubColors.Source, fontSize = 12.sp)
         MediaHubButton(
             label = if (saving) "正在保存" else "保存服务设置",
@@ -280,4 +305,18 @@ private fun WorkflowTargetEditor(label: String, target: WorkflowTargetSettings, 
     LabeledField("$label 115 目标目录 ID", target.destinationId) { onChange(target.copy(destinationId = it)) }
     LabeledField("$label QMediaSync 目标路径", target.qMediaSyncTargetPath) { onChange(target.copy(qMediaSyncTargetPath = it)) }
     LabeledField("$label Emby 媒体库 ID", target.embyLibraryId) { onChange(target.copy(embyLibraryId = it)) }
+}
+
+private fun formatCheckInTime(hour: Int, minute: Int) = "%02d:%02d".format(hour, minute)
+
+private fun parseCheckInTime(value: String): Pair<Int, Int> {
+    val parts = value.split(":")
+    val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 0
+    val minute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+    return hour to minute
+}
+
+private fun CheckInSettings.toggleSource(id: String, enabled: Boolean): CheckInSettings {
+    val next = if (enabled) sources.filterNot { it == id } + id else sources.filterNot { it == id }
+    return copy(sources = next)
 }

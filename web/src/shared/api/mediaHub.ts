@@ -12,6 +12,7 @@ export type Integration = {
 export type SecretStatus = { configured: boolean }
 export type SecretUpdate = { value: string; clear: boolean }
 export type WorkflowTargetSettings = { destinationId: string; qMediaSyncTargetPath: string; embyLibraryId: string }
+export type CheckInSettings = { enabled: boolean; hour: number; minute: number; sources: Array<'framehdr' | 'juying'> }
 export type ProviderSettings = {
   qmediaSync: { baseUrl: string; apiKey: SecretStatus }
   emby: { baseUrl: string; apiKey: SecretStatus; userId: string; password: SecretStatus }
@@ -19,6 +20,7 @@ export type ProviderSettings = {
   tmdb: { baseUrl: string; accessToken: SecretStatus }
   wecom: { baseUrl: string; corpId: string; secret: SecretStatus; sendMode: 'app' | 'appchat'; agentId: number; toUser: string; chatId: string }
   workflow: { qMediaSyncAccountId: number; movie: WorkflowTargetSettings; series: WorkflowTargetSettings }
+  checkIn: CheckInSettings
   sources: { id: string; label: string; baseUrl: string; account: string; authMode: string; token: SecretStatus }[]
 }
 export type ProviderSettingsUpdate = {
@@ -28,6 +30,7 @@ export type ProviderSettingsUpdate = {
   tmdb: { baseUrl: string; accessToken: SecretUpdate }
   wecom: { baseUrl: string; corpId: string; secret: SecretUpdate; sendMode: 'app' | 'appchat'; agentId: number; toUser: string; chatId: string }
   workflow: ProviderSettings['workflow']
+  checkIn: CheckInSettings
   sources: { id: string; baseUrl: string; account: string; authMode: string; token: SecretUpdate }[]
 }
 export type OperationalStatistics = {

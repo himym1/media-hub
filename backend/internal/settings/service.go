@@ -173,6 +173,10 @@ func merge(current Values, input Update) Values {
 		}
 	}
 	current.Workflow = input.Workflow.Config()
+	if input.CheckIn != nil {
+		normalized := NormalizeCheckIn(input.CheckIn)
+		current.CheckIn = &normalized
+	}
 
 	byID := make(map[string]config.SearchSource, len(current.Sources))
 	for _, source := range current.Sources {
@@ -238,6 +242,10 @@ func validate(value Values) error {
 	}
 	if value.Workflow.QMediaSyncAccountID > uint(^uint32(0)) {
 		return fmt.Errorf("%w: QMediaSync account ID is out of range", ErrInvalid)
+	}
+	checkIn := NormalizeCheckIn(value.CheckIn)
+	if checkIn.Hour < 0 || checkIn.Hour > 23 || checkIn.Minute < 0 || checkIn.Minute > 59 {
+		return fmt.Errorf("%w: check-in time is invalid", ErrInvalid)
 	}
 	if len(value.QMediaSync.BaseURL) > 2048 || len(value.QMediaSync.APIKey) > 4096 ||
 		len(value.Emby.BaseURL) > 2048 || len(value.Emby.APIKey) > 4096 || len(value.Emby.UserID) > 200 || len(value.Emby.Password) > 4096 ||
@@ -407,11 +415,17 @@ func publicView(value Values) View {
 			SendMode: value.WeCom.DeliveryMode(), AgentID: value.WeCom.AgentID, ToUser: value.WeCom.ToUser, ChatID: value.WeCom.ChatID,
 		},
 		Workflow: workflowFromConfig(value.Workflow),
+		CheckIn:  NormalizeCheckIn(value.CheckIn),
 		Sources:  sources,
 	}
 }
 
 func clone(value Values) Values {
 	value.Sources = append([]config.SearchSource(nil), value.Sources...)
+	if value.CheckIn != nil {
+		copied := *value.CheckIn
+		copied.Sources = append([]string(nil), value.CheckIn.Sources...)
+		value.CheckIn = &copied
+	}
 	return value
 }

@@ -752,6 +752,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
                 chatId = wecom.getString("chatId"),
             ),
             workflow = parseWorkflowSettings(workflow),
+            checkIn = parseCheckInSettings(item.optJSONObject("checkIn")),
             sources = item.getJSONArray("sources").objects { source ->
                 val id = source.getString("id")
                 val account = source.optString("account")
@@ -767,6 +768,13 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
 			},
         )
     }
+
+    private fun parseCheckInSettings(item: JSONObject?) = CheckInSettings(
+        enabled = item?.optBoolean("enabled", true) ?: true,
+        hour = item?.optInt("hour", 0) ?: 0,
+        minute = item?.optInt("minute", 5) ?: 5,
+        sources = item?.optJSONArray("sources")?.strings() ?: listOf("framehdr", "juying"),
+    )
 
     private fun parseWorkflowSettings(item: JSONObject) = WorkflowSettings(
         qMediaSyncAccountId = item.getInt("qMediaSyncAccountId"),
@@ -794,6 +802,11 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
             .put("toUser", input.wecom.toUser)
             .put("chatId", input.wecom.chatId))
         .put("workflow", JSONObject().put("qMediaSyncAccountId", input.workflow.qMediaSyncAccountId).put("movie", workflowTargetBody(input.workflow.movie)).put("series", workflowTargetBody(input.workflow.series)))
+        .put("checkIn", JSONObject()
+            .put("enabled", input.checkIn.enabled)
+            .put("hour", input.checkIn.hour)
+            .put("minute", input.checkIn.minute)
+            .put("sources", JSONArray(input.checkIn.sources)))
         .put("sources", JSONArray().apply { input.sources.forEach { source -> put(JSONObject().put("id", source.id).put("baseUrl", source.baseUrl).put("account", source.account).put("authMode", source.authMode).put("token", secretBody(source.token))) } })
 
     private fun secretBody(value: SecretUpdate) = JSONObject().put("value", value.value).put("clear", value.clear)

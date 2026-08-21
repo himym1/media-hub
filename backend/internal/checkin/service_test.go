@@ -181,3 +181,72 @@ func TestFailedCheckInNotifiesOnce(t *testing.T) {
 		t.Fatalf("health=%#v", health)
 	}
 }
+
+func TestWorkerSkipsBeforeScheduledTime(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	source := &checkInStub{id: "framehdr", label: "帧影", result: search.CheckInResult{State: "completed", Message: "签到成功"}}
+	service := NewService(dataStore, sourceFinderStub{sources: []search.CheckInSource{source}}, nil)
+	service.Configure(Schedule{Enabled: true, Hour: 8, Minute: 30, Sources: []string{"framehdr"}})
+	service.now = func() time.Time { return time.Date(2026, 8, 21, 8, 29, 0, 0, checkInLocation) }
+	if err := service.work(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if source.calls != 0 {
+		t.Fatalf("called before schedule: %d", source.calls)
+	}
+	service.now = func() time.Time { return time.Date(2026, 8, 21, 8, 30, 0, 0, checkInLocation) }
+	if err := service.work(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if source.calls != 1 {
+		t.Fatalf("calls=%d", source.calls)
+	}
+}
+
+func TestWorkerSkipsDisabledSchedule(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	source := &checkInStub{id: "framehdr", label: "帧影", result: search.CheckInResult{State: "completed", Message: "签到成功"}}
+	service := NewService(dataStore, sourceFinderStub{sources: []search.CheckInSource{source}}, nil)
+	service.Configure(Schedule{Enabled: false, Hour: 0, Minute: 5, Sources: []string{"framehdr"}})
+	service.now = func() time.Time { return time.Date(2026, 8, 21, 11, 0, 0, 0, checkInLocation) }
+	if err := service.work(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if source.calls != 0 {
+		t.Fatalf("disabled auto check-in still ran: %d", source.calls)
+	}
+	item, err := service.Retry(ctx, "framehdr")
+	if err != nil || item.State != "completed" || source.calls != 1 {
+		t.Fatalf("manual retry item=%#v calls=%d err=%v", item, source.calls, err)
+	}
+}
+
+func TestWorkerSkipsUnselectedSource(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	frame := &checkInStub{id: "framehdr", label: "帧影", result: search.CheckInResult{State: "completed", Message: "签到成功"}}
+	juying := &checkInStub{id: "juying", label: "聚影", result: search.CheckInResult{State: "completed", Message: "签到成功"}}
+	service := NewService(dataStore, sourceFinderStub{sources: []search.CheckInSource{frame, juying}}, nil)
+	service.Configure(Schedule{Enabled: true, Hour: 0, Minute: 5, Sources: []string{"juying"}})
+	service.now = func() time.Time { return time.Date(2026, 8, 21, 11, 0, 0, 0, checkInLocation) }
+	if err := service.work(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if frame.calls != 0 || juying.calls != 1 {
+		t.Fatalf("frame=%d juying=%d", frame.calls, juying.calls)
+	}
+}

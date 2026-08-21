@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.19.22
+  version: 0.19.23
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -1583,6 +1583,16 @@ components:
         qMediaSyncAccountId: { type: integer, minimum: 0, maximum: 4294967295 }
         movie: { $ref: '#/components/schemas/WorkflowTargetSettings' }
         series: { $ref: '#/components/schemas/WorkflowTargetSettings' }
+    CheckInSettings:
+      type: object
+      required: [enabled, hour, minute, sources]
+      properties:
+        enabled: { type: boolean, description: 是否按北京时间自动签到 }
+        hour: { type: integer, minimum: 0, maximum: 23 }
+        minute: { type: integer, minimum: 0, maximum: 59 }
+        sources:
+          type: array
+          items: { type: string, enum: [framehdr, juying] }
     SourceSettings:
       type: object
       required: [id, label, baseUrl, account, authMode, token]
@@ -1604,7 +1614,7 @@ components:
         token: { $ref: '#/components/schemas/SecretUpdate' }
     ProviderSettings:
       type: object
-      required: [qmediaSync, emby, drive115, tmdb, wecom, workflow, sources]
+      required: [qmediaSync, emby, drive115, tmdb, wecom, workflow, checkIn, sources]
       properties:
         qmediaSync:
           type: object
@@ -1643,6 +1653,7 @@ components:
             toUser: { type: string, maxLength: 200 }
             chatId: { type: string, maxLength: 200 }
         workflow: { $ref: '#/components/schemas/WorkflowSettings' }
+        checkIn: { $ref: '#/components/schemas/CheckInSettings' }
         sources:
           type: array
           minItems: 8
@@ -1689,6 +1700,7 @@ components:
             toUser: { type: string, maxLength: 200 }
             chatId: { type: string, maxLength: 200 }
         workflow: { $ref: '#/components/schemas/WorkflowSettings' }
+        checkIn: { $ref: '#/components/schemas/CheckInSettings' }
         sources:
           type: array
           minItems: 8

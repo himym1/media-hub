@@ -123,6 +123,7 @@ func run(logger *slog.Logger) error {
 		dataStore, searchService, selectionCodec, qmsClient, embyClient, wecomClient, configuration.Workflow,
 		drive115AuthService.FolderPath,
 	)
+	checkinService := checkin.NewService(dataStore, searchService, wecomClient)
 	settingsService := settings.NewService(
 		dataStore, securePayloadCodec, settings.FromConfig(configuration),
 		func(value settings.Values) {
@@ -139,6 +140,10 @@ func run(logger *slog.Logger) error {
 			workflowService.Configure(value.Workflow)
 			runtimeSources := searchSourcesFromSettings(value, configuration.SearchTimeout, configuration.FixtureMode, drive115AuthService, configuration.SourceProxyURL)
 			searchService.Configure(tmdbClient, runtimeSources...)
+			normalized := settings.NormalizeCheckIn(value.CheckIn)
+			checkinService.Configure(checkin.Schedule{
+				Enabled: normalized.Enabled, Hour: normalized.Hour, Minute: normalized.Minute, Sources: normalized.Sources,
+			})
 		},
 	)
 	if admin, exists, err := dataStore.Admin(startupContext); err != nil {
@@ -149,7 +154,6 @@ func run(logger *slog.Logger) error {
 		}
 	}
 	subscriptionService := subscription.NewService(dataStore, searchService, workflowService, embyClient)
-	checkinService := checkin.NewService(dataStore, searchService, wecomClient)
 	overview := integration.NewOverviewService(
 		searchService,
 		drive115AuthService,
