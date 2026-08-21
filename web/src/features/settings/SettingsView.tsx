@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Activity, Database, Film, HardDrive, KeyRound, LogOut, QrCode, RefreshCw, Server, SlidersHorizontal, Waypoints } from 'lucide-react'
+import { Activity, CalendarCheck, Database, Film, HardDrive, KeyRound, LogOut, QrCode, RefreshCw, Server, SlidersHorizontal, Waypoints } from 'lucide-react'
 import {
   changePassword,
   getDrive115Status,
@@ -8,7 +8,9 @@ import {
   getOperationalStatistics,
   getProviderSettings,
   getQMediaSyncStatus,
+  getSourceCheckIns,
   pollDrive115Authorization,
+  retrySourceCheckIn,
   startDrive115Authorization,
   testWeComNotification,
   updateProviderSettings,
@@ -20,6 +22,26 @@ import { IconButton } from '../../shared/ui/IconButton'
 import { ProviderSettingsForm } from './ProviderSettingsForm'
 
 const statusLabel: Record<IntegrationStatus, string> = { healthy: '在线', degraded: '受限', unavailable: '离线', unconfigured: '未配置' }
+const checkInStateLabel = (state?: string) => {
+  switch (state) {
+    case 'completed': return '已签到'
+    case 'skipped': return '已跳过'
+    case 'failed': return '失败'
+    case 'needs_attention': return '需要确认'
+    case 'running': return '进行中'
+    default: return '等待执行'
+  }
+}
+const syncStateLabel = (state?: string) => {
+  switch (state) {
+    case 'completed': return '已完成'
+    case 'failed': return '失败'
+    case 'running': return '进行中'
+    case 'queued': return '排队中'
+    case 'unknown': return '未知'
+    default: return '无记录'
+  }
+}
 type SettingsSection = 'overview' | 'providers' | 'account'
 const settingsSections: SettingsSection[] = ['overview', 'providers', 'account']
 
@@ -56,6 +78,7 @@ export function SettingsView({ integrations, onDirtyChange, onLogout, onRefresh 
   const drive = useQuery({ queryKey: ['drive-115-status'], queryFn: getDrive115Status, enabled: section === 'overview', retry: false })
   const refetchDrive = drive.refetch
   const emby = useQuery({ queryKey: ['emby-libraries'], queryFn: getEmbyLibraries, enabled: section === 'overview', retry: false })
+  const checkins = useQuery({ queryKey: ['source-checkins'], queryFn: getSourceCheckIns, enabled: section === 'overview', retry: false, refetchInterval: 15_000 })
   const queryClient = useQueryClient()
   const providerSettings = useQuery({ queryKey: ['provider-settings'], queryFn: getProviderSettings, enabled: section === 'providers' })
   const saveProviderSettings = useMutation({
@@ -63,11 +86,18 @@ export function SettingsView({ integrations, onDirtyChange, onLogout, onRefresh 
     onSuccess: async (value) => {
       queryClient.setQueryData(['provider-settings'], value)
       updateProviderDirty(false)
-      await Promise.all([qms.refetch(), drive.refetch(), emby.refetch(), queryClient.invalidateQueries({ queryKey: ['system-overview'] })])
+      await Promise.all([qms.refetch(), drive.refetch(), emby.refetch(), checkins.refetch(), queryClient.invalidateQueries({ queryKey: ['system-overview'] })])
       onRefresh()
     },
   })
   const testWeCom = useMutation({ mutationFn: testWeComNotification })
+  const retryCheckIn = useMutation({
+    mutationFn: retrySourceCheckIn,
+    onSuccess: async () => {
+      await Promise.all([checkins.refetch(), queryClient.invalidateQueries({ queryKey: ['system-overview'] })])
+      onRefresh()
+    },
+  })
   const statistics = useQuery({ queryKey: ['operational-statistics'], queryFn: getOperationalStatistics, enabled: section === 'overview' })
   const authorization = useMutation({ mutationFn: startDrive115Authorization })
   const authorizationStatus = useQuery({
@@ -136,6 +166,7 @@ export function SettingsView({ integrations, onDirtyChange, onLogout, onRefresh 
     void emby.refetch()
     void statistics.refetch()
     void providerSettings.refetch()
+    void checkins.refetch()
   }
 
   return (
@@ -152,11 +183,20 @@ export function SettingsView({ integrations, onDirtyChange, onLogout, onRefresh 
 
       {section === 'overview' ? <div aria-labelledby="settings-tab-overview" className="settings-section" id="settings-panel-overview" role="tabpanel">
         {statistics.data ? <section className="statistics-strip" aria-label="运营摘要"><div><Activity size={18} /><span>运营摘要</span></div><dl><div><dt>进行中任务</dt><dd>{statistics.data.transfersActive}</dd></div><div><dt>需要处理</dt><dd>{statistics.data.transfersNeedsAttention + statistics.data.commandsNeedsAttention + statistics.data.notificationsNeedsAttention}</dd></div><div><dt>启用订阅</dt><dd>{statistics.data.subscriptionsEnabled}</dd></div><div><dt>失败运行</dt><dd>{statistics.data.runsFailed}</dd></div></dl></section> : null}
-        <div className="service-grid">{integrations.map((integration) => { const Icon = integration.id === '115' ? HardDrive : integration.id === 'qmediasync' ? Waypoints : integration.id === 'emby' ? Film : Server; return <article className="service-card" key={integration.id}><Icon size={20} /><div><strong>{integration.label}</strong><span>{integration.detail}</span></div><span className={`state-chip ${integration.status}`}>{statusLabel[integration.status]}</span></article> })}</div>
+        <div className="service-grid">{integrations.map((integration) => { const Icon = integration.id === '115' ? HardDrive : integration.id === 'qmediasync' ? Waypoints : integration.id === 'emby' ? Film : integration.id === 'source-checkin' ? CalendarCheck : Server; return <article className={`service-card ${integration.status}`} key={integration.id}><Icon size={20} /><div><strong>{integration.label}</strong><span>{integration.detail}</span></div><span className={`state-chip ${integration.status}`}>{statusLabel[integration.status]}</span></article> })}</div>
         <div className="diagnostic-grid">
-          <section className="diagnostic-block"><div className="diagnostic-title"><Waypoints size={18} /><strong>QMediaSync</strong></div><dl><div><dt>版本</dt><dd>{qms.data?.version ?? '不可用'}</dd></div><div><dt>同步记录</dt><dd>{qms.data?.totalSyncs ?? 0}</dd></div><div><dt>最近状态</dt><dd>{qms.data?.recentSyncs[0]?.state ?? '无记录'}</dd></div></dl></section>
+          <section className="diagnostic-block"><div className="diagnostic-title"><Waypoints size={18} /><strong>QMediaSync</strong></div><dl><div><dt>版本</dt><dd>{qms.data?.version ?? '不可用'}</dd></div><div><dt>同步记录</dt><dd>{qms.data?.totalSyncs ?? 0}</dd></div><div><dt>最近同步</dt><dd>{syncStateLabel(qms.data?.recentSyncs[0]?.state)}</dd></div>{qms.data?.recentSyncs[0]?.failReason ? <div><dt>失败原因</dt><dd>{qms.data.recentSyncs[0].failReason}</dd></div> : null}</dl></section>
           <section className="diagnostic-block drive-authorization"><div className="diagnostic-title"><HardDrive size={18} /><strong>115</strong></div><dl><div><dt>授权</dt><dd>{drive.data?.authorized ? '有效' : '不可用'}</dd></div><div><dt>已使用</dt><dd>{formatCapacity(drive.data?.usedBytes)}</dd></div><div><dt>总容量</dt><dd>{formatCapacity(drive.data?.totalBytes)}</dd></div></dl>{authorization.data?.qrImage && authorizationStatus.data?.state !== 'confirmed' ? <div className="qr-box"><img alt="115 扫码授权二维码" height="148" src={authorization.data.qrImage} width="148" /></div> : null}<button className="secondary-command" disabled={authorization.isPending || authorizationStatus.data?.state === 'pending'} onClick={() => authorization.mutate()} type="button"><QrCode size={15} />{authorizationStatus.data?.state === 'confirmed' ? '重新授权' : authorizationStatus.data?.state === 'pending' ? '等待扫码确认' : '扫码授权'}</button>{authorization.isError ? <span className="form-error" role="alert">{authorization.error.message}</span> : null}</section>
           <section className="diagnostic-block"><div className="diagnostic-title"><Database size={18} /><strong>Emby</strong></div><dl><div><dt>媒体库</dt><dd>{emby.data?.libraries.length ?? 0}</dd></div><div><dt>读取状态</dt><dd>{emby.isSuccess ? '正常' : '不可用'}</dd></div></dl></section>
+          <section className="diagnostic-block source-checkins"><div className="diagnostic-title"><CalendarCheck size={18} /><strong>资源签到</strong></div>
+            {checkins.data?.items.length ? <ul className="checkin-list">{checkins.data.items.map((item) => (
+              <li key={item.sourceId}>
+                <div><strong>{item.label}</strong><span>{checkInStateLabel(item.state)}{item.message ? ` · ${item.message}` : ''}</span></div>
+                <button className="secondary-command" disabled={item.state === 'running' || retryCheckIn.isPending} onClick={() => retryCheckIn.mutate(item.sourceId)} type="button">立即签到</button>
+              </li>
+            ))}</ul> : <p className="empty-inline">{checkins.isLoading ? '正在读取签到状态…' : '尚未配置可签到的资源源'}</p>}
+            {retryCheckIn.isError ? <span className="form-error" role="alert">{retryCheckIn.error.message}</span> : null}
+          </section>
         </div>
       </div> : null}
 

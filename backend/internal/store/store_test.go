@@ -24,8 +24,8 @@ func TestOpenAppliesMigrationsAndSyncsIntegrations(t *testing.T) {
 	if err := store.database.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatalf("count migrations: %v", err)
 	}
-	if migrationCount != 14 {
-		t.Fatalf("migration count = %d, want 14", migrationCount)
+	if migrationCount != 15 {
+		t.Fatalf("migration count = %d, want 15", migrationCount)
 	}
 
 	var baseURL string

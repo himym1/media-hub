@@ -168,6 +168,7 @@ type Dependencies struct {
 	WeComTester      WeComNotificationTester
 	SecureCookies    bool
 	AndroidReleases  AndroidReleaseProvider
+	SourceCheckIns   SourceCheckInService
 	Web              http.Handler
 }
 
@@ -206,6 +207,8 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/search", h.protected(h.search))
 	mux.Handle("GET /api/v1/discovery/trending", h.protected(h.getTrending))
 	mux.Handle("GET /api/v1/discovery/{mediaType}/{tmdbId}/recommendations", h.protected(h.getRecommendations))
+	mux.Handle("GET /api/v1/integrations/sources/checkins", h.protected(h.listSourceCheckIns))
+	mux.Handle("POST /api/v1/integrations/sources/checkins/{id}/retry", h.protected(h.retrySourceCheckIn))
 	mux.Handle("GET /api/v1/integrations/qmediasync/status", h.protected(h.getQMediaSyncStatus))
 	mux.Handle("GET /api/v1/integrations/emby/libraries", h.protected(h.getEmbyLibraries))
 	mux.Handle("GET /api/v1/integrations/emby/items", h.protected(h.searchEmbyItems))

@@ -181,7 +181,7 @@ function TaskGroup({ label, jobs, selectedID, onSelect }: { label: string; jobs:
   return <section className="task-group"><div className="task-group-heading"><strong>{label}</strong><span>{jobs.length}</span></div>{jobs.map((job) => (
     <button aria-pressed={selectedID === job.id} className={selectedID === job.id ? 'task-row selected' : 'task-row'} key={job.id} onClick={() => onSelect(job.id)} type="button">
       <span className={`task-state-mark ${job.state}`} aria-hidden="true" />
-      <span className="task-copy"><strong>{transferTitle(job)}</strong><small>{job.source} · {timeFormatter.format(new Date(job.updatedAt))}</small></span>
+      <span className="task-copy"><strong>{transferTitle(job)}</strong><small>{job.source} · {timeFormatter.format(new Date(job.updatedAt))}</small>{job.errorMessage ? <small className="task-row-error">{job.errorMessage}</small> : null}</span>
       <span className={`state-chip ${job.state}`}>{stateLabel[job.state]}</span>
     </button>
   ))}</section>

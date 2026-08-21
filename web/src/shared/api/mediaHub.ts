@@ -227,6 +227,7 @@ export type QMediaSyncStatus = {
     newStrm: number
     newMetadata: number
     newUploads: number
+    failReason?: string
     createdAt?: string
     finishedAt?: string
   }[]
@@ -433,6 +434,28 @@ export function updateProviderSettings(input: ProviderSettingsUpdate) {
 		headers: writeHeaders(),
 		body: JSON.stringify(input),
 	})
+}
+
+export type SourceCheckIn = {
+  sourceId: string
+  label: string
+  state: 'idle' | 'running' | 'completed' | 'skipped' | 'failed' | 'needs_attention'
+  message?: string
+  errorCode?: string
+  retryable: boolean
+  lastSuccessAt?: string
+  updatedAt: string
+}
+
+export function getSourceCheckIns() {
+  return requestJSON<{ items: SourceCheckIn[] }>('/api/v1/integrations/sources/checkins')
+}
+
+export function retrySourceCheckIn(sourceId: string) {
+  return requestJSON<SourceCheckIn>(`/api/v1/integrations/sources/checkins/${encodeURIComponent(sourceId)}/retry`, {
+    method: 'POST',
+    headers: writeHeaders(false),
+  })
 }
 
 export function testWeComNotification() {

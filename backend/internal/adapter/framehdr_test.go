@@ -109,6 +109,28 @@ func TestParseFrameHDRShareURLRejectsNon115AndUnexpectedQuery(t *testing.T) {
 	}
 }
 
+func TestParseFrameHDRCheckInAction(t *testing.T) {
+	action, ok := parseFrameHDRCheckInAction([]byte(`<a id="checkinbtn" href="/attendance.php">签到</a>`))
+	if !ok || action.Path != "/attendance.php" || action.Method != http.MethodGet {
+		t.Fatalf("action=%#v ok=%v", action, ok)
+	}
+	action, ok = parseFrameHDRCheckInAction([]byte(`<button id="checkinbtn" onclick="fetch('/user/checkin.php')">签到</button>`))
+	if !ok || action.Path != "/user/checkin.php" {
+		t.Fatalf("onclick action=%#v ok=%v", action, ok)
+	}
+}
+
+func TestFrameHDRCheckInCompletesFromAttendancePage(t *testing.T) {
+	server, _ := newFrameHDRTestServer(t)
+	defer server.Close()
+	source := NewFrameHDR(server.URL, "user", "pass", time.Second, nil, nil)
+	source.client.Transport = server.Client().Transport
+	result, err := source.CheckIn(context.Background())
+	if err != nil || result.State != "completed" || result.Message != "签到成功" {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+}
+
 func TestFrameHDRUsesConfiguredProxy(t *testing.T) {
 	proxyURL, _ := url.Parse("http://proxy.local:8080")
 	source := NewFrameHDR("https://framehdr.com", "user", "pass", time.Second, nil, proxyURL)
@@ -145,7 +167,11 @@ func newFrameHDRTestServer(t *testing.T) (*httptest.Server, *int) {
 		case !loggedIn:
 			loginPage()
 		case request.URL.Path == "/":
-			_, _ = w.Write([]byte(`<a href="/user/index.php">用户中心</a><a href="/logout.php">退出</a>`))
+			_, _ = w.Write([]byte(`<a href="/user/index.php">用户中心</a><a href="/logout.php">退出</a><a id="checkinbtn" href="/attendance.php">签到</a>`))
+		case request.URL.Path == "/user/index.php":
+			_, _ = w.Write([]byte(`<a href="/logout.php">退出</a><a id="checkinbtn" href="/attendance.php">签到</a>`))
+		case request.URL.Path == "/attendance.php":
+			_, _ = w.Write([]byte(`<a href="/logout.php">退出</a><div>签到成功</div>`))
 		case request.URL.Path == "/search.php" && request.URL.Query().Get("q") == "范海辛":
 			_, _ = w.Write([]byte(`<div class="resource-card" onclick="location.href='detail.php?id=37051'"><span class="category-badge-overlay">电影</span><h3 class="card-title">范海辛 Van Helsing</h3><div class="card-meta"><span class="meta-info">2004 / 美国</span></div></div><div class="resource-card" onclick="location.href='detail.php?id=37052'"><span class="category-badge-overlay">电视剧</span><h3 class="card-title">测试剧 Test Series</h3><span class="meta-info">2025 / 美国</span></div>`))
 		case request.URL.Path == "/detail.php" && request.URL.Query().Get("id") == "37051":

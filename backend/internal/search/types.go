@@ -14,6 +14,16 @@ type TransferSource interface {
 	TransferStatus(context.Context, int64, string) (TransferResult, error)
 }
 
+type CheckInSource interface {
+	Source
+	CheckIn(context.Context) (CheckInResult, error)
+}
+
+type CheckInResult struct {
+	State   string
+	Message string
+}
+
 type IdentityResolver interface {
 	Resolve(context.Context, string) ([]Identity, error)
 }

@@ -109,6 +109,38 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         request("/api/v1/auth/password", method = "PUT", body = body, token = token)
     }
 
+    suspend fun sourceCheckIns(token: String): List<SourceCheckIn> {
+        val payload = JSONObject(request("/api/v1/integrations/sources/checkins", token = token))
+        val items = payload.getJSONArray("items")
+        return buildList(items.length()) {
+            for (index in 0 until items.length()) {
+                val item = items.getJSONObject(index)
+                add(
+                    SourceCheckIn(
+                        sourceId = item.getString("sourceId"),
+                        label = item.getString("label"),
+                        state = item.getString("state"),
+                        message = item.optString("message"),
+                        retryable = item.getBoolean("retryable"),
+                        updatedAt = item.getString("updatedAt"),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun retrySourceCheckIn(token: String, sourceId: String): SourceCheckIn {
+        val item = JSONObject(request("/api/v1/integrations/sources/checkins/${encode(sourceId)}/retry", method = "POST", token = token))
+        return SourceCheckIn(
+            sourceId = item.getString("sourceId"),
+            label = item.getString("label"),
+            state = item.getString("state"),
+            message = item.optString("message"),
+            retryable = item.getBoolean("retryable"),
+            updatedAt = item.getString("updatedAt"),
+        )
+    }
+
     suspend fun overview(token: String): List<IntegrationHealth> {
         val payload = JSONObject(request("/api/v1/system/overview", token = token))
         val items = payload.getJSONArray("integrations")

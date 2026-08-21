@@ -80,6 +80,15 @@ data class IntegrationHealth(
     val detail: String,
 )
 
+data class SourceCheckIn(
+    val sourceId: String,
+    val label: String,
+    val state: String,
+    val message: String,
+    val retryable: Boolean,
+    val updatedAt: String,
+)
+
 data class OperationalStatistics(
     val transfersTotal: Int,
     val transfersActive: Int,

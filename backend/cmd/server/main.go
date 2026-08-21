@@ -16,6 +16,7 @@ import (
 	"media-hub/backend/internal/androidrelease"
 	"media-hub/backend/internal/archive"
 	"media-hub/backend/internal/auth"
+	"media-hub/backend/internal/checkin"
 	"media-hub/backend/internal/config"
 	"media-hub/backend/internal/drive115"
 	"media-hub/backend/internal/emby"
@@ -148,6 +149,7 @@ func run(logger *slog.Logger) error {
 		}
 	}
 	subscriptionService := subscription.NewService(dataStore, searchService, workflowService, embyClient)
+	checkinService := checkin.NewService(dataStore, searchService, wecomClient)
 	overview := integration.NewOverviewService(
 		searchService,
 		drive115AuthService,
@@ -156,6 +158,7 @@ func run(logger *slog.Logger) error {
 		qmsClient,
 		embyClient,
 		emby.NewPlaybackChecker(embyClient),
+		checkinService,
 	)
 	statisticsService := statistics.NewService(dataStore)
 	localUploadService := localupload.NewService(dataStore, securePayloadCodec, configuration.LocalUploadRoots)
@@ -186,6 +189,10 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("start subscription worker: %w", err)
 	}
 	subscriptionWorkerStarted := true
+	if err := checkinService.Start(runtimeContext); err != nil {
+		return fmt.Errorf("start source check-in worker: %w", err)
+	}
+	checkinWorkerStarted := true
 	workerStarted := false
 	if selectionCodec != nil || wecomClient.Configured() {
 		if err := workflowService.Start(runtimeContext); err != nil {
@@ -200,7 +207,7 @@ func run(logger *slog.Logger) error {
 			Auth: authService, Overview: overview, Search: searchService, Discovery: tmdbClient,
 			QMediaSync: qmsClient, Emby: embyClient, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
 			Playback: playback.NewService(drive115AuthService, embyClient),
-			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService,
+			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService, SourceCheckIns: checkinService,
 			Settings: settingsService, WeComTester: wecomClient,
 			SecureCookies: configuration.SecureCookies,
 			Web:           webui.Handler(),
@@ -240,6 +247,13 @@ func run(logger *slog.Logger) error {
 			defer cancelWait()
 			if waitErr := subscriptionService.Wait(waitContext); waitErr != nil {
 				return fmt.Errorf("stop subscription worker: %w", waitErr)
+			}
+		}
+		if checkinWorkerStarted {
+			waitContext, cancelWait := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancelWait()
+			if waitErr := checkinService.Wait(waitContext); waitErr != nil {
+				return fmt.Errorf("stop source check-in worker: %w", waitErr)
 			}
 		}
 		if workerStarted {
@@ -292,6 +306,11 @@ func run(logger *slog.Logger) error {
 		if subscriptionWorkerStarted {
 			if err := subscriptionService.Wait(shutdownContext); err != nil {
 				return fmt.Errorf("stop subscription worker: %w", err)
+			}
+		}
+		if checkinWorkerStarted {
+			if err := checkinService.Wait(shutdownContext); err != nil {
+				return fmt.Errorf("stop source check-in worker: %w", err)
 			}
 		}
 		if workerStarted {

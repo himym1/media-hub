@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,9 +52,11 @@ type SyncRecord struct {
 	NewSTRM    int        `json:"newStrm"`
 	NewMeta    int        `json:"newMetadata"`
 	NewUploads int        `json:"newUploads"`
+	FailReason string     `json:"failReason,omitempty"`
 	CreatedAt  *time.Time `json:"createdAt,omitempty"`
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
 	BaseCID    string     `json:"-"`
+	rawReason  string
 }
 
 type versionResponse struct {
@@ -70,15 +73,38 @@ type syncEnvelope struct {
 }
 
 type syncRecord struct {
-	ID        uint   `json:"id"`
-	Status    int    `json:"status"`
-	Total     int    `json:"total"`
-	NewSTRM   int    `json:"new_strm"`
-	NewMeta   int    `json:"new_meta"`
-	NewUpload int    `json:"new_upload"`
-	BaseCID   string `json:"base_cid"`
-	CreatedAt int64  `json:"created_at"`
-	Finished  int64  `json:"finish_at"`
+	ID         uint   `json:"id"`
+	Status     int    `json:"status"`
+	Total      int    `json:"total"`
+	NewSTRM    int    `json:"new_strm"`
+	NewMeta    int    `json:"new_meta"`
+	NewUpload  int    `json:"new_upload"`
+	FailReason string `json:"fail_reason"`
+	BaseCID    string `json:"base_cid"`
+	CreatedAt  int64  `json:"created_at"`
+	Finished   int64  `json:"finish_at"`
+}
+
+type accountEnvelope struct {
+	Code int             `json:"code"`
+	Data json.RawMessage `json:"data"`
+}
+
+type accountRecord struct {
+	ID                uint   `json:"id"`
+	SourceType        string `json:"source_type"`
+	Token             string `json:"token"`
+	TokenFailedReason string `json:"token_failed_reason"`
+	Username          string `json:"username"`
+	Password          string `json:"password"`
+	AppID             string `json:"app_id"`
+}
+
+type cloudAccount struct {
+	ID                uint
+	SourceType        string
+	HasToken          bool
+	TokenFailedReason string
 }
 
 type ManualSyncRequest struct {
@@ -141,6 +167,19 @@ func (c *Client) Check(ctx context.Context) integration.Health {
 	if err == nil {
 		health.Status = integration.StatusHealthy
 		health.Detail = "QMediaSync " + version.Version + " 在线"
+		if accounts, accountErr := c.accounts(ctx, configuration); accountErr == nil {
+			if detail := accountAuthDetail(accounts); detail != "" {
+				health.Status = integration.StatusDegraded
+				health.Detail = detail
+			}
+			return health
+		}
+		if records, _, recordErr := c.recentSyncs(ctx, configuration, 10); recordErr == nil {
+			if detail := latestSyncAuthDetail(records); detail != "" {
+				health.Status = integration.StatusDegraded
+				health.Detail = detail
+			}
+		}
 		return health
 	}
 	if errors.Is(err, ErrUnauthorized) {
@@ -209,6 +248,13 @@ func (c *Client) recentSyncs(ctx context.Context, configuration clientConfig, li
 
 	records := make([]SyncRecord, 0, len(response.Data.Records))
 	for _, record := range response.Data.Records {
+		failReason := ""
+		if record.Status == 3 {
+			failReason = publicRecordFailure(record.FailReason)
+			if failReason == "" {
+				failReason = messageSyncFailed
+			}
+		}
 		records = append(records, SyncRecord{
 			ID:         strconv.FormatUint(uint64(record.ID), 10),
 			State:      syncState(record.Status),
@@ -216,9 +262,11 @@ func (c *Client) recentSyncs(ctx context.Context, configuration clientConfig, li
 			NewSTRM:    record.NewSTRM,
 			NewMeta:    record.NewMeta,
 			NewUploads: record.NewUpload,
+			FailReason: failReason,
 			CreatedAt:  unixTime(record.CreatedAt),
 			FinishedAt: unixTime(record.Finished),
 			BaseCID:    record.BaseCID,
+			rawReason:  record.FailReason,
 		})
 	}
 	return records, response.Data.Total, nil
@@ -263,6 +311,67 @@ func (c *Client) SubmitManualSync(ctx context.Context, input ManualSyncRequest) 
 		return ErrRejected
 	}
 	return nil
+}
+
+func (c *Client) accounts(ctx context.Context, configuration clientConfig) ([]cloudAccount, error) {
+	if err := validateClientConfiguration(configuration); err != nil {
+		return nil, err
+	}
+	var envelope accountEnvelope
+	if err := c.getJSON(ctx, configuration, "api/account/list", nil, &envelope); err != nil {
+		return nil, err
+	}
+	if envelope.Code != http.StatusOK {
+		return nil, ErrUpstreamResponse
+	}
+	var records []accountRecord
+	if err := json.Unmarshal(envelope.Data, &records); err != nil {
+		return nil, ErrUpstreamResponse
+	}
+	accounts := make([]cloudAccount, 0, len(records))
+	for index := range records {
+		accounts = append(accounts, forgetAccountSecrets(&records[index]))
+	}
+	return accounts, nil
+}
+
+func forgetAccountSecrets(record *accountRecord) cloudAccount {
+	account := cloudAccount{
+		ID:                record.ID,
+		SourceType:        record.SourceType,
+		HasToken:          strings.TrimSpace(record.Token) != "",
+		TokenFailedReason: record.TokenFailedReason,
+	}
+	record.Token = ""
+	record.Username = ""
+	record.Password = ""
+	record.AppID = ""
+	return account
+}
+
+func latestSyncAuthDetail(records []SyncRecord) string {
+	var latest SyncRecord
+	found := false
+	for _, record := range records {
+		if record.State != "completed" && record.State != "failed" {
+			continue
+		}
+		if record.CreatedAt == nil {
+			if !found {
+				latest = record
+				found = true
+			}
+			continue
+		}
+		if !found || latest.CreatedAt == nil || record.CreatedAt.After(*latest.CreatedAt) {
+			latest = record
+			found = true
+		}
+	}
+	if !found || latest.State != "failed" || !AuthExpired(latest.FailReason) {
+		return ""
+	}
+	return messageAuthDegraded
 }
 
 func (c *Client) FindSyncByBaseCID(ctx context.Context, baseCID string, createdAfter time.Time) (SyncRecord, bool, error) {
@@ -361,6 +470,10 @@ func syncState(status int) string {
 	default:
 		return "unknown"
 	}
+}
+
+func (r SyncRecord) OriginalFailReason() string {
+	return r.rawReason
 }
 
 func unixTime(value int64) *time.Time {

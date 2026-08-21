@@ -268,12 +268,22 @@ func (f *FrameHDR) fetch(ctx context.Context, rawPath string, limit int64, post 
 		return nil, search.Failure{Code: "source_unavailable", Message: "帧影暂时不可用", Retryable: true}
 	}
 	defer response.Body.Close()
-	if post != nil && response.StatusCode >= 300 && response.StatusCode < 400 {
+	if response.StatusCode >= 300 && response.StatusCode < 400 {
 		location, parseErr := response.Location()
 		if parseErr != nil || !sameOrigin(f.baseURL, location) {
 			return nil, search.Failure{Code: "invalid_source_response", Message: "帧影登录跳转无效", Retryable: false}
 		}
-		return nil, nil
+		if post != nil {
+			return nil, nil
+		}
+		next := location.EscapedPath()
+		if location.RawQuery != "" {
+			next += "?" + location.RawQuery
+		}
+		if next == rawPath {
+			return nil, search.Failure{Code: "invalid_source_response", Message: "帧影跳转无效", Retryable: false}
+		}
+		return f.fetch(ctx, next, limit, nil)
 	}
 	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 		return nil, search.Failure{Code: "source_unauthorized", Message: "帧影鉴权失败", Retryable: false}

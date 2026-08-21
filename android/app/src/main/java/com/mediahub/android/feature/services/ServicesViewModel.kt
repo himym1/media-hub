@@ -12,6 +12,7 @@ import com.mediahub.android.core.network.ProviderSettings
 import com.mediahub.android.core.network.ProviderSettingsUpdate
 import com.mediahub.android.core.network.ProviderSourceSettingsUpdate
 import com.mediahub.android.core.network.SecretUpdate
+import com.mediahub.android.core.network.SourceCheckIn
 import com.mediahub.android.data.MediaHubRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -23,6 +24,8 @@ import kotlinx.coroutines.launch
 data class ServicesUiState(
     val integrations: List<IntegrationHealth> = emptyList(),
     val statistics: OperationalStatistics? = null,
+    val sourceCheckIns: List<SourceCheckIn> = emptyList(),
+    val retryingCheckInId: String? = null,
     val providerSettings: ProviderSettings? = null,
     val settingsDraft: ProviderSettingsUpdate? = null,
     val settingsExpanded: Boolean = false,
@@ -224,11 +227,13 @@ class ServicesViewModel(
             try {
                 val integrations = repository.overview()
                 val statistics = try { repository.operationalStatistics() } catch (_: Exception) { null }
+                val sourceCheckIns = try { repository.sourceCheckIns() } catch (_: Exception) { emptyList() }
                 val providerSettings = try { repository.providerSettings() } catch (_: Exception) { null }
                 val current = _uiState.value
                 _uiState.value = current.copy(
                     integrations = integrations,
                     statistics = statistics,
+                    sourceCheckIns = sourceCheckIns,
                     providerSettings = providerSettings ?: current.providerSettings,
                     settingsDraft = if (!current.settingsExpanded && providerSettings != null) providerSettings.toUpdate() else current.settingsDraft,
                     loading = false,
@@ -243,6 +248,25 @@ class ServicesViewModel(
                     loading = false,
                     errorMessage = "无法读取服务状态",
                 )
+            }
+        }
+    }
+
+    fun retryCheckIn(sourceId: String) {
+        if (_uiState.value.retryingCheckInId != null) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(retryingCheckInId = sourceId, errorMessage = null)
+            try {
+                repository.retrySourceCheckIn(sourceId)
+                val items = repository.sourceCheckIns()
+                _uiState.value = _uiState.value.copy(sourceCheckIns = items, retryingCheckInId = null)
+            } catch (error: ApiException) {
+                _uiState.value = _uiState.value.copy(
+                    retryingCheckInId = null,
+                    errorMessage = error.message ?: "资源源签到失败",
+                )
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(retryingCheckInId = null, errorMessage = "无法重新签到")
             }
         }
     }

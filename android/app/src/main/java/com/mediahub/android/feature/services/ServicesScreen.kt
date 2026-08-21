@@ -86,6 +86,7 @@ internal fun ServicesRoute(
         onSaveSettings = viewModel::saveSettings,
         onTestWeCom = viewModel::testWeComNotification,
         onStartDriveAuthorization = viewModel::startDriveAuthorization,
+        onRetryCheckIn = viewModel::retryCheckIn,
         onCurrentPasswordChange = viewModel::setCurrentPassword,
         onNewPasswordChange = viewModel::setNewPassword,
         onConfirmationChange = viewModel::setConfirmation,
@@ -110,6 +111,7 @@ internal fun ServicesScreen(
     onSaveSettings: () -> Unit,
     onTestWeCom: () -> Unit,
     onStartDriveAuthorization: () -> Unit,
+    onRetryCheckIn: (String) -> Unit,
     onCurrentPasswordChange: (String) -> Unit,
     onNewPasswordChange: (String) -> Unit,
     onConfirmationChange: (String) -> Unit,
@@ -132,6 +134,7 @@ internal fun ServicesScreen(
             onSaveSettings = onSaveSettings,
             onTestWeCom = onTestWeCom,
             onStartDriveAuthorization = onStartDriveAuthorization,
+            onRetryCheckIn = onRetryCheckIn,
             onCurrentPasswordChange = onCurrentPasswordChange,
             onNewPasswordChange = onNewPasswordChange,
             onConfirmationChange = onConfirmationChange,
@@ -179,6 +182,7 @@ internal fun ServicesScreen(
                 onSaveSettings = onSaveSettings,
                 onTestWeCom = onTestWeCom,
                 onStartDriveAuthorization = onStartDriveAuthorization,
+                onRetryCheckIn = onRetryCheckIn,
                 onCurrentPasswordChange = onCurrentPasswordChange,
                 onNewPasswordChange = onNewPasswordChange,
                 onConfirmationChange = onConfirmationChange,
@@ -204,6 +208,7 @@ private fun ServicesTwoPane(
     onSaveSettings: () -> Unit,
     onTestWeCom: () -> Unit,
     onStartDriveAuthorization: () -> Unit,
+    onRetryCheckIn: (String) -> Unit,
     onCurrentPasswordChange: (String) -> Unit,
     onNewPasswordChange: (String) -> Unit,
     onConfirmationChange: (String) -> Unit,
@@ -269,6 +274,7 @@ private fun ServicesTwoPane(
                         onSaveSettings = onSaveSettings,
                         onTestWeCom = onTestWeCom,
                         onStartDriveAuthorization = onStartDriveAuthorization,
+                        onRetryCheckIn = onRetryCheckIn,
                         onCurrentPasswordChange = onCurrentPasswordChange,
                         onNewPasswordChange = onNewPasswordChange,
                         onConfirmationChange = onConfirmationChange,
@@ -294,6 +300,7 @@ private fun LazyListScope.servicesSectionItems(
     onSaveSettings: () -> Unit,
     onTestWeCom: () -> Unit,
     onStartDriveAuthorization: () -> Unit,
+    onRetryCheckIn: (String) -> Unit,
     onCurrentPasswordChange: (String) -> Unit,
     onNewPasswordChange: (String) -> Unit,
     onConfirmationChange: (String) -> Unit,
@@ -330,6 +337,28 @@ private fun LazyListScope.servicesSectionItems(
                     }
                     uiState.statistics?.let { statistics ->
                         item(key = "statistics") { OperationalSummary(statistics) }
+                    }
+                    if (uiState.sourceCheckIns.isNotEmpty()) {
+                        item(key = "source-checkins") {
+                            MediaHubSmallTitle(text = "资源签到")
+                            MediaHubCard {
+                                uiState.sourceCheckIns.forEachIndexed { index, item ->
+                                    if (index > 0) MediaHubListDivider()
+                                    MediaHubPreferenceRow(
+                                        title = item.label,
+                                        summary = checkInSummary(item.state, item.message),
+                                        onClick = { onRetryCheckIn(item.sourceId) },
+                                        end = {
+                                            MediaHubButton(
+                                                label = if (uiState.retryingCheckInId == item.sourceId) "正在签到" else "立即签到",
+                                                enabled = item.state != "running" && uiState.retryingCheckInId == null,
+                                                onClick = { onRetryCheckIn(item.sourceId) },
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                     item(key = "drive-authorization") {
                         MediaHubSmallTitle(text = "115 扫码授权")
@@ -516,6 +545,18 @@ private fun decodeQRImage(dataURL: String): androidx.compose.ui.graphics.ImageBi
         val bytes = Base64.decode(encoded, Base64.DEFAULT)
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
     }.getOrNull()
+}
+
+private fun checkInSummary(state: String, message: String): String {
+    val label = when (state) {
+        "completed" -> "已签到"
+        "skipped" -> "已跳过"
+        "failed" -> "失败"
+        "needs_attention" -> "需要确认"
+        "running" -> "进行中"
+        else -> "等待执行"
+    }
+    return if (message.isBlank()) label else "$label · $message"
 }
 
 private fun serviceSummary(loading: Boolean, integrations: List<IntegrationHealth>): String {

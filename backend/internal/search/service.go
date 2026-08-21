@@ -314,6 +314,18 @@ func (s *Service) CurrentRevision() uint64 {
 	return s.revision
 }
 
+func (s *Service) CheckInSources() []CheckInSource {
+	_, sources, _, _ := s.snapshot()
+	items := make([]CheckInSource, 0)
+	for _, source := range sources {
+		checkIn, ok := source.(CheckInSource)
+		if ok {
+			items = append(items, checkIn)
+		}
+	}
+	return items
+}
+
 func (s *Service) TransferSource(sourceID string) (TransferSource, bool) {
 	switch sourceID {
 	case "frame":

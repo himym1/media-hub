@@ -298,6 +298,73 @@ func TestJuyingWebLoginTokenAcceptsAlternateShapes(t *testing.T) {
 	}
 }
 
+func TestJuyingWebCheckInUsesStatsAndDo(t *testing.T) {
+	doCalls := 0
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/csrf/":
+			http.SetCookie(w, &http.Cookie{Name: "csrftoken", Value: "csrf-token", Path: "/"})
+			_, _ = w.Write([]byte(`{"status":"success"}`))
+		case "/api/app/login/":
+			_, _ = w.Write([]byte(`{"status":"success","token":"user-token"}`))
+		case "/api/app/checkin/stats/":
+			requireJuyingWebToken(t, r, "user-token")
+			_, _ = w.Write([]byte(`{"status":"success","checked_today":false,"my_total_days":12}`))
+		case "/api/app/checkin/do/":
+			if r.Method != http.MethodPost {
+				t.Errorf("method = %s", r.Method)
+			}
+			requireJuyingWebToken(t, r, "user-token")
+			doCalls++
+			_, _ = w.Write([]byte(`{"status":"success","points":5}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	source := NewJuyingWithAuthMode(server.URL, "web", "user", "pass", time.Second, nil, nil, nil)
+	source.client.Transport = server.Client().Transport
+	result, err := source.CheckIn(context.Background())
+	if err != nil || result.State != "completed" || result.Message != "签到成功" || doCalls != 1 {
+		t.Fatalf("result=%#v doCalls=%d err=%v", result, doCalls, err)
+	}
+}
+
+func TestJuyingWebCheckInSkipsWhenAlreadyDone(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/csrf/":
+			http.SetCookie(w, &http.Cookie{Name: "csrftoken", Value: "csrf-token", Path: "/"})
+			_, _ = w.Write([]byte(`{"status":"success"}`))
+		case "/api/app/login/":
+			_, _ = w.Write([]byte(`{"status":"success","token":"user-token"}`))
+		case "/api/app/checkin/stats/":
+			_, _ = w.Write([]byte(`{"status":"success","checked_today":true}`))
+		case "/api/app/checkin/do/":
+			t.Fatal("already checked-in account posted again")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	source := NewJuyingWithAuthMode(server.URL, "web", "user", "pass", time.Second, nil, nil, nil)
+	source.client.Transport = server.Client().Transport
+	result, err := source.CheckIn(context.Background())
+	if err != nil || result.State != "completed" || result.Message != "今日已签到" {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+}
+
+func TestJuyingDeveloperCheckInIsSkipped(t *testing.T) {
+	source := NewJuyingWithAuthMode("https://www.jying.top", "developer", "app", "key", time.Second, nil, nil, nil)
+	result, err := source.CheckIn(context.Background())
+	if err != nil || result.State != "skipped" {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+}
+
 func requireJuyingWebToken(t *testing.T, request *http.Request, expected string) {
 	t.Helper()
 	if request.Header.Get("X-App-User-Token") != expected || request.Header.Get("X-Requested-With") != "XMLHttpRequest" {

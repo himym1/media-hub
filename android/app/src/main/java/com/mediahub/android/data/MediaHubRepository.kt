@@ -26,6 +26,7 @@ import com.mediahub.android.core.network.OperationalStatistics
 import com.mediahub.android.core.network.ProviderSettings
 import com.mediahub.android.core.network.ProviderSettingsUpdate
 import com.mediahub.android.core.network.SearchResponse
+import com.mediahub.android.core.network.SourceCheckIn
 import com.mediahub.android.core.network.SubscriptionInput
 import com.mediahub.android.core.network.SubscriptionRun
 import com.mediahub.android.core.network.TransferJob
@@ -77,6 +78,11 @@ class MediaHubRepository(
         authenticated { api.downloadAndroidRelease(it, release, destination) }
 
     suspend fun overview(): List<IntegrationHealth> = authenticated { token -> api.overview(token) }
+
+    suspend fun sourceCheckIns(): List<SourceCheckIn> = authenticated(api::sourceCheckIns)
+
+    suspend fun retrySourceCheckIn(sourceId: String): SourceCheckIn =
+        authenticated { api.retrySourceCheckIn(it, sourceId) }
 
     suspend fun operationalStatistics(): OperationalStatistics = authenticated(api::operationalStatistics)
 

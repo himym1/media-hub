@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.19.21
+  version: 0.19.22
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -155,6 +155,41 @@ paths:
                 $ref: '#/components/schemas/SystemOverview'
         '401':
           $ref: '#/components/responses/ProblemResponse'
+  /integrations/sources/checkins:
+    get:
+      operationId: listSourceCheckIns
+      summary: Read daily resource-source check-in status
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Configured source check-in statuses
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SourceCheckInStatus' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/sources/checkins/{id}/retry:
+    post:
+      operationId: retrySourceCheckIn
+      summary: Queue a source check-in to run again today
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 50, pattern: '^[a-z0-9][a-z0-9_-]{0,49}$' }
+      responses:
+        '202':
+          description: Check-in queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SourceCheckIn' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '409': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
   /settings/providers:
     get:
       operationId: getProviderSettings
@@ -1760,6 +1795,25 @@ components:
           type: string
         retryable:
           type: boolean
+    SourceCheckInStatus:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/SourceCheckIn' }
+    SourceCheckIn:
+      type: object
+      required: [sourceId, label, state, retryable, updatedAt]
+      properties:
+        sourceId: { type: string }
+        label: { type: string }
+        state: { type: string, enum: [idle, running, completed, skipped, failed, needs_attention] }
+        message: { type: string }
+        errorCode: { type: string }
+        retryable: { type: boolean }
+        lastSuccessAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     QMediaSyncStatus:
       type: object
       required: [version, recentSyncs, totalSyncs]
@@ -1796,6 +1850,8 @@ components:
         newUploads:
           type: integer
           minimum: 0
+        failReason:
+          type: string
         createdAt:
           type: string
           format: date-time

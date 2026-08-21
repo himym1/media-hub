@@ -88,13 +88,7 @@ func (s *Service) processNotification(ctx context.Context, item store.TransferNo
 	if err != nil || !begun {
 		return err
 	}
-	message := "Media Hub\n《" + item.Title + "》处理失败，请查看任务详情"
-	switch item.EventType {
-	case "completed":
-		message = "Media Hub\n《" + item.Title + "》已完成转存并可播放"
-	case "needs_attention":
-		message = "Media Hub\n《" + item.Title + "》需要人工确认，请查看任务详情"
-	}
+	message := notificationMessage(item)
 	unknown, sendErr := s.notifier.Send(ctx, message)
 	if sendErr == nil {
 		return s.store.FinishTransferNotification(ctx, item, "sent", "企业微信通知已发送", s.now())
@@ -108,6 +102,24 @@ func (s *Service) processNotification(ctx context.Context, item store.TransferNo
 		)
 	}
 	return s.store.FinishTransferNotification(ctx, item, "needs_attention", "企业微信通知发送失败", s.now())
+}
+
+func notificationMessage(item store.TransferNotification) string {
+	title := "《" + item.Title + "》"
+	switch item.EventType {
+	case "completed":
+		return "Media Hub\n" + title + "已完成转存并可播放"
+	case "needs_attention":
+		if item.ErrorMessage != "" {
+			return "Media Hub\n" + title + "需要人工确认\n" + item.ErrorMessage
+		}
+		return "Media Hub\n" + title + "需要人工确认，请查看任务详情"
+	default:
+		if item.ErrorMessage != "" {
+			return "Media Hub\n" + title + "处理失败\n" + item.ErrorMessage
+		}
+		return "Media Hub\n" + title + "处理失败，请查看任务详情"
+	}
 }
 
 func (s *Service) processJob(ctx context.Context, job store.TransferJob) error {
@@ -317,7 +329,8 @@ func (s *Service) pollSync(ctx context.Context, job store.TransferJob) error {
 		job.NextAttemptAt = 0
 		return s.save(ctx, &job, "syncing", "STRM 同步完成")
 	case "failed":
-		return s.fail(ctx, &job, "syncing", "sync_failed", "QMediaSync 同步失败", true, "transferred")
+		code, message := qms.PublicSyncFailure(record.OriginalFailReason())
+		return s.fail(ctx, &job, "syncing", code, message, true, "transferred")
 	default:
 		job.NextAttemptAt = s.now().UTC().Add(syncPollDelay).Unix()
 		return s.save(ctx, &job, "syncing", "")

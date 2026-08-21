@@ -6,6 +6,7 @@ const integrations = [
   { id: 'qmediasync', label: 'QMediaSync', status: 'healthy', detail: '同步服务在线' },
   { id: 'emby', label: 'Emby', status: 'healthy', detail: '媒体库在线' },
   { id: 'sources', label: '资源源', status: 'healthy', detail: '4 个资源源可用' },
+  { id: 'source-checkin', label: '资源签到', status: 'healthy', detail: '今日资源源签到已完成' },
 ]
 
 const transfer = {
@@ -104,6 +105,7 @@ async function respond(route: Route, authenticated: boolean, state: FixtureState
   if (path.includes('/recommendations')) return json(route, { items: [] })
   if (path === '/api/v1/statistics/summary') return json(route, { transfersTotal: 1, transfersActive: 0, transfersCompleted: 1, transfersFailed: 0, transfersNeedsAttention: 0, subscriptionsTotal: 0, subscriptionsEnabled: 0, runsTotal: 0, runsFailed: 0, commandsPending: 0, commandsNeedsAttention: 0, notificationsNeedsAttention: 0 })
   if (path === '/api/v1/integrations/qmediasync/status') return json(route, { version: '0.14.23', totalSyncs: 1, recentSyncs: [] })
+  if (path === '/api/v1/integrations/sources/checkins') return json(route, { items: [{ sourceId: 'framehdr', label: '帧影', state: 'completed', message: '今日已签到', retryable: false, updatedAt: '2026-08-21T03:00:00Z' }] })
   if (path === '/api/v1/integrations/115/status') return json(route, { authorized: true, usedBytes: 1_000_000, totalBytes: 2_000_000 })
   if (path === '/api/v1/integrations/emby/libraries') return json(route, { libraries: [{ id: 'movie', name: '电影', collectionType: 'movies' }] })
   if (path === '/api/v1/integrations/emby/libraries/movie/items') return json(route, { items: state.itemDeleted ? [] : [{ id: 'item-1', name: '验收影片', type: 'Movie', year: 2026, providerIds: { Tmdb: '100' } }], total: state.itemDeleted ? 0 : 1 })

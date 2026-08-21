@@ -288,6 +288,14 @@ private fun TransferRow(job: TransferJob, selected: Boolean, onClick: () -> Unit
                 color = MediaHubColors.TextMuted,
                 fontSize = 12.sp,
             )
+            job.errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
+                MediaHubText(
+                    text = message,
+                    modifier = Modifier.padding(top = 4.dp),
+                    color = MediaHubColors.Error,
+                    fontSize = 12.sp,
+                )
+            }
         }
         MediaHubText(
             text = stateLabel(job.state),

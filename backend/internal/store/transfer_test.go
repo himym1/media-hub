@@ -202,6 +202,47 @@ func TestInterruptedNotificationIsNotAutomaticallyReplayed(t *testing.T) {
 	}
 }
 
+func TestNextTransferNotificationIncludesJobError(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1_720_000_100, 0).UTC()
+	job, _, err := dataStore.CreateTransferJob(ctx, TransferJob{
+		ID: "job-error", UserID: admin.ID, IdempotencyKey: "request_error",
+		RequestHash: []byte("hash-error"), SelectionToken: "encrypted", SourceID: "frame",
+		CandidateID: "candidate", Title: "Movie", Year: 2026, MediaType: "movie", TMDBID: "123",
+		State: "failed", CreatedAt: now.Unix(), UpdatedAt: now.Unix(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job.ErrorMessage = "QMediaSync 的 115 授权已失效，请到 QMediaSync「网盘账号」重新授权后再重试任务"
+	job.UpdatedAt = now.Unix()
+	if ok, err := dataStore.UpdateTransferJob(ctx, job, "failed", "同步失败"); err != nil || !ok {
+		t.Fatalf("update job ok=%v err=%v", ok, err)
+	}
+	if err := dataStore.EnsureTerminalNotifications(ctx, now); err != nil {
+		t.Fatal(err)
+	}
+	item, found, err := dataStore.NextTransferNotification(ctx, now)
+	if err != nil || !found {
+		t.Fatalf("notification found=%v err=%v", found, err)
+	}
+	if item.ErrorMessage != job.ErrorMessage {
+		t.Fatalf("error message=%q", item.ErrorMessage)
+	}
+}
+
 func TestTransferArchiveOnlyHidesTerminalNonRetryableJobs(t *testing.T) {
 	ctx := context.Background()
 	dataStore, err := Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))

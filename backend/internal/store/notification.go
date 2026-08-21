@@ -14,15 +14,16 @@ var (
 )
 
 type TransferNotification struct {
-	JobID       string
-	EventType   string
-	JobState    string
-	Title       string
-	State       string
-	Attempts    int
-	NextAttempt int64
-	CreatedAt   int64
-	UpdatedAt   int64
+	JobID        string
+	EventType    string
+	JobState     string
+	Title        string
+	ErrorMessage string
+	State        string
+	Attempts     int
+	NextAttempt  int64
+	CreatedAt    int64
+	UpdatedAt    int64
 }
 
 func (s *Store) EnsureTerminalNotifications(ctx context.Context, now time.Time) error {
@@ -83,12 +84,12 @@ func (s *Store) MarkInterruptedNotifications(ctx context.Context, now time.Time)
 func (s *Store) NextTransferNotification(ctx context.Context, now time.Time) (TransferNotification, bool, error) {
 	var item TransferNotification
 	err := s.database.QueryRowContext(ctx, `
-		SELECT n.job_id, n.event_type, j.state, j.title, n.state, n.attempts, n.next_attempt_at
+		SELECT n.job_id, n.event_type, j.state, j.title, j.error_message, n.state, n.attempts, n.next_attempt_at
 		FROM transfer_notifications n
 		JOIN transfer_jobs j ON j.id = n.job_id
 		WHERE n.state = 'pending' AND n.next_attempt_at <= ?
 		ORDER BY n.created_at LIMIT 1`, now.UTC().Unix()).Scan(
-		&item.JobID, &item.EventType, &item.JobState, &item.Title,
+		&item.JobID, &item.EventType, &item.JobState, &item.Title, &item.ErrorMessage,
 		&item.State, &item.Attempts, &item.NextAttempt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
