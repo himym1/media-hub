@@ -206,11 +206,39 @@ func (h *handler) deleteEmbyItem(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	preview, err := h.dependencies.Emby.DeletePreview(r.Context(), id)
+	if err != nil {
+		writeIntegrationProblem(w, err)
+		return
+	}
 	if err := h.dependencies.Emby.DeleteItem(r.Context(), id); err != nil {
 		writeIntegrationProblem(w, err)
 		return
 	}
+	h.notifyLibraryDelete(r.Context(), preview)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *handler) notifyLibraryDelete(ctx context.Context, preview emby.DeletePreview) {
+	if h.dependencies.WeComTester == nil || !h.dependencies.WeComTester.Configured() {
+		return
+	}
+	_, _ = h.dependencies.WeComTester.Send(ctx, libraryDeleteNotification(preview))
+}
+
+func libraryDeleteNotification(preview emby.DeletePreview) string {
+	name := strings.TrimSpace(preview.Name)
+	if name == "" {
+		name = "该条目"
+	}
+	message := "Media Hub\n《" + name + "》已从片库删除"
+	if preview.VersionCount > 1 {
+		message += "（" + strconv.Itoa(preview.VersionCount) + " 个版本）"
+	}
+	if preview.CloudKept {
+		message += "\n115 云盘文件已保留"
+	}
+	return message
 }
 
 func (h *handler) refreshEmbyObject(w http.ResponseWriter, r *http.Request, library bool) {

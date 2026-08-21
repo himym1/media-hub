@@ -98,6 +98,7 @@ type embyStub struct {
 	refreshedLibrary string
 	refreshedItem    string
 	deletedItem      string
+	deleteErr        error
 }
 
 func (*embyStub) Libraries(context.Context) ([]emby.Library, error) {
@@ -136,10 +137,13 @@ func (stub *embyStub) RefreshItem(_ context.Context, id string) error {
 }
 func (stub *embyStub) DeletePreview(_ context.Context, id string) (emby.DeletePreview, error) {
 	return emby.DeletePreview{
-		ID: id, Name: "Movie", Type: "Movie", FileCount: 1, DeletesFiles: true, CloudKept: true,
+		ID: id, Name: "Movie", Type: "Movie", FileCount: 1, DeletesFiles: true, CloudKept: true, VersionCount: 1,
 	}, nil
 }
 func (stub *embyStub) DeleteItem(_ context.Context, id string) error {
+	if stub.deleteErr != nil {
+		return stub.deleteErr
+	}
 	stub.deletedItem = id
 	return nil
 }

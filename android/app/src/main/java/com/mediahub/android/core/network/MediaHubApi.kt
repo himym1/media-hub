@@ -348,6 +348,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
             fileCount = payload.getInt("fileCount"),
             deletesFiles = payload.getBoolean("deletesFiles"),
             cloudKept = payload.getBoolean("cloudKept"),
+            versionCount = payload.optInt("versionCount", 1).coerceAtLeast(1),
         )
     }
 

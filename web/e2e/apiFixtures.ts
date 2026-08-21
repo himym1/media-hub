@@ -114,7 +114,7 @@ async function respond(route: Route, authenticated: boolean, state: FixtureState
     if (state.itemDeleted) return json(route, { code: 'not_found', title: '媒体不存在' }, 404)
     return json(route, { id: 'item-1', name: '验收影片', originalTitle: 'Acceptance Movie', overview: '用于验证媒体库详情。', type: 'Movie', year: 2026, providerIds: { Tmdb: '100' }, communityRating: 8.2, runtimeMinutes: 118, genres: ['Drama', 'Science Fiction'], mediaSourceCount: 1, externalUrl: 'https://emby.example/web/index.html#!/item?id=item-1', appUrl: 'emby://items/server-1/item-1' })
   }
-  if (path === '/api/v1/integrations/emby/items/item-1/delete-preview' && request.method() === 'GET') return json(route, { id: 'item-1', name: '验收影片', type: 'Movie', fileCount: 1, deletesFiles: true, cloudKept: true })
+  if (path === '/api/v1/integrations/emby/items/item-1/delete-preview' && request.method() === 'GET') return json(route, { id: 'item-1', name: '验收影片', type: 'Movie', fileCount: 1, deletesFiles: true, cloudKept: true, versionCount: 1 })
   if (path === '/api/v1/integrations/emby/items/item-1/delete' && request.method() === 'POST') {
     const confirmation = JSON.parse(request.postData() ?? '{}').confirmation
     if (confirmation !== 'item-1') return json(route, { code: 'invalid_confirmation', title: '删除确认无效' }, 400)

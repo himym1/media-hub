@@ -275,6 +275,7 @@ export type EmbyDeletePreview = {
   fileCount: number
   deletesFiles: boolean
   cloudKept: boolean
+  versionCount: number
 }
 
 export type Drive115Status = {

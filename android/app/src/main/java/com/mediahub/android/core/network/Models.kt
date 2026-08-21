@@ -349,6 +349,7 @@ data class EmbyDeletePreview(
     val fileCount: Int,
     val deletesFiles: Boolean,
     val cloudKept: Boolean,
+    val versionCount: Int = 1,
 )
 
 

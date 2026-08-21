@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.19.23
+  version: 0.19.24
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -1956,7 +1956,7 @@ components:
     EmbyDeletePreview:
       type: object
       additionalProperties: false
-      required: [id, name, type, fileCount, deletesFiles, cloudKept]
+      required: [id, name, type, fileCount, deletesFiles, cloudKept, versionCount]
       properties:
         id: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' }
         name: { type: string }
@@ -1964,6 +1964,7 @@ components:
         fileCount: { type: integer, minimum: 0 }
         deletesFiles: { type: boolean }
         cloudKept: { type: boolean }
+        versionCount: { type: integer, minimum: 1 }
     EmbyDeleteResponse:
       type: object
       additionalProperties: false
