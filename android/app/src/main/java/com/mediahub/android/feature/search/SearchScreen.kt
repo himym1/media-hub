@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.BellPlus
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Wifi
 import com.mediahub.android.app.LocalTwoPane
 import com.mediahub.android.core.designsystem.MediaHubButton
