@@ -44,7 +44,7 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 	if loaded.Address != "127.0.0.1:9090" || loaded.DatabasePath != "/tmp/media-hub-test.db" {
 		t.Fatal("unexpected server configuration")
 	}
-	if loaded.ProbeTimeout != 750*time.Millisecond || !loaded.FixtureMode || !loaded.SecureCookies {
+	if loaded.ProbeTimeout != 750*time.Millisecond || loaded.SearchTimeout != defaultSearchTimeout || !loaded.FixtureMode || !loaded.SecureCookies {
 		t.Fatal("unexpected runtime configuration")
 	}
 	if loaded.SourceProxyURL == nil || loaded.SourceProxyURL.String() != "http://source-egress:17898" {
@@ -73,6 +73,16 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 	}
 	if target, ok := loaded.Workflow.Target("movie"); !ok || target.DestinationID != "100" {
 		t.Fatal("unexpected movie workflow target")
+	}
+}
+
+func TestLoadParsesSearchTimeout(t *testing.T) {
+	loaded, err := load(testLookup(map[string]string{"MEDIA_HUB_SEARCH_TIMEOUT": "12s"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.SearchTimeout != 12*time.Second || loaded.ProbeTimeout != defaultProbeTimeout {
+		t.Fatalf("timeouts search=%s probe=%s", loaded.SearchTimeout, loaded.ProbeTimeout)
 	}
 }
 

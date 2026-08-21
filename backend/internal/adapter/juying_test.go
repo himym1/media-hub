@@ -67,7 +67,7 @@ func TestJuyingSearchAndTransfersSupportedResources(t *testing.T) {
 			_, _ = w.Write([]byte(`{"status":"success","results":[{"id":1,"title":"范海辛 Van Helsing","release_year":"2004","movie_type":"movie","tmdb_id":7131}]}`))
 		case "/api/dev/movie/1/resources/":
 			_, _ = w.Write([]byte(`{"status":"success","title":"范海辛","resources":[` +
-				`{"id":11,"resource_type":"115","share_link":"https://115.com/s/shareABC123","extraction_code":"WENG","description":"Van.Helsing.2004.2160p.HEVC","file_size":"12.5 GB"},` +
+				`{"id":11,"resource_type":"115","share_link":"https://115.com/s/shareABC123","extraction_code":"WENG","description":"Van.Helsing.2004.2160p.HEVC","file_size":13421772800},` +
 				`{"id":12,"resource_type":"magnet","share_link":"` + magnet + `","description":"Van.Helsing.2004.1080p"},` +
 				`{"id":13,"resource_type":"ed2k","share_link":"ed2k://bad","description":"ignored"}` +
 				`]}`))

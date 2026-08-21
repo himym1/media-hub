@@ -41,6 +41,7 @@ The backend reads environment variables as a startup baseline and applies embedd
 MEDIA_HUB_ADDR=:8080
 MEDIA_HUB_DATABASE_PATH=data/media-hub.db
 MEDIA_HUB_PROBE_TIMEOUT=3s
+MEDIA_HUB_SEARCH_TIMEOUT=15s
 MEDIA_HUB_SOURCE_PROXY_URL=<optional-http-proxy-for-built-in-sources>
 MEDIA_HUB_SECURE_COOKIES=true
 MEDIA_HUB_ENABLE_FIXTURES=false

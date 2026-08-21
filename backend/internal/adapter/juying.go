@@ -53,7 +53,7 @@ type juyingResource struct {
 	Description         string          `json:"description"`
 	ResourceDescription string          `json:"resource_description"`
 	Title               string          `json:"title"`
-	FileSize            string          `json:"file_size"`
+	FileSize            json.RawMessage `json:"file_size"`
 	ExtractionCode      string          `json:"extraction_code"`
 	LinkExposed         bool            `json:"link_exposed"`
 	AccessTicket        string          `json:"access_ticket"`
@@ -253,7 +253,9 @@ func juyingCandidate(movieID, title string, year int, mediaType string, resource
 			Resolution:   mikanNormalizedResolution(releaseTitle),
 			VideoCodec:   mikanNormalizedCodec(releaseTitle),
 			DynamicRange: normalizedSidhubHDR(releaseTitle),
-			SizeBytes:    sidhubSizeBytes(firstNonEmptyString(resource.FileSize, releaseTitle)),
+			SizeBytes: firstReleaseSizeBytes(
+				rawJSONText(resource.FileSize), resource.Title, resource.Description, resource.ResourceDescription, releaseTitle,
+			),
 		},
 	}, true
 }

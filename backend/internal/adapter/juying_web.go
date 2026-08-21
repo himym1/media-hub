@@ -23,11 +23,6 @@ const (
 	juyingMaxOpaqueLen = 4096
 )
 
-type juyingLoginResponse struct {
-	Status string `json:"status"`
-	Token  string `json:"token"`
-}
-
 type juyingAccessResponse struct {
 	Status     string `json:"status"`
 	Target     string `json:"target"`
@@ -165,7 +160,9 @@ func juyingWebCandidate(movieID, title string, year int, mediaType string, resou
 			Resolution:   firstNonEmptyString(strings.TrimSpace(resourceDescriptionResolution(resource)), mikanNormalizedResolution(releaseTitle)),
 			VideoCodec:   mikanNormalizedCodec(releaseTitle),
 			DynamicRange: normalizedSidhubHDR(releaseTitle),
-			SizeBytes:    sidhubSizeBytes(firstNonEmptyString(resource.FileSize, releaseTitle)),
+			SizeBytes: firstReleaseSizeBytes(
+				rawJSONText(resource.FileSize), resource.Title, resource.Description, resource.ResourceDescription, releaseTitle,
+			),
 		},
 	}, true
 }
@@ -388,11 +385,40 @@ func (s *Juying) loginWebLocked(ctx context.Context) (string, error) {
 	if err != nil || len(data) > juyingMaxPageBytes {
 		return "", search.Failure{Code: "source_unavailable", Message: "聚影登录响应无效", Retryable: true}
 	}
-	var response juyingLoginResponse
-	if json.Unmarshal(data, &response) != nil || !validJuyingOpaque(response.Token) {
+	token := juyingWebLoginToken(data, loginResponse.Header)
+	if token == "" {
 		return "", search.Failure{Code: "source_unauthorized", Message: "聚影登录失败", Retryable: false}
 	}
-	return strings.TrimSpace(response.Token), nil
+	return token, nil
+}
+
+func juyingWebLoginToken(data []byte, header http.Header) string {
+	var payload map[string]json.RawMessage
+	if json.Unmarshal(data, &payload) == nil {
+		for _, key := range []string{"token", "user_token", "access_token"} {
+			if token := rawJSONText(payload[key]); validJuyingOpaque(token) {
+				return token
+			}
+		}
+		if nested := payload["data"]; len(nested) > 0 {
+			var inner map[string]json.RawMessage
+			if json.Unmarshal(nested, &inner) == nil {
+				for _, key := range []string{"token", "user_token", "access_token"} {
+					if token := rawJSONText(inner[key]); validJuyingOpaque(token) {
+						return token
+					}
+				}
+			}
+		}
+	}
+	if header != nil {
+		for _, key := range []string{"X-App-User-Token", "X-Refreshed-Token"} {
+			if token := strings.TrimSpace(header.Get(key)); validJuyingOpaque(token) {
+				return token
+			}
+		}
+	}
+	return ""
 }
 
 func (s *Juying) webCSRFToken() string {

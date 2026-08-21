@@ -112,6 +112,90 @@ func TestSidhubUsesConfiguredProxy(t *testing.T) {
 	if err != nil || resolved.String() != proxyURL.String() {
 		t.Fatalf("proxy = %v, err = %v", resolved, err)
 	}
+	directTransport := source.direct.Transport.(*http.Transport)
+	if resolved, err := directTransport.Proxy(request); err != nil || resolved != nil {
+		t.Fatalf("direct proxy = %v, err = %v", resolved, err)
+	}
+}
+
+func TestSidhubSizeBytesParsesCommonFormats(t *testing.T) {
+	cases := []struct {
+		value string
+		want  int64
+	}{
+		{"12.5 GB", 13421772800},
+		{"12.5GB", 13421772800},
+		{"约12.5GiB", 13421772800},
+		{"12GB+", 12 << 30},
+		{"13421772800", 13421772800},
+		{"2004", 0},
+		{"2160p", 0},
+		{"", 0},
+	}
+	for _, test := range cases {
+		if got := sidhubSizeBytes(test.value); got != test.want {
+			t.Fatalf("sidhubSizeBytes(%q) = %d, want %d", test.value, got, test.want)
+		}
+	}
+	if got := firstReleaseSizeBytes("Van.Helsing.2004.2160p", "约12.5 GB 内封"); got != 13421772800 {
+		t.Fatalf("firstReleaseSizeBytes = %d", got)
+	}
+}
+
+func TestSidhubFollowsSameHostRedirect(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/s/test/":
+			http.Redirect(w, r, "/s/moved/", http.StatusFound)
+		case "/s/moved/":
+			_, _ = w.Write([]byte(`<div class="cover"><a class="image" title="First" href="/movies/1/"></a><h2>First</h2></div>`))
+		case "/movies/1/":
+			_, _ = w.Write([]byte(`<h1 id="cover">First</h1><ul class="seeds"><li><a title="release [12.5G]" href="/link_start/?seed_id=1">release</a></li></ul>`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	source := NewSidhub(server.URL, time.Second, nil, nil)
+	client := server.Client()
+	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		return sidhubFollowRedirect(server.URL, request, via)
+	}
+	source.client = client
+	source.direct = client
+	results, err := source.Search(context.Background(), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].Title != "First" || results[0].Release.SizeBytes != 13421772800 {
+		t.Fatalf("results = %#v", results)
+	}
+}
+
+func TestSidhubRetriesForbiddenWithoutProxy(t *testing.T) {
+	ok := newSidhubTestServer(t)
+	defer ok.Close()
+	source := NewSidhub(ok.URL, time.Second, nil, nil)
+	source.direct = &http.Client{Transport: roundTripStatus(http.StatusForbidden), Timeout: time.Second}
+	source.client = ok.Client()
+	results, err := source.Search(context.Background(), "范海辛")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("results = %d", len(results))
+	}
+}
+
+type roundTripStatus int
+
+func (status roundTripStatus) RoundTrip(request *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: int(status),
+		Header:     make(http.Header),
+		Body:       http.NoBody,
+		Request:    request,
+	}, nil
 }
 
 func TestSidhubFetchesDetailsConcurrentlyAndPreservesOrder(t *testing.T) {

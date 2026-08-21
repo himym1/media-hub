@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	defaultSidhubURL      = "https://sidhub.cc"
+	defaultSidhubURL      = "https://seedog.cc"
 	sidhubMaxSearchCards  = 6
 	sidhubMaxCandidates   = 50
 	sidhubMaxPageBytes    = 4 << 20
@@ -28,19 +28,21 @@ const (
 )
 
 var (
-	sidhubMoviePath = regexp.MustCompile(`^/movies/[0-9]+/$`)
-	sidhubSeedID    = regexp.MustCompile(`^[0-9]+$`)
-	sidhubYear      = regexp.MustCompile(`(?:^|[^0-9])((?:19|20)[0-9]{2})(?:[^0-9]|$)`)
-	sidhubEpisode   = regexp.MustCompile(`(?i)\bS([0-9]{1,2})E([0-9]{1,4})(?:\s*[-~]\s*E?([0-9]{1,4}))?\b`)
-	sidhubData      = regexp.MustCompile(`(?i)(?:const|let|var)\s+data\s*=\s*["']([A-Za-z0-9+/]+={0,2})["']`)
-	sidhubBTIH      = regexp.MustCompile(`(?i)^(?:[0-9a-f]{40}|[a-z2-7]{32})$`)
-	sidhubSize      = regexp.MustCompile(`(?i)([0-9]+(?:\.[0-9]+)?)\s*([KMGT])(?:i?B)?`)
-	sidhubHDR       = regexp.MustCompile(`(?i)\b(Dolby[ ._-]?Vision|DV|HDR10\+?|HDR|HLG)\b`)
+	sidhubMoviePath     = regexp.MustCompile(`^/movies/[0-9]+/$`)
+	sidhubSeedID        = regexp.MustCompile(`^[0-9]+$`)
+	sidhubYear          = regexp.MustCompile(`(?:^|[^0-9])((?:19|20)[0-9]{2})(?:[^0-9]|$)`)
+	sidhubEpisode       = regexp.MustCompile(`(?i)\bS([0-9]{1,2})E([0-9]{1,4})(?:\s*[-~]\s*E?([0-9]{1,4}))?\b`)
+	sidhubData          = regexp.MustCompile(`(?i)(?:const|let|var)\s+data\s*=\s*["']([A-Za-z0-9+/]+={0,2})["']`)
+	sidhubBTIH          = regexp.MustCompile(`(?i)^(?:[0-9a-f]{40}|[a-z2-7]{32})$`)
+	sidhubSize          = regexp.MustCompile(`(?i)([0-9]+(?:\.[0-9]+)?)\s*([KMGT])(?:i?B)?`)
+	sidhubSizeBytesOnly = regexp.MustCompile(`^\s*([0-9]{7,})\s*$`)
+	sidhubHDR           = regexp.MustCompile(`(?i)\b(Dolby[ ._-]?Vision|DV|HDR10\+?|HDR|HLG)\b`)
 )
 
 type Sidhub struct {
 	baseURL string
 	client  *http.Client
+	direct  *http.Client
 	offline Offline
 }
 
@@ -63,19 +65,32 @@ func NewSidhub(baseURL string, timeout time.Duration, offline Offline, proxyURL 
 	if timeout <= 0 {
 		timeout = 8 * time.Second
 	}
+	resolved := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	client := newSidhubHTTPClient(resolved, timeout, proxyURL)
+	direct := client
+	if proxyURL != nil {
+		direct = newSidhubHTTPClient(resolved, timeout, nil)
+	}
+	return &Sidhub{
+		baseURL: resolved,
+		offline: offline,
+		client:  client,
+		direct:  direct,
+	}
+}
+
+func newSidhubHTTPClient(baseURL string, timeout time.Duration, proxyURL *url.URL) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if proxyURL != nil {
 		transport.Proxy = http.ProxyURL(proxyURL)
+	} else {
+		transport.Proxy = func(*http.Request) (*url.URL, error) { return nil, nil }
 	}
-	return &Sidhub{
-		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
-		offline: offline,
-		client: &http.Client{
-			Timeout:   timeout,
-			Transport: transport,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			return sidhubFollowRedirect(baseURL, request, via)
 		},
 	}
 }
@@ -182,8 +197,33 @@ func (s *Sidhub) TransferStatus(_ context.Context, _ int64, operationID string) 
 }
 
 func (s *Sidhub) fetch(ctx context.Context, endpoint string, limit int64) ([]byte, error) {
+	var last error
+	for _, client := range s.fetchClients() {
+		body, err := s.fetchWith(ctx, client, endpoint, limit)
+		if err == nil {
+			return body, nil
+		}
+		last = err
+		if !sidhubShouldRetryDirect(err) {
+			return nil, err
+		}
+	}
+	if last == nil {
+		return nil, search.Failure{Code: "source_unavailable", Message: "Sidhub 暂时不可用", Retryable: true}
+	}
+	return nil, last
+}
+
+func (s *Sidhub) fetchClients() []*http.Client {
+	if s.direct != nil && s.direct != s.client {
+		return []*http.Client{s.direct, s.client}
+	}
+	return []*http.Client{s.client}
+}
+
+func (s *Sidhub) fetchWith(ctx context.Context, client *http.Client, endpoint string, limit int64) ([]byte, error) {
 	parsed, err := url.Parse(endpoint)
-	if err != nil || parsed.Scheme != "https" || !sameOrigin(s.baseURL, parsed) {
+	if err != nil || parsed.Scheme != "https" || !sidhubRequestAllowed(s.baseURL, parsed) {
 		return nil, search.Failure{Code: "source_unconfigured", Message: "Sidhub 地址无效", Retryable: false}
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
@@ -192,7 +232,7 @@ func (s *Sidhub) fetch(ctx context.Context, endpoint string, limit int64) ([]byt
 	}
 	request.Header.Set("Accept", "text/html,application/xhtml+xml")
 	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36")
-	response, err := s.client.Do(request)
+	response, err := client.Do(request)
 	if err != nil {
 		return nil, search.Failure{Code: "source_unavailable", Message: "Sidhub 暂时不可用", Retryable: true}
 	}
@@ -333,7 +373,7 @@ func parseSidhubDetail(body []byte, card sidhubCard) ([]search.Candidate, error)
 					Resolution:   mikanNormalizedResolution(releaseTitle),
 					VideoCodec:   mikanNormalizedCodec(releaseTitle),
 					DynamicRange: normalizedSidhubHDR(releaseTitle),
-					SizeBytes:    sidhubSizeBytes(htmlText(parentHTMLElement(link, "li"))),
+					SizeBytes:    firstReleaseSizeBytes(htmlText(parentHTMLElement(link, "li")), releaseTitle),
 				},
 				TransferState: "available",
 			})
@@ -389,16 +429,39 @@ func sidhubYearValue(value string) int {
 	return year
 }
 
+func firstReleaseSizeBytes(values ...string) int64 {
+	for _, value := range values {
+		if size := sidhubSizeBytes(value); size > 0 {
+			return size
+		}
+	}
+	return 0
+}
+
 func sidhubSizeBytes(value string) int64 {
-	matched := sidhubSize.FindStringSubmatch(value)
-	if len(matched) != 3 {
+	value = strings.TrimSpace(value)
+	if value == "" {
 		return 0
 	}
-	number, err := strconv.ParseFloat(matched[1], 64)
+	if matched := sidhubSize.FindStringSubmatch(value); len(matched) == 3 {
+		return sizeFromBinaryPrefix(matched[1], matched[2])
+	}
+	if matched := sidhubSizeBytesOnly.FindStringSubmatch(value); len(matched) == 2 {
+		parsed, err := strconv.ParseInt(matched[1], 10, 64)
+		if err != nil || parsed < 1<<20 {
+			return 0
+		}
+		return parsed
+	}
+	return 0
+}
+
+func sizeFromBinaryPrefix(numberText, unit string) int64 {
+	number, err := strconv.ParseFloat(numberText, 64)
 	if err != nil || number <= 0 {
 		return 0
 	}
-	power := map[string]int{"K": 1, "M": 2, "G": 3, "T": 4}[strings.ToUpper(matched[2])]
+	power := map[string]int{"K": 1, "M": 2, "G": 3, "T": 4}[strings.ToUpper(unit)]
 	bytes := number
 	for range power {
 		bytes *= 1024
@@ -494,4 +557,38 @@ func sameOrigin(baseURL string, endpoint *url.URL) bool {
 		return false
 	}
 	return strings.EqualFold(base.Scheme, endpoint.Scheme) && strings.EqualFold(base.Host, endpoint.Host)
+}
+
+func sidhubAllowedHost(host string) bool {
+	switch strings.ToLower(strings.TrimSpace(host)) {
+	case "sidhub.cc", "www.sidhub.cc", "seeduck.cc", "www.seeduck.cc", "seedog.cc", "www.seedog.cc":
+		return true
+	default:
+		return false
+	}
+}
+
+func sidhubRequestAllowed(baseURL string, endpoint *url.URL) bool {
+	if endpoint == nil || endpoint.Scheme != "https" || endpoint.User != nil {
+		return false
+	}
+	if sameOrigin(baseURL, endpoint) {
+		return true
+	}
+	return endpoint.Port() == "" && sidhubAllowedHost(endpoint.Hostname())
+}
+
+func sidhubFollowRedirect(baseURL string, request *http.Request, via []*http.Request) error {
+	if len(via) >= 4 || request == nil || !sidhubRequestAllowed(baseURL, request.URL) {
+		return http.ErrUseLastResponse
+	}
+	return nil
+}
+
+func sidhubShouldRetryDirect(err error) bool {
+	var failure search.Failure
+	if !errors.As(err, &failure) {
+		return true
+	}
+	return failure.Code == "source_unavailable" || failure.Code == "source_unauthorized"
 }

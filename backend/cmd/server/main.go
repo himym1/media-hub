@@ -136,7 +136,7 @@ func run(logger *slog.Logger) error {
 			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
 			wecomClient.ConfigureDelivery(value.WeCom)
 			workflowService.Configure(value.Workflow)
-			runtimeSources := searchSourcesFromSettings(value, configuration.ProbeTimeout, configuration.FixtureMode, drive115AuthService, configuration.SourceProxyURL)
+			runtimeSources := searchSourcesFromSettings(value, configuration.SearchTimeout, configuration.FixtureMode, drive115AuthService, configuration.SourceProxyURL)
 			searchService.Configure(tmdbClient, runtimeSources...)
 		},
 	)

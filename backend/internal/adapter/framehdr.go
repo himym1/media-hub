@@ -386,7 +386,7 @@ func parseFrameHDRDetail(body []byte, card frameHDRCard) ([]search.Candidate, er
 			SourceID: "framehdr", SourceRef: string(reference), TransferState: "available",
 			Release: search.ReleaseFacts{
 				Resolution: mikanNormalizedResolution(releaseTitle), VideoCodec: mikanNormalizedCodec(releaseTitle),
-				DynamicRange: normalizedSidhubHDR(releaseTitle), SizeBytes: sidhubSizeBytes(htmlText(node)),
+				DynamicRange: normalizedSidhubHDR(releaseTitle), SizeBytes: firstReleaseSizeBytes(htmlText(node), releaseTitle),
 			},
 		})
 	})

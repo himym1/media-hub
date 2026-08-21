@@ -33,6 +33,15 @@ func TestNewUsesBuiltinSourcesWhenURLEmpty(t *testing.T) {
 	}
 }
 
+func TestNewUsesNativeSidhubForOfficialHosts(t *testing.T) {
+	for _, raw := range []string{"", "https://sidhub.cc", "https://www.sidhub.cc/", "https://seedog.cc", "https://www.seedog.cc/"} {
+		got := New(config.SearchSource{ID: "sidhub", BaseURL: raw}, time.Second, nil, nil)
+		if _, ok := got.(*Sidhub); !ok {
+			t.Fatalf("source for %q = %#v", raw, got)
+		}
+	}
+}
+
 func TestNewPassesProxyOnlyToBuiltinSources(t *testing.T) {
 	proxyURL, err := url.Parse("http://proxy.local:8080")
 	if err != nil {

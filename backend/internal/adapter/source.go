@@ -76,8 +76,7 @@ func isSidhubHost(raw string) bool {
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Port() != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return false
 	}
-	host := strings.ToLower(parsed.Hostname())
-	return host == "sidhub.cc" || host == "www.sidhub.cc" || host == "seeduck.cc" || host == "www.seeduck.cc"
+	return sidhubAllowedHost(parsed.Hostname())
 }
 
 func isFrameHDRHost(raw string) bool {

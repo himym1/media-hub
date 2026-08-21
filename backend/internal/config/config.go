@@ -11,15 +11,17 @@ import (
 )
 
 const (
-	defaultAddress      = ":8080"
-	defaultDatabasePath = "data/media-hub.db"
-	defaultProbeTimeout = 3 * time.Second
+	defaultAddress       = ":8080"
+	defaultDatabasePath  = "data/media-hub.db"
+	defaultProbeTimeout  = 3 * time.Second
+	defaultSearchTimeout = 15 * time.Second
 )
 
 type Config struct {
 	Address                string
 	DatabasePath           string
 	ProbeTimeout           time.Duration
+	SearchTimeout          time.Duration
 	SourceProxyURL         *url.URL
 	FixtureMode            bool
 	SecureCookies          bool
@@ -134,6 +136,10 @@ func Load() (Config, error) {
 
 func load(lookup func(string) (string, bool)) (Config, error) {
 	probeTimeout, err := durationValue(lookup, "MEDIA_HUB_PROBE_TIMEOUT", defaultProbeTimeout)
+	if err != nil {
+		return Config{}, err
+	}
+	searchTimeout, err := durationValue(lookup, "MEDIA_HUB_SEARCH_TIMEOUT", defaultSearchTimeout)
 	if err != nil {
 		return Config{}, err
 	}
@@ -256,6 +262,7 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		Address:                stringValue(lookup, "MEDIA_HUB_ADDR", defaultAddress),
 		DatabasePath:           stringValue(lookup, "MEDIA_HUB_DATABASE_PATH", defaultDatabasePath),
 		ProbeTimeout:           probeTimeout,
+		SearchTimeout:          searchTimeout,
 		SourceProxyURL:         sourceProxyURL,
 		FixtureMode:            fixtureMode,
 		SecureCookies:          secureCookies,

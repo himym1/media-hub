@@ -54,7 +54,7 @@ func TestJuyingWebSearchDefersAccessUntilTransfer(t *testing.T) {
 			}
 			mu.Unlock()
 			_, _ = w.Write([]byte(`{"status":"success","has_more":false,"resources":[` +
-				`{"id":901,"resource_type":"115","resource_description":"Van.Helsing.2004.2160p.HEVC","file_size":"12.5 GB","link_exposed":true,"access_ticket":"` + ticket + `","access_endpoint":"/api/app/resource/901/access/","access_mode":"open","share_link":""},` +
+				`{"id":901,"resource_type":"115","resource_description":"Van.Helsing.2004.2160p.HEVC","file_size":13421772800,"link_exposed":true,"access_ticket":"` + ticket + `","access_endpoint":"/api/app/resource/901/access/","access_mode":"open","share_link":""},` +
 				`{"id":902,"resource_type":"115","resource_description":"hidden","link_exposed":false,"access_ticket":"","access_endpoint":""},` +
 				`{"id":903,"resource_type":"115","resource_description":"cross-origin","link_exposed":true,"access_ticket":"other-ticket","access_endpoint":"https://example.invalid/access/"}` +
 				`]}`))
@@ -271,6 +271,30 @@ func TestJuyingWebRejectsForgedReferenceBeforeNetwork(t *testing.T) {
 	}
 	if target.shareCode != "" || len(target.magnets) != 0 {
 		t.Fatalf("target was called: %+v", target)
+	}
+}
+
+func TestJuyingWebLoginTokenAcceptsAlternateShapes(t *testing.T) {
+	header := make(http.Header)
+	header.Set("X-App-User-Token", "header-token")
+	cases := []struct {
+		body string
+		want string
+	}{
+		{`{"status":"success","token":"user-token"}`, "user-token"},
+		{`{"user_token":"nested-user"}`, "nested-user"},
+		{`{"data":{"access_token":"inner-token"}}`, "inner-token"},
+		{`{"status":"success"}`, "header-token"},
+		{`not-json`, "header-token"},
+		{`{"token":""}`, "header-token"},
+	}
+	for _, test := range cases {
+		if got := juyingWebLoginToken([]byte(test.body), header); got != test.want {
+			t.Fatalf("body %s: got %q want %q", test.body, got, test.want)
+		}
+	}
+	if got := juyingWebLoginToken([]byte(`{}`), nil); got != "" {
+		t.Fatalf("empty login produced %q", got)
 	}
 }
 
