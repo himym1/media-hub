@@ -12,12 +12,14 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.test.core.graphics.writeToTestStorage
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.mediahub.android.app.LocalTwoPane
 import com.mediahub.android.core.designsystem.MediaHubTheme
 import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.OperationalStatistics
@@ -91,6 +93,52 @@ class SecondStageLayoutTest {
     }
 
     @Test
+    fun searchTwoPaneKeepsResultsBesideDetail() {
+        val candidate = SearchCandidate(
+            id = "candidate-1",
+            title = "一部标题很长但仍需完整显示的电影资源",
+            year = 2026,
+            season = 0,
+            mediaType = "movie",
+            tmdbId = "100",
+            source = "mikan",
+            provider = "Mikan",
+            posterUrl = null,
+            release = ReleaseFacts("2160p", "HEVC", "Dolby Vision", "TrueHD Atmos", 32L * 1024 * 1024 * 1024),
+            transferState = "ready",
+            transferToken = "token",
+        )
+        composeRule.setContent {
+            MediaHubTheme {
+                CompositionLocalProvider(LocalTwoPane provides true) {
+                    SearchScreen(
+                        uiState = SearchUiState(
+                            query = "电影",
+                            submittedQuery = "电影",
+                            results = listOf(candidate),
+                            selectedCandidateId = candidate.id,
+                        ),
+                        onQueryChanged = {},
+                        onSearch = {},
+                        onRefreshOverview = {},
+                        onTrendingSelected = {},
+                        onCandidateSelected = {},
+                        onRecommendationSelected = {},
+                        onTransfer = {},
+                        onSubscribe = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("search-list-pane").assertExists()
+        composeRule.onNodeWithTag("search-detail-pane").assertExists()
+        composeRule.onNodeWithText(candidate.title).assertExists()
+        composeRule.onNodeWithText("开始转存").assertExists()
+        saveScreenshot("mediahub-search-tablet")
+    }
+
+    @Test
     fun servicesMetricsUseTwoRowsAtLargeFont() {
         composeRule.setContent {
             val density = LocalDensity.current
@@ -129,6 +177,49 @@ class SecondStageLayoutTest {
         composeRule.onNodeWithText("Emby").assertExists()
         composeRule.onNodeWithText("Media3 播放入口").assertExists()
         saveScreenshot("mediahub-services-large")
+    }
+
+    @Test
+    fun servicesTwoPaneKeepsSectionListBesideContent() {
+        composeRule.setContent {
+            MediaHubTheme {
+                CompositionLocalProvider(LocalTwoPane provides true) {
+                    ServicesScreen(
+                        uiState = ServicesUiState(
+                            integrations = listOf(
+                                IntegrationHealth("emby", "Emby", "healthy", "媒体库在线"),
+                            ),
+                            statistics = OperationalStatistics(4, 1, 2, 1, 0, 3, 2, 8, 1, 0, 0, 0),
+                        ),
+                        onRefresh = {},
+                        onToggleSettings = {},
+                        onSettingsDraftChange = {},
+                        onSaveSettings = {},
+                        onTestWeCom = {},
+                        onStartDriveAuthorization = {},
+                        onCurrentPasswordChange = {},
+                        onNewPasswordChange = {},
+                        onConfirmationChange = {},
+                        onChangePassword = {},
+                        onChangeServer = {},
+                        onCheckForUpdate = {},
+                        onDownloadUpdate = {},
+                        onInstallUpdate = {},
+                        onLogout = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("services-section-list").assertExists()
+        composeRule.onNodeWithTag("services-section-detail").assertExists()
+        composeRule.onNodeWithText("状态概览").assertExists()
+        composeRule.onNodeWithText("服务配置").assertExists()
+        composeRule.onNodeWithText("账户与更新").assertExists()
+        composeRule.onNodeWithText("进行中").assertExists()
+        composeRule.onNodeWithText("服务配置").performClick()
+        composeRule.onNodeWithText("服务设置").assertExists()
+        saveScreenshot("mediahub-services-tablet")
     }
 
     @Test

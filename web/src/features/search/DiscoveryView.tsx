@@ -183,7 +183,7 @@ export function DiscoveryView({
               const transferring = transfer.isPending && transfer.variables.id === candidate.id
               const available = candidate.transferState === 'available' && Boolean(candidate.transferToken)
               const subscribable = candidate.transferState !== 'identity_required' && Boolean(candidate.tmdbId)
-              const availabilityLabel = available ? '可转存' : candidate.transferState === 'identity_required' ? '身份待确认' : '不可转存'
+              const availabilityLabel = available ? '可转存' : candidate.transferState === 'identity_required' ? '身份待确认' : '工作流不可用'
               return (
                 <article className={selected?.id === candidate.id ? 'result-row selected' : 'result-row'} key={candidate.id}>
                   <div className="poster-wrap">{candidate.posterUrl ? <img alt={`${candidate.title} 海报`} height="144" loading="lazy" src={candidate.posterUrl} width="96" /> : <Film aria-hidden="true" size={24} />}<span>{candidate.mediaType === 'movie' ? '电影' : '剧集'}</span></div>

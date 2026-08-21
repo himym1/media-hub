@@ -42,6 +42,7 @@ import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubEmptyState
 import com.mediahub.android.core.designsystem.MediaHubFilterChip
+import com.mediahub.android.core.designsystem.MediaHubListDetail
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubSearchField
@@ -114,11 +115,14 @@ internal fun LibraryRoute(
         onConfirmDelete = detailViewModel::confirmDelete,
         onCancelDelete = detailViewModel::cancelDelete,
     )
-    if (selectedItemId != null) {
-        LibraryDetailScreen(state = detailState, actions = detailActions, posterLoader = posterLoader)
-    } else {
-        LibraryScreen(uiState = browseState, actions = browseActions, posterLoader = posterLoader)
-    }
+    MediaHubListDetail(
+        detailOpen = selectedItemId != null,
+        emptyTitle = "选择一部影片",
+        emptyMessage = "从左侧媒体库打开详情",
+        emptyIcon = Lucide.BookOpen,
+        list = { LibraryScreen(uiState = browseState, actions = browseActions, posterLoader = posterLoader) },
+        detail = { LibraryDetailScreen(state = detailState, actions = detailActions, posterLoader = posterLoader) },
+    )
 }
 
 @Composable

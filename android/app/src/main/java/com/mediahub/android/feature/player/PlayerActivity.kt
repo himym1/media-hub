@@ -28,6 +28,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.mediahub.android.app.ProvideWindowAdaptive
 import com.mediahub.android.core.designsystem.MediaHubTheme
 import com.mediahub.android.playback.MediaHubPlaybackService
 import com.mediahub.android.playback.PlaybackRequest
@@ -56,6 +57,7 @@ class PlayerActivity : ComponentActivity() {
         })
         setContent {
             MediaHubTheme {
+                ProvideWindowAdaptive {
                 val isPictureInPicture by pictureInPicture.collectAsState()
                 PlayerRoute(
                     request = request,
@@ -68,6 +70,7 @@ class PlayerActivity : ComponentActivity() {
                         onEnterPictureInPicture = ::enterPictureInPicture,
                     ),
                 )
+                }
             }
         }
     }

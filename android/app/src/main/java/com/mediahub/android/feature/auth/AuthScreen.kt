@@ -1,11 +1,9 @@
 package com.mediahub.android.feature.auth
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -26,8 +24,10 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.LogIn
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Server
+import com.mediahub.android.app.LocalTwoPane
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
+import com.mediahub.android.core.designsystem.MediaHubCenteredPane
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubPasswordField
 import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
@@ -67,13 +67,12 @@ private fun LoginScreen(
     onSubmit: () -> Unit,
     onChangeServer: () -> Unit,
 ) {
-    Column(
+    MediaHubCenteredPane(
         modifier = Modifier
-            .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
-            .imePadding()
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+            .imePadding(),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 20.dp),
     ) {
         MediaHubText(text = "Media Hub", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MediaHubColors.TextMuted)
         MediaHubText(text = "管理员登录", modifier = Modifier.padding(top = 4.dp), fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
@@ -128,7 +127,7 @@ private fun LoginScreen(
             )
         }
 
-        Spacer(Modifier.weight(1f))
+        if (LocalTwoPane.current) Spacer(Modifier.height(24.dp)) else Spacer(Modifier.weight(1f))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

@@ -1,9 +1,7 @@
 package com.mediahub.android.feature.config
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -17,6 +15,7 @@ import com.composables.icons.lucide.Link
 import com.composables.icons.lucide.Lucide
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
+import com.mediahub.android.core.designsystem.MediaHubCenteredPane
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextField
@@ -27,8 +26,8 @@ fun ServerConfigScreen(
     onConfigured: (String) -> Unit,
 ) {
     val value by viewModel.serverUrl.collectAsState()
-    Column(
-        modifier = Modifier.fillMaxSize().padding(28.dp),
+    MediaHubCenteredPane(
+        contentPadding = PaddingValues(28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
     ) {
         MediaHubText("Media Hub 服务器", fontSize = 22.sp)

@@ -6,6 +6,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.composables.icons.lucide.ListPlus
+import com.composables.icons.lucide.Lucide
+import com.mediahub.android.core.designsystem.MediaHubListDetail
 import com.mediahub.android.core.network.SearchCandidate
 
 internal data class SubscriptionNavigator(
@@ -124,6 +127,12 @@ internal fun SubscriptionRoute(
         import = viewModel::importBackup,
         fileError = viewModel::reportFileError,
     )
-    if (navigator.editorOpen) SubscriptionEditorScreen(state = state, actions = editorActions)
-    else SubscriptionListScreen(state = state, actions = listActions)
+    MediaHubListDetail(
+        detailOpen = navigator.editorOpen,
+        emptyTitle = "选择一条订阅",
+        emptyMessage = "从左侧打开编辑",
+        emptyIcon = Lucide.ListPlus,
+        list = { SubscriptionListScreen(state = state, actions = listActions) },
+        detail = { SubscriptionEditorScreen(state = state, actions = editorActions) },
+    )
 }

@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
@@ -36,14 +37,17 @@ import com.composables.icons.lucide.BellPlus
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Wifi
+import com.mediahub.android.app.LocalTwoPane
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubListDetail
 import com.mediahub.android.core.designsystem.MediaHubListDivider
 import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSearchBar
+import com.mediahub.android.core.designsystem.MediaHubSearchField
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.image.RemotePoster
@@ -94,6 +98,20 @@ internal fun SearchScreen(
     onTransfer: (String) -> Unit,
     onSubscribe: (String) -> Unit,
 ) {
+    if (LocalTwoPane.current) {
+        SearchTwoPane(
+            uiState = uiState,
+            onQueryChanged = onQueryChanged,
+            onSearch = onSearch,
+            onRefreshOverview = onRefreshOverview,
+            onTrendingSelected = onTrendingSelected,
+            onCandidateSelected = onCandidateSelected,
+            onRecommendationSelected = onRecommendationSelected,
+            onTransfer = onTransfer,
+            onSubscribe = onSubscribe,
+        )
+        return
+    }
     val selectedCandidate = uiState.selectedCandidate
     var expanded by remember {
         mutableStateOf(uiState.submittedQuery.isNotBlank() || uiState.results.isNotEmpty())
@@ -188,7 +206,7 @@ internal fun SearchScreen(
                             label = when {
                                 uiState.transferringCandidateId == selectedCandidate.id -> "正在创建…"
                                 selectedCandidate.transferState == "identity_required" -> "身份待确认"
-                                selectedCandidate.transferToken == null -> "不可转存"
+                                selectedCandidate.transferToken == null -> "工作流不可用"
                                 else -> "开始转存"
                             },
                             enabled = selectedCandidate.transferToken != null && uiState.transferringCandidateId == null,
@@ -223,6 +241,236 @@ internal fun SearchScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SearchTwoPane(
+    uiState: SearchUiState,
+    onQueryChanged: (String) -> Unit,
+    onSearch: () -> Unit,
+    onRefreshOverview: () -> Unit,
+    onTrendingSelected: (DiscoveryItem) -> Unit,
+    onCandidateSelected: (String) -> Unit,
+    onRecommendationSelected: (DiscoveryItem) -> Unit,
+    onTransfer: (String) -> Unit,
+    onSubscribe: (String) -> Unit,
+) {
+    val selectedCandidate = uiState.selectedCandidate
+    val showingResults = uiState.submittedQuery.isNotBlank() || uiState.searching || uiState.results.isNotEmpty()
+    MediaHubListDetail(
+        detailOpen = selectedCandidate != null,
+        emptyTitle = "选择一个资源",
+        emptyMessage = "从左侧打开详情后转存或订阅",
+        emptyIcon = Lucide.Search,
+        list = {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp)
+                    .testTag("search-list-pane"),
+            ) {
+                MediaHubSearchField(
+                    value = uiState.query,
+                    onValueChange = onQueryChanged,
+                    onSearch = onSearch,
+                    enabled = !uiState.searching,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp),
+                )
+                if (showingResults) {
+                    if (uiState.submittedQuery.isNotBlank() || uiState.searching) {
+                        MediaHubSmallTitle(text = if (uiState.searching) "正在搜索…" else "搜索结果 ${uiState.results.size}")
+                    }
+                    uiState.errorMessage?.let { StatusMessage(it, MediaHubColors.Error) }
+                    uiState.sourceMessage?.let { StatusMessage(it, MediaHubColors.Warning) }
+                    uiState.transferMessage?.let { StatusMessage(it, MediaHubColors.Error) }
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        if (uiState.results.isNotEmpty()) {
+                            item(key = "results") {
+                                MediaHubCard {
+                                    uiState.results.forEachIndexed { index, candidate ->
+                                        if (index > 0) MediaHubListDivider()
+                                        ReleaseRow(
+                                            candidate = candidate,
+                                            selected = selectedCandidate?.id == candidate.id,
+                                            onClick = { onCandidateSelected(candidate.id) },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        if (!uiState.searching && uiState.submittedQuery.isNotBlank() && uiState.results.isEmpty() && uiState.errorMessage == null) {
+                            item {
+                                MediaHubText(
+                                    text = "没有找到匹配资源",
+                                    modifier = Modifier.padding(vertical = 28.dp),
+                                    color = MediaHubColors.TextMuted,
+                                    fontSize = 13.sp,
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    SearchIdleOverview(
+                        integrations = uiState.integrations,
+                        refreshing = uiState.refreshingOverview,
+                        trending = uiState.trending,
+                        onRefresh = onRefreshOverview,
+                        onTrendingSelected = onTrendingSelected,
+                    )
+                }
+            }
+        },
+        detail = {
+            if (selectedCandidate != null) {
+                SearchCandidateDetail(
+                    uiState = uiState,
+                    candidate = selectedCandidate,
+                    onTransfer = onTransfer,
+                    onSubscribe = onSubscribe,
+                    onRecommendationSelected = onRecommendationSelected,
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun SearchIdleOverview(
+    integrations: List<IntegrationHealth>,
+    refreshing: Boolean,
+    trending: List<DiscoveryItem>,
+    onRefresh: () -> Unit,
+    onTrendingSelected: (DiscoveryItem) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        StatusLine(integrations = integrations, refreshing = refreshing, onRefresh = onRefresh)
+        if (trending.isNotEmpty()) {
+            MediaHubSmallTitle(text = "本周热门")
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(bottom = 8.dp),
+            ) {
+                items(trending, key = { "${it.mediaType}-${it.tmdbId}" }) { item ->
+                    TrendingItem(item = item, onClick = { onTrendingSelected(item) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchCandidateDetail(
+    uiState: SearchUiState,
+    candidate: SearchCandidate,
+    onTransfer: (String) -> Unit,
+    onSubscribe: (String) -> Unit,
+    onRecommendationSelected: (DiscoveryItem) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+            .testTag("search-detail-pane"),
+    ) {
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                MediaHubText(text = candidateDisplayTitle(candidate), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                MediaHubText(
+                    text = buildString {
+                        append(if (candidate.mediaType == "movie") "电影" else "剧集")
+                        if (candidate.year > 0) append(" · ").append(candidate.year)
+                        append(" · ").append(candidate.provider ?: candidate.source)
+                    },
+                    modifier = Modifier.padding(top = 4.dp),
+                    color = MediaHubColors.TextMuted,
+                    fontSize = 13.sp,
+                )
+            }
+            item {
+                MediaHubCard(insideMargin = PaddingValues(16.dp)) {
+                    MediaHubText(
+                        text = buildString {
+                            append(candidate.release.resolution)
+                            append(" · ")
+                            append(candidate.release.videoCodec)
+                            candidate.release.dynamicRange?.let { append(" · ").append(it) }
+                            candidate.release.audio?.let { append(" · ").append(it) }
+                        },
+                        color = MediaHubColors.TextSecondary,
+                        fontSize = 13.sp,
+                    )
+                    MediaHubText(
+                        text = formatBytes(candidate.release.sizeBytes),
+                        modifier = Modifier.padding(top = 8.dp),
+                        color = MediaHubColors.TextMuted,
+                        fontSize = 12.sp,
+                    )
+                    if (candidate.transferState.isNotEmpty() && candidate.transferState != "unknown") {
+                        MediaHubText(
+                            text = when (candidate.transferState) {
+                                "available" -> "可转存"
+                                "transferring" -> "转存中"
+                                "transferred" -> "已转存"
+                                "identity_required" -> "身份待确认"
+                                else -> candidate.transferState
+                            },
+                            modifier = Modifier.padding(top = 8.dp),
+                            color = when (candidate.transferState) {
+                                "available", "transferred" -> MediaHubColors.Success
+                                "identity_required" -> MediaHubColors.Warning
+                                else -> MediaHubColors.TextMuted
+                            },
+                            fontSize = 12.sp,
+                        )
+                    }
+                }
+            }
+            uiState.transferMessage?.let { message ->
+                item { StatusMessage(message, MediaHubColors.Error) }
+            }
+            if (uiState.recommendations.isNotEmpty()) {
+                item { MediaHubSmallTitle(text = "相似内容") }
+                item {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(uiState.recommendations, key = { "${it.mediaType}-${it.tmdbId}" }) { item ->
+                            TrendingItem(item = item, onClick = { onRecommendationSelected(item) })
+                        }
+                    }
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            MediaHubButton(
+                label = "订阅",
+                icon = Lucide.BellPlus,
+                enabled = candidate.tmdbId != null && candidate.transferState != "identity_required",
+                modifier = Modifier.weight(0.35f),
+                onClick = { onSubscribe(candidate.id) },
+            )
+            MediaHubButton(
+                label = when {
+                    uiState.transferringCandidateId == candidate.id -> "正在创建…"
+                    candidate.transferState == "identity_required" -> "身份待确认"
+                    candidate.transferToken == null -> "工作流不可用"
+                    else -> "开始转存"
+                },
+                enabled = candidate.transferToken != null && uiState.transferringCandidateId == null,
+                modifier = Modifier.weight(0.65f),
+                onClick = { onTransfer(candidate.id) },
+            )
         }
     }
 }

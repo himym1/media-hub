@@ -21,10 +21,10 @@ func (stub sourceStub) Search(context.Context, string) ([]Candidate, error) {
 
 func TestServiceReturnsPartialResultsAndUpdatesHealth(t *testing.T) {
 	service := NewService(
-		sourceStub{id: "frame", label: "帧影", candidates: []Candidate{{
-			ID: "release-1", Title: "范海辛", MediaType: "movie",
+		transferSearchStub{sourceStub: sourceStub{id: "frame", label: "帧影", candidates: []Candidate{{
+			ID: "release-1", Title: "范海辛", MediaType: "movie", SourceRef: "private",
 			Release: ReleaseFacts{Resolution: "2160p", VideoCodec: "HEVC"},
-		}}},
+		}}}},
 		sourceStub{id: "gather", label: "聚影", err: errors.New("offline")},
 	)
 
@@ -77,8 +77,8 @@ func TestServiceRequiresVerifiedIdentityForTransfer(t *testing.T) {
 		t.Fatalf("unexpected candidate: %#v", response.Results)
 	}
 	withoutIdentity := NewService(source).Search(context.Background(), "范海辛")
-	if withoutIdentity.Results[0].TransferState != "identity_required" {
-		t.Fatalf("unverified state = %q", withoutIdentity.Results[0].TransferState)
+	if withoutIdentity.Results[0].TransferState != "available" || withoutIdentity.Results[0].TMDBID != "" {
+		t.Fatalf("unverified candidate = %#v", withoutIdentity.Results[0])
 	}
 }
 
@@ -111,7 +111,7 @@ func TestServiceRejectsMikanMovieForSeriesIdentity(t *testing.T) {
 	}}}, source)
 
 	response := service.Search(context.Background(), "名侦探柯南")
-	if response.Results[0].TransferState != "identity_required" || response.Results[0].TMDBID != "" {
+	if response.Results[0].TransferState != "available" || response.Results[0].TMDBID != "" {
 		t.Fatalf("candidate = %#v", response.Results[0])
 	}
 }
@@ -155,10 +155,18 @@ func TestServiceRequiresJuyingTMDBAndReleaseIdentityEvidence(t *testing.T) {
 		states[candidate.ID] = candidate.TransferState
 	}
 	if states["juying:valid"] != "available" ||
-		states["juying:missing-tmdb"] != "identity_required" ||
-		states["juying:wrong-tmdb"] != "identity_required" ||
-		states["juying:wrong-release"] != "identity_required" {
+		states["juying:missing-tmdb"] != "available" ||
+		states["juying:wrong-tmdb"] != "available" ||
+		states["juying:wrong-release"] != "available" {
 		t.Fatalf("states = %#v", states)
+	}
+	if response.Results[0].ID != "juying:valid" || response.Results[0].TMDBID != "7131" || !response.Results[0].IdentityVerified {
+		t.Fatalf("verified candidate = %#v", response.Results[0])
+	}
+	for _, candidate := range response.Results[1:] {
+		if candidate.IdentityVerified {
+			t.Fatalf("unverified candidate attached identity: %#v", candidate)
+		}
 	}
 }
 
@@ -172,7 +180,7 @@ func TestServiceDoesNotUseReleaseTitleContainmentForContractSources(t *testing.T
 		TMDBID: "7131", Title: "范海辛", OriginalTitle: "Van Helsing", Year: 2004, MediaType: "movie",
 	}}}, source)
 	response := service.Search(context.Background(), "范海辛")
-	if response.Results[0].TransferState != "identity_required" || response.Results[0].TMDBID != "" {
+	if response.Results[0].TransferState != "available" || response.Results[0].TMDBID != "" {
 		t.Fatalf("candidate = %#v", response.Results[0])
 	}
 }
@@ -189,12 +197,12 @@ func TestServiceDoesNotGuessAmbiguousIdentity(t *testing.T) {
 		{TMDBID: "2", Title: "同名电影", Year: 2020, MediaType: "movie"},
 	}}, source)
 	response := service.Search(context.Background(), "同名电影")
-	if response.Results[0].TransferState != "identity_required" || response.Results[0].TMDBID != "" {
+	if response.Results[0].TransferState != "available" || response.Results[0].TMDBID != "" {
 		t.Fatalf("ambiguous candidate = %#v", response.Results[0])
 	}
 }
 
-func TestServiceCompletesUnknownMediaTypeAndRejectsIncompleteSeriesShape(t *testing.T) {
+func TestServiceCompletesUnknownMediaTypeAndKeepsIncompleteSeriesTransferable(t *testing.T) {
 	identity := identityStub{identities: []Identity{{
 		TMDBID: "7131", Title: "范海辛", OriginalTitle: "Van Helsing", Year: 2004, MediaType: "movie",
 	}}}
@@ -217,7 +225,20 @@ func TestServiceCompletesUnknownMediaTypeAndRejectsIncompleteSeriesShape(t *test
 		}},
 	}}
 	series := NewServiceWithIdentity(seriesIdentity, seriesSource).Search(context.Background(), "葬送的芙莉莲").Results[0]
-	if series.MediaType != "series" || series.TMDBID != "209867" || series.TransferState != "identity_required" {
+	if series.MediaType != "series" || series.TMDBID != "209867" || series.TransferState != "available" {
 		t.Fatalf("series = %#v", series)
+	}
+}
+
+func TestServiceOmitsResultsThatCannotTransfer(t *testing.T) {
+	source := transferSearchStub{sourceStub: sourceStub{
+		id: "juying", label: "聚影", candidates: []Candidate{
+			{ID: "magnet", Title: "范海辛", Year: 2004, MediaType: "movie"},
+			{ID: "share", Title: "范海辛", Year: 2004, MediaType: "movie", SourceRef: "private"},
+		},
+	}}
+	response := NewService(source).Search(context.Background(), "范海辛")
+	if len(response.Results) != 1 || response.Results[0].ID != "juying:share" || response.Results[0].TransferState != "available" {
+		t.Fatalf("results = %#v", response.Results)
 	}
 }

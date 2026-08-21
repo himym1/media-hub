@@ -86,6 +86,35 @@ func TestSelectionTokenAndEnqueueAreIdempotent(t *testing.T) {
 	}
 }
 
+func TestSelectionTokenAllowsShareWithoutTMDB(t *testing.T) {
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	searchService := search.NewService(transferSourceStub{})
+	service := NewService(
+		nil,
+		searchService,
+		codec,
+		qms.NewClient("http://qms.local", "qms-key", time.Second),
+		emby.NewClient("http://emby.local", "emby-key", time.Second),
+		nil,
+		config.Workflow{
+			QMediaSyncAccountID: 3,
+			Movie:               config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
+		},
+		nil,
+	)
+	candidate := search.Candidate{
+		ID: "framehdr:item-1", Title: "Movie", MediaType: "movie",
+		SourceID: "framehdr", SourceRef: "private-reference",
+		TransferState: "available", Revision: searchService.CurrentRevision(),
+	}
+	if service.SelectionToken(candidate) == "" {
+		t.Fatal("share without TMDB should still receive a transfer token")
+	}
+}
+
 func TestEnqueueRejectsInvalidSelection(t *testing.T) {
 	service := NewService(nil, search.NewService(), nil, nil, nil, nil, config.Workflow{}, nil)
 	_, _, err := service.Enqueue(context.Background(), 1, "invalid", "request_one")

@@ -40,6 +40,7 @@ import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubEmptyState
 import com.mediahub.android.core.designsystem.MediaHubIcon
+import com.mediahub.android.core.designsystem.MediaHubListDetail
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubListDivider
 import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
@@ -126,10 +127,21 @@ internal fun TransferScreen(
     actions: TransferActions,
 ) {
     BackHandler(enabled = detailOpen, onBack = actions.back)
-    if (detailOpen) {
-        TransferDetailPage(uiState = uiState, actions = actions)
-        return
-    }
+    MediaHubListDetail(
+        detailOpen = detailOpen,
+        emptyTitle = "选择一个任务",
+        emptyMessage = "从左侧打开转存进度",
+        emptyIcon = Lucide.ListTodo,
+        list = { TransferListPage(uiState = uiState, actions = actions) },
+        detail = { TransferDetailPage(uiState = uiState, actions = actions) },
+    )
+}
+
+@Composable
+private fun TransferListPage(
+    uiState: TransferUiState,
+    actions: TransferActions,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()

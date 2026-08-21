@@ -260,6 +260,7 @@ func TestSearchReturnsProviderResponse(t *testing.T) {
 	provider := searchStub{response: search.Response{
 		Query: "范海辛", Results: []search.Candidate{{
 			ID: "frame:release-1", Title: "范海辛", MediaType: "movie", Source: "帧影",
+			SourceRef: "private", TransferState: "available",
 			Release: search.ReleaseFacts{Resolution: "2160p", VideoCodec: "HEVC"},
 		}}, SourceErrors: []search.SourceError{},
 	}}
@@ -275,6 +276,27 @@ func TestSearchReturnsProviderResponse(t *testing.T) {
 	}
 	if len(response.Results) != 1 || response.Results[0].ID != "frame:release-1" {
 		t.Fatal("unexpected search response")
+	}
+}
+
+func TestSearchOmitsResultsThatCannotTransfer(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodGet, "/api/v1/search?query=%E8%8C%83%E6%B5%B7%E8%BE%9B")
+	provider := searchStub{response: search.Response{
+		Query: "范海辛", Results: []search.Candidate{
+			{ID: "juying:magnet", Title: "范海辛", MediaType: "movie", TransferState: "unavailable"},
+			{ID: "juying:share", Title: "范海辛", MediaType: "movie", SourceRef: "private", TransferState: "available"},
+		},
+	}}
+
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Search: provider, Workflow: &workflowStub{}}).ServeHTTP(recorder, request)
+
+	var response search.Response
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if recorder.Code != http.StatusOK || len(response.Results) != 1 || response.Results[0].ID != "juying:share" {
+		t.Fatalf("status=%d results=%#v", recorder.Code, response.Results)
 	}
 }
 

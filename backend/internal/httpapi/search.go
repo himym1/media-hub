@@ -49,12 +49,12 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request) {
 	response := h.dependencies.Search.Search(r.Context(), query)
 	results := make([]publicCandidate, 0, len(response.Results))
 	for _, candidate := range response.Results {
+		if candidate.TransferState != "available" {
+			continue
+		}
 		token := ""
 		if h.dependencies.Workflow != nil {
 			token = h.dependencies.Workflow.SelectionToken(candidate)
-		}
-		if token == "" {
-			candidate.TransferState = "unavailable"
 		}
 		results = append(results, publicCandidate{Candidate: candidate, TransferToken: token})
 	}

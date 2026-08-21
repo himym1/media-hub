@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -30,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -43,11 +45,13 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.QrCode
 import com.composables.icons.lucide.Server
+import com.mediahub.android.app.LocalTwoPane
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
+import com.mediahub.android.core.designsystem.MediaHubListDetail
 import com.mediahub.android.core.designsystem.MediaHubListDivider
 import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
@@ -117,6 +121,29 @@ internal fun ServicesScreen(
     onLogout: () -> Unit,
 ) {
     val section = rememberSaveable { androidx.compose.runtime.mutableStateOf("overview") }
+    if (LocalTwoPane.current) {
+        ServicesTwoPane(
+            section = section.value,
+            onSectionChanged = { section.value = it },
+            uiState = uiState,
+            onRefresh = onRefresh,
+            onToggleSettings = onToggleSettings,
+            onSettingsDraftChange = onSettingsDraftChange,
+            onSaveSettings = onSaveSettings,
+            onTestWeCom = onTestWeCom,
+            onStartDriveAuthorization = onStartDriveAuthorization,
+            onCurrentPasswordChange = onCurrentPasswordChange,
+            onNewPasswordChange = onNewPasswordChange,
+            onConfirmationChange = onConfirmationChange,
+            onChangePassword = onChangePassword,
+            onChangeServer = onChangeServer,
+            onCheckForUpdate = onCheckForUpdate,
+            onDownloadUpdate = onDownloadUpdate,
+            onInstallUpdate = onInstallUpdate,
+            onLogout = onLogout,
+        )
+        return
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -143,7 +170,141 @@ internal fun ServicesScreen(
             contentPadding = PaddingValues(bottom = 18.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            when (section.value) {
+            servicesSectionItems(
+                section = section.value,
+                uiState = uiState,
+                onRefresh = onRefresh,
+                onToggleSettings = onToggleSettings,
+                onSettingsDraftChange = onSettingsDraftChange,
+                onSaveSettings = onSaveSettings,
+                onTestWeCom = onTestWeCom,
+                onStartDriveAuthorization = onStartDriveAuthorization,
+                onCurrentPasswordChange = onCurrentPasswordChange,
+                onNewPasswordChange = onNewPasswordChange,
+                onConfirmationChange = onConfirmationChange,
+                onChangePassword = onChangePassword,
+                onChangeServer = onChangeServer,
+                onCheckForUpdate = onCheckForUpdate,
+                onDownloadUpdate = onDownloadUpdate,
+                onInstallUpdate = onInstallUpdate,
+                onLogout = onLogout,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ServicesTwoPane(
+    section: String,
+    onSectionChanged: (String) -> Unit,
+    uiState: ServicesUiState,
+    onRefresh: () -> Unit,
+    onToggleSettings: () -> Unit,
+    onSettingsDraftChange: (com.mediahub.android.core.network.ProviderSettingsUpdate) -> Unit,
+    onSaveSettings: () -> Unit,
+    onTestWeCom: () -> Unit,
+    onStartDriveAuthorization: () -> Unit,
+    onCurrentPasswordChange: (String) -> Unit,
+    onNewPasswordChange: (String) -> Unit,
+    onConfirmationChange: (String) -> Unit,
+    onChangePassword: () -> Unit,
+    onChangeServer: () -> Unit,
+    onCheckForUpdate: () -> Unit,
+    onDownloadUpdate: (com.mediahub.android.core.network.AndroidRelease) -> Unit,
+    onInstallUpdate: (String) -> Unit,
+    onLogout: () -> Unit,
+) {
+    MediaHubListDetail(
+        detailOpen = true,
+        emptyTitle = "选择一项设置",
+        emptyMessage = "从左侧打开系统分区",
+        emptyIcon = Lucide.Server,
+        list = {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .testTag("services-section-list"),
+            ) {
+                MediaHubCard {
+                    serviceSectionOptions.forEachIndexed { index, (key, label) ->
+                        if (index > 0) MediaHubListDivider()
+                        MediaHubPreferenceRow(
+                            title = label,
+                            summary = if (section == key) "当前分区" else null,
+                            onClick = { onSectionChanged(key) },
+                        )
+                    }
+                }
+            }
+        },
+        detail = {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp)
+                    .testTag("services-section-detail"),
+            ) {
+                uiState.errorMessage?.let { message ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        MediaHubIcon(imageVector = Lucide.CircleAlert, contentDescription = null, tint = MediaHubColors.Error, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.width(8.dp))
+                        MediaHubText(text = message, color = MediaHubColors.Error, fontSize = 12.sp)
+                    }
+                }
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(bottom = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    servicesSectionItems(
+                        section = section,
+                        uiState = uiState,
+                        onRefresh = onRefresh,
+                        onToggleSettings = onToggleSettings,
+                        onSettingsDraftChange = onSettingsDraftChange,
+                        onSaveSettings = onSaveSettings,
+                        onTestWeCom = onTestWeCom,
+                        onStartDriveAuthorization = onStartDriveAuthorization,
+                        onCurrentPasswordChange = onCurrentPasswordChange,
+                        onNewPasswordChange = onNewPasswordChange,
+                        onConfirmationChange = onConfirmationChange,
+                        onChangePassword = onChangePassword,
+                        onChangeServer = onChangeServer,
+                        onCheckForUpdate = onCheckForUpdate,
+                        onDownloadUpdate = onDownloadUpdate,
+                        onInstallUpdate = onInstallUpdate,
+                        onLogout = onLogout,
+                    )
+                }
+            }
+        },
+    )
+}
+
+private fun LazyListScope.servicesSectionItems(
+    section: String,
+    uiState: ServicesUiState,
+    onRefresh: () -> Unit,
+    onToggleSettings: () -> Unit,
+    onSettingsDraftChange: (com.mediahub.android.core.network.ProviderSettingsUpdate) -> Unit,
+    onSaveSettings: () -> Unit,
+    onTestWeCom: () -> Unit,
+    onStartDriveAuthorization: () -> Unit,
+    onCurrentPasswordChange: (String) -> Unit,
+    onNewPasswordChange: (String) -> Unit,
+    onConfirmationChange: (String) -> Unit,
+    onChangePassword: () -> Unit,
+    onChangeServer: () -> Unit,
+    onCheckForUpdate: () -> Unit,
+    onDownloadUpdate: (com.mediahub.android.core.network.AndroidRelease) -> Unit,
+    onInstallUpdate: (String) -> Unit,
+    onLogout: () -> Unit,
+) {
+    when (section) {
                 "overview" -> {
                     item(key = "summary") {
                         MediaHubSmallTitle(text = "服务状态")
@@ -293,8 +454,6 @@ internal fun ServicesScreen(
                         }
                     }
                 }
-            }
-        }
     }
 }
 

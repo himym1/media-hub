@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -35,14 +37,21 @@ import com.mediahub.android.app.AppViewModel
 import com.mediahub.android.app.MainDestination
 import com.mediahub.android.app.WorkspaceDetail
 import com.mediahub.android.app.primaryDestinations
+import com.mediahub.android.app.LocalTwoPane
+import com.mediahub.android.app.ProvideWindowAdaptive
+import com.mediahub.android.app.showsWorkspaceBottomBar
+import com.mediahub.android.app.showsWorkspaceNavigationRail
+import com.mediahub.android.app.showsWorkspaceTopBar
 import com.mediahub.android.app.MediaHubViewModelFactory
 import com.mediahub.android.app.ServerViewModelStoreHolder
 import com.mediahub.android.core.designsystem.MediaHubButton
+import com.mediahub.android.core.designsystem.MediaHubCenteredPane
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubNavItem
 import com.mediahub.android.core.designsystem.MediaHubNavigationBar
+import com.mediahub.android.core.designsystem.MediaHubNavigationRail
 import com.mediahub.android.core.designsystem.MediaHubScaffold
 import com.mediahub.android.core.image.PosterLoader
 import com.mediahub.android.core.designsystem.MediaHubText
@@ -72,6 +81,7 @@ import com.mediahub.android.feature.transfers.TransferViewModel
 @Composable
 fun MediaHubApp() {
     MediaHubTheme {
+        ProvideWindowAdaptive {
         MediaHubScaffold(consumeWindowInsets = false) {
         val applicationContext = LocalContext.current.applicationContext
         val container = remember { (applicationContext as MediaHubApplication).container }
@@ -151,6 +161,7 @@ fun MediaHubApp() {
             }
         }
         }
+        }
     }
 }
 
@@ -177,12 +188,12 @@ private fun AuthenticatedWorkspace(
     val detailOpen = detail != null
     BackHandler(enabled = inSystem, onBack = appViewModel::closeSystem)
     WorkspaceShell(
-        destination = destination,
-        detailOpen = detailOpen,
-        onSystemBack = appViewModel::closeSystem,
-        onOpenSystem = appViewModel::openSystem,
-        onPrimarySelected = appViewModel::showDestination,
-    ) {
+            destination = destination,
+            detailOpen = detailOpen,
+            onSystemBack = appViewModel::closeSystem,
+            onOpenSystem = appViewModel::openSystem,
+            onPrimarySelected = appViewModel::showDestination,
+        ) {
             when (destination) {
                 MainDestination.Search -> {
                     val searchViewModel = viewModel<SearchViewModel>(key = "search-$serverGeneration", factory = factory)
@@ -254,7 +265,7 @@ private fun AuthenticatedWorkspace(
                     )
                 }
             }
-    }
+        }
 }
 
 @Composable
@@ -267,29 +278,41 @@ internal fun WorkspaceShell(
     content: @Composable () -> Unit,
 ) {
     val inSystem = destination == MainDestination.Services
-    MediaHubScaffold(
-        topBar = {
-            if (!detailOpen) {
-                Box(Modifier.testTag("workspace-top-bar")) {
-                    WorkspaceTopBar(
-                        destination = destination,
-                        inSystem = inSystem,
-                        onBack = onSystemBack,
-                        onOpenSystem = onOpenSystem,
-                    )
-                }
+    val twoPane = LocalTwoPane.current
+    val showTopBar = showsWorkspaceTopBar(detailOpen = detailOpen, twoPane = twoPane)
+    val showBottomBar = showsWorkspaceBottomBar(inSystem = inSystem, detailOpen = detailOpen, twoPane = twoPane)
+    val showRail = showsWorkspaceNavigationRail(inSystem = inSystem, twoPane = twoPane)
+    Row(Modifier.fillMaxSize()) {
+        if (showRail) {
+            Box(Modifier.testTag("workspace-nav-rail")) {
+                MainNavigationRail(selected = destination, onSelected = onPrimarySelected)
             }
-        },
-        bottomBar = {
-            if (!inSystem && !detailOpen) {
-                Box(Modifier.testTag("workspace-bottom-nav")) {
-                    MainNavigationBar(selected = destination, onSelected = onPrimarySelected)
+        }
+        MediaHubScaffold(
+            modifier = Modifier.weight(1f),
+            topBar = {
+                if (showTopBar) {
+                    Box(Modifier.testTag("workspace-top-bar")) {
+                        WorkspaceTopBar(
+                            destination = destination,
+                            inSystem = inSystem,
+                            onBack = onSystemBack,
+                            onOpenSystem = onOpenSystem,
+                        )
+                    }
                 }
+            },
+            bottomBar = {
+                if (showBottomBar) {
+                    Box(Modifier.testTag("workspace-bottom-nav")) {
+                        MainNavigationBar(selected = destination, onSelected = onPrimarySelected)
+                    }
+                }
+            },
+        ) { padding ->
+            Column(Modifier.fillMaxSize().padding(padding)) {
+                Box(Modifier.weight(1f)) { content() }
             }
-        },
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            Box(Modifier.weight(1f)) { content() }
         }
     }
 }
@@ -325,6 +348,19 @@ internal fun WorkspaceTopBar(
     )
 }
 
+@Composable
+private fun MainNavigationRail(selected: MainDestination, onSelected: (MainDestination) -> Unit) {
+    MediaHubNavigationRail(
+        items = primaryDestinations.map { destination ->
+            MediaHubNavItem(destination.name, destination.title, destinationIcon(destination))
+        },
+        selectedKey = selected.name,
+        onSelected = { key ->
+            primaryDestinations.firstOrNull { it.name == key }?.let(onSelected)
+        },
+    )
+}
+
 private fun destinationIcon(destination: MainDestination) = when (destination) {
     MainDestination.Search -> Lucide.Search
     MainDestination.Transfers -> Lucide.ListTodo
@@ -355,8 +391,8 @@ private fun AppMessageScreen(
     secondaryLabel: String? = null,
     onSecondary: () -> Unit = {},
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(28.dp),
+    MediaHubCenteredPane(
+        contentPadding = PaddingValues(28.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

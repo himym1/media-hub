@@ -1,5 +1,6 @@
 package com.mediahub.android
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -19,6 +20,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.core.graphics.writeToTestStorage
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.mediahub.android.app.LocalTwoPane
 import com.mediahub.android.app.MainDestination
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTheme
@@ -79,6 +81,32 @@ class SystemNavigationTest {
         composeRule.onNodeWithTag("workspace-bottom-nav").assertDoesNotExist()
         composeRule.onNodeWithTag("detail-title").assertExists()
         saveScreenshot("mediahub-workspace-detail")
+    }
+
+    @Test
+    fun expandedWorkspaceKeepsChromeWhenDetailIsOpen() {
+        composeRule.setContent {
+            MediaHubTheme {
+                CompositionLocalProvider(LocalTwoPane provides true) {
+                    WorkspaceShell(
+                        destination = MainDestination.Library,
+                        detailOpen = true,
+                        onSystemBack = {},
+                        onOpenSystem = {},
+                        onPrimarySelected = {},
+                    ) {
+                        MediaHubText("媒体详情", modifier = androidx.compose.ui.Modifier.testTag("detail-title"))
+                    }
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("workspace-top-bar").assertExists()
+        composeRule.onNodeWithTag("workspace-nav-rail").assertExists()
+        composeRule.onNodeWithTag("workspace-bottom-nav").assertDoesNotExist()
+        composeRule.onNodeWithTag("detail-title").assertExists()
+        composeRule.onNodeWithContentDescription("媒体库").assertHasClickAction().assertHeightIsAtLeast(48.dp)
+        saveScreenshot("mediahub-workspace-tablet")
     }
 
     private fun saveScreenshot(name: String) {

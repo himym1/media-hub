@@ -87,13 +87,7 @@ func (s *Service) workflowConfiguration() config.Workflow {
 }
 
 func (s *Service) SelectionToken(candidate search.Candidate) string {
-	if s.codec == nil || candidate.TransferState != "available" || candidate.SourceRef == "" || candidate.TMDBID == "" {
-		return ""
-	}
-	if candidate.MediaType == "series" && (candidate.Season == 0 || candidate.EpisodeStart == 0 || candidate.EpisodeEnd == 0) {
-		return ""
-	}
-	if candidate.MediaType == "movie" && (candidate.Season != 0 || candidate.EpisodeStart != 0 || candidate.EpisodeEnd != 0) {
+	if s.codec == nil || candidate.TransferState != "available" || candidate.SourceRef == "" {
 		return ""
 	}
 	if s.qms == nil || !s.qms.Configured() || s.emby == nil || !s.emby.Configured() {
