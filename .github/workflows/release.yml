@@ -68,6 +68,27 @@ jobs:
           from pathlib import Path
           path = Path("Dockerfile")
           text = path.read_text()
+          backend_old = (
+              "FROM golang:1.25-bookworm AS backend\n"
+              "ARG VERSION=dev\n"
+              "ARG GOPROXY=https://proxy.golang.org,direct\n"
+              "WORKDIR /src\n"
+              "COPY backend/go.mod backend/go.sum ./backend/\n"
+              'RUN GOPROXY="$GOPROXY" go -C backend mod download\n'
+          )
+          backend_new = (
+              "FROM golang:1.25-bookworm AS backend\n"
+              "ARG VERSION=dev\n"
+              "ARG GOPROXY=https://goproxy.cn,direct\n"
+              "ENV GOPROXY=$GOPROXY\n"
+              "ENV GOSUMDB=off\n"
+              "WORKDIR /src\n"
+              "COPY backend/go.mod backend/go.sum ./backend/\n"
+              "RUN go -C backend mod download\n"
+          )
+          if backend_old not in text:
+              raise SystemExit("expected golang backend stage was not found")
+          text = text.replace(backend_old, backend_new, 1)
           old = "FROM gcr.io/distroless/static-debian12:nonroot\n"
           new = (
               "FROM alpine:3.20\n"
@@ -80,7 +101,12 @@ jobs:
           path.write_text(text.replace(old, new, 1))
           PY
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
-          timeout 12m docker build --platform linux/amd64 --build-arg VERSION="$GITHUB_REF_NAME" --build-arg GOPROXY=https://goproxy.cn,direct -t "$image:${{ steps.version.outputs.name }}" -t "$image:${GITHUB_SHA}" .
+          # Synology Docker cannot reliably reach module proxies without host networking.
+          timeout 20m docker build --network=host --platform linux/amd64 \
+            --build-arg VERSION="$GITHUB_REF_NAME" \
+            --build-arg GOPROXY=https://goproxy.cn,direct \
+            -t "$image:${{ steps.version.outputs.name }}" \
+            -t "$image:${GITHUB_SHA}" .
       - name: Build signed release APK
         working-directory: android
         run: ./gradlew :app:assembleRelease -PMEDIA_HUB_VERSION_NAME='${{ steps.version.outputs.name }}' -PMEDIA_HUB_VERSION_CODE='${{ steps.version.outputs.code }}'
