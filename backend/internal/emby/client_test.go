@@ -220,6 +220,55 @@ func TestFindPlayableItemRequiresEveryEpisodeInRange(t *testing.T) {
 	}
 }
 
+func TestFindIndexedItemMatchesReleaseStyleNamesWithoutProviderIds(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/Items" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		query := request.URL.Query()
+		if query.Get("AnyProviderIdEquals") != "" {
+			_, _ = w.Write([]byte(`{"Items":[],"TotalRecordCount":0}`))
+			return
+		}
+		if !strings.Contains(query.Get("Fields"), "Path") || !strings.Contains(query.Get("Fields"), "OriginalTitle") {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte(`{"Items":[
+			{"Id":"wrong-prefix","Name":"【站点】超凡蜘蛛侠2","Type":"Movie","ProductionYear":2014,"Path":"/library/spider2.strm"},
+			{"Id":"ready-player","Name":"【高清影视之家发布 www.BBEBBB.com】头号玩家(无字片源).Ready.Player.One","Type":"Movie","ProductionYear":2018,"Path":"/library/ready.strm"}
+		],"TotalRecordCount":2}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key", time.Second, "")
+	item, found, err := client.FindIndexedItem(context.Background(), "头号玩家", "movie", 2018, "333339")
+	if err != nil || !found || item.ID != "ready-player" {
+		t.Fatalf("release-style match: item=%#v found=%v err=%v", item, found, err)
+	}
+	_, found, err = client.FindIndexedItem(context.Background(), "超凡蜘蛛侠", "movie", 2012, "1930")
+	if err != nil || found {
+		t.Fatalf("prefix title should not match sequel: found=%v err=%v", found, err)
+	}
+	item, found, err = client.FindIndexedItem(context.Background(), "超凡蜘蛛侠2", "movie", 2014, "102382")
+	if err != nil || !found || item.ID != "wrong-prefix" {
+		t.Fatalf("sequel title match: item=%#v found=%v err=%v", item, found, err)
+	}
+}
+
+func TestContainsTitleTokenRejectsLongerPrefixedTitles(t *testing.T) {
+	if !containsTitleToken("【站点】头号玩家(无字片源).Ready.Player.One", "头号玩家") {
+		t.Fatal("expected contained Chinese title to match")
+	}
+	if containsTitleToken("【站点】超凡蜘蛛侠2", "超凡蜘蛛侠") {
+		t.Fatal("expected shorter title not to match sequel name")
+	}
+	if !containsTitleToken("【站点】超凡蜘蛛侠2", "超凡蜘蛛侠2") {
+		t.Fatal("expected exact sequel token to match")
+	}
+}
+
 func TestLibrariesReturnsConfiguredMovieAndTVFoldersWithoutProbingEmby(t *testing.T) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {

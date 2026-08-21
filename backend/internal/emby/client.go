@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"media-hub/backend/internal/integration"
 )
@@ -485,7 +486,7 @@ func (c *Client) findIndexedItem(ctx context.Context, configuration clientConfig
 	if tmdbID != "" {
 		query := url.Values{
 			"AnyProviderIdEquals": {"Tmdb." + tmdbID},
-			"Fields":              {"ProviderIds"},
+			"Fields":              {"ProviderIds,OriginalTitle,Path"},
 			"IncludeItemTypes":    {expectedType},
 			"Limit":               {"10"},
 			"Recursive":           {"true"},
@@ -499,30 +500,104 @@ func (c *Client) findIndexedItem(ctx context.Context, configuration clientConfig
 		}
 		for _, item := range response.Items {
 			if item.ID != "" && item.Type == expectedType && item.ProviderIDs["Tmdb"] == tmdbID {
-				return Item{
-					ID: item.ID, Name: item.Name, Type: item.Type,
-					Year: item.ProductionYear, ProviderIDs: item.ProviderIDs,
-				}, true, nil
+				return publicItem(item), true, nil
 			}
 		}
 	}
-	result, err := c.searchItems(ctx, configuration, title, 50)
-	if err != nil {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return Item{}, false, nil
+	}
+	if err := validateAuthenticated(configuration); err != nil {
 		return Item{}, false, err
 	}
-	for _, item := range result.Items {
-		if item.Type != expectedType {
-			continue
-		}
-		if !strings.EqualFold(strings.TrimSpace(item.Name), strings.TrimSpace(title)) {
-			continue
-		}
-		if year > 0 && item.Year > 0 && item.Year != year {
-			continue
-		}
-		return item, true, nil
+	query := url.Values{
+		"Fields":           {"ProviderIds,OriginalTitle,Path"},
+		"IncludeItemTypes": {expectedType},
+		"Limit":            {"50"},
+		"Recursive":        {"true"},
+		"SearchTerm":       {title},
 	}
-	return Item{}, false, nil
+	if configuration.userID != "" {
+		query.Set("UserId", configuration.userID)
+	}
+	var response itemResponse
+	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
+		return Item{}, false, err
+	}
+	var best baseItem
+	bestScore := 0
+	for _, item := range response.Items {
+		if item.ID == "" || item.Type != expectedType {
+			continue
+		}
+		score, ok := indexedTitleMatchScore(title, year, item)
+		if !ok || score < bestScore {
+			continue
+		}
+		best = item
+		bestScore = score
+	}
+	if bestScore == 0 {
+		return Item{}, false, nil
+	}
+	return publicItem(best), true, nil
+}
+
+// indexedTitleMatchScore ranks Emby candidates for workflow completion.
+// Exact Name/OriginalTitle beats release-style names that merely contain the title.
+// Fuzzy matches require a year agreement when both sides provide one, and reject
+// longer titles that only share a prefix (e.g. 超凡蜘蛛侠 must not match 超凡蜘蛛侠2).
+func indexedTitleMatchScore(title string, year int, item baseItem) (int, bool) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return 0, false
+	}
+	name := strings.TrimSpace(item.Name)
+	original := strings.TrimSpace(item.OriginalTitle)
+	pathValue := strings.TrimSpace(item.Path)
+	if year > 0 && item.ProductionYear > 0 && item.ProductionYear != year {
+		return 0, false
+	}
+	if strings.EqualFold(name, title) || strings.EqualFold(original, title) {
+		return 3, true
+	}
+	if containsTitleToken(name, title) || containsTitleToken(original, title) || containsTitleToken(pathValue, title) {
+		if year > 0 && item.ProductionYear <= 0 {
+			return 1, true
+		}
+		return 2, true
+	}
+	return 0, false
+}
+
+func containsTitleToken(haystack, title string) bool {
+	haystack = strings.TrimSpace(haystack)
+	title = strings.TrimSpace(title)
+	if haystack == "" || title == "" {
+		return false
+	}
+	haystackFold := strings.ToLower(haystack)
+	titleFold := strings.ToLower(title)
+	haystackRunes := []rune(haystackFold)
+	titleRunes := []rune(titleFold)
+	if len(titleRunes) == 0 || len(titleRunes) > len(haystackRunes) {
+		return false
+	}
+	for index := 0; index+len(titleRunes) <= len(haystackRunes); index++ {
+		if string(haystackRunes[index:index+len(titleRunes)]) != titleFold {
+			continue
+		}
+		end := index + len(titleRunes)
+		if end == len(haystackRunes) || !isTitleContinuation(haystackRunes[end]) {
+			return true
+		}
+	}
+	return false
+}
+
+func isTitleContinuation(value rune) bool {
+	return unicode.IsLetter(value) || unicode.IsDigit(value)
 }
 
 func (c *Client) FindPlayableItem(ctx context.Context, title, mediaType string, year int, tmdbID string, season, episodeStart, episodeEnd int) (Item, bool, error) {
