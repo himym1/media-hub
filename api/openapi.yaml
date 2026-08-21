@@ -1265,6 +1265,21 @@ paths:
           $ref: '#/components/responses/ProblemResponse'
         '404':
           $ref: '#/components/responses/ProblemResponse'
+    delete:
+      operationId: deleteTransfer
+      summary: Permanently delete a failed or needs-attention transfer record
+      description: Removes only the local workflow record and related events/notifications. Does not delete 115, STRM, or Emby media.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: transferId, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/CSRFToken' }
+      responses:
+        '204':
+          description: Transfer record deleted
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '409': { $ref: '#/components/responses/ProblemResponse' }
   /transfers/{transferId}/retry:
     post:
       operationId: retryTransfer
@@ -1297,7 +1312,7 @@ paths:
   /transfers/{transferId}/archived:
     patch:
       operationId: setTransferArchived
-      summary: Archive or restore a terminal transfer record without deleting external media
+      summary: Archive or restore a completed transfer record without deleting external media
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       parameters:
         - { name: transferId, in: path, required: true, schema: { type: string } }

@@ -224,6 +224,10 @@ func (s *Service) SetArchived(ctx context.Context, userID int64, jobID string, a
 	return publicJob(job), nil
 }
 
+func (s *Service) Delete(ctx context.Context, userID int64, jobID string) error {
+	return s.store.DeleteTransferJob(ctx, userID, jobID)
+}
+
 func (s *Service) Retry(ctx context.Context, userID int64, jobID string) (Job, error) {
 	settings.ProviderSettingsLock.RLock()
 	defer settings.ProviderSettingsLock.RUnlock()

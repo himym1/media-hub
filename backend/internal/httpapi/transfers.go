@@ -143,6 +143,19 @@ func (h *handler) setTransferArchived(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, job)
 }
 
+func (h *handler) deleteTransfer(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Workflow == nil {
+		writeTransferProblem(w, workflow.ErrUnavailable)
+		return
+	}
+	principal := principalFromContext(r.Context())
+	if err := h.dependencies.Workflow.Delete(r.Context(), principal.UserID, r.PathValue("id")); err != nil {
+		writeTransferProblem(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func writeTransferProblem(w http.ResponseWriter, err error) {
 	value := problem{
 		Type:  "https://media-hub.local/problems/internal",
@@ -187,6 +200,11 @@ func writeTransferProblem(w http.ResponseWriter, err error) {
 		value.Title = "当前任务不能归档"
 		value.Status = http.StatusConflict
 		value.Code = "transfer_not_archivable"
+	case errors.Is(err, store.ErrTransferNotDeletable):
+		value.Type = "https://media-hub.local/problems/transfer-not-deletable"
+		value.Title = "当前任务不能删除"
+		value.Status = http.StatusConflict
+		value.Code = "transfer_not_deletable"
 	}
 	writeProblem(w, value)
 }

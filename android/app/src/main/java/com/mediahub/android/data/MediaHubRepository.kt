@@ -161,6 +161,8 @@ class MediaHubRepository(
     suspend fun setTransferArchived(id: String, archived: Boolean): TransferJob =
         authenticated { token -> api.setTransferArchived(token, id, archived) }
 
+    suspend fun deleteTransfer(id: String) = authenticated { token -> api.deleteTransfer(token, id) }
+
     suspend fun transferNotifications(): List<TransferNotification> = authenticated(api::transferNotifications)
 
     suspend fun retryTransferNotification(notification: TransferNotification): TransferNotification =

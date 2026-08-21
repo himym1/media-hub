@@ -282,9 +282,12 @@ func TestTransferArchiveOnlyHidesTerminalNonRetryableJobs(t *testing.T) {
 	create("running", "queued", false, 102)
 	create("retryable", "failed", true, 103)
 
-	archived, err := dataStore.SetTransferArchived(ctx, admin.ID, "failed", true, time.Unix(200, 0))
+	archived, err := dataStore.SetTransferArchived(ctx, admin.ID, "completed", true, time.Unix(200, 0))
 	if err != nil || archived.ArchivedAt != 200 {
-		t.Fatalf("archive failed job: job=%#v err=%v", archived, err)
+		t.Fatalf("archive completed job: job=%#v err=%v", archived, err)
+	}
+	if _, err := dataStore.SetTransferArchived(ctx, admin.ID, "failed", true, time.Unix(201, 0)); !errors.Is(err, ErrTransferNotArchivable) {
+		t.Fatalf("failed archive error = %v", err)
 	}
 	if _, err := dataStore.SetTransferArchived(ctx, admin.ID, "running", true, time.Unix(201, 0)); !errors.Is(err, ErrTransferNotArchivable) {
 		t.Fatalf("running archive error = %v", err)
@@ -298,19 +301,31 @@ func TestTransferArchiveOnlyHidesTerminalNonRetryableJobs(t *testing.T) {
 		t.Fatalf("active jobs=%#v err=%v", active, err)
 	}
 	archives, err := dataStore.ListTransferJobs(ctx, admin.ID, 10, true)
-	if err != nil || len(archives) != 1 || archives[0].ID != "failed" {
+	if err != nil || len(archives) != 1 || archives[0].ID != "completed" {
 		t.Fatalf("archived jobs=%#v err=%v", archives, err)
 	}
-	restored, err := dataStore.SetTransferArchived(ctx, admin.ID, "failed", false, time.Unix(202, 0))
+	restored, err := dataStore.SetTransferArchived(ctx, admin.ID, "completed", false, time.Unix(202, 0))
 	if err != nil || restored.ArchivedAt != 0 {
 		t.Fatalf("restore job=%#v err=%v", restored, err)
 	}
-	events, err := dataStore.TransferEvents(ctx, admin.ID, "failed")
+	events, err := dataStore.TransferEvents(ctx, admin.ID, "completed")
 	if err != nil || len(events) < 2 || events[len(events)-2].Message != "任务已归档" || events[len(events)-1].Message != "任务已恢复到当前列表" {
 		t.Fatalf("archive events=%#v err=%v", events, err)
 	}
 	active, err = dataStore.ListTransferJobs(ctx, admin.ID, 10, false)
 	if err != nil || len(active) != 4 {
 		t.Fatalf("restored active jobs=%#v err=%v", active, err)
+	}
+	if err := dataStore.DeleteTransferJob(ctx, admin.ID, "failed"); err != nil {
+		t.Fatalf("delete failed job: %v", err)
+	}
+	if err := dataStore.DeleteTransferJob(ctx, admin.ID, "completed"); !errors.Is(err, ErrTransferNotDeletable) {
+		t.Fatalf("completed delete error = %v", err)
+	}
+	if err := dataStore.DeleteTransferJob(ctx, admin.ID, "running"); !errors.Is(err, ErrTransferNotDeletable) {
+		t.Fatalf("running delete error = %v", err)
+	}
+	if _, err := dataStore.TransferJob(ctx, admin.ID, "failed"); !errors.Is(err, ErrTransferNotFound) {
+		t.Fatalf("deleted job still readable: %v", err)
 	}
 }

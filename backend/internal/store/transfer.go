@@ -14,6 +14,7 @@ var (
 	ErrTransferNotFound      = errors.New("transfer job not found")
 	ErrTransferNotRetryable  = errors.New("transfer job is not retryable")
 	ErrTransferNotArchivable = errors.New("transfer job is not archivable")
+	ErrTransferNotDeletable  = errors.New("transfer job is not deletable")
 )
 
 type TransferJob struct {
@@ -151,7 +152,7 @@ func (s *Store) SetTransferArchived(ctx context.Context, userID int64, jobID str
 	if archived == (job.ArchivedAt > 0) {
 		return job, nil
 	}
-	if archived && job.State != "completed" && (job.State != "failed" || job.Retryable) {
+	if archived && job.State != "completed" {
 		return TransferJob{}, ErrTransferNotArchivable
 	}
 
@@ -170,8 +171,7 @@ func (s *Store) SetTransferArchived(ctx context.Context, userID int64, jobID str
 		archivedAt = timestamp
 		message = "任务已归档"
 		query = `UPDATE transfer_jobs SET archived_at = ?
-			WHERE id = ? AND user_id = ? AND archived_at = 0
-			AND (state = 'completed' OR (state = 'failed' AND retryable = 0))`
+			WHERE id = ? AND user_id = ? AND archived_at = 0 AND state = 'completed'`
 		arguments = []any{archivedAt, jobID, userID}
 	}
 	result, err := tx.ExecContext(ctx, query, arguments...)
@@ -195,6 +195,31 @@ func (s *Store) SetTransferArchived(ctx context.Context, userID int64, jobID str
 	}
 	job.ArchivedAt = archivedAt
 	return job, nil
+}
+
+func (s *Store) DeleteTransferJob(ctx context.Context, userID int64, jobID string) error {
+	job, err := s.TransferJob(ctx, userID, jobID)
+	if err != nil {
+		return err
+	}
+	if job.State != "failed" && job.State != "needs_attention" {
+		return ErrTransferNotDeletable
+	}
+	result, err := s.database.ExecContext(ctx, `
+		DELETE FROM transfer_jobs
+		WHERE id = ? AND user_id = ? AND state IN ('failed', 'needs_attention')`,
+		jobID, userID)
+	if err != nil {
+		return fmt.Errorf("delete transfer job: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read transfer delete result: %w", err)
+	}
+	if count == 0 {
+		return ErrTransferNotDeletable
+	}
+	return nil
 }
 
 func (s *Store) TransferEvents(ctx context.Context, userID int64, jobID string) ([]TransferEvent, error) {

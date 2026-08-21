@@ -627,6 +627,13 @@ export function setTransferArchived(id: string, archived: boolean) {
   })
 }
 
+export function deleteTransfer(id: string) {
+  return requestJSON<void>(`/api/v1/transfers/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: writeHeaders(),
+  })
+}
+
 export function listTransferNotifications(limit = 100) {
   return requestJSON<{ notifications: TransferNotification[] }>(`/api/v1/notifications?limit=${limit}`)
 }

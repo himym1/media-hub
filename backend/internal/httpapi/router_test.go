@@ -82,8 +82,9 @@ func (stub *workflowStub) List(_ context.Context, _ int64, _ int, archived bool)
 }
 func (stub *workflowStub) SetArchived(_ context.Context, _ int64, _ string, archived bool) (workflow.Job, error) {
 	stub.archivedSet = &archived
-	return workflow.Job{ID: "job-1", State: "failed", Archived: archived}, nil
+	return workflow.Job{ID: "job-1", State: "completed", Archived: archived}, nil
 }
+func (*workflowStub) Delete(context.Context, int64, string) error { return nil }
 func (*workflowStub) Retry(context.Context, int64, string) (workflow.Job, error) {
 	return workflow.Job{}, nil
 }
@@ -414,6 +415,17 @@ func TestTransferArchiveRequiresExplicitBoolean(t *testing.T) {
 	NewRouter("test-version", Dependencies{Auth: authStub{}, Workflow: provider}).ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest || provider.archivedSet != nil {
 		t.Fatalf("archive status=%d archived=%v", recorder.Code, provider.archivedSet)
+	}
+}
+
+func TestTransferDeleteUsesWorkflowBoundary(t *testing.T) {
+	provider := &workflowStub{}
+	recorder := httptest.NewRecorder()
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Workflow: provider}).ServeHTTP(
+		recorder, authenticatedRequest(http.MethodDelete, "/api/v1/transfers/job-1"),
+	)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("delete status=%d", recorder.Code)
 	}
 }
 

@@ -78,6 +78,7 @@ class WorkspaceDetailFlowTest {
                             retryNotification = {},
                             showArchived = {},
                             setArchived = {},
+                            delete = {},
                         ),
                     )
                 }

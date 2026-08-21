@@ -24,9 +24,11 @@ data class TransferUiState(
     val retrying: Boolean = false,
     val notificationRetrying: Boolean = false,
     val archiving: Boolean = false,
+    val deleting: Boolean = false,
     val errorMessage: String? = null,
     val initialized: Boolean = false,
     val archivedCompletedId: String? = null,
+    val deletedCompletedId: String? = null,
 )
 
 class TransferViewModel(
@@ -78,7 +80,7 @@ class TransferViewModel(
     fun setSelectedArchived() {
         val selected = _uiState.value.selected ?: return
         val allowed = canArchiveTransfer(selected)
-        if (!allowed || _uiState.value.archiving) return
+        if (!allowed || _uiState.value.archiving || _uiState.value.deleting) return
         val archived = !_uiState.value.archived
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(archiving = true, errorMessage = null, archivedCompletedId = null)
@@ -94,9 +96,32 @@ class TransferViewModel(
         }
     }
 
+    fun deleteSelected() {
+        val selected = _uiState.value.selected ?: return
+        if (!canDeleteTransfer(selected) || _uiState.value.deleting || _uiState.value.archiving) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(deleting = true, errorMessage = null, deletedCompletedId = null)
+            try {
+                repository.deleteTransfer(selected.id)
+                load(false)
+                _uiState.value = _uiState.value.copy(deletedCompletedId = selected.id)
+            } catch (error: ApiException) {
+                _uiState.value = _uiState.value.copy(deleting = false, errorMessage = error.message ?: "任务删除失败")
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(deleting = false, errorMessage = "无法删除任务")
+            }
+        }
+    }
+
     fun consumeArchivedCompletion(id: String) {
         if (_uiState.value.archivedCompletedId == id) {
             _uiState.value = _uiState.value.copy(archivedCompletedId = null)
+        }
+    }
+
+    fun consumeDeletedCompletion(id: String) {
+        if (_uiState.value.deletedCompletedId == id) {
+            _uiState.value = _uiState.value.copy(deletedCompletedId = null)
         }
     }
 
@@ -161,6 +186,7 @@ class TransferViewModel(
                 retrying = false,
                 notificationRetrying = false,
                 archiving = false,
+                deleting = false,
                 errorMessage = null,
                 initialized = true,
             )
@@ -173,6 +199,7 @@ class TransferViewModel(
                 retrying = false,
                 notificationRetrying = false,
                 archiving = false,
+                deleting = false,
                 errorMessage = error.message ?: "任务读取失败",
             )
         } catch (_: Exception) {
@@ -183,6 +210,7 @@ class TransferViewModel(
                 retrying = false,
                 notificationRetrying = false,
                 archiving = false,
+                deleting = false,
                 errorMessage = "无法读取转存任务",
             )
         }
@@ -200,5 +228,7 @@ class TransferViewModel(
     }
 }
 
-internal fun canArchiveTransfer(job: TransferJob): Boolean =
-    job.state == "completed" || (job.state == "failed" && !job.retryable)
+internal fun canArchiveTransfer(job: TransferJob): Boolean = job.state == "completed"
+
+internal fun canDeleteTransfer(job: TransferJob): Boolean =
+    job.state == "failed" || job.state == "needs_attention"

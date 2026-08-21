@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
-import { Archive, ArchiveRestore, CheckCircle2, CircleAlert, Clock3, ListTodo, RefreshCw, RotateCcw } from 'lucide-react'
+import { Archive, ArchiveRestore, CheckCircle2, CircleAlert, Clock3, ListTodo, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
 import {
+  deleteTransfer,
   getTransfer,
   listTransferNotifications,
   listTransfers,
@@ -111,6 +112,20 @@ export function TransferQueue({ query }: TransferQueueProps) {
       ])
     },
   })
+  const remove = useMutation({
+    mutationFn: deleteTransfer,
+    onSuccess: async (_result, id) => {
+      if (selectedID === id) {
+        setSelectedID(null)
+        commitUrl({ task: null })
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['transfers'] }),
+        queryClient.invalidateQueries({ queryKey: ['transfer', id] }),
+        queryClient.invalidateQueries({ queryKey: ['transfer-notifications'] }),
+      ])
+    },
+  })
   const notifications = useQuery({
     queryKey: ['transfer-notifications'],
     queryFn: () => listTransferNotifications(),
@@ -167,7 +182,9 @@ export function TransferQueue({ query }: TransferQueueProps) {
               {selectedNotification ? <div className="notification-recovery"><CircleAlert size={17} /><div><strong>企业微信通知结果未知</strong><span>再次发送可能产生重复消息。</span></div><button disabled={retryNotification.isPending} onClick={() => retryNotification.mutate(selectedNotification)} type="button"><RotateCcw size={15} />{retryNotification.isPending ? '正在提交…' : '确认并重发'}</button></div> : null}
               {detail.data.retryable ? <button className="secondary-action" disabled={retry.isPending} onClick={() => retry.mutate(detail.data.id)} type="button"><RotateCcw size={16} />{retry.isPending ? '正在重试…' : '重试任务'}</button> : null}
               {archive.error ? <div className="task-error" role="alert"><CircleAlert size={17} /><span>{archive.error.message}</span></div> : null}
-              {(detail.data.state === 'completed' || (detail.data.state === 'failed' && !detail.data.retryable)) ? <button className="secondary-action" disabled={archive.isPending} onClick={() => archive.mutate({ id: detail.data.id, archived: !showArchived })} type="button">{showArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}{archive.isPending ? '正在处理…' : showArchived ? '恢复到任务列表' : '归档任务'}</button> : null}
+              {remove.error ? <div className="task-error" role="alert"><CircleAlert size={17} /><span>{remove.error.message}</span></div> : null}
+              {detail.data.state === 'completed' ? <button className="secondary-action" disabled={archive.isPending} onClick={() => archive.mutate({ id: detail.data.id, archived: !showArchived })} type="button">{showArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}{archive.isPending ? '正在处理…' : showArchived ? '恢复到任务列表' : '归档任务'}</button> : null}
+              {detail.data.state === 'failed' || detail.data.state === 'needs_attention' ? <button className="danger-button" disabled={remove.isPending} onClick={() => window.confirm('删除这条失败任务记录？不会影响 115 / Emby 中的媒体。') && remove.mutate(detail.data.id)} type="button"><Trash2 size={16} />{remove.isPending ? '正在删除…' : '删除任务'}</button> : null}
             </> : null}
           </aside>
         </div>

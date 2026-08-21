@@ -35,11 +35,13 @@ import com.composables.icons.lucide.ListTodo
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.RotateCcw
+import com.composables.icons.lucide.Trash2
 import com.mediahub.android.core.designsystem.BadgeVariant
 import com.mediahub.android.core.designsystem.MediaHubBadge
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
+import com.mediahub.android.core.designsystem.MediaHubConfirmDialog
 import com.mediahub.android.core.designsystem.MediaHubEmptyState
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubListDetail
@@ -47,12 +49,16 @@ import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubListDivider
 import com.mediahub.android.core.designsystem.MediaHubPipelineStepper
 import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
+import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.PipelineStepItem
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.network.TransferJob
 import com.mediahub.android.core.network.TransferNotification
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -75,6 +81,7 @@ internal data class TransferActions(
     val retryNotification: (TransferNotification) -> Unit,
     val showArchived: (Boolean) -> Unit,
     val setArchived: () -> Unit,
+    val delete: () -> Unit,
 )
 
 @Composable
@@ -106,6 +113,14 @@ internal fun TransferRoute(
         }
         viewModel.consumeArchivedCompletion(completedId)
     }
+    LaunchedEffect(detailId, uiState.deletedCompletedId) {
+        val deletedId = uiState.deletedCompletedId ?: return@LaunchedEffect
+        if (shouldCloseCompletedTransferDetail(detailId, deletedId)) {
+            viewModel.closeDetail()
+            onDetailChanged(null)
+        }
+        viewModel.consumeDeletedCompletion(deletedId)
+    }
     val actions = TransferActions(
         select = { id ->
             viewModel.select(id)
@@ -120,6 +135,7 @@ internal fun TransferRoute(
         retryNotification = viewModel::retryNotification,
         showArchived = viewModel::showArchived,
         setArchived = viewModel::setSelectedArchived,
+        delete = viewModel::deleteSelected,
     )
     TransferScreen(uiState = uiState, detailOpen = detailId != null, actions = actions)
 }
@@ -259,6 +275,8 @@ private fun TransferDetailPage(
                         archived = uiState.archived,
                         archiving = uiState.archiving,
                         onSetArchived = actions.setArchived,
+                        deleting = uiState.deleting,
+                        onDelete = actions.delete,
                     )
                 }
             }
@@ -326,7 +344,10 @@ private fun TransferDetail(
     archived: Boolean,
     archiving: Boolean,
     onSetArchived: () -> Unit,
+    deleting: Boolean,
+    onDelete: () -> Unit,
 ) {
+    var confirmingDelete by remember(job.id) { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -381,18 +402,40 @@ private fun TransferDetail(
             MediaHubButton(
                 label = if (retrying) "正在重试" else "重试任务",
                 icon = Lucide.RotateCcw,
-                enabled = !retrying,
+                enabled = !retrying && !deleting,
                 onClick = onRetry,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
         if (canArchiveTransfer(job)) {
-            MediaHubButton(
+            MediaHubSecondaryButton(
                 label = if (archiving) "正在处理" else if (archived) "恢复到任务列表" else "归档任务",
                 icon = if (archived) Lucide.ArchiveRestore else Lucide.Archive,
-                enabled = !archiving,
+                enabled = !archiving && !deleting,
                 onClick = onSetArchived,
                 modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (canDeleteTransfer(job)) {
+            MediaHubSecondaryButton(
+                label = if (deleting) "正在删除" else "删除任务",
+                icon = Lucide.Trash2,
+                enabled = !deleting && !archiving && !retrying,
+                onClick = { confirmingDelete = true },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            MediaHubConfirmDialog(
+                visible = confirmingDelete,
+                title = "确认删除该任务？",
+                message = "只会删除本地任务记录，不会影响 115 或 Emby 中的媒体。",
+                confirmLabel = if (deleting) "正在删除…" else "确认删除",
+                cancelLabel = "取消",
+                isDestructive = true,
+                onConfirm = {
+                    confirmingDelete = false
+                    onDelete()
+                },
+                onDismiss = { confirmingDelete = false },
             )
         }
     }

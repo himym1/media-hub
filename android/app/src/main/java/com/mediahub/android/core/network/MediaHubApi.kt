@@ -437,6 +437,10 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         )))
     }
 
+    suspend fun deleteTransfer(token: String, id: String) {
+        request("/api/v1/transfers/${encode(id)}", method = "DELETE", token = token)
+    }
+
     suspend fun transferNotifications(token: String): List<TransferNotification> {
         val root = JSONObject(request("/api/v1/notifications?limit=100", token = token))
         return root.getJSONArray("notifications").objects(::parseTransferNotification)

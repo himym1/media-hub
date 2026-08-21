@@ -7,12 +7,21 @@ import org.junit.Test
 
 class TransferArchivePolicyTest {
     @Test
-    fun onlySettledNonRetryableJobsCanBeArchived() {
+    fun onlyCompletedJobsCanBeArchived() {
         assertTrue(canArchiveTransfer(job(state = "completed", retryable = false)))
-        assertTrue(canArchiveTransfer(job(state = "failed", retryable = false)))
+        assertFalse(canArchiveTransfer(job(state = "failed", retryable = false)))
         assertFalse(canArchiveTransfer(job(state = "failed", retryable = true)))
         assertFalse(canArchiveTransfer(job(state = "needs_attention", retryable = false)))
         assertFalse(canArchiveTransfer(job(state = "transferring", retryable = false)))
+    }
+
+    @Test
+    fun failedAndNeedsAttentionJobsCanBeDeleted() {
+        assertTrue(canDeleteTransfer(job(state = "failed", retryable = false)))
+        assertTrue(canDeleteTransfer(job(state = "failed", retryable = true)))
+        assertTrue(canDeleteTransfer(job(state = "needs_attention", retryable = true)))
+        assertFalse(canDeleteTransfer(job(state = "completed", retryable = false)))
+        assertFalse(canDeleteTransfer(job(state = "transferring", retryable = false)))
     }
 
     @Test

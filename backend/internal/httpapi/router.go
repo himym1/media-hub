@@ -119,6 +119,7 @@ type TransferWorkflow interface {
 	Get(context.Context, int64, string) (workflow.JobDetail, error)
 	List(context.Context, int64, int, bool) ([]workflow.Job, error)
 	SetArchived(context.Context, int64, string, bool) (workflow.Job, error)
+	Delete(context.Context, int64, string) error
 	Retry(context.Context, int64, string) (workflow.Job, error)
 	ListNotifications(context.Context, int64, int) ([]workflow.Notification, error)
 	RetryNotification(context.Context, int64, string, string, string) (workflow.Notification, error)
@@ -263,6 +264,7 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/transfers/{id}", h.protected(h.getTransfer))
 	mux.Handle("POST /api/v1/transfers/{id}/retry", h.protected(h.retryTransfer))
 	mux.Handle("PATCH /api/v1/transfers/{id}/archived", h.protected(h.setTransferArchived))
+	mux.Handle("DELETE /api/v1/transfers/{id}", h.protected(h.deleteTransfer))
 	mux.Handle("GET /api/v1/notifications", h.protected(h.listNotifications))
 	mux.Handle("POST /api/v1/notifications/{jobId}/{eventType}/retry", h.protected(h.retryNotification))
 	if dependencies.AndroidReleases != nil {

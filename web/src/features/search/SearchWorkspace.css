@@ -189,6 +189,9 @@ h1 em { color: #d7f36a; font-style: normal; }
 .event-list strong { color: #d1d3cc; font-size: 12px; }
 .event-list span, .event-list time { color: var(--text-muted); font-size: 12px; }
 .secondary-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 0 13px; color: #d7f36a; border: 1px solid #64723e; border-radius: 7px; background: transparent; font-size: 12px; }
+.task-detail .danger-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; margin-top: 10px; padding: 0 13px; color: #f2b4ab; border: 1px solid #71403b; border-radius: 7px; background: #341d1b; font-size: 12px; }
+.task-detail .danger-button:hover:not(:disabled) { background: #422320; }
+.task-detail .danger-button:disabled { opacity: .45; }
 .compact-search { display: flex; align-items: center; gap: 12px; min-height: 54px; margin-top: 28px; padding: 0 8px 0 16px; color: #858b88; border: 1px solid #404645; border-radius: 8px; background: #191c1d; }
 .compact-search:focus-within { border-color: #a4bd55; }
 .compact-search input { flex: 1; min-width: 0; color: #f2f1eb; border: 0; outline: 0; background: transparent; font-size: 14px; }
