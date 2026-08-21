@@ -85,9 +85,15 @@ class SearchViewModel(
         }
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(initialLoading = true)
-            fetchDiscoveryData()
-            _uiState.value = _uiState.value.copy(initialLoading = false)
+            val cached = repository.cachedTrending()
+            if (cached != null) {
+                _uiState.value = _uiState.value.copy(trending = cached, initialLoading = false)
+                fetchDiscoveryData(forceNetwork = true)
+            } else {
+                _uiState.value = _uiState.value.copy(initialLoading = true)
+                fetchDiscoveryData(forceNetwork = true)
+                _uiState.value = _uiState.value.copy(initialLoading = false)
+            }
         }
     }
 
@@ -95,7 +101,7 @@ class SearchViewModel(
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(refreshing = true)
-            fetchDiscoveryData()
+            fetchDiscoveryData(forceNetwork = true)
             _uiState.value = _uiState.value.copy(refreshing = false)
         }
     }
@@ -111,7 +117,7 @@ class SearchViewModel(
             "movie"
         }
 
-    private suspend fun fetchDiscoveryData() {
+    private suspend fun fetchDiscoveryData(forceNetwork: Boolean) {
         try {
             val integrations = repository.overview()
             _uiState.value = _uiState.value.copy(integrations = integrations)
@@ -120,9 +126,12 @@ class SearchViewModel(
 
         var trendingItems: List<DiscoveryItem> = emptyList()
         try {
-            trendingItems = repository.trending()
+            trendingItems = repository.trending(forceRefresh = forceNetwork)
             _uiState.value = _uiState.value.copy(trending = trendingItems)
         } catch (_: Exception) {
+            if (trendingItems.isEmpty()) {
+                trendingItems = _uiState.value.trending
+            }
         }
 
         try {

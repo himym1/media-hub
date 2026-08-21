@@ -33,7 +33,15 @@ type Client struct {
 	mutex  sync.RWMutex
 	config clientConfig
 	client *http.Client
+	cache  map[string]discoveryCacheEntry
 }
+
+type discoveryCacheEntry struct {
+	items   []DiscoveryItem
+	expires time.Time
+}
+
+const discoveryCacheTTL = 5 * time.Minute
 
 type multiSearchResponse struct {
 	Results []struct {
@@ -66,12 +74,14 @@ func NewClient(baseURL, token string, timeout time.Duration) *Client {
 				return http.ErrUseLastResponse
 			},
 		},
+		cache: map[string]discoveryCacheEntry{},
 	}
 }
 
 func (c *Client) Configure(baseURL, token string) {
 	c.mutex.Lock()
 	c.config = clientConfig{baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"), token: strings.TrimSpace(token)}
+	c.cache = map[string]discoveryCacheEntry{}
 	c.mutex.Unlock()
 }
 
@@ -189,6 +199,10 @@ func (c *Client) discovery(ctx context.Context, endpointPath, fallbackMediaType 
 	if limit > 20 {
 		limit = 20
 	}
+	cacheKey := endpointPath + "|limit=" + strconv.Itoa(limit)
+	if items, ok := c.cachedDiscovery(cacheKey); ok {
+		return items, nil
+	}
 	query := url.Values{"include_adult": {"false"}, "language": {"zh-CN"}}
 	var response multiSearchResponse
 	if err := c.getJSON(ctx, endpointPath, query, &response); err != nil {
@@ -209,7 +223,36 @@ func (c *Client) discovery(ctx context.Context, endpointPath, fallbackMediaType 
 			break
 		}
 	}
+	c.storeDiscovery(cacheKey, items)
 	return items, nil
+}
+
+func (c *Client) cachedDiscovery(key string) ([]DiscoveryItem, bool) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	entry, ok := c.cache[key]
+	if !ok || time.Now().After(entry.expires) {
+		return nil, false
+	}
+	return cloneDiscoveryItems(entry.items), true
+}
+
+func (c *Client) storeDiscovery(key string, items []DiscoveryItem) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.cache[key] = discoveryCacheEntry{
+		items:   cloneDiscoveryItems(items),
+		expires: time.Now().Add(discoveryCacheTTL),
+	}
+}
+
+func cloneDiscoveryItems(items []DiscoveryItem) []DiscoveryItem {
+	if len(items) == 0 {
+		return []DiscoveryItem{}
+	}
+	cloned := make([]DiscoveryItem, len(items))
+	copy(cloned, items)
+	return cloned
 }
 
 func discoveryItem(id int64, mediaType, movieTitle, seriesTitle, releaseDate, firstAirDate, posterPath string) DiscoveryItem {

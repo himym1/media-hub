@@ -663,6 +663,35 @@ func (c *Client) RefreshItem(ctx context.Context, itemID string) error {
 	return c.refreshItem(ctx, itemID)
 }
 
+// ApplyTMDBMetadata identifies an Emby item with a known TMDB id and refreshes
+// metadata/images. Prefer this over library refresh alone when folder names are
+// non-standard and ProviderIds are empty.
+func (c *Client) ApplyTMDBMetadata(ctx context.Context, itemID, title string, year int, tmdbID string, replaceAllImages bool) error {
+	configuration := c.configuration()
+	if err := validateAuthenticated(configuration); err != nil {
+		return err
+	}
+	itemID = strings.TrimSpace(itemID)
+	tmdbID = strings.TrimSpace(tmdbID)
+	if itemID == "" || tmdbID == "" {
+		return ErrUpstreamResponse
+	}
+	payload := map[string]any{
+		"ProviderIds": map[string]string{"Tmdb": tmdbID},
+	}
+	if name := strings.TrimSpace(title); name != "" {
+		payload["Name"] = name
+	}
+	if year > 0 {
+		payload["ProductionYear"] = year
+	}
+	query := url.Values{}
+	if replaceAllImages {
+		query.Set("ReplaceAllImages", "true")
+	}
+	return c.postJSONBody(ctx, configuration, path.Join("Items", "RemoteSearch", "Apply", itemID), query, payload, nil)
+}
+
 func (c *Client) refreshItem(ctx context.Context, itemID string) error {
 	configuration := c.configuration()
 	if err := validateAuthenticated(configuration); err != nil {
@@ -861,11 +890,26 @@ func (c *Client) getJSONResponse(
 }
 
 func (c *Client) postJSON(ctx context.Context, configuration clientConfig, endpointPath string, query url.Values, target any) error {
+	return c.postJSONBody(ctx, configuration, endpointPath, query, map[string]any{}, target)
+}
+
+func (c *Client) postJSONBody(
+	ctx context.Context,
+	configuration clientConfig,
+	endpointPath string,
+	query url.Values,
+	body any,
+	target any,
+) error {
 	endpoint, err := endpointURL(configuration.baseURL, endpointPath, query)
 	if err != nil {
 		return err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewBufferString("{}"))
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("encode Emby request: %w", err)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("create Emby request: %w", err)
 	}

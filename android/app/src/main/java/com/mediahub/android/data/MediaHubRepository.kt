@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.SharedFlow
 class MediaHubRepository(
     private val api: MediaHubApi,
     private val sessionStore: SecureSessionStore,
+    private val discoveryCache: DiscoveryCache? = null,
 ) {
     private val _sessionExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val sessionExpired: SharedFlow<Unit> = _sessionExpired
@@ -113,7 +114,17 @@ class MediaHubRepository(
 
     suspend fun search(query: String): SearchResponse = authenticated { token -> api.search(token, query) }
 
-    suspend fun trending(): List<DiscoveryItem> = authenticated { api.trending(it) }
+    fun cachedTrending(maxAgeMs: Long = DiscoveryCache.TTL_MS): List<DiscoveryItem>? =
+        discoveryCache?.loadTrending(maxAgeMs)
+
+    suspend fun trending(forceRefresh: Boolean = false): List<DiscoveryItem> {
+        if (!forceRefresh) {
+            discoveryCache?.loadTrending()?.let { return it }
+        }
+        val items = authenticated { api.trending(it) }
+        discoveryCache?.saveTrending(items)
+        return items
+    }
 
     suspend fun recommendations(mediaType: String, tmdbId: String, limit: Int = 24): List<DiscoveryItem> =
         authenticated { api.recommendations(it, mediaType, tmdbId, limit) }

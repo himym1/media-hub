@@ -7,6 +7,7 @@ import com.mediahub.android.core.config.ServerUrlStore
 import com.mediahub.android.core.image.EmbyPosterLoader
 import com.mediahub.android.core.network.MediaHubApi
 import com.mediahub.android.core.network.MediaHubHttpClient
+import com.mediahub.android.data.DiscoveryCache
 import com.mediahub.android.data.MediaHubRepository
 import com.mediahub.android.playback.NetworkPlaybackRepository
 import com.mediahub.android.playback.PlaybackRepository
@@ -15,6 +16,8 @@ import java.security.MessageDigest
 class AppContainer(context: Context) {
     val serverUrlStore = ServerUrlStore(context)
     val sessionStore = SecureSessionStore(context)
+    private val appContext = context.applicationContext
+    private val discoveryCache = DiscoveryCache(appContext)
 
     @Volatile
     private var configured: ConfiguredDependencies? = null
@@ -30,9 +33,9 @@ class AppContainer(context: Context) {
             serverUrl = transport.baseUrl,
             generation = ++generationCounter,
             serverIdentity = serverIdentity(transport.baseUrl),
-            repository = MediaHubRepository(MediaHubApi(transport), sessionStore),
+            repository = MediaHubRepository(MediaHubApi(transport), sessionStore, discoveryCache),
             playbackRepository = NetworkPlaybackRepository(transport, sessionStore),
-            posterLoader = EmbyPosterLoader(transport, sessionStore),
+            posterLoader = EmbyPosterLoader(appContext, transport, sessionStore),
         ).also { configured = it }
     }
 
@@ -43,6 +46,7 @@ class AppContainer(context: Context) {
     fun clearConfiguration() {
         sessionStore.clear()
         serverUrlStore.clear()
+        discoveryCache.clear()
         generationCounter++
         configured = null
     }

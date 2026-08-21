@@ -50,7 +50,13 @@ export function DiscoveryView({
     queryFn: () => searchMedia(submittedQuery),
     enabled: Boolean(submittedQuery),
   })
-  const trending = useQuery({ queryKey: ['tmdb-trending'], queryFn: () => getTrending('all', 10), retry: false })
+  const trending = useQuery({
+    queryKey: ['tmdb-trending'],
+    queryFn: () => getTrending('all', 10),
+    retry: false,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+  })
   const transfer = useMutation({
     mutationFn: (candidate: Candidate) => {
       if (!candidate.transferToken) throw new Error('当前资源不能转存')
@@ -93,6 +99,8 @@ export function DiscoveryView({
     queryFn: () => getRecommendations(selected!.mediaType, selected!.tmdbId!, 6),
     enabled: Boolean(selected?.tmdbId),
     retry: false,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
   })
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {

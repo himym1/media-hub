@@ -213,6 +213,12 @@ func TestWorkflowCompletesOnlyAfterEmbyPlaybackIsReady(t *testing.T) {
 		switch request.URL.Path {
 		case "/Items/library-movies/Refresh":
 			w.WriteHeader(http.StatusNoContent)
+		case "/Items/RemoteSearch/Apply/emby-item":
+			if request.Method != http.MethodPost {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
 		case "/Items":
 			_, _ = w.Write([]byte(`{"Items":[{"Id":"emby-item","Name":"Movie","Type":"Movie","ProductionYear":2026}],"TotalRecordCount":1}`))
 		case "/Items/emby-item/PlaybackInfo":

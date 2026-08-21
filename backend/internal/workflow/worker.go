@@ -383,8 +383,17 @@ func (s *Service) pollEmbyIndex(ctx context.Context, job store.TransferJob) erro
 		job.NextAttemptAt = s.now().UTC().Add(syncPollDelay).Unix()
 		return s.save(ctx, &job, "indexing_emby", "")
 	}
-	job.State = "verifying_playback"
 	job.EmbyItemID = item.ID
+	if job.TMDBID != "" && item.ProviderIDs["Tmdb"] != job.TMDBID {
+		if err := s.emby.ApplyTMDBMetadata(ctx, item.ID, job.Title, job.Year, job.TMDBID, true); err != nil {
+			if saveErr := s.save(ctx, &job, "indexing_emby", "Emby 元数据识别失败，继续完成入库"); saveErr != nil {
+				return saveErr
+			}
+		} else if saveErr := s.save(ctx, &job, "indexing_emby", "已触发 Emby 元数据识别"); saveErr != nil {
+			return saveErr
+		}
+	}
+	job.State = "verifying_playback"
 	job.NextAttemptAt = 0
 	return s.save(ctx, &job, "indexing_emby", "Emby 已完成入库")
 }

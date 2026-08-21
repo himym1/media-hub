@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -266,6 +267,38 @@ func TestContainsTitleTokenRejectsLongerPrefixedTitles(t *testing.T) {
 	}
 	if !containsTitleToken("【站点】超凡蜘蛛侠2", "超凡蜘蛛侠2") {
 		t.Fatal("expected exact sequel token to match")
+	}
+}
+
+func TestApplyTMDBMetadataPostsRemoteSearchApply(t *testing.T) {
+	var sawPath string
+	var sawBody string
+	var sawReplace string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost || request.Header.Get("X-Emby-Token") != "test-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		sawPath = request.URL.Path
+		sawReplace = request.URL.Query().Get("ReplaceAllImages")
+		body, _ := io.ReadAll(request.Body)
+		sawBody = string(body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key", time.Second, "")
+	if err := client.ApplyTMDBMetadata(context.Background(), "item-9", "头号玩家", 2018, "333339", true); err != nil {
+		t.Fatalf("apply metadata: %v", err)
+	}
+	if sawPath != "/Items/RemoteSearch/Apply/item-9" {
+		t.Fatalf("path=%q", sawPath)
+	}
+	if sawReplace != "true" {
+		t.Fatalf("replace=%q", sawReplace)
+	}
+	if !strings.Contains(sawBody, `"Tmdb":"333339"`) || !strings.Contains(sawBody, `"Name":"头号玩家"`) {
+		t.Fatalf("body=%s", sawBody)
 	}
 }
 
