@@ -87,7 +87,8 @@ func (c *Client) PrimaryImage(ctx context.Context, itemID string, maxWidth int) 
 	if err != nil {
 		return PrimaryImage{}, err
 	}
-	request.Header.Set("Accept", "image/webp,image/png,image/jpeg")
+	// Prefer JPEG: some Emby builds return 500 when asked to convert Primary to WebP.
+	request.Header.Set("Accept", "image/jpeg,image/png,image/webp,*/*")
 	request.Header.Set("User-Agent", "Media-Hub/emby-image")
 	request.Header.Set("X-Emby-Token", configuration.apiKey)
 	response, err := c.client.Do(request)

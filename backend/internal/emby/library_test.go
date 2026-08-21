@@ -42,3 +42,29 @@ func TestEpisodesExposeUserPlaybackStateWithoutCredentials(t *testing.T) {
 		t.Fatalf("episode URLs = %#v", episodes[0])
 	}
 }
+
+func TestPrimaryImagePrefersJPEGAccept(t *testing.T) {
+	var accept string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/Items/item-1/Images/Primary" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		accept = request.Header.Get("Accept")
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xd9})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "emby-key", time.Second, "user-1")
+	image, err := client.PrimaryImage(context.Background(), "item-1", 320)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image.ContentType != "image/jpeg" || len(image.Data) == 0 {
+		t.Fatalf("image = %#v", image)
+	}
+	if !strings.HasPrefix(accept, "image/jpeg") {
+		t.Fatalf("Accept = %q", accept)
+	}
+}

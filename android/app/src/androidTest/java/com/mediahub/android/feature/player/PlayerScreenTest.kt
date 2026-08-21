@@ -21,6 +21,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.media3.ui.PlayerView
 import com.mediahub.android.core.designsystem.MediaHubTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -74,7 +75,7 @@ class PlayerScreenTest {
     }
 
     @Test
-    fun media3ControlsExposeTracksAndHidePlaylistCommands() {
+    fun media3SurfaceDisablesStockControllerForComposeChrome() {
         var playerView: PlayerView? = null
         composeRule.setContent {
             val context = LocalContext.current
@@ -82,14 +83,31 @@ class PlayerScreenTest {
         }
         composeRule.runOnIdle {
             val view = checkNotNull(playerView)
-            assertEquals(4_000, view.controllerShowTimeoutMs)
-            assertTrue(view.useController)
-            assertEquals(View.GONE, view.findViewById<View>(androidx.media3.ui.R.id.exo_prev).visibility)
-            assertEquals(View.GONE, view.findViewById<View>(androidx.media3.ui.R.id.exo_next).visibility)
-            assertEquals(View.GONE, view.findViewById<View>(androidx.media3.ui.R.id.exo_shuffle).visibility)
-            assertEquals(View.VISIBLE, view.findViewById<View>(androidx.media3.ui.R.id.exo_subtitle).visibility)
-            assertEquals(View.VISIBLE, view.findViewById<View>(androidx.media3.ui.R.id.exo_settings).visibility)
+            assertFalse(view.useController)
+            assertEquals(View.VISIBLE, view.visibility)
         }
+    }
+
+    @Test
+    fun readyStateWithoutControllerKeepsTopChromeOnly() {
+        composeRule.setContent {
+            MediaHubTheme {
+                PlayerScreen(
+                    state = PlayerUiState.Ready,
+                    title = "演示影片",
+                    controller = null,
+                    isPictureInPicture = false,
+                    actions = PlayerActions(
+                        onRetry = {},
+                        onBack = {},
+                        onToggleOrientation = {},
+                        onEnterPictureInPicture = {},
+                    ),
+                )
+            }
+        }
+        composeRule.onNodeWithContentDescription("返回").assertExists()
+        composeRule.onNodeWithContentDescription("后退 10 秒").assertDoesNotExist()
     }
 
     @Test
@@ -98,15 +116,19 @@ class PlayerScreenTest {
             MediaHubTheme {
                 PlayerScreen(
                     state = PlayerUiState.Error("当前媒体暂无直链", retryable = false),
-                    title = "测试视频",
+                    title = "演示影片",
                     controller = null,
                     isPictureInPicture = false,
-                    actions = PlayerActions({}, {}, {}, {}),
+                    actions = PlayerActions(
+                        onRetry = {},
+                        onBack = {},
+                        onToggleOrientation = {},
+                        onEnterPictureInPicture = {},
+                    ),
                 )
             }
         }
         composeRule.onNodeWithText("当前媒体暂无直链").assertExists()
         composeRule.onNodeWithText("重试").assertDoesNotExist()
-        composeRule.onNodeWithText("使用 Emby 播放").assertDoesNotExist()
     }
 }

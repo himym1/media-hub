@@ -23,6 +23,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 
+private const val SeekStepMs = 10_000L
+
 @androidx.annotation.OptIn(UnstableApi::class)
 class MediaHubPlaybackService : MediaSessionService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -38,12 +40,14 @@ class MediaHubPlaybackService : MediaSessionService() {
         sessionReporter = PlaybackSessionReporter {
             (application as MediaHubApplication).container.requireConfigured().playbackRepository
         }
-        httpFactory = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(false)
+        httpFactory = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, httpFactory)))
             .setAudioAttributes(AudioAttributes.DEFAULT, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
+            .setSeekBackIncrementMs(SeekStepMs)
+            .setSeekForwardIncrementMs(SeekStepMs)
             .build()
         sessionTracker = PlaybackSessionTracker(
             scope = scope,
