@@ -172,8 +172,47 @@ func TestJuyingStoresChineseFolderWithoutShareTitleGate(t *testing.T) {
 	if result.Path != "绿灯侠：绿灯长明" || result.FileID != "folder-1" {
 		t.Fatalf("result = %+v", result)
 	}
-	if target.ensureCalls != 1 || target.destinationID != "folder-1" || target.shareCode != "shareABC123" || target.inspectCalls != 0 {
+	if target.ensureCalls != 1 || target.destinationID != "folder-1" || target.shareCode != "shareABC123" || target.inspectCalls != 1 {
 		t.Fatalf("target = %+v", target)
+	}
+}
+
+func TestJuyingRejectsEpisodePackForMovieTransfer(t *testing.T) {
+	target := &juyingTransferTarget{
+		shareVideoNames: []string{
+			"시그널.E11.2160p.mkv",
+			"시그널.E12.2160p.mkv",
+		},
+	}
+	source := NewJuying("https://www.jying.top", "app-id", "app-key", time.Second, target, target, nil)
+	reference, err := json.Marshal(juyingReference{Kind: "share", Title: "信号 (2016)", ShareCode: "shareABC123", ReceiveCode: "WENG"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = source.StartTransfer(context.Background(), search.TransferRequest{
+		Title: "信号", MediaType: "movie", Reference: string(reference), DestinationID: "dest", IdempotencyKey: "op",
+	})
+	var failure search.Failure
+	if !errors.As(err, &failure) || failure.Code != "source_identity_mismatch" || failure.Retryable {
+		t.Fatalf("failure = %#v", err)
+	}
+	if target.shareCode != "" {
+		t.Fatalf("share was received despite identity mismatch: %+v", target)
+	}
+}
+
+func TestJuyingCandidateUpgradesEpisodeReleaseToSeries(t *testing.T) {
+	resource := juyingResource{
+		ID: json.RawMessage(`1`), ResourceType: "115",
+		ShareLink: "https://115.com/s/shareABC123?password=WENG",
+		Title:     "시그널.E11.2160p",
+	}
+	candidate, ok := juyingCandidate("1", "信号", 2016, "movie", resource)
+	if !ok {
+		t.Fatal("candidate was rejected")
+	}
+	if candidate.MediaType != "series" || candidate.Season != 1 || candidate.EpisodeStart != 11 || candidate.EpisodeEnd != 11 {
+		t.Fatalf("candidate = %+v", candidate)
 	}
 }
 

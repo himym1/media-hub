@@ -20,6 +20,7 @@ import (
 
 	"golang.org/x/net/html"
 
+	"media-hub/backend/internal/mediaidentity"
 	"media-hub/backend/internal/search"
 )
 
@@ -161,6 +162,15 @@ func (f *FrameHDR) StartTransfer(ctx context.Context, input search.TransferReque
 	}
 	if f.receiver == nil {
 		return search.TransferResult{}, search.Failure{Code: "source_unconfigured", Message: "115 分享接收未配置", Retryable: false}
+	}
+	if inspector, ok := f.receiver.(ShareInspector); ok {
+		videoNames, _, err := inspector.InspectShare(ctx, reference.ShareCode, reference.ReceiveCode)
+		if err != nil {
+			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "无法校验分享内容", Retryable: automaticWriteRetryAllowed(err)}
+		}
+		if mediaidentity.ShareContentConflictsWithMediaType(input.MediaType, videoNames) {
+			return search.TransferResult{}, search.Failure{Code: "source_identity_mismatch", Message: "分享内容像是电视剧分集，请按剧集重新搜索", Retryable: false}
+		}
 	}
 	if err := f.receiver.ReceiveShare(ctx, input.DestinationID, reference.ShareCode, reference.ReceiveCode, nil); err != nil {
 		var uncertain interface{ SubmissionUncertain() bool }

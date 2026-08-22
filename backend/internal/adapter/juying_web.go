@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"media-hub/backend/internal/mediaidentity"
 	"media-hub/backend/internal/search"
 )
 
@@ -146,10 +147,7 @@ func juyingWebCandidate(movieID, title string, year int, mediaType string, resou
 		sourceRef = ""
 		transferState = "unavailable"
 	}
-	season, episodeStart, episodeEnd := sidhubEpisodeRange(releaseTitle)
-	if mediaType != "series" {
-		season, episodeStart, episodeEnd = 0, 0, 0
-	}
+	mediaType, season, episodeStart, episodeEnd := mediaidentity.ApplyReleaseIdentity(mediaType, releaseTitle)
 	resourceIDHash := frameHDRReferenceID(movieID + "|" + resourceID + "|" + releaseTitle)
 	return search.Candidate{
 		ID:    "juying-" + movieID + "-" + resourceIDHash,

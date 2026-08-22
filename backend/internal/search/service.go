@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	"media-hub/backend/internal/integration"
+	"media-hub/backend/internal/mediaidentity"
 )
 
 type sourceState struct {
@@ -180,6 +181,15 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 					candidate.MediaType = "series"
 				} else {
 					candidate.MediaType = "movie"
+				}
+			}
+			if candidate.ReleaseTitle != "" {
+				mediaType, season, episodeStart, episodeEnd := mediaidentity.ApplyReleaseIdentity(candidate.MediaType, candidate.ReleaseTitle)
+				candidate.MediaType = mediaType
+				if season > 0 || episodeStart > 0 {
+					candidate.Season = season
+					candidate.EpisodeStart = episodeStart
+					candidate.EpisodeEnd = episodeEnd
 				}
 			}
 			if !supportsTransfer || candidate.SourceRef == "" {

@@ -61,6 +61,7 @@ func TestUnknownSourceAccessIsNotAutomaticallyRepeated(t *testing.T) {
 		config.Workflow{QMediaSyncAccountID: 1, Movie: config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"}},
 		nil,
 		nil,
+		nil,
 	)
 	token := service.SelectionToken(search.Candidate{
 		ID: "juying:item-1", Title: "Movie", MediaType: "movie", TMDBID: "123", SourceID: "juying",
@@ -153,6 +154,7 @@ func TestUnknownQMediaSyncSubmissionIsNotAutomaticallyRepeated(t *testing.T) {
 			QMediaSyncAccountID: 3,
 			Movie:               config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
 		},
+		nil,
 		nil,
 		nil,
 	)
@@ -259,6 +261,7 @@ func TestWorkflowCompletesOnlyAfterEmbyPlaybackIsReady(t *testing.T) {
 		},
 		func(context.Context, string) (string, error) { return "Media/Movies", nil },
 		nil,
+		nil,
 	)
 	token := service.SelectionToken(search.Candidate{
 		ID: "framehdr:item-1", Title: "Movie", Year: 2026, MediaType: "movie", TMDBID: "123", SourceID: "framehdr",
@@ -328,6 +331,7 @@ func TestQMediaSyncAuthExpirySurfacesFailReason(t *testing.T) {
 			Movie:               config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
 		},
 		func(context.Context, string) (string, error) { return "Media/Movies", nil },
+		nil,
 		nil,
 	)
 	token := service.SelectionToken(search.Candidate{

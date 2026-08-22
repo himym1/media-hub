@@ -46,6 +46,9 @@ type SourcePathResolver func(context.Context, string) (string, error)
 // inherit a stable Title (Year) name instead of release watermarks.
 type SourceRenamer func(context.Context, string, string) error
 
+// TransferredContentValidator inspects a transferred 115 folder before QMediaSync.
+type TransferredContentValidator func(context.Context, string, string) error
+
 type Service struct {
 	store             *store.Store
 	search            *search.Service
@@ -55,6 +58,7 @@ type Service struct {
 	notifier          Notifier
 	resolveSourcePath SourcePathResolver
 	renameSource      SourceRenamer
+	validateTransfer  TransferredContentValidator
 	mutex             sync.RWMutex
 	workflow          config.Workflow
 	now               func() time.Time
@@ -72,11 +76,12 @@ func NewService(
 	workflowConfig config.Workflow,
 	resolveSourcePath SourcePathResolver,
 	renameSource SourceRenamer,
+	validateTransfer TransferredContentValidator,
 ) *Service {
 	return &Service{
 		store: dataStore, search: searchService, codec: codec, qms: qmsClient, emby: embyClient,
 		notifier: notifier, workflow: workflowConfig, resolveSourcePath: resolveSourcePath,
-		renameSource: renameSource, now: time.Now,
+		renameSource: renameSource, validateTransfer: validateTransfer, now: time.Now,
 		wake: make(chan struct{}, 1), done: make(chan struct{}),
 	}
 }

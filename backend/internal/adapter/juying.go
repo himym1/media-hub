@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"media-hub/backend/internal/mediaidentity"
 	"media-hub/backend/internal/search"
 )
 
@@ -238,10 +239,7 @@ func juyingCandidate(movieID, title string, year int, mediaType string, resource
 		sourceRef = ""
 		transferState = "unavailable"
 	}
-	season, episodeStart, episodeEnd := sidhubEpisodeRange(releaseTitle)
-	if mediaType != "series" {
-		season, episodeStart, episodeEnd = 0, 0, 0
-	}
+	mediaType, season, episodeStart, episodeEnd := mediaidentity.ApplyReleaseIdentity(mediaType, releaseTitle)
 	resourceID := frameHDRReferenceID(movieID + "|" + rawJSONText(resource.ID) + "|" + string(encoded))
 	return search.Candidate{
 		ID:    "juying-" + movieID + "-" + resourceID,
@@ -290,6 +288,15 @@ func (s *Juying) StartTransfer(ctx context.Context, input search.TransferRequest
 				return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "无法创建中文片名目录", Retryable: automaticWriteRetryAllowed(err)}
 			}
 			destinationID = folderID
+		}
+		if inspector, ok := s.receiver.(ShareInspector); ok {
+			videoNames, _, err := inspector.InspectShare(ctx, reference.ShareCode, reference.ReceiveCode)
+			if err != nil {
+				return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "无法校验分享内容", Retryable: automaticWriteRetryAllowed(err)}
+			}
+			if mediaidentity.ShareContentConflictsWithMediaType(input.MediaType, videoNames) {
+				return search.TransferResult{}, search.Failure{Code: "source_identity_mismatch", Message: "分享内容像是电视剧分集，请按剧集重新搜索", Retryable: false}
+			}
 		}
 		if err := s.receiver.ReceiveShare(ctx, destinationID, reference.ShareCode, reference.ReceiveCode, nil); err != nil {
 			var uncertain interface{ SubmissionUncertain() bool }

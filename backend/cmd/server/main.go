@@ -23,6 +23,7 @@ import (
 	"media-hub/backend/internal/httpapi"
 	"media-hub/backend/internal/integration"
 	"media-hub/backend/internal/localupload"
+	"media-hub/backend/internal/mediaidentity"
 	"media-hub/backend/internal/playback"
 	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
@@ -131,6 +132,23 @@ func run(logger *slog.Logger) error {
 				"fileId": fileID,
 				"name":   name,
 			})
+		},
+		func(ctx context.Context, mediaType, folderID string) error {
+			if mediaType != "movie" {
+				return nil
+			}
+			items, _, err := drive115AuthService.ListFiles(ctx, folderID, 200, 0)
+			if err != nil {
+				return fmt.Errorf("无法校验转存内容")
+			}
+			names := make([]string, 0, len(items))
+			for _, item := range items {
+				names = append(names, item.Name)
+			}
+			if mediaidentity.MovieShareLooksLikeSeries(names) {
+				return errors.New("转存内容像是电视剧分集，请按剧集重新搜索")
+			}
+			return nil
 		},
 	)
 	checkinService := checkin.NewService(dataStore, searchService, wecomClient)

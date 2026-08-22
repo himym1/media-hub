@@ -40,6 +40,7 @@ type Identity struct {
 type TransferRequest struct {
 	UserID         int64
 	Title          string
+	MediaType      string
 	Reference      string
 	DestinationID  string
 	IdempotencyKey string

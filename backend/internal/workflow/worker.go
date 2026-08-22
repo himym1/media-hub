@@ -193,7 +193,7 @@ func (s *Service) processTransfer(ctx context.Context, job store.TransferJob) er
 	var result search.TransferResult
 	if provider.OperationID == "" {
 		result, err = source.StartTransfer(ctx, search.TransferRequest{
-			UserID: job.UserID, Title: job.Title, Reference: payload.Reference, DestinationID: target.DestinationID,
+			UserID: job.UserID, Title: job.Title, MediaType: payload.MediaType, Reference: payload.Reference, DestinationID: target.DestinationID,
 			IdempotencyKey: job.ID + "_transfer",
 		})
 	} else {
@@ -272,6 +272,11 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 	}
 	if sourcePath == "" {
 		return s.fail(ctx, &job, "transferred", "provider_state_invalid", "资源转存结果无法解密", false, "")
+	}
+	if s.validateTransfer != nil && !isFile {
+		if err := s.validateTransfer(ctx, job.MediaType, provider.FileID); err != nil {
+			return s.fail(ctx, &job, "transferred", "source_identity_mismatch", err.Error(), false, "transferred")
+		}
 	}
 	desiredName := libraryEntryName(job.Title, job.Year, isFile, sourcePath)
 	if s.renameSource != nil && needsLibraryRename(sourcePath, desiredName) {
