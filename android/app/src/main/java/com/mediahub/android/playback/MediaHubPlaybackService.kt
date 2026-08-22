@@ -3,6 +3,7 @@ package com.mediahub.android.playback
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.AudioAttributes
@@ -102,7 +103,13 @@ class MediaHubPlaybackService : MediaSessionService() {
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                commandCoordinator.onPlayerError(playbackHttpStatus(error))
+                val status = playbackHttpStatus(error)
+                Log.w(
+                    TAG,
+                    "player error code=${error.errorCodeName} http=$status message=${error.message}",
+                    error,
+                )
+                commandCoordinator.onPlayerError(status)
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -168,6 +175,7 @@ class MediaHubPlaybackService : MediaSessionService() {
         const val STATE_LOADING = "loading"
         const val STATE_READY = "ready"
         const val STATE_ERROR = "error"
+        private const val TAG = "MediaHubPlayback"
 
         private const val ACTION_PLAY = "com.mediahub.android.action.PLAY_115"
         private const val ACTION_INVALIDATE = "com.mediahub.android.action.INVALIDATE_PLAYBACK"

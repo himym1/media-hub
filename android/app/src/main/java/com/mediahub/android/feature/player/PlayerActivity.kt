@@ -21,12 +21,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.mediahub.android.MediaHubApplication
@@ -163,31 +165,52 @@ private fun PlayerRoute(
 ) {
     var controller by remember { mutableStateOf<MediaController?>(null) }
     var state by remember { mutableStateOf<PlayerUiState>(PlayerUiState.Loading) }
+    val latestState by rememberUpdatedState(state)
     val context = androidx.compose.ui.platform.LocalContext.current
-    DisposableEffect(context, request.mediaId) {
+    val appContext = context.applicationContext
+    DisposableEffect(request.mediaId) {
+        var connectedController: MediaController? = null
+        val playerListener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY && latestState !is PlayerUiState.Error) {
+                    state = PlayerUiState.Ready
+                }
+            }
+        }
         val controllerListener = object : MediaController.Listener {
             override fun onExtrasChanged(controller: MediaController, extras: Bundle) {
-                state = extras.playerUiState()
+                val next = extras.playerUiState()
+                if (
+                    next is PlayerUiState.Loading &&
+                    controller.currentMediaItem != null &&
+                    controller.playbackState != Player.STATE_IDLE
+                ) {
+                    return
+                }
+                state = next
             }
         }
         val future = MediaController.Builder(
-            context,
-            SessionToken(context, ComponentName(context, MediaHubPlaybackService::class.java)),
+            appContext,
+            SessionToken(appContext, ComponentName(appContext, MediaHubPlaybackService::class.java)),
         ).setListener(controllerListener).buildAsync()
         future.addListener({
             if (!future.isCancelled) {
-                controller = runCatching { future.get() }.getOrNull()
-                onControllerChanged(controller)
-                controller?.let { connected ->
+                connectedController = runCatching { future.get() }.getOrNull()
+                controller = connectedController
+                onControllerChanged(connectedController)
+                connectedController?.let { connected ->
+                    connected.addListener(playerListener)
                     state = connected.sessionExtras.playerUiState()
-                    context.startService(MediaHubPlaybackService.playIntent(context, request))
+                    appContext.startService(MediaHubPlaybackService.playIntent(appContext, request))
                 }
             }
-        }, ContextCompat.getMainExecutor(context))
+        }, ContextCompat.getMainExecutor(appContext))
         onDispose {
+            connectedController?.removeListener(playerListener)
+            MediaController.releaseFuture(future)
             controller = null
             onControllerChanged(null)
-            MediaController.releaseFuture(future)
         }
     }
     PlayerScreen(
@@ -200,7 +223,7 @@ private fun PlayerRoute(
         subtitleActions = subtitleActions,
         actions = playerActions.copy(onRetry = {
             state = PlayerUiState.Loading
-            context.startService(MediaHubPlaybackService.playIntent(context, request, force = true))
+            appContext.startService(MediaHubPlaybackService.playIntent(appContext, request, force = true))
         }),
     )
 }

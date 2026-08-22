@@ -82,8 +82,8 @@ class PlaybackCommandCoordinatorTest {
 
         coordinator.onPlayerError(500)
 
-        assertEquals(listOf("pause", "stop-session", "error:视频连接中断"), host.events)
-        assertEquals(PlaybackFailure("视频连接中断", true), host.failure)
+        assertEquals(listOf("pause", "stop-session", "error:视频连接中断 (HTTP 500)"), host.events)
+        assertEquals(playbackConnectionFailure(500), host.failure)
         coordinator.close()
     }
 

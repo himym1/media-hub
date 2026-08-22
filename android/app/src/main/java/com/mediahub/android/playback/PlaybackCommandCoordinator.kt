@@ -77,7 +77,7 @@ internal class PlaybackCommandCoordinator(
         if (action == null) {
             host.pause()
             host.stopSession()
-            host.publishError(PlaybackFailure("视频连接中断", retryable = true))
+            host.publishError(playbackConnectionFailure(responseCode))
             return
         }
         launchLatest { command ->
@@ -154,7 +154,8 @@ internal class PlaybackRecoveryCoordinator {
         positionMs: Long,
         autoPlay: Boolean,
     ): PlaybackRecoveryAction? {
-        if (responseCode == null || acquired || !isRefreshableHttpStatus(responseCode)) return null
+        if (acquired) return null
+        if (responseCode != null && !isRefreshableHttpStatus(responseCode)) return null
         acquired = true
         return PlaybackRecoveryAction(request, positionMs, autoPlay)
     }
@@ -164,7 +165,13 @@ internal class PlaybackRecoveryCoordinator {
     }
 }
 
-internal fun isRefreshableHttpStatus(responseCode: Int): Boolean = responseCode in setOf(401, 403, 404, 410)
+internal fun isRefreshableHttpStatus(responseCode: Int): Boolean =
+    responseCode in setOf(401, 403, 404, 410, 416, 502, 503, 504)
+
+internal fun playbackConnectionFailure(responseCode: Int?): PlaybackFailure {
+    val suffix = responseCode?.let { " (HTTP $it)" }.orEmpty()
+    return PlaybackFailure("视频连接中断$suffix", retryable = true)
+}
 
 internal fun matchesServerIdentity(request: PlaybackRequest, configuredIdentity: String): Boolean =
     request.serverIdentity == configuredIdentity

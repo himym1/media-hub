@@ -221,6 +221,9 @@ internal fun PlayerScreen(
         }
     }
 
+    val showPreparingOverlay = state is PlayerUiState.Loading &&
+        (controller == null || controller.currentMediaItem == null)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -231,10 +234,18 @@ internal fun PlayerScreen(
             AndroidView(
                 factory = { ctx -> createPlayerView(ctx) },
                 update = { playerView ->
-                    if (playerView.player !== controller) {
+                    if (playerView.player != controller) {
                         playerView.player = controller
+                        playerView.useController = false
                     }
                     playerView.resizeMode = aspectRatio.resizeMode
+                    playerView.setShowBuffering(
+                        if (state is PlayerUiState.Ready) {
+                            PlayerView.SHOW_BUFFERING_WHEN_PLAYING
+                        } else {
+                            PlayerView.SHOW_BUFFERING_NEVER
+                        },
+                    )
                 },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -413,8 +424,8 @@ internal fun PlayerScreen(
         }
 
         // 10. Loading & Error States
-        when (state) {
-            PlayerUiState.Loading -> {
+        when {
+            showPreparingOverlay -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -445,7 +456,7 @@ internal fun PlayerScreen(
                 }
             }
 
-            is PlayerUiState.Error -> {
+            state is PlayerUiState.Error -> {
                 Column(
                     modifier = Modifier
                         .align(Alignment.Center)
@@ -481,7 +492,7 @@ internal fun PlayerScreen(
                 }
             }
 
-            PlayerUiState.Ready -> Unit
+            else -> Unit
         }
 
         // 11. Modern Frosted Audio & Subtitle Side Drawer
@@ -2135,7 +2146,7 @@ private fun PlayerLiquidPillButton(
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun createPlayerView(context: Context): PlayerView = PlayerView(context).apply {
-    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
     useController = false
     controllerAutoShow = false
     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT

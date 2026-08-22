@@ -10,8 +10,17 @@ import org.junit.Test
 class PlaybackRecoveryTest {
     @Test
     fun refreshesKnownExpiredHttpResponsesOnly() {
-        listOf(401, 403, 404, 410).forEach { assertTrue(isRefreshableHttpStatus(it)) }
-        listOf(400, 416, 429, 500).forEach { assertFalse(isRefreshableHttpStatus(it)) }
+        listOf(401, 403, 404, 410, 416, 502, 503, 504).forEach { assertTrue(isRefreshableHttpStatus(it)) }
+        listOf(400, 429, 500).forEach { assertFalse(isRefreshableHttpStatus(it)) }
+    }
+
+    @Test
+    fun recoveryAllowsOneRefreshWhenHttpStatusIsUnknown() {
+        val coordinator = PlaybackRecoveryCoordinator()
+        val request = PlaybackRequest(Drive115Target("10", "20"), "Movie.mkv", serverIdentity = "a".repeat(64))
+
+        assertEquals(91_234L, coordinator.recover(null, request, positionMs = 91_234L, autoPlay = true)?.positionMs)
+        assertNull(coordinator.recover(null, request, positionMs = 1L, autoPlay = true))
     }
 
     @Test
