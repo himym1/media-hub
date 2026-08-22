@@ -19,6 +19,8 @@ import kotlinx.coroutines.launch
 data class SearchUiState(
     val query: String = "",
     val submittedQuery: String = "",
+    val focusTitle: String = "",
+    val focusSubtitle: String = "",
     val results: List<SearchCandidate> = emptyList(),
     val trending: List<DiscoveryItem> = emptyList(),
     val libraryRecommendations: List<DiscoveryItem> = emptyList(),
@@ -38,6 +40,9 @@ data class SearchUiState(
 ) {
     val selectedCandidate: SearchCandidate?
         get() = results.firstOrNull { it.id == selectedCandidateId }
+
+    val resultsHeading: String
+        get() = discoveryResultsHeading(searching, focusTitle, results.size)
 
     val heroItems: List<DiscoveryItem>
         get() = trending.take(5)
@@ -276,30 +281,60 @@ class SearchViewModel(
 
     fun onQueryChanged(query: String) {
         if (query.length > 120) return
-        _uiState.value = _uiState.value.copy(query = query, errorMessage = null)
+        _uiState.value = _uiState.value.copy(
+            query = query,
+            errorMessage = null,
+            focusTitle = "",
+            focusSubtitle = "",
+        )
     }
 
     fun submitSearch() {
-        val query = _uiState.value.query.trim()
+        runSearch(query = _uiState.value.query.trim(), focus = null)
+    }
+
+    fun refreshOverview() = refreshAll()
+
+    fun refreshTrending() = refreshAll()
+
+    fun searchTrending(item: DiscoveryItem) {
+        val query = discoverySearchQuery(item)
+        if (query.isEmpty()) return
+        runSearch(query = query, focus = item)
+    }
+
+    fun searchRecommendation(item: DiscoveryItem) = searchTrending(item)
+
+    private fun runSearch(query: String, focus: DiscoveryItem?) {
         if (query.isEmpty()) return
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
+                query = query,
                 submittedQuery = query,
+                focusTitle = focus?.title.orEmpty(),
+                focusSubtitle = focus?.let(::discoveryFocusSubtitle).orEmpty(),
                 searching = true,
                 errorMessage = null,
                 sourceMessage = null,
                 recommendations = emptyList(),
+                results = emptyList(),
+                selectedCandidateId = null,
             )
             try {
                 val response = repository.search(query)
+                val ranked = if (focus != null) {
+                    prioritizeDiscoveryResults(response.results, focus)
+                } else {
+                    response.results
+                }
                 _uiState.value = _uiState.value.copy(
                     searching = false,
-                    results = response.results,
-                    selectedCandidateId = response.results.firstOrNull()?.id,
+                    results = ranked,
+                    selectedCandidateId = ranked.firstOrNull()?.id,
                     sourceMessage = response.sourceErrors.joinToString(" · ") { it.message }.ifEmpty { null },
                 )
-                response.results.firstOrNull()?.let { onCandidateSelected(it.id) }
+                ranked.firstOrNull()?.let { onCandidateSelected(it.id) }
             } catch (error: ApiException) {
                 _uiState.value = _uiState.value.copy(
                     searching = false,
@@ -313,17 +348,6 @@ class SearchViewModel(
             }
         }
     }
-
-    fun refreshOverview() = refreshAll()
-
-    fun refreshTrending() = refreshAll()
-
-    fun searchTrending(item: DiscoveryItem) {
-        _uiState.value = _uiState.value.copy(query = item.title)
-        submitSearch()
-    }
-
-    fun searchRecommendation(item: DiscoveryItem) = searchTrending(item)
 
     fun onCandidateSelected(candidateId: String) {
         val candidate = _uiState.value.results.firstOrNull { it.id == candidateId }

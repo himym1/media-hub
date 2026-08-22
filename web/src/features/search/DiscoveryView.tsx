@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BellPlus, CircleAlert, Film, FolderInput, RefreshCw, Search, X } from 'lucide-react'
 import {
@@ -7,10 +7,17 @@ import {
   getTrending,
   searchMedia,
   type Candidate,
+  type DiscoveryItem,
   type Integration,
 } from '../../shared/api/mediaHub'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
+import {
+  discoveryFocusSubtitle,
+  discoveryResultsHeading,
+  discoverySearchQuery,
+  prioritizeDiscoveryResults,
+} from './discoverySearch'
 
 function formatSize(bytes: number) {
   if (bytes <= 0) return '大小未知'
@@ -18,8 +25,13 @@ function formatSize(bytes: number) {
   return gib >= 1024 ? `${(gib / 1024).toFixed(1)} TB` : `${gib.toFixed(1)} GB`
 }
 
-function searchQueryFromLocation() {
-  return new URLSearchParams(window.location.search).get('q')?.trim().slice(0, 120) ?? ''
+function searchStateFromLocation() {
+  const params = new URLSearchParams(window.location.search)
+  return {
+    query: params.get('q')?.trim().slice(0, 120) ?? '',
+    focusTitle: params.get('focus')?.trim().slice(0, 120) ?? '',
+    focusSubtitle: params.get('focusMeta')?.trim().slice(0, 40) ?? '',
+  }
 }
 
 type DiscoveryViewProps = {
@@ -39,8 +51,12 @@ export function DiscoveryView({
 }: DiscoveryViewProps) {
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [query, setQuery] = useState(searchQueryFromLocation)
-  const [submittedQuery, setSubmittedQuery] = useState(searchQueryFromLocation)
+  const initial = searchStateFromLocation()
+  const [query, setQuery] = useState(initial.query)
+  const [submittedQuery, setSubmittedQuery] = useState(initial.query)
+  const [focusTitle, setFocusTitle] = useState(initial.focusTitle)
+  const [focusSubtitle, setFocusSubtitle] = useState(initial.focusSubtitle)
+  const [focusItem, setFocusItem] = useState<Pick<DiscoveryItem, 'tmdbId' | 'year' | 'mediaType'> | null>(null)
   const [selected, setSelected] = useState<Candidate | null>(null)
   const sourceIntegration = integrations.find((item) => item.id === 'sources')
   const healthyCount = integrations.filter((item) => item.status === 'healthy').length
@@ -85,9 +101,12 @@ export function DiscoveryView({
 
   useEffect(() => {
     const restoreSearch = () => {
-      const restored = searchQueryFromLocation()
-      setQuery(restored)
-      setSubmittedQuery(restored)
+      const restored = searchStateFromLocation()
+      setQuery(restored.query)
+      setSubmittedQuery(restored.query)
+      setFocusTitle(restored.focusTitle)
+      setFocusSubtitle(restored.focusSubtitle)
+      setFocusItem(null)
       setSelected(null)
     }
     window.addEventListener('popstate', restoreSearch)
@@ -103,24 +122,50 @@ export function DiscoveryView({
     gcTime: 30 * 60_000,
   })
 
+  const rankedResults = useMemo(() => {
+    const results = search.data?.results ?? []
+    return focusItem ? prioritizeDiscoveryResults(results, focusItem) : results
+  }, [focusItem, search.data?.results])
+
+  useEffect(() => {
+    if (!search.isSuccess) return
+    setSelected(rankedResults[0] ?? null)
+  }, [search.dataUpdatedAt, rankedResults, search.isSuccess])
+
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const next = query.trim()
     if (!next) return
     setSubmittedQuery(next)
+    setFocusTitle('')
+    setFocusSubtitle('')
+    setFocusItem(null)
     setSelected(null)
-    commitUrl({ q: next })
+    commitUrl({ q: next, focus: null, focusMeta: null })
   }
-  const searchDiscoveryItem = (title: string) => {
-    setQuery(title)
-    setSubmittedQuery(title)
+
+  const openDiscoveryItem = (item: DiscoveryItem) => {
+    const next = discoverySearchQuery(item)
+    if (!next) return
+    setQuery(next)
+    setSubmittedQuery(next)
+    setFocusTitle(item.title)
+    setFocusSubtitle(discoveryFocusSubtitle(item))
+    setFocusItem({ tmdbId: item.tmdbId, year: item.year, mediaType: item.mediaType })
     setSelected(null)
-    commitUrl({ q: title })
+    commitUrl({
+      q: next,
+      focus: item.title,
+      focusMeta: discoveryFocusSubtitle(item),
+    })
   }
+
   const handleTransfer = (candidate: Candidate) => {
     setSelected(candidate)
     transfer.mutate(candidate)
   }
+
+  const heading = discoveryResultsHeading(search.isFetching, focusTitle)
 
   return (
     <section className="discovery-view">
@@ -138,7 +183,14 @@ export function DiscoveryView({
             id="media-search"
             maxLength={120}
             name="media-query"
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value)
+              if (focusTitle) {
+                setFocusTitle('')
+                setFocusSubtitle('')
+                setFocusItem(null)
+              }
+            }}
             placeholder="搜索电影或电视剧…"
             ref={inputRef}
             value={query}
@@ -158,17 +210,17 @@ export function DiscoveryView({
           ) : (
             <kbd aria-hidden="true" className="search-shortcut">⌘K</kbd>
           )}
-          <button disabled={!query.trim() || search.isFetching} type="submit">{search.isFetching ? '搜索中…' : '搜索'}</button>
+          <button disabled={!query.trim() || search.isFetching} type="submit">{search.isFetching ? '查找中…' : '搜索'}</button>
         </form>
-        <div className="search-meta"><span>{sourceIntegration?.detail ?? '资源源尚未配置'}</span>{submittedQuery ? <><span>·</span><span>{search.data?.partial ? '部分结果' : '搜索完成'}</span></> : null}</div>
+        <div className="search-meta"><span>{sourceIntegration?.detail ?? '资源源尚未配置'}</span>{submittedQuery ? <><span>·</span><span>{search.data?.partial ? '部分结果' : '已列出可转存版本'}</span></> : null}</div>
       </section>
 
       {!submittedQuery && trending.data?.items.length ? (
         <section className="trending-band" aria-label="本周热门">
-          <div className="section-heading"><div><h2>本周热门</h2></div></div>
+          <div className="section-heading"><div><h2>本周热门</h2><p>点选后直接列出可转存版本</p></div></div>
           <div className="trending-list">
             {trending.data.items.map((item) => (
-              <button key={`${item.mediaType}-${item.tmdbId}`} onClick={() => searchDiscoveryItem(item.title)} type="button">
+              <button key={`${item.mediaType}-${item.tmdbId}`} onClick={() => openDiscoveryItem(item)} type="button">
                 <span className="trending-poster">{item.posterUrl ? <img alt="" height="210" loading="lazy" src={item.posterUrl} width="140" /> : <Film aria-hidden="true" size={20} />}</span>
                 <span><strong>{item.title}</strong><small>{item.year || '年份未知'} · {item.mediaType === 'movie' ? '电影' : '剧集'}</small></span>
               </button>
@@ -183,11 +235,21 @@ export function DiscoveryView({
       {submittedQuery ? (
         <div className={selected ? 'content-grid has-detail' : 'content-grid'}>
           <section className="results-column">
-            <div className="section-heading"><div><h2>{search.data?.query ?? submittedQuery}<span>{search.data?.results.length ?? 0}</span></h2></div></div>
+            <div className="section-heading">
+              <div>
+                <h2>{heading}{!search.isFetching ? <span>{rankedResults.length}</span> : null}</h2>
+                {focusSubtitle ? <p>{focusSubtitle}</p> : null}
+              </div>
+            </div>
             {search.isLoading ? <div className="result-loading"><div /><div /><div /></div> : null}
-            {search.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>搜索暂时不可用</strong><span>{search.error.message}</span></div><button onClick={() => void search.refetch()} type="button">重试</button></div> : null}
-            {!search.isLoading && !search.isError && search.data?.results.length === 0 ? <div className="empty-state"><Film size={26} /><span>没有找到匹配资源</span></div> : null}
-            {!search.isLoading && !search.isError ? search.data?.results.map((candidate) => {
+            {search.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>暂时无法列出可转存版本</strong><span>{search.error.message}</span></div><button onClick={() => void search.refetch()} type="button">重试</button></div> : null}
+            {!search.isLoading && !search.isError && rankedResults.length === 0 ? (
+              <div className="empty-state">
+                <Film size={26} />
+                <span>{focusTitle ? `没有找到《${focusTitle}》的可转存版本` : '没有找到匹配资源'}</span>
+              </div>
+            ) : null}
+            {!search.isLoading && !search.isError ? rankedResults.map((candidate) => {
               const transferring = transfer.isPending && transfer.variables.id === candidate.id
               const available = candidate.transferState === 'available' && Boolean(candidate.transferToken)
               const subscribable = candidate.transferState !== 'identity_required' && Boolean(candidate.tmdbId)
@@ -210,7 +272,7 @@ export function DiscoveryView({
             <div className="detail-header"><div><h2>{selected.title}</h2></div><IconButton label="关闭详情" onClick={() => setSelected(null)} subtle><X size={17} /></IconButton></div>
             <div className="detail-poster">{selected.posterUrl ? <img alt={`${selected.title} 海报`} height="270" src={selected.posterUrl} width="360" /> : <div className="poster-placeholder"><Film size={34} /></div>}<div className="poster-overlay"><span>{selected.provider ?? selected.source}</span><strong>{selected.release.resolution}</strong></div></div>
             <div className="detail-facts"><div><span>视频</span><strong>{selected.release.videoCodec}{selected.release.dynamicRange ? ` · ${selected.release.dynamicRange}` : ''}</strong></div><div><span>音频</span><strong>{selected.release.audio ?? '未知'}</strong></div><div><span>体积</span><strong>{formatSize(selected.release.sizeBytes)}</strong></div><div><span>目标</span><strong>{selected.mediaType === 'movie' ? '115 / 电影' : '115 / 电视剧'}</strong></div></div>
-            {recommendations.data?.items.length ? <div className="recommendation-links"><span>相似内容</span>{recommendations.data.items.slice(0, 4).map((item) => <button key={`${item.mediaType}-${item.tmdbId}`} onClick={() => searchDiscoveryItem(item.title)} type="button">{item.title}</button>)}</div> : null}
+            {recommendations.data?.items.length ? <div className="recommendation-links"><span>相似内容</span>{recommendations.data.items.slice(0, 4).map((item) => <button key={`${item.mediaType}-${item.tmdbId}`} onClick={() => openDiscoveryItem(item)} type="button">{item.title}</button>)}</div> : null}
             <div className="detail-actions"><button className="secondary-command" disabled={!selected.tmdbId || selected.transferState === 'identity_required'} onClick={() => onSubscribe(selected)} type="button"><BellPlus size={16} />订阅</button><button className="primary-action" disabled={!selected.transferToken || transfer.isPending} onClick={() => handleTransfer(selected)} type="button"><FolderInput size={17} />{transfer.isPending ? '正在创建任务…' : selected.transferToken ? '加入转存队列' : selected.transferState === 'identity_required' ? '身份待确认' : '工作流不可用'}</button></div>
           </aside> : null}
         </div>

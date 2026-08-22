@@ -81,6 +81,7 @@ h1 em { color: #d7f36a; font-style: normal; }
 .content-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 38px; padding-top: 38px; }
 .section-heading, .detail-header { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
 .section-heading h2, .detail-header h2 { color: #edece5; font-size: 24px; font-weight: 500; letter-spacing: 0; }
+.section-heading p { margin: 6px 0 0; color: #9aa093; font-size: 13px; line-height: 1.4; }
 .section-heading h2 span { display: inline-grid; place-items: center; min-width: 22px; height: 20px; margin-left: 9px; padding: 0 5px; color: #c8d889; border: 1px solid #4b5c34; border-radius: 5px; font-size: 12px; vertical-align: 4px; }
 .filter-button { display: inline-flex; align-items: center; gap: 7px; padding: 8px 10px; color: #a2a6a1; border: 1px solid #363b3b; border-radius: 7px; background: transparent; font-size: 12px; }
 .filter-button:hover { color: #f2f1eb; border-color: #59615c; }

@@ -195,7 +195,15 @@ internal fun SearchScreen(
         ) {
             Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
                 if (uiState.submittedQuery.isNotBlank() || uiState.searching) {
-                    MediaHubSmallTitle(text = if (uiState.searching) "正在搜索…" else "搜索结果 ${uiState.results.size}")
+                    MediaHubSmallTitle(text = uiState.resultsHeading)
+                    if (uiState.focusSubtitle.isNotBlank() && !uiState.searching) {
+                        MediaHubText(
+                            text = uiState.focusSubtitle,
+                            color = MediaHubColors.TextMuted,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                        )
+                    }
                 }
                 uiState.errorMessage?.let { message ->
                     StatusMessage(message, MediaHubColors.Error)
@@ -243,7 +251,11 @@ internal fun SearchScreen(
                     if (!uiState.searching && uiState.submittedQuery.isNotBlank() && uiState.results.isEmpty() && uiState.errorMessage == null) {
                         item {
                             MediaHubText(
-                                text = "没有找到匹配资源",
+                                text = if (uiState.focusTitle.isNotBlank()) {
+                                    "没有找到《${uiState.focusTitle}》的可转存版本"
+                                } else {
+                                    "没有找到匹配资源"
+                                },
                                 modifier = Modifier.padding(vertical = 28.dp),
                                 color = MediaHubColors.TextMuted,
                                 fontSize = 13.sp,
@@ -329,7 +341,7 @@ internal fun SearchScreen(
                             item(key = "library-recs") {
                                 DiscoveryGallerySection(
                                     title = "猜你喜欢",
-                                    subtitle = uiState.libraryRecommendationSeed?.let { "基于《$it》推荐" } ?: "根据你的媒体库精选推荐",
+                                    subtitle = uiState.libraryRecommendationSeed?.let { "基于《$it》 · 点选直接列出可转存版本" } ?: "点选后直接列出可转存版本",
                                     icon = Lucide.Sparkles,
                                     items = uiState.libraryRecommendations,
                                     onSelect = onRecommendationSelected,
@@ -375,7 +387,7 @@ internal fun SearchScreen(
                         item(key = "trending-movies") {
                             DiscoveryGallerySection(
                                 title = "院线热映",
-                                subtitle = "全网热度最高的电影资源",
+                                subtitle = "点选后直接列出可转存版本",
                                 icon = Lucide.Film,
                                 items = uiState.trendingMovies,
                                 onSelect = onTrendingSelected,
@@ -390,7 +402,7 @@ internal fun SearchScreen(
                         item(key = "trending-series") {
                             DiscoveryGallerySection(
                                 title = "连载热播",
-                                subtitle = "正在热播的剧集与动漫",
+                                subtitle = "点选后直接列出可转存版本",
                                 icon = Lucide.Tv,
                                 items = uiState.trendingSeries,
                                 onSelect = onTrendingSelected,
@@ -403,7 +415,7 @@ internal fun SearchScreen(
                         item(key = "more-trending") {
                             DiscoveryGallerySection(
                                 title = "本周爆款榜",
-                                subtitle = "全网热搜排名前列",
+                                subtitle = "点选后直接列出可转存版本",
                                 icon = Lucide.Flame,
                                 items = uiState.trending.drop(5),
                                 onSelect = onTrendingSelected,
@@ -1047,7 +1059,15 @@ private fun SearchTwoPane(
                 )
                 if (showingResults) {
                     if (uiState.submittedQuery.isNotBlank() || uiState.searching) {
-                        MediaHubSmallTitle(text = if (uiState.searching) "正在搜索…" else "搜索结果 ${uiState.results.size}")
+                        MediaHubSmallTitle(text = uiState.resultsHeading)
+                        if (uiState.focusSubtitle.isNotBlank() && !uiState.searching) {
+                            MediaHubText(
+                                text = uiState.focusSubtitle,
+                                color = MediaHubColors.TextMuted,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                            )
+                        }
                     }
                     uiState.errorMessage?.let { StatusMessage(it, MediaHubColors.Error) }
                     uiState.sourceMessage?.let { StatusMessage(it, MediaHubColors.Warning) }
@@ -1074,7 +1094,11 @@ private fun SearchTwoPane(
                         if (!uiState.searching && uiState.submittedQuery.isNotBlank() && uiState.results.isEmpty() && uiState.errorMessage == null) {
                             item {
                                 MediaHubText(
-                                    text = "没有找到匹配资源",
+                                    text = if (uiState.focusTitle.isNotBlank()) {
+                                        "没有找到《${uiState.focusTitle}》的可转存版本"
+                                    } else {
+                                        "没有找到匹配资源"
+                                    },
                                     modifier = Modifier.padding(vertical = 28.dp),
                                     color = MediaHubColors.TextMuted,
                                     fontSize = 13.sp,
@@ -1142,7 +1166,7 @@ private fun SearchIdleOverview(
             item {
                 DiscoveryGallerySection(
                     title = "猜你喜欢",
-                    subtitle = uiState.libraryRecommendationSeed?.let { "基于《$it》" } ?: "精选推荐",
+                    subtitle = uiState.libraryRecommendationSeed?.let { "基于《$it》 · 点选直接列出可转存版本" } ?: "点选后直接列出可转存版本",
                     icon = Lucide.Sparkles,
                     items = uiState.libraryRecommendations,
                     onSelect = onSelect,
@@ -1156,7 +1180,7 @@ private fun SearchIdleOverview(
             item {
                 DiscoveryGallerySection(
                     title = "热门精选",
-                    subtitle = "实时全网热榜",
+                    subtitle = "点选后直接列出可转存版本",
                     icon = Lucide.Flame,
                     items = uiState.trending,
                     onSelect = onSelect,
