@@ -12,6 +12,7 @@ import com.mediahub.android.feature.operations.LocalUploadViewModel
 import com.mediahub.android.feature.search.SearchViewModel
 import com.mediahub.android.feature.services.ServicesViewModel
 import com.mediahub.android.feature.subscriptions.SubscriptionViewModel
+import com.mediahub.android.feature.subtitles.RemoteSubtitleViewModel
 import com.mediahub.android.feature.transfers.TransferViewModel
 
 class MediaHubViewModelFactory(
@@ -30,6 +31,7 @@ class MediaHubViewModelFactory(
         modelClass.isAssignableFrom(LocalUploadViewModel::class.java) -> LocalUploadViewModel(repository) as T
         modelClass.isAssignableFrom(ArchiveViewModel::class.java) -> ArchiveViewModel(repository) as T
         modelClass.isAssignableFrom(SubscriptionViewModel::class.java) -> SubscriptionViewModel(repository) as T
+        modelClass.isAssignableFrom(RemoteSubtitleViewModel::class.java) -> RemoteSubtitleViewModel(repository) as T
         else -> throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

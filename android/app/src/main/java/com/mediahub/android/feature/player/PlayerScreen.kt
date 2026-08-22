@@ -83,6 +83,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.Captions
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Lock
@@ -102,7 +103,9 @@ import com.composables.icons.lucide.X
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubText
+import com.mediahub.android.core.network.EmbyRemoteSubtitle
 import com.mediahub.android.feature.library.formatPlaybackPosition
+import com.mediahub.android.feature.subtitles.RemoteSubtitleUiState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.abs
@@ -113,6 +116,12 @@ internal sealed interface PlayerUiState {
     data object Ready : PlayerUiState
     data class Error(val message: String, val retryable: Boolean) : PlayerUiState
 }
+
+internal data class PlayerSubtitleActions(
+    val onSearch: () -> Unit = {},
+    val onDownload: (String) -> Unit = {},
+    val onClear: () -> Unit = {},
+)
 
 internal data class PlayerActions(
     val onRetry: () -> Unit,
@@ -130,10 +139,21 @@ internal data class SeekGestureState(
 private val PlaybackSpeeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 
 @androidx.annotation.OptIn(UnstableApi::class)
-private enum class PlayerAspectRatio(val label: String, val resizeMode: Int) {
-    Fit("自适应", AspectRatioFrameLayout.RESIZE_MODE_FIT),
-    Fill("拉伸", AspectRatioFrameLayout.RESIZE_MODE_FILL),
-    Zoom("铺满", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
+internal enum class PlayerAspectRatio(
+    val label: String,
+    val description: String,
+    val resizeMode: Int,
+) {
+    Fit("自适应", "保持比例，完整显示", AspectRatioFrameLayout.RESIZE_MODE_FIT),
+    Zoom("铺满", "裁切边缘，填满屏幕", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
+    FixedWidth("宽度优先", "宽度铺满，高度按比例", AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH),
+    FixedHeight("高度优先", "高度铺满，宽度按比例", AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT),
+    Fill("拉伸", "拉伸填满，可能变形", AspectRatioFrameLayout.RESIZE_MODE_FILL),
+    ;
+
+    companion object {
+        val options: List<PlayerAspectRatio> = entries
+    }
 }
 
 private enum class DragGestureMode {
@@ -151,14 +171,20 @@ internal fun PlayerScreen(
     controller: MediaController?,
     isPictureInPicture: Boolean,
     actions: PlayerActions,
+    embyItemId: String? = null,
+    subtitleState: RemoteSubtitleUiState = RemoteSubtitleUiState(),
+    subtitleActions: PlayerSubtitleActions = PlayerSubtitleActions(),
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     var controlsVisible by remember { mutableStateOf(true) }
     var isLocked by remember { mutableStateOf(false) }
     var lockIndicatorVisible by remember { mutableStateOf(false) }
-    var aspectRatio by remember { mutableStateOf(PlayerAspectRatio.Fit) }
+    var aspectRatio by remember(title, controller?.currentMediaItem?.mediaId) {
+        mutableStateOf(PlayerAspectRatio.Fit)
+    }
     var speedDialogVisible by remember { mutableStateOf(false) }
+    var aspectRatioDialogVisible by remember { mutableStateOf(false) }
     var trackPanelVisible by remember { mutableStateOf(false) }
 
     // Edge HUD states (Subtitle-Safe)
@@ -168,9 +194,9 @@ internal fun PlayerScreen(
     var gestureSeekState by remember { mutableStateOf<SeekGestureState?>(null) }
 
     // Auto-hide controls timer
-    LaunchedEffect(controlsVisible, controller?.isPlaying, isLocked, gestureSeekState, trackPanelVisible, speedDialogVisible) {
+    LaunchedEffect(controlsVisible, controller?.isPlaying, isLocked, gestureSeekState, trackPanelVisible, speedDialogVisible, aspectRatioDialogVisible) {
         if (controlsVisible && !isLocked && controller?.isPlaying == true &&
-            gestureSeekState == null && !trackPanelVisible && !speedDialogVisible
+            gestureSeekState == null && !trackPanelVisible && !speedDialogVisible && !aspectRatioDialogVisible
         ) {
             delay(5_000)
             controlsVisible = false
@@ -205,8 +231,9 @@ internal fun PlayerScreen(
             AndroidView(
                 factory = { ctx -> createPlayerView(ctx) },
                 update = { playerView ->
-                    playerView.player = controller
-                    playerView.useController = false
+                    if (playerView.player !== controller) {
+                        playerView.player = controller
+                    }
                     playerView.resizeMode = aspectRatio.resizeMode
                 },
                 modifier = Modifier.fillMaxSize(),
@@ -337,13 +364,9 @@ internal fun PlayerScreen(
             PlayerTopBar(
                 title = title,
                 aspectRatio = aspectRatio,
-                onToggleAspectRatio = {
+                onOpenAspectRatio = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    aspectRatio = when (aspectRatio) {
-                        PlayerAspectRatio.Fit -> PlayerAspectRatio.Zoom
-                        PlayerAspectRatio.Zoom -> PlayerAspectRatio.Fill
-                        PlayerAspectRatio.Fill -> PlayerAspectRatio.Fit
-                    }
+                    aspectRatioDialogVisible = true
                 },
                 actions = actions,
             )
@@ -465,6 +488,9 @@ internal fun PlayerScreen(
         if (trackPanelVisible && controller != null) {
             PlayerTrackSelectionDrawer(
                 player = controller,
+                embyItemId = embyItemId,
+                subtitleState = subtitleState,
+                subtitleActions = subtitleActions,
                 onDismiss = { trackPanelVisible = false },
             )
         }
@@ -481,6 +507,19 @@ internal fun PlayerScreen(
                 onDismiss = { speedDialogVisible = false },
             )
         }
+
+        // 13. Aspect Ratio Selector Dialog
+        if (aspectRatioDialogVisible) {
+            PlayerAspectRatioDialog(
+                current = aspectRatio,
+                onSelect = { selected ->
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    aspectRatio = selected
+                    aspectRatioDialogVisible = false
+                },
+                onDismiss = { aspectRatioDialogVisible = false },
+            )
+        }
     }
 }
 
@@ -492,7 +531,7 @@ internal fun PlayerScreen(
 private fun PlayerTopBar(
     title: String,
     aspectRatio: PlayerAspectRatio,
-    onToggleAspectRatio: () -> Unit,
+    onOpenAspectRatio: () -> Unit,
     actions: PlayerActions,
     modifier: Modifier = Modifier,
 ) {
@@ -572,7 +611,7 @@ private fun PlayerTopBar(
             // Aspect Ratio Liquid Pill Button
             PlayerLiquidPillButton(
                 label = aspectRatio.label,
-                onClick = onToggleAspectRatio,
+                onClick = onOpenAspectRatio,
             )
 
             // Screen Rotation Button
@@ -1445,10 +1484,14 @@ private fun PlayerCenterSeekHud(
 @Composable
 private fun PlayerTrackSelectionDrawer(
     player: Player,
+    embyItemId: String?,
+    subtitleState: RemoteSubtitleUiState,
+    subtitleActions: PlayerSubtitleActions,
     onDismiss: () -> Unit,
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val haptic = LocalHapticFeedback.current
+    val canSearchRemoteSubtitles = !embyItemId.isNullOrBlank()
 
     val currentTracks = player.currentTracks
     val subtitleGroups = currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
@@ -1559,6 +1602,20 @@ private fun PlayerTrackSelectionDrawer(
                     val isSubtitlesDisabled = player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT) ||
                         subtitleGroups.none { it.isSelected }
 
+                    if (canSearchRemoteSubtitles) {
+                        item {
+                            PlayerRemoteSubtitleSection(
+                                subtitleState = subtitleState,
+                                onSearch = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    subtitleActions.onSearch()
+                                },
+                                onDownload = subtitleActions.onDownload,
+                                onClear = subtitleActions.onClear,
+                            )
+                        }
+                    }
+
                     item {
                         PlayerTrackItem(
                             title = "关闭字幕",
@@ -1640,6 +1697,142 @@ private fun PlayerTrackSelectionDrawer(
     }
 }
 
+@Composable
+private fun PlayerRemoteSubtitleSection(
+    subtitleState: RemoteSubtitleUiState,
+    onSearch: () -> Unit,
+    onDownload: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MediaHubText(
+                text = "远程字幕",
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (subtitleState.targetId != null || subtitleState.remoteSubtitles.isNotEmpty()) {
+                PlayerFrostedCircleButton(
+                    imageVector = Lucide.X,
+                    contentDescription = "关闭字幕结果",
+                    onClick = onClear,
+                    modifier = Modifier.size(28.dp),
+                    iconSize = 14.dp,
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF2563EB).copy(alpha = 0.35f))
+                .clickable(enabled = !subtitleState.searching, onClick = onSearch)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MediaHubIcon(
+                    imageVector = Lucide.Captions,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp),
+                )
+                MediaHubText(
+                    text = if (subtitleState.searching) "正在搜索中文字幕…" else "搜中文字幕",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+        subtitleState.message?.let { message ->
+            MediaHubText(
+                text = message,
+                color = Color.White.copy(alpha = 0.65f),
+                fontSize = 11.sp,
+            )
+        }
+        subtitleState.remoteSubtitles.forEach { subtitle ->
+            PlayerRemoteSubtitleRow(
+                subtitle = subtitle,
+                downloading = subtitleState.downloadingId == subtitle.id,
+                enabled = subtitleState.downloadingId == null,
+                onDownload = { onDownload(subtitle.id) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlayerRemoteSubtitleRow(
+    subtitle: EmbyRemoteSubtitle,
+    downloading: Boolean,
+    enabled: Boolean,
+    onDownload: () -> Unit,
+) {
+    val meta = listOfNotNull(
+        subtitle.format.takeIf { it.isNotBlank() }?.uppercase(),
+        subtitle.providerName.takeIf { it.isNotBlank() },
+        if (subtitle.isHashMatch) "精确匹配" else null,
+    ).joinToString(" · ")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = 0.05f))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            MediaHubText(
+                text = subtitle.name,
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (meta.isNotBlank()) {
+                MediaHubText(
+                    text = meta,
+                    color = Color.White.copy(alpha = 0.50f),
+                    fontSize = 10.sp,
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (enabled) Color(0xFF2563EB) else Color.White.copy(alpha = 0.12f))
+                .clickable(enabled = enabled, onClick = onDownload)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        ) {
+            MediaHubText(
+                text = if (downloading) "下载中…" else "下载",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    }
+}
+
 /**
  * Individual track item with checkmark and glowing border.
  */
@@ -1688,6 +1881,95 @@ private fun PlayerTrackItem(
                     tint = Color(0xFF38BDF8),
                     modifier = Modifier.size(16.dp),
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Frosted Glass Aspect Ratio Selection Dialog.
+ */
+@Composable
+private fun PlayerAspectRatioDialog(
+    current: PlayerAspectRatio,
+    onSelect: (PlayerAspectRatio) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.60f))
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onDismiss,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(min = 320.dp, max = 380.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xF20B101B))
+                .border(0.5.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(20.dp))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = {},
+                )
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            MediaHubText(
+                text = "画面比例",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            PlayerAspectRatio.options.forEach { mode ->
+                val isSelected = mode == current
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isSelected) Color(0xFF2563EB).copy(alpha = 0.30f) else Color.White.copy(alpha = 0.07f))
+                        .border(
+                            0.5.dp,
+                            if (isSelected) Color(0xFF60A5FA) else Color.Transparent,
+                            RoundedCornerShape(12.dp),
+                        )
+                        .clickable { onSelect(mode) }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            MediaHubText(
+                                text = mode.label,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            )
+                            MediaHubText(
+                                text = mode.description,
+                                color = Color.White.copy(alpha = 0.55f),
+                                fontSize = 11.sp,
+                            )
+                        }
+                        if (isSelected) {
+                            MediaHubIcon(
+                                imageVector = Lucide.Check,
+                                contentDescription = null,
+                                tint = Color(0xFF7DD3FC),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -1856,6 +2138,7 @@ internal fun createPlayerView(context: Context): PlayerView = PlayerView(context
     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
     useController = false
     controllerAutoShow = false
+    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
 }
 
 // Helpers for volume and brightness gestures

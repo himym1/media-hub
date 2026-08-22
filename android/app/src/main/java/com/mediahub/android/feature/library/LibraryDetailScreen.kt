@@ -58,11 +58,17 @@ import com.mediahub.android.core.image.PosterLoader
 import com.mediahub.android.core.network.EmbyItemDetail
 import com.mediahub.android.core.network.EmbyItem
 import com.mediahub.android.core.network.EmbyRemoteSubtitle
+import com.mediahub.android.feature.subtitles.RemoteSubtitleUiState
 import com.mediahub.android.playback.PlaybackFallback
 import java.net.URI
 
 @Composable
-internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDetailActions, posterLoader: PosterLoader) {
+internal fun LibraryDetailScreen(
+    state: LibraryDetailState,
+    subtitleState: RemoteSubtitleUiState,
+    actions: LibraryDetailActions,
+    posterLoader: PosterLoader,
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 36.dp),
@@ -126,22 +132,22 @@ internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDeta
                 }
                 item {
                     MediaHubSecondaryButton(
-                        label = if (state.searchingSubtitles && state.subtitleTargetId == detail.item.id) {
+                        label = if (subtitleState.searching && subtitleState.targetId == detail.item.id) {
                             "正在搜索字幕…"
                         } else {
                             "搜中文字幕"
                         },
                         icon = Lucide.Captions,
-                        enabled = !state.searchingSubtitles && state.downloadingSubtitleId == null && !state.refreshing,
+                        enabled = !subtitleState.searching && subtitleState.downloadingId == null && !state.refreshing,
                         onClick = { actions.onSearchSubtitles(detail.item.id, detail.item.name) },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     )
                 }
             }
-            if (state.subtitleTargetId != null || state.remoteSubtitles.isNotEmpty() || state.searchingSubtitles) {
+            if (subtitleState.targetId != null || subtitleState.remoteSubtitles.isNotEmpty() || subtitleState.searching) {
                 item {
                     RemoteSubtitlePanel(
-                        state = state,
+                        state = subtitleState,
                         onDownload = actions.onDownloadSubtitle,
                         onClear = actions.onClearSubtitles,
                     )
@@ -165,7 +171,7 @@ internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDeta
 
 @Composable
 private fun RemoteSubtitlePanel(
-    state: LibraryDetailState,
+    state: RemoteSubtitleUiState,
     onDownload: (String) -> Unit,
     onClear: () -> Unit,
 ) {
@@ -175,15 +181,15 @@ private fun RemoteSubtitlePanel(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             MediaHubSmallTitle(
-                text = state.subtitleTargetLabel?.let { "中文字幕 · $it" } ?: "中文字幕",
+                text = state.targetLabel?.let { "中文字幕 · $it" } ?: "中文字幕",
                 modifier = Modifier.weight(1f),
             )
             MediaHubIconButton(Lucide.X, "关闭字幕结果", onClear)
         }
-        state.subtitleMessage?.let {
+        state.message?.let {
             MediaHubText(text = it, color = MediaHubColors.TextMuted, fontSize = 12.sp)
         }
-        if (state.searchingSubtitles) {
+        if (state.searching) {
             MediaHubText(text = "正在通过 Emby 搜索…", color = MediaHubColors.TextMuted, fontSize = 13.sp)
         }
         if (state.remoteSubtitles.isNotEmpty()) {
@@ -192,8 +198,8 @@ private fun RemoteSubtitlePanel(
                     if (index > 0) MediaHubListDivider()
                     RemoteSubtitleRow(
                         subtitle = subtitle,
-                        downloading = state.downloadingSubtitleId == subtitle.id,
-                        enabled = state.downloadingSubtitleId == null,
+                        downloading = state.downloadingId == subtitle.id,
+                        enabled = state.downloadingId == null,
                         onDownload = { onDownload(subtitle.id) },
                     )
                 }

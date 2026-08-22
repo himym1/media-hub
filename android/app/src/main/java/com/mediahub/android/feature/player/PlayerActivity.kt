@@ -26,10 +26,16 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.mediahub.android.MediaHubApplication
+import com.mediahub.android.app.MediaHubViewModelFactory
 import com.mediahub.android.app.ProvideWindowAdaptive
 import com.mediahub.android.core.designsystem.MediaHubTheme
+import com.mediahub.android.feature.subtitles.RemoteSubtitleUiState
+import com.mediahub.android.feature.subtitles.RemoteSubtitleViewModel
+import com.mediahub.android.playback.EmbyItemTarget
 import com.mediahub.android.playback.MediaHubPlaybackService
 import com.mediahub.android.playback.PlaybackRequest
 import com.mediahub.android.playback.PlaybackRequestIntentCodec
@@ -59,11 +65,27 @@ class PlayerActivity : ComponentActivity() {
             MediaHubTheme {
                 ProvideWindowAdaptive {
                 val isPictureInPicture by pictureInPicture.collectAsState()
+                val dependencies = remember { (application as MediaHubApplication).container.requireConfigured() }
+                val factory = remember(dependencies.repository) { MediaHubViewModelFactory(dependencies.repository) }
+                val subtitleViewModel = viewModel<RemoteSubtitleViewModel>(factory = factory)
+                val subtitleState by subtitleViewModel.uiState.collectAsState()
+                val embyItemId = (request.target as? EmbyItemTarget)?.itemId
                 PlayerRoute(
                     request = request,
                     isPictureInPicture = isPictureInPicture,
                     onControllerChanged = { activeController = it },
-                    actions = PlayerActions(
+                    subtitleState = subtitleState,
+                    embyItemId = embyItemId,
+                    subtitleActions = PlayerSubtitleActions(
+                        onSearch = {
+                            embyItemId?.let { id ->
+                                subtitleViewModel.search(itemId = id, label = request.title)
+                            }
+                        },
+                        onDownload = subtitleViewModel::download,
+                        onClear = subtitleViewModel::clear,
+                    ),
+                    playerActions = PlayerActions(
                         onRetry = {},
                         onBack = ::closePlayer,
                         onToggleOrientation = ::toggleOrientation,
@@ -113,7 +135,7 @@ class PlayerActivity : ComponentActivity() {
         if (activeController?.currentMediaItem == null || isInPictureInPictureMode) return
         val sourceRect = Rect().also(window.decorView::getGlobalVisibleRect)
         val params = PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(16, 9))
+            .setAspectRatio(pipAspectRatio(activeController))
             .setSourceRectHint(sourceRect)
             .apply {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setAutoEnterEnabled(true)
@@ -134,7 +156,10 @@ private fun PlayerRoute(
     request: PlaybackRequest,
     isPictureInPicture: Boolean,
     onControllerChanged: (MediaController?) -> Unit,
-    actions: PlayerActions,
+    subtitleState: RemoteSubtitleUiState,
+    embyItemId: String?,
+    subtitleActions: PlayerSubtitleActions,
+    playerActions: PlayerActions,
 ) {
     var controller by remember { mutableStateOf<MediaController?>(null) }
     var state by remember { mutableStateOf<PlayerUiState>(PlayerUiState.Loading) }
@@ -170,7 +195,10 @@ private fun PlayerRoute(
         title = request.title,
         controller = controller,
         isPictureInPicture = isPictureInPicture,
-        actions = actions.copy(onRetry = {
+        embyItemId = embyItemId,
+        subtitleState = subtitleState,
+        subtitleActions = subtitleActions,
+        actions = playerActions.copy(onRetry = {
             state = PlayerUiState.Loading
             context.startService(MediaHubPlaybackService.playIntent(context, request, force = true))
         }),
@@ -189,10 +217,23 @@ private fun Bundle.playerUiState(): PlayerUiState = when (getString(MediaHubPlay
 internal const val PlayerLandscapeOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
 internal fun nextPlayerOrientation(current: Int): Int =
-    if (current == PlayerLandscapeOrientation) {
-        ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-    } else {
+    if (current == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE) {
         PlayerLandscapeOrientation
+    } else {
+        ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
     }
+
+internal fun pipAspectRatio(controller: MediaController?): Rational {
+    val size = controller?.videoSize ?: return Rational(16, 9)
+    if (size.width <= 0 || size.height <= 0) return Rational(16, 9)
+    val width = size.width
+    val height = size.height
+    val aspect = width.toFloat() / height.toFloat()
+    return when {
+        aspect >= 2.39f -> Rational(239, 100)
+        aspect <= 1f / 2.39f -> Rational(100, 239)
+        else -> Rational(width, height)
+    }
+}
 
 internal fun validRequest(request: PlaybackRequest): Boolean = PlaybackRequestIntentCodec.valid(request)

@@ -7,7 +7,6 @@ import com.mediahub.android.core.network.EmbyDeletePreview
 import com.mediahub.android.core.network.EmbyItem
 import com.mediahub.android.core.network.EmbyEpisode
 import com.mediahub.android.core.network.EmbyItemDetail
-import com.mediahub.android.core.network.EmbyRemoteSubtitle
 import com.mediahub.android.data.MediaHubRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,12 +27,6 @@ data class LibraryDetailState(
     val errorMessage: String? = null,
     val episodesError: String? = null,
     val actionMessage: String? = null,
-    val subtitleTargetId: String? = null,
-    val subtitleTargetLabel: String? = null,
-    val remoteSubtitles: List<EmbyRemoteSubtitle> = emptyList(),
-    val searchingSubtitles: Boolean = false,
-    val downloadingSubtitleId: String? = null,
-    val subtitleMessage: String? = null,
 )
 
 class LibraryDetailViewModel(
@@ -157,95 +150,8 @@ class LibraryDetailViewModel(
         _uiState.value = _uiState.value.copy(deleting = false, deletePreview = null)
     }
 
-    fun searchChineseSubtitles(targetItemId: String? = null, targetLabel: String? = null) {
-        val detail = _uiState.value.item ?: return
-        val itemId = targetItemId?.takeIf { it.isNotBlank() } ?: detail.item.id
-        if (detail.item.type == "Series" && targetItemId.isNullOrBlank()) {
-            _uiState.value = _uiState.value.copy(subtitleMessage = "请选择某一集后再搜中文字幕")
-            return
-        }
-        if (_uiState.value.searchingSubtitles) return
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                searchingSubtitles = true,
-                subtitleTargetId = itemId,
-                subtitleTargetLabel = targetLabel ?: detail.item.name,
-                remoteSubtitles = emptyList(),
-                subtitleMessage = null,
-                errorMessage = null,
-            )
-            try {
-                val items = repository.searchRemoteSubtitles(itemId, "chi")
-                if (_uiState.value.subtitleTargetId == itemId) {
-                    _uiState.value = _uiState.value.copy(
-                        searchingSubtitles = false,
-                        remoteSubtitles = items,
-                        subtitleMessage = if (items.isEmpty()) "未找到可用中文字幕（需 Emby 已配置字幕插件）" else null,
-                    )
-                }
-            } catch (error: ApiException) {
-                if (_uiState.value.subtitleTargetId == itemId) {
-                    _uiState.value = _uiState.value.copy(
-                        searchingSubtitles = false,
-                        subtitleMessage = error.message ?: "字幕搜索失败",
-                    )
-                }
-            } catch (_: Exception) {
-                if (_uiState.value.subtitleTargetId == itemId) {
-                    _uiState.value = _uiState.value.copy(
-                        searchingSubtitles = false,
-                        subtitleMessage = "无法搜索 Emby 字幕",
-                    )
-                }
-            }
-        }
-    }
-
-    fun downloadRemoteSubtitle(subtitleId: String) {
-        val itemId = _uiState.value.subtitleTargetId ?: return
-        if (_uiState.value.downloadingSubtitleId != null) return
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                downloadingSubtitleId = subtitleId,
-                subtitleMessage = null,
-                errorMessage = null,
-            )
-            try {
-                repository.downloadRemoteSubtitle(itemId, subtitleId)
-                if (_uiState.value.subtitleTargetId == itemId) {
-                    _uiState.value = _uiState.value.copy(
-                        downloadingSubtitleId = null,
-                        actionMessage = "已下载字幕，Emby 正在刷新；重新播放后可选中文字幕",
-                        subtitleMessage = "下载成功",
-                    )
-                }
-            } catch (error: ApiException) {
-                if (_uiState.value.subtitleTargetId == itemId) {
-                    _uiState.value = _uiState.value.copy(
-                        downloadingSubtitleId = null,
-                        subtitleMessage = error.message ?: "字幕下载失败",
-                    )
-                }
-            } catch (_: Exception) {
-                if (_uiState.value.subtitleTargetId == itemId) {
-                    _uiState.value = _uiState.value.copy(
-                        downloadingSubtitleId = null,
-                        subtitleMessage = "无法下载 Emby 字幕",
-                    )
-                }
-            }
-        }
-    }
-
-    fun clearSubtitleResults() {
-        _uiState.value = _uiState.value.copy(
-            subtitleTargetId = null,
-            subtitleTargetLabel = null,
-            remoteSubtitles = emptyList(),
-            searchingSubtitles = false,
-            downloadingSubtitleId = null,
-            subtitleMessage = null,
-        )
+    fun refreshActionMessage(message: String) {
+        _uiState.value = _uiState.value.copy(actionMessage = message, errorMessage = null)
     }
 
     fun clear() {

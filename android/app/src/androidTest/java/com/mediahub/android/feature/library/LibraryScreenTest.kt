@@ -34,6 +34,7 @@ import com.mediahub.android.core.network.EmbyEpisode
 import com.mediahub.android.core.network.EmbyItem
 import com.mediahub.android.core.network.EmbyItemDetail
 import com.mediahub.android.core.network.MediaLibrary
+import com.mediahub.android.feature.subtitles.RemoteSubtitleUiState
 import com.mediahub.android.playback.PlaybackFallback
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -88,6 +89,7 @@ class LibraryScreenTest {
             MediaHubTheme {
                 LibraryDetailScreen(
                     state = LibraryDetailState(itemId = "item-1", item = movieDetail()),
+                    subtitleState = RemoteSubtitleUiState(),
                     actions = detailActions { item, fallback -> played = item to fallback },
                     posterLoader = posterLoader,
                 )
@@ -124,6 +126,7 @@ class LibraryScreenTest {
                             item = movieDetail(type = "Series", id = "series-1"),
                             episodes = listOf(episode),
                         ),
+                        subtitleState = RemoteSubtitleUiState(),
                         actions = detailActions { item, fallback -> played = item to fallback },
                         posterLoader = posterLoader,
                     )

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -101,6 +102,10 @@ func run(logger *slog.Logger) error {
 		MovieLibraryID:  configuration.Workflow.Movie.EmbyLibraryID,
 		SeriesLibraryID: configuration.Workflow.Series.EmbyLibraryID,
 	}, configuration.ProbeTimeout)
+	posterCache, err := emby.OpenPrimaryImageCache(filepath.Join(filepath.Dir(configuration.DatabasePath), "poster-cache"))
+	if err != nil {
+		return fmt.Errorf("open poster cache: %w", err)
+	}
 	drive115Client := drive115.NewClient("", configuration.ProbeTimeout)
 	drive115AuthService := drive115.NewAuthService(
 		dataStore, securePayloadCodec, drive115Client, configuration.ProbeTimeout,
@@ -238,7 +243,7 @@ func run(logger *slog.Logger) error {
 		Addr: configuration.Address,
 		Handler: httpapi.NewRouter(version, httpapi.Dependencies{
 			Auth: authService, Overview: overview, Search: searchService, Discovery: tmdbClient,
-			QMediaSync: qmsClient, Emby: embyClient, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
+			QMediaSync: qmsClient, Emby: embyClient, EmbyPosterCache: posterCache, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
 			Playback: playback.NewService(drive115AuthService, embyClient),
 			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService, SourceCheckIns: checkinService,
 			Settings: settingsService, WeComTester: wecomClient,

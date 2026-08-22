@@ -53,6 +53,7 @@ type Client struct {
 	mutex        sync.RWMutex
 	config       clientConfig
 	client       *http.Client
+	imageClient  *http.Client
 	sessionToken string
 }
 
@@ -161,13 +162,22 @@ func NewClient(baseURL, apiKey string, timeout time.Duration, userID ...string) 
 }
 
 func NewConfiguredClient(configuration RuntimeConfig, timeout time.Duration) *Client {
+	imageTimeout := timeout
+	if imageTimeout < 45*time.Second {
+		imageTimeout = 45 * time.Second
+	}
+	redirectPolicy := func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
 	return &Client{
 		config: runtimeClientConfig(configuration),
 		client: &http.Client{
-			Timeout: timeout,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
+			Timeout:       timeout,
+			CheckRedirect: redirectPolicy,
+		},
+		imageClient: &http.Client{
+			Timeout:       imageTimeout,
+			CheckRedirect: redirectPolicy,
 		},
 	}
 }

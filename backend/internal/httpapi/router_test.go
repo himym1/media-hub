@@ -501,6 +501,23 @@ func TestEmbyBrowseDetailAndRefreshRoutes(t *testing.T) {
 	}
 }
 
+func TestEmbyPrimaryImageUsesPosterCache(t *testing.T) {
+	cache, err := emby.OpenPrimaryImageCache(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.Put("item-1", 320, emby.PrimaryImage{Data: []byte("cached"), ContentType: "image/jpeg"}); err != nil {
+		t.Fatal(err)
+	}
+	provider := &embyStub{}
+	router := NewRouter("test-version", Dependencies{Auth: authStub{}, Emby: provider, EmbyPosterCache: cache})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, authenticatedRequest(http.MethodGet, "/api/v1/integrations/emby/items/item-1/primary-image"))
+	if recorder.Code != http.StatusOK || recorder.Header().Get("X-Poster-Cache") != "HIT" || recorder.Body.String() != "cached" {
+		t.Fatalf("status=%d cache=%q body=%q", recorder.Code, recorder.Header().Get("X-Poster-Cache"), recorder.Body.String())
+	}
+}
+
 func TestEmbyManagementRoutesRejectInvalidIdentifiersAndPages(t *testing.T) {
 	provider := &embyStub{}
 	router := NewRouter("test-version", Dependencies{Auth: authStub{}, Emby: provider})

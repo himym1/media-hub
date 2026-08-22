@@ -6,18 +6,18 @@ import org.junit.Test
 
 class PlayerOrientationTest {
     @Test
-    fun startsInSensorLandscapeAndToggleUnlocksThenRelocks() {
+    fun orientationToggleStaysInLandscapeFamily() {
         assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE, PlayerLandscapeOrientation)
         assertEquals(
-            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+            ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
             nextPlayerOrientation(PlayerLandscapeOrientation),
         )
         assertEquals(
             PlayerLandscapeOrientation,
-            nextPlayerOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED),
+            nextPlayerOrientation(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE),
         )
         assertEquals(
-            PlayerLandscapeOrientation,
+            ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
             nextPlayerOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT),
         )
     }

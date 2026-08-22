@@ -75,6 +75,11 @@ type EmbyReader interface {
 	DownloadRemoteSubtitle(context.Context, string, string) error
 }
 
+type EmbyPosterCache interface {
+	Get(itemID string, maxWidth int) (emby.PrimaryImage, bool)
+	Put(itemID string, maxWidth int, image emby.PrimaryImage) error
+}
+
 type Drive115Reader interface {
 	Status(context.Context) (drive115.Status, error)
 	ListFiles(context.Context, string, int, int) ([]drive115.FileItem, int, error)
@@ -161,6 +166,7 @@ type Dependencies struct {
 	Statistics       StatisticsProvider
 	QMediaSync       QMediaSyncReader
 	Emby             EmbyReader
+	EmbyPosterCache  EmbyPosterCache
 	Drive115         Drive115Reader
 	Drive115Auth     Drive115Authorizer
 	Drive115Commands Drive115CommandService

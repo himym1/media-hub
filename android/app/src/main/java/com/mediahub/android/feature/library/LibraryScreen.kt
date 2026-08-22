@@ -54,6 +54,7 @@ import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.image.PosterLoader
 import com.mediahub.android.core.network.EmbyItem
+import com.mediahub.android.feature.subtitles.RemoteSubtitleViewModel
 import com.mediahub.android.playback.PlaybackFallback
 
 data class LibraryBrowseActions(
@@ -83,6 +84,7 @@ data class LibraryDetailActions(
 internal fun LibraryRoute(
     browseViewModel: LibraryViewModel,
     detailViewModel: LibraryDetailViewModel,
+    subtitleViewModel: RemoteSubtitleViewModel,
     selectedItemId: String?,
     onSelectedItemChanged: (String?) -> Unit,
     onPlayItem: (EmbyItem, PlaybackFallback) -> Unit,
@@ -91,10 +93,14 @@ internal fun LibraryRoute(
 ) {
     val browseState by browseViewModel.uiState.collectAsState()
     val detailState by detailViewModel.uiState.collectAsState()
+    val subtitleState by subtitleViewModel.uiState.collectAsState()
     LaunchedEffect(browseViewModel, active) {
         if (active) browseViewModel.ensureLibrariesLoaded()
     }
-    LaunchedEffect(selectedItemId) { selectedItemId?.let(detailViewModel::load) }
+    LaunchedEffect(selectedItemId) {
+        subtitleViewModel.clear()
+        selectedItemId?.let(detailViewModel::load)
+    }
     LaunchedEffect(detailState.deleted) {
         if (detailState.deleted) {
             browseViewModel.reloadItems()
@@ -105,6 +111,7 @@ internal fun LibraryRoute(
     val closeDetail = {
         onSelectedItemChanged(null)
         detailViewModel.clear()
+        subtitleViewModel.clear()
     }
     BackHandler(enabled = selectedItemId != null, onBack = closeDetail)
     val browseActions = LibraryBrowseActions(
@@ -124,9 +131,23 @@ internal fun LibraryRoute(
         onDelete = detailViewModel::requestDelete,
         onConfirmDelete = detailViewModel::confirmDelete,
         onCancelDelete = detailViewModel::cancelDelete,
-        onSearchSubtitles = { itemId, label -> detailViewModel.searchChineseSubtitles(itemId, label) },
-        onDownloadSubtitle = detailViewModel::downloadRemoteSubtitle,
-        onClearSubtitles = detailViewModel::clearSubtitleResults,
+        onSearchSubtitles = { itemId, label ->
+            val detail = detailState.item ?: return@LibraryDetailActions
+            val resolvedId = itemId?.takeIf { it.isNotBlank() } ?: detail.item.id
+            val seriesBlocked = detail.item.type == "Series" && itemId.isNullOrBlank()
+            subtitleViewModel.search(
+                itemId = resolvedId,
+                label = label ?: detail.item.name,
+                allowSearch = !seriesBlocked,
+                blockedMessage = if (seriesBlocked) "请选择某一集后再搜中文字幕" else null,
+            )
+        },
+        onDownloadSubtitle = { subtitleId ->
+            subtitleViewModel.download(subtitleId) {
+                detailViewModel.refreshActionMessage("已下载字幕，Emby 正在刷新；重新播放后可选中文字幕")
+            }
+        },
+        onClearSubtitles = subtitleViewModel::clear,
     )
     MediaHubListDetail(
         detailOpen = selectedItemId != null,
@@ -134,7 +155,14 @@ internal fun LibraryRoute(
         emptyMessage = "从左侧媒体库打开详情",
         emptyIcon = Lucide.BookOpen,
         list = { LibraryScreen(uiState = browseState, actions = browseActions, posterLoader = posterLoader) },
-        detail = { LibraryDetailScreen(state = detailState, actions = detailActions, posterLoader = posterLoader) },
+        detail = {
+            LibraryDetailScreen(
+                state = detailState,
+                subtitleState = subtitleState,
+                actions = detailActions,
+                posterLoader = posterLoader,
+            )
+        },
     )
 }
 

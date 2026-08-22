@@ -77,8 +77,9 @@ import com.mediahub.android.playback.MediaHubPlaybackService
 import com.mediahub.android.feature.services.ServicesRoute
 import com.mediahub.android.feature.services.ServicesViewModel
 import com.mediahub.android.feature.subscriptions.SubscriptionRoute
-import com.mediahub.android.feature.subscriptions.SubscriptionViewModel
 import com.mediahub.android.feature.subscriptions.SubscriptionNavigator
+import com.mediahub.android.feature.subscriptions.SubscriptionViewModel
+import com.mediahub.android.feature.subtitles.RemoteSubtitleViewModel
 import com.mediahub.android.feature.transfers.TransferRoute
 import com.mediahub.android.feature.transfers.TransferViewModel
 
@@ -197,6 +198,7 @@ private fun AuthenticatedWorkspace(
     val subscriptionViewModel = viewModel<SubscriptionViewModel>(key = "subscriptions-$serverGeneration", factory = factory)
     val libraryViewModel = viewModel<LibraryViewModel>(key = "library-$serverGeneration", factory = factory)
     val libraryDetailViewModel = viewModel<LibraryDetailViewModel>(key = "library-detail-$serverGeneration", factory = factory)
+    val remoteSubtitleViewModel = viewModel<RemoteSubtitleViewModel>(key = "remote-subtitles-$serverGeneration", factory = factory)
     val servicesViewModel = viewModel<ServicesViewModel>(key = "services-$serverGeneration", factory = factory)
 
     WorkspaceShell(
@@ -247,6 +249,7 @@ private fun AuthenticatedWorkspace(
                 LibraryRoute(
                     browseViewModel = libraryViewModel,
                     detailViewModel = libraryDetailViewModel,
+                    subtitleViewModel = remoteSubtitleViewModel,
                     active = !inSystem && destination == MainDestination.Library,
                     posterLoader = posterLoader,
                     selectedItemId = (detail as? WorkspaceDetail.LibraryItem)?.itemId,

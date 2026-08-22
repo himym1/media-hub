@@ -147,15 +147,34 @@ func (h *handler) getEmbyPrimaryImage(w http.ResponseWriter, r *http.Request) {
 		writeInvalidEmbyID(w)
 		return
 	}
-	image, err := h.dependencies.Emby.PrimaryImage(r.Context(), itemID, 320)
+	const maxWidth = 320
+	if h.dependencies.EmbyPosterCache != nil {
+		if image, ok := h.dependencies.EmbyPosterCache.Get(itemID, maxWidth); ok {
+			writeEmbyPrimaryImage(w, image, true)
+			return
+		}
+	}
+	image, err := h.dependencies.Emby.PrimaryImage(r.Context(), itemID, maxWidth)
 	if err != nil {
 		writeIntegrationProblem(w, err)
 		return
 	}
+	if h.dependencies.EmbyPosterCache != nil {
+		_ = h.dependencies.EmbyPosterCache.Put(itemID, maxWidth, image)
+	}
+	writeEmbyPrimaryImage(w, image, false)
+}
+
+func writeEmbyPrimaryImage(w http.ResponseWriter, image emby.PrimaryImage, cached bool) {
 	w.Header().Set("Content-Type", image.ContentType)
 	w.Header().Set("Content-Length", strconv.Itoa(len(image.Data)))
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Header().Set("Cache-Control", "private, max-age=604800")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if cached {
+		w.Header().Set("X-Poster-Cache", "HIT")
+	} else {
+		w.Header().Set("X-Poster-Cache", "MISS")
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(image.Data)
 }
