@@ -308,6 +308,15 @@ h1 em { color: #d7f36a; font-style: normal; }
 .library-detail-actions .danger-button { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 13px; color: #f2b4ab; background: #341d1b; border: 1px solid #71403b; border-radius: 6px; }
 .library-detail-actions .danger-button:hover:not(:disabled) { background: #422320; }
 .library-detail-actions .danger-button:disabled { opacity: .5; }
+.library-subtitle-hint { align-self: center; color: var(--text-muted, #9aa093); font-size: 12px; }
+.library-subtitle-panel { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border, #2a2d30); }
+.library-subtitle-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.library-subtitle-heading strong { color: var(--text, #e7e8e1); font-size: 14px; font-weight: 600; }
+.library-subtitle-status { margin: 10px 0 0; color: var(--text-muted, #9aa093); font-size: 13px; }
+.library-subtitle-list { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.library-subtitle-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; }
+.library-subtitle-list strong { display: block; color: var(--text-secondary, #dde0d9); font-size: 13px; font-weight: 550; }
+.library-subtitle-list small { display: block; margin-top: 3px; color: var(--text-muted, #9aa093); font-size: 12px; }
 .library-delete-confirm { display: grid; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .library-delete-confirm p { margin: 0; color: var(--text-secondary, var(--text-muted)); font-size: 13px; line-height: 1.5; }
 .library-delete-confirm .library-detail-actions { margin-top: 0; }
