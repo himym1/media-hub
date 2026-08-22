@@ -256,6 +256,52 @@ paths:
               schema: { $ref: '#/components/schemas/DiscoveryResponse' }
         '401': { $ref: '#/components/responses/ProblemResponse' }
         '503': { $ref: '#/components/responses/ProblemResponse' }
+  /discovery/catalog:
+    get:
+      operationId: getDiscoveryCatalog
+      summary: Read TMDB popular, top-rated, or genre discovery lists
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema: { type: string, enum: [popular, top_rated, genre] }
+        - name: mediaType
+          in: query
+          required: true
+          schema: { type: string, enum: [movie, series] }
+        - name: genreId
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 20, default: 20 }
+      responses:
+        '200':
+          description: Catalog media identities
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiscoveryResponse' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /discovery/genres:
+    get:
+      operationId: getDiscoveryGenres
+      summary: Read TMDB genre labels for discovery chips
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - name: mediaType
+          in: query
+          schema: { type: string, enum: [movie, series], default: movie }
+      responses:
+        '200':
+          description: Genre list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiscoveryGenresResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
   /discovery/{mediaType}/{tmdbId}/recommendations:
     get:
       operationId: getRecommendations
@@ -524,6 +570,54 @@ paths:
         '400': { $ref: '#/components/responses/ProblemResponse' }
         '401': { $ref: '#/components/responses/ProblemResponse' }
         '403': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+        '504': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/emby/items/{id}/remote-subtitles:
+    get:
+      operationId: searchEmbyRemoteSubtitles
+      summary: Search Emby remote subtitle providers for one item
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
+        - name: language
+          in: query
+          schema: { type: string, minLength: 2, maxLength: 16, default: chi }
+          description: ISO language code; Chinese defaults try chi then zh
+      responses:
+        '200':
+          description: Remote subtitle candidates
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmbyRemoteSubtitleList' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+        '504': { $ref: '#/components/responses/ProblemResponse' }
+    post:
+      operationId: downloadEmbyRemoteSubtitle
+      summary: Download one Emby remote subtitle onto the item
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
+        - { $ref: '#/components/parameters/CSRFToken' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmbyRemoteSubtitleDownloadRequest' }
+      responses:
+        '202':
+          description: Subtitle download accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmbyRefreshResponse' }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '403': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
         '502': { $ref: '#/components/responses/ProblemResponse' }
         '503': { $ref: '#/components/responses/ProblemResponse' }
         '504': { $ref: '#/components/responses/ProblemResponse' }
@@ -1738,6 +1832,19 @@ components:
           type: array
           maxItems: 20
           items: { $ref: '#/components/schemas/DiscoveryItem' }
+    DiscoveryGenre:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+    DiscoveryGenresResponse:
+      type: object
+      required: [genres]
+      properties:
+        genres:
+          type: array
+          items: { $ref: '#/components/schemas/DiscoveryGenre' }
     SearchResponse:
       type: object
       required: [query, partial, results, sourceErrors]
@@ -1968,6 +2075,38 @@ components:
       additionalProperties: false
       properties:
         status: { type: string, enum: [accepted] }
+    EmbyRemoteSubtitle:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 512 }
+        name: { type: string, maxLength: 240 }
+        language: { type: string, maxLength: 16 }
+        format: { type: string, maxLength: 32 }
+        providerName: { type: string, maxLength: 80 }
+        author: { type: string, maxLength: 80 }
+        comment: { type: string, maxLength: 240 }
+        communityRating: { type: number, format: double }
+        downloadCount: { type: integer, minimum: 0 }
+        isHashMatch: { type: boolean }
+        hearingImpaired: { type: boolean }
+        forced: { type: boolean }
+    EmbyRemoteSubtitleList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 40
+          items: { $ref: '#/components/schemas/EmbyRemoteSubtitle' }
+    EmbyRemoteSubtitleDownloadRequest:
+      type: object
+      additionalProperties: false
+      required: [subtitleId]
+      properties:
+        subtitleId: { type: string, minLength: 1, maxLength: 512 }
     EmbyDeletePreview:
       type: object
       additionalProperties: false

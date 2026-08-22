@@ -36,24 +36,49 @@ class LibraryViewModel(
     private val _uiState = MutableStateFlow(LibraryBrowseState())
     val uiState: StateFlow<LibraryBrowseState> = _uiState.asStateFlow()
     private var contentJob: Job? = null
+    private var librariesJob: Job? = null
 
-    fun refreshLibraries() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(loadingLibraries = true, errorMessage = null)
+    /** First open loads; revisits keep the current grid and only soft-refresh in background. */
+    fun ensureLibrariesLoaded() {
+        val state = _uiState.value
+        if (state.libraries.isNotEmpty() && (state.items.isNotEmpty() || state.loadingItems || state.submittedQuery.isNotEmpty())) {
+            softRefreshLibraries()
+            return
+        }
+        refreshLibraries(force = true)
+    }
+
+    fun refreshLibraries(force: Boolean = true) {
+        librariesJob?.cancel()
+        librariesJob = viewModelScope.launch {
+            val keepGrid = !force && _uiState.value.items.isNotEmpty() && _uiState.value.submittedQuery.isEmpty()
+            _uiState.value = _uiState.value.copy(
+                loadingLibraries = _uiState.value.libraries.isEmpty(),
+                errorMessage = null,
+            )
             try {
                 val libraries = repository.libraries()
-                val selected = _uiState.value.selectedLibraryId?.takeIf { id -> libraries.any { it.id == id } }
+                val previousSelected = _uiState.value.selectedLibraryId
+                val selected = previousSelected?.takeIf { id -> libraries.any { it.id == id } }
                     ?: libraries.firstOrNull()?.id
                 val browsing = _uiState.value.submittedQuery.isEmpty()
+                val selectionChanged = selected != previousSelected
                 _uiState.value = _uiState.value.copy(
                     libraries = libraries,
                     selectedLibraryId = selected,
-                    items = if (browsing) emptyList() else _uiState.value.items,
-                    total = if (browsing) 0 else _uiState.value.total,
-                    page = if (browsing) 0 else _uiState.value.page,
                     loadingLibraries = false,
+                    page = if (browsing && selectionChanged) 0 else _uiState.value.page,
                 )
-                if (browsing && selected != null) loadLibraryPage(selected, 0)
+                if (browsing && selected != null) {
+                    val page = if (selectionChanged) 0 else _uiState.value.page
+                    loadLibraryPage(
+                        libraryId = selected,
+                        page = page,
+                        keepExisting = keepGrid && !selectionChanged,
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: ApiException) {
                 fail(error.message ?: "媒体库读取失败", libraries = true)
             } catch (_: Exception) {
@@ -62,8 +87,13 @@ class LibraryViewModel(
         }
     }
 
+    private fun softRefreshLibraries() {
+        refreshLibraries(force = false)
+    }
+
     fun selectLibrary(id: String) {
         if (_uiState.value.libraries.none { it.id == id }) return
+        if (id == _uiState.value.selectedLibraryId && _uiState.value.submittedQuery.isEmpty()) return
         _uiState.value = _uiState.value.copy(
             selectedLibraryId = id,
             query = "",
@@ -72,7 +102,7 @@ class LibraryViewModel(
             actionMessage = null,
         )
         contentJob?.cancel()
-        contentJob = viewModelScope.launch { loadLibraryPage(id, 0) }
+        contentJob = viewModelScope.launch { loadLibraryPage(id, 0, keepExisting = false) }
     }
 
     fun onQueryChanged(query: String) {
@@ -106,7 +136,7 @@ class LibraryViewModel(
         _uiState.value = _uiState.value.copy(query = "", submittedQuery = "", page = 0, errorMessage = null)
         if (libraryId != null) {
             contentJob?.cancel()
-            contentJob = viewModelScope.launch { loadLibraryPage(libraryId, 0) }
+            contentJob = viewModelScope.launch { loadLibraryPage(libraryId, 0, keepExisting = false) }
         }
     }
 
@@ -115,7 +145,7 @@ class LibraryViewModel(
         val libraryId = _uiState.value.selectedLibraryId ?: return
         val page = nextLibraryPage(_uiState.value.page, delta, _uiState.value.total) ?: return
         contentJob?.cancel()
-        contentJob = viewModelScope.launch { loadLibraryPage(libraryId, page) }
+        contentJob = viewModelScope.launch { loadLibraryPage(libraryId, page, keepExisting = false) }
     }
 
     fun reloadItems() {
@@ -126,7 +156,9 @@ class LibraryViewModel(
         }
         val libraryId = _uiState.value.selectedLibraryId ?: return
         contentJob?.cancel()
-        contentJob = viewModelScope.launch { loadLibraryPage(libraryId, _uiState.value.page) }
+        contentJob = viewModelScope.launch {
+            loadLibraryPage(libraryId, _uiState.value.page, keepExisting = _uiState.value.items.isNotEmpty())
+        }
     }
 
     fun refreshSelectedLibrary() {
@@ -137,7 +169,9 @@ class LibraryViewModel(
             try {
                 repository.refreshLibrary(id)
                 _uiState.value = _uiState.value.copy(refreshing = false, actionMessage = "已请求 Emby 刷新媒体库")
-                if (_uiState.value.submittedQuery.isEmpty()) loadLibraryPage(id, _uiState.value.page)
+                if (_uiState.value.submittedQuery.isEmpty()) {
+                    loadLibraryPage(id, _uiState.value.page, keepExisting = true)
+                }
             } catch (error: ApiException) {
                 fail(error.message ?: "媒体库刷新失败", refreshing = true)
             } catch (_: Exception) {
@@ -146,12 +180,28 @@ class LibraryViewModel(
         }
     }
 
-    private suspend fun loadLibraryPage(libraryId: String, page: Int) {
-        _uiState.value = _uiState.value.copy(loadingItems = true, errorMessage = null)
+    private suspend fun loadLibraryPage(libraryId: String, page: Int, keepExisting: Boolean) {
+        val showLoading = !keepExisting || _uiState.value.items.isEmpty()
+        _uiState.value = _uiState.value.copy(
+            loadingItems = showLoading,
+            errorMessage = null,
+        )
         try {
             val result = repository.libraryItems(libraryId, page * LibraryPageSize, LibraryPageSize)
             if (_uiState.value.selectedLibraryId == libraryId && _uiState.value.submittedQuery.isEmpty()) {
-                _uiState.value = _uiState.value.copy(items = result.items, total = result.total, page = page, loadingItems = false)
+                val unchanged = _uiState.value.page == page &&
+                    _uiState.value.total == result.total &&
+                    _uiState.value.items.map { it.id } == result.items.map { it.id }
+                if (unchanged) {
+                    _uiState.value = _uiState.value.copy(loadingItems = false)
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        items = result.items,
+                        total = result.total,
+                        page = page,
+                        loadingItems = false,
+                    )
+                }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -165,7 +215,6 @@ class LibraryViewModel(
             }
         }
     }
-
 
     private fun fail(message: String, libraries: Boolean = false, refreshing: Boolean = false) {
         _uiState.value = _uiState.value.copy(

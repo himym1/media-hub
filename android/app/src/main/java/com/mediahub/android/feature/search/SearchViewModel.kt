@@ -3,11 +3,14 @@ package com.mediahub.android.feature.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mediahub.android.core.network.ApiException
+import com.mediahub.android.core.network.DiscoveryGenre
 import com.mediahub.android.core.network.DiscoveryItem
 import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.SearchCandidate
 import com.mediahub.android.data.MediaHubRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -23,6 +26,13 @@ data class SearchUiState(
     val focusSubtitle: String = "",
     val results: List<SearchCandidate> = emptyList(),
     val trending: List<DiscoveryItem> = emptyList(),
+    val topRatedMovies: List<DiscoveryItem> = emptyList(),
+    val popularSeries: List<DiscoveryItem> = emptyList(),
+    val movieGenres: List<DiscoveryGenre> = emptyList(),
+    val selectedGenreId: Int? = null,
+    val selectedGenreName: String? = null,
+    val genreItems: List<DiscoveryItem> = emptyList(),
+    val loadingGenre: Boolean = false,
     val libraryRecommendations: List<DiscoveryItem> = emptyList(),
     val libraryRecommendationSeed: String? = null,
     val shufflingRecommendations: Boolean = false,
@@ -139,6 +149,23 @@ class SearchViewModel(
             }
         }
 
+        coroutineScope {
+            val topRated = async {
+                runCatching { repository.discoveryCatalog("top_rated", "movie", limit = 12) }.getOrDefault(emptyList())
+            }
+            val popular = async {
+                runCatching { repository.discoveryCatalog("popular", "series", limit = 12) }.getOrDefault(emptyList())
+            }
+            val genres = async {
+                runCatching { repository.discoveryGenres("movie") }.getOrDefault(emptyList())
+            }
+            _uiState.value = _uiState.value.copy(
+                topRatedMovies = topRated.await(),
+                popularSeries = popular.await(),
+                movieGenres = genres.await(),
+            )
+        }
+
         try {
             val seeds = mutableListOf<RecommendationSeed>()
             val seen = mutableSetOf<String>()
@@ -186,6 +213,36 @@ class SearchViewModel(
                 )
             }
         } catch (_: Exception) {
+        }
+    }
+
+    fun selectGenre(genre: DiscoveryGenre?) {
+        if (genre == null) {
+            _uiState.value = _uiState.value.copy(
+                selectedGenreId = null,
+                selectedGenreName = null,
+                genreItems = emptyList(),
+                loadingGenre = false,
+            )
+            return
+        }
+        if (_uiState.value.selectedGenreId == genre.id && _uiState.value.genreItems.isNotEmpty()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                selectedGenreId = genre.id,
+                selectedGenreName = genre.name,
+                loadingGenre = true,
+            )
+            try {
+                val items = repository.discoveryCatalog("genre", "movie", genre.id.toString(), limit = 16)
+                if (_uiState.value.selectedGenreId == genre.id) {
+                    _uiState.value = _uiState.value.copy(genreItems = items, loadingGenre = false)
+                }
+            } catch (_: Exception) {
+                if (_uiState.value.selectedGenreId == genre.id) {
+                    _uiState.value = _uiState.value.copy(genreItems = emptyList(), loadingGenre = false)
+                }
+            }
         }
     }
 

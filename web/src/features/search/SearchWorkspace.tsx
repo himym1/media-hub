@@ -85,7 +85,7 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
   const integrations = overview.data?.integrations ?? []
   const connectedCount = integrations.filter((item) => item.status === 'healthy').length
   const configuredCount = integrations.filter((item) => item.status !== 'unconfigured').length
-  const connectionLabel = overview.isLoading
+  const connectionLabel = overview.isLoading && integrations.length === 0
     ? '正在检查服务'
     : connectedCount > 0
       ? `${connectedCount} 个服务在线`
@@ -111,7 +111,6 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
       settings: next === '服务' ? current.get('settings') : null,
     })
     setActiveView(next)
-    window.scrollTo({ top: 0 })
     return true
   }
   const guardedLogout = () => {
@@ -184,20 +183,30 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
         ) : null}
 
         <div className="page-wrap">
-          {activeView === '发现' ? (
+          <div aria-hidden={activeView !== '发现'} className="page-pane" hidden={activeView !== '发现'}>
             <DiscoveryView
               integrations={integrations}
-              integrationsLoading={overview.isLoading}
+              integrationsLoading={overview.isLoading && integrations.length === 0}
               onRefreshIntegrations={() => void overview.refetch()}
               onTransferCreated={() => navigate('任务')}
               onSubscribe={(candidate) => { setDraftSubscription(candidate); navigate('订阅') }}
             />
-          ) : null}
-          {activeView === '任务' ? <TransferQueue query={transfers} /> : null}
-          {activeView === '订阅' ? <SubscriptionView draftCandidate={draftSubscription} onDraftConsumed={() => setDraftSubscription(null)} /> : null}
-          {activeView === '媒体库' ? <LibraryView /> : null}
-          {activeView === '运维' ? <OperationsView /> : null}
-          {activeView === '服务' ? <SettingsView integrations={integrations} onDirtyChange={updateProviderDirty} onLogout={guardedLogout} onRefresh={() => void overview.refetch()} /> : null}
+          </div>
+          <div aria-hidden={activeView !== '任务'} className="page-pane" hidden={activeView !== '任务'}>
+            <TransferQueue query={transfers} />
+          </div>
+          <div aria-hidden={activeView !== '订阅'} className="page-pane" hidden={activeView !== '订阅'}>
+            <SubscriptionView draftCandidate={draftSubscription} onDraftConsumed={() => setDraftSubscription(null)} />
+          </div>
+          <div aria-hidden={activeView !== '媒体库'} className="page-pane" hidden={activeView !== '媒体库'}>
+            <LibraryView />
+          </div>
+          <div aria-hidden={activeView !== '运维'} className="page-pane" hidden={activeView !== '运维'}>
+            <OperationsView />
+          </div>
+          <div aria-hidden={activeView !== '服务'} className="page-pane" hidden={activeView !== '服务'}>
+            <SettingsView integrations={integrations} onDirtyChange={updateProviderDirty} onLogout={guardedLogout} onRefresh={() => void overview.refetch()} />
+          </div>
         </div>
       </main>
 

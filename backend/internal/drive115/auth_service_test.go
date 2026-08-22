@@ -41,7 +41,7 @@ func TestDeviceAuthorizationPersistsEncryptedCookieSession(t *testing.T) {
 		case "/status":
 			_, _ = w.Write([]byte(`{"state":1,"data":{"status":2}}`))
 		case "/login":
-			if request.FormValue("account") != "uid" || request.FormValue("app") != "web" {
+			if request.FormValue("account") != "uid" || request.FormValue("app") != "qandroid" {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}

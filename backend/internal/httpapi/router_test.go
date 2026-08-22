@@ -100,6 +100,7 @@ type embyStub struct {
 	refreshedItem    string
 	deletedItem      string
 	deleteErr        error
+	downloadedSubtitle string
 }
 
 func (*embyStub) Libraries(context.Context) ([]emby.Library, error) {
@@ -146,6 +147,15 @@ func (stub *embyStub) DeleteItem(_ context.Context, id string) error {
 		return stub.deleteErr
 	}
 	stub.deletedItem = id
+	return nil
+}
+func (*embyStub) SearchRemoteSubtitles(context.Context, string, string) ([]emby.RemoteSubtitle, error) {
+	return []emby.RemoteSubtitle{{
+		ID: "opensubtitles-1", Name: "Movie.chi.srt", Language: "chi", Format: "srt", ProviderName: "Open Subtitles",
+	}}, nil
+}
+func (stub *embyStub) DownloadRemoteSubtitle(_ context.Context, itemID, subtitleID string) error {
+	stub.downloadedSubtitle = itemID + ":" + subtitleID
 	return nil
 }
 

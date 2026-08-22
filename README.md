@@ -108,6 +108,19 @@ Enterprise WeChat supports `app` delivery through a normal self-built applicatio
 
 ## Local Verification
 
+One-command (works from any directory):
+
+```bash
+./scripts/test              # Android unit tests + debug APK + lint
+./scripts/test web          # Vitest + lint + quality + build
+./scripts/test backend      # go test ./...
+./scripts/test all          # backend + web + android
+./scripts/test android-apk  # also assembleDebugAndroidTest
+./scripts/test android-ui   # instrumented UI tests (needs emulator)
+```
+
+Or run the pieces manually:
+
 ```bash
 # Backend
 go -C backend test ./...
@@ -120,9 +133,8 @@ pnpm --dir web test
 pnpm --dir web lint
 pnpm --dir web build
 
-# Android
-cd android
-./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+# Android (from repo root)
+./android/gradlew -p android :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 ```
 
 ## Private deployment

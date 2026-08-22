@@ -77,7 +77,7 @@ internal fun ServicesRoute(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
-    LaunchedEffect(viewModel) { viewModel.refresh() }
+    LaunchedEffect(viewModel) { viewModel.ensureLoaded() }
     LaunchedEffect(viewModel) { viewModel.checkForUpdate() }
     DisposableEffect(viewModel) { onDispose(viewModel::stopDriveAuthorization) }
     ServicesScreen(
@@ -421,45 +421,85 @@ private fun LazyListScope.servicesSectionItems(
                     item(key = "password") {
                         MediaHubSmallTitle(text = "管理员密码")
                         MediaHubCard(insideMargin = PaddingValues(16.dp)) {
-                            MediaHubText(text = "修改密码后会撤销其他设备会话", color = MediaHubColors.TextMuted, fontSize = 12.sp)
-                            MediaHubTextField(value = uiState.currentPassword, onValueChange = onCurrentPasswordChange, placeholder = "当前密码", keyboardType = KeyboardType.Password, password = true)
-                            MediaHubTextField(value = uiState.newPassword, onValueChange = onNewPasswordChange, placeholder = "新密码（至少 12 位）", keyboardType = KeyboardType.Password, password = true)
-                            MediaHubTextField(value = uiState.confirmation, onValueChange = onConfirmationChange, placeholder = "确认新密码", keyboardType = KeyboardType.Password, password = true)
-                            if (uiState.passwordChanged) {
-                                MediaHubText(text = "密码已修改，其他设备的会话已撤销", color = MediaHubColors.Source, fontSize = 12.sp)
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                MediaHubText(
+                                    text = "修改密码后会撤销其他设备会话",
+                                    color = MediaHubColors.TextMuted,
+                                    fontSize = 12.sp,
+                                )
+                                MediaHubTextField(
+                                    value = uiState.currentPassword,
+                                    onValueChange = onCurrentPasswordChange,
+                                    placeholder = "当前密码",
+                                    keyboardType = KeyboardType.Password,
+                                    password = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                MediaHubTextField(
+                                    value = uiState.newPassword,
+                                    onValueChange = onNewPasswordChange,
+                                    placeholder = "新密码（至少 12 位）",
+                                    keyboardType = KeyboardType.Password,
+                                    password = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                MediaHubTextField(
+                                    value = uiState.confirmation,
+                                    onValueChange = onConfirmationChange,
+                                    placeholder = "确认新密码",
+                                    keyboardType = KeyboardType.Password,
+                                    password = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                if (uiState.passwordChanged) {
+                                    MediaHubText(
+                                        text = "密码已修改，其他设备的会话已撤销",
+                                        color = MediaHubColors.Source,
+                                        fontSize = 12.sp,
+                                    )
+                                }
+                                MediaHubButton(
+                                    label = if (uiState.changingPassword) "正在修改" else "修改密码",
+                                    icon = Lucide.KeyRound,
+                                    enabled = !uiState.changingPassword &&
+                                        uiState.newPassword.length >= 12 &&
+                                        uiState.newPassword == uiState.confirmation &&
+                                        uiState.currentPassword != uiState.newPassword,
+                                    onClick = onChangePassword,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                             }
-                            MediaHubButton(
-                                label = if (uiState.changingPassword) "正在修改" else "修改密码",
-                                icon = Lucide.KeyRound,
-                                enabled = !uiState.changingPassword && uiState.newPassword.length >= 12 && uiState.newPassword == uiState.confirmation && uiState.currentPassword != uiState.newPassword,
-                                onClick = onChangePassword,
-                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            )
                         }
                     }
                     item(key = "android-update") {
                         val release = uiState.androidRelease
                         MediaHubSmallTitle(text = "应用更新")
                         MediaHubCard(insideMargin = PaddingValues(16.dp)) {
-                            MediaHubText(text = release?.let { "发现 ${it.versionName}，${it.notes}" } ?: "当前已是最新版本", color = MediaHubColors.TextMuted, fontSize = 12.sp)
-                            MediaHubButton(
-                                label = when {
-                                    uiState.downloadedUpdatePath != null -> "安装 ${release?.versionName.orEmpty()}"
-                                    uiState.downloadingUpdate -> "正在下载并校验"
-                                    release != null -> "下载 ${release.versionName}"
-                                    uiState.checkingUpdate -> "正在检查"
-                                    else -> "检查更新"
-                                },
-                                icon = if (release != null) Lucide.Download else Lucide.RefreshCw,
-                                enabled = !uiState.checkingUpdate && !uiState.downloadingUpdate,
-                                onClick = {
-                                    val path = uiState.downloadedUpdatePath
-                                    if (path != null) onInstallUpdate(path)
-                                    else if (release != null) onDownloadUpdate(release)
-                                    else onCheckForUpdate()
-                                },
-                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                MediaHubText(
+                                    text = release?.let { "发现 ${it.versionName}，${it.notes}" } ?: "当前已是最新版本",
+                                    color = MediaHubColors.TextMuted,
+                                    fontSize = 12.sp,
+                                )
+                                MediaHubButton(
+                                    label = when {
+                                        uiState.downloadedUpdatePath != null -> "安装 ${release?.versionName.orEmpty()}"
+                                        uiState.downloadingUpdate -> "正在下载并校验"
+                                        release != null -> "下载 ${release.versionName}"
+                                        uiState.checkingUpdate -> "正在检查"
+                                        else -> "检查更新"
+                                    },
+                                    icon = if (release != null) Lucide.Download else Lucide.RefreshCw,
+                                    enabled = !uiState.checkingUpdate && !uiState.downloadingUpdate,
+                                    onClick = {
+                                        val path = uiState.downloadedUpdatePath
+                                        if (path != null) onInstallUpdate(path)
+                                        else if (release != null) onDownloadUpdate(release)
+                                        else onCheckForUpdate()
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                     }
                     item(key = "server") {

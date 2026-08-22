@@ -158,7 +158,7 @@ export function TransferQueue({ query }: TransferQueueProps) {
       </header>
 
       {currentQuery.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>任务读取失败</strong><span>{currentQuery.error.message}</span></div><button onClick={() => void currentQuery.refetch()} type="button">重试</button></div> : null}
-      {currentQuery.isLoading ? <div className="result-loading"><div /><div /><div /></div> : null}
+      {currentQuery.isLoading && jobs.length === 0 ? <div className="result-loading"><div /><div /><div /></div> : null}
       {!currentQuery.isLoading && jobs.length === 0 ? <div className="empty-state"><ListTodo size={28} /><span>{showArchived ? '还没有归档任务' : '还没有转存任务'}</span></div> : null}
 
       {jobs.length > 0 ? (
@@ -171,7 +171,7 @@ export function TransferQueue({ query }: TransferQueueProps) {
           </div>
 
           <aside className="task-detail" aria-label="任务详情">
-            {detail.isLoading ? <div className="status-loading">正在读取…</div> : null}
+            {detail.isLoading && !detail.data ? <div className="status-loading">正在读取…</div> : null}
             {detail.data ? <>
               <div className="task-detail-heading"><div><h2>{detail.data.title}</h2></div><span className={`state-chip ${detail.data.state}`}>{stateLabel[detail.data.state]}</span></div>
               {detail.data.errorMessage ? <div className="task-error" role="alert"><CircleAlert size={17} /><span>{detail.data.errorMessage}</span></div> : null}

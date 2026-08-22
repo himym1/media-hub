@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, ChevronLeft, ChevronRight, CircleAlert, Film, FolderOpen, RefreshCw, Search, Trash2, X } from 'lucide-react'
+import { BookOpen, Captions, ChevronLeft, ChevronRight, CircleAlert, Film, FolderOpen, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import {
   deleteEmbyItem,
+  downloadEmbyRemoteSubtitle,
   getEmbyItem,
   getEmbyLibraries,
   getEmbyLibraryItems,
@@ -10,9 +11,11 @@ import {
   refreshEmbyItem,
   refreshEmbyLibrary,
   searchEmbyItems,
+  searchEmbyRemoteSubtitles,
   type EmbyDeletePreview,
   type EmbyItem,
   type EmbyItemDetail,
+  type EmbyRemoteSubtitle,
 } from '../../shared/api/mediaHub'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
@@ -183,7 +186,7 @@ export function LibraryView() {
             <div><strong>{submittedQuery ? `“${submittedQuery}”的结果` : selectedLibrary?.name ?? '媒体内容'}</strong><span>{total} 项</span></div>
             {!submittedQuery && total > pageSize ? <div className="library-pagination"><IconButton label="上一页" disabled={page === 0} onClick={() => changePage(Math.max(0, page - 1))} subtle><ChevronLeft size={17} /></IconButton><span>{page + 1} / {Math.max(1, Math.ceil(total / pageSize))}</span><IconButton label="下一页" disabled={(page + 1) * pageSize >= total} onClick={() => changePage(page + 1)} subtle><ChevronRight size={17} /></IconButton></div> : null}
           </div>
-          {result.isLoading ? <div className="result-loading"><div /><div /><div /></div> : null}
+          {result.isLoading && items.length === 0 ? <div className="result-loading"><div /><div /><div /></div> : null}
           {result.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>媒体内容读取失败</strong><span>{result.error.message}</span></div><button onClick={() => void result.refetch()} type="button">重试</button></div> : null}
           {!result.isLoading && !result.isError && items.length === 0 ? <div className="empty-state"><BookOpen size={28} /><span>{submittedQuery ? '没有匹配的媒体' : '此媒体库暂无可浏览内容'}</span></div> : null}
           <div className="library-item-list">
@@ -194,7 +197,7 @@ export function LibraryView() {
         <aside className="library-detail" aria-label="媒体详情">
           {itemId ? <div className="library-detail-back"><IconButton label="返回媒体列表" onClick={closeItem} subtle><ChevronLeft size={17} /></IconButton><span>返回媒体列表</span></div> : null}
           {!itemId ? <div className="library-detail-empty"><Film size={28} /><strong>选择一个媒体</strong><span>查看简介、年份和播放信息。</span></div> : null}
-          {detail.isLoading ? <div className="status-loading">正在读取媒体详情…</div> : null}
+          {detail.isLoading && !detail.data ? <div className="status-loading">正在读取媒体详情…</div> : null}
           {detail.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>详情读取失败</strong><span>{detail.error.message}</span></div><button onClick={() => void detail.refetch()} type="button">重试</button></div> : null}
           {detail.data ? <LibraryItemDetail key={detail.data.id} item={detail.data} onDeleted={closeItem} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} /> : null}
         </aside>
@@ -207,6 +210,7 @@ function LibraryItemDetail({ item, onDeleted, onRefresh, refreshing }: { item: E
   const queryClient = useQueryClient()
   const originalTitle = visibleOriginalTitle(item)
   const genres = localizedGenres(item.genres ?? [])
+  const [subtitleResults, setSubtitleResults] = useState<EmbyRemoteSubtitle[] | null>(null)
   const previewDelete = useMutation({ mutationFn: () => previewEmbyItemDelete(item.id) })
   const confirmDelete = useMutation({
     mutationFn: () => deleteEmbyItem(item.id),
@@ -217,9 +221,18 @@ function LibraryItemDetail({ item, onDeleted, onRefresh, refreshing }: { item: E
       await queryClient.invalidateQueries({ queryKey: ['emby-search'] })
     },
   })
+  const searchSubtitles = useMutation({
+    mutationFn: () => searchEmbyRemoteSubtitles(item.id, 'chi'),
+    onSuccess: (data) => setSubtitleResults(data.items),
+  })
+  const downloadSubtitle = useMutation({
+    mutationFn: (subtitleId: string) => downloadEmbyRemoteSubtitle(item.id, subtitleId),
+  })
   const preview = previewDelete.data
-  const busy = previewDelete.isPending || confirmDelete.isPending || refreshing
+  const busy = previewDelete.isPending || confirmDelete.isPending || refreshing || searchSubtitles.isPending || downloadSubtitle.isPending
   const deleteError = previewDelete.error ?? confirmDelete.error
+  const subtitleError = searchSubtitles.error ?? downloadSubtitle.error
+  const canSearchSubtitles = item.type !== 'Series'
 
   return <>
     <div className="library-detail-heading"><div><h2>{item.name}</h2></div><span className="media-type-chip">{mediaTypeLabel(item.type)}</span></div>
@@ -241,8 +254,63 @@ function LibraryItemDetail({ item, onDeleted, onRefresh, refreshing }: { item: E
     </details>
     <div className="library-detail-actions">
       <button className="secondary-command" disabled={busy} onClick={() => onRefresh(item.id)} type="button"><RefreshCw size={16} />{refreshing ? '已提交…' : '刷新元数据'}</button>
+      {canSearchSubtitles ? (
+        <button
+          className="secondary-command"
+          disabled={busy}
+          onClick={() => {
+            setSubtitleResults(null)
+            searchSubtitles.mutate()
+          }}
+          type="button"
+        >
+          <Captions size={16} />
+          {searchSubtitles.isPending ? '正在搜索…' : '搜中文字幕'}
+        </button>
+      ) : (
+        <span className="library-subtitle-hint">剧集请在 Emby 分集条目上搜索字幕</span>
+      )}
       {preview ? null : <button className="danger-button" disabled={busy} onClick={() => previewDelete.mutate()} type="button"><Trash2 size={16} />{previewDelete.isPending ? '正在读取删除预览…' : '从 Emby 删除'}</button>}
     </div>
+    {subtitleResults ? (
+      <section className="library-subtitle-panel" aria-label="中文字幕搜索结果">
+        <div className="library-subtitle-heading">
+          <strong>中文字幕</strong>
+          <IconButton label="关闭字幕结果" onClick={() => { setSubtitleResults(null); searchSubtitles.reset(); downloadSubtitle.reset() }} subtle><X size={16} /></IconButton>
+        </div>
+        {downloadSubtitle.isSuccess ? <p className="library-subtitle-status" role="status">已下载字幕，Emby 正在刷新；重新打开播放可选中文字幕。</p> : null}
+        {subtitleError ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{subtitleError.message}</span></div> : null}
+        {subtitleResults.length === 0 ? <p className="library-subtitle-status">未找到可用中文字幕（需 Emby 已配置字幕插件）。</p> : (
+          <ul className="library-subtitle-list">
+            {subtitleResults.map((subtitle) => {
+              const meta = [
+                subtitle.format?.toUpperCase(),
+                subtitle.providerName,
+                subtitle.isHashMatch ? '精确匹配' : null,
+                subtitle.downloadCount ? `${subtitle.downloadCount} 次下载` : null,
+              ].filter(Boolean).join(' · ')
+              const downloading = downloadSubtitle.isPending && downloadSubtitle.variables === subtitle.id
+              return (
+                <li key={subtitle.id}>
+                  <div>
+                    <strong>{subtitle.name}</strong>
+                    {meta ? <small>{meta}</small> : null}
+                  </div>
+                  <button
+                    className="secondary-command"
+                    disabled={busy}
+                    onClick={() => downloadSubtitle.mutate(subtitle.id)}
+                    type="button"
+                  >
+                    {downloading ? '下载中…' : '下载'}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
+    ) : subtitleError ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{subtitleError.message}</span></div> : null}
     {preview ? (
       <div className="library-delete-confirm">
         <p>{deletePreviewCopy(preview)}</p>

@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.Captions
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Play
@@ -30,6 +31,7 @@ import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubFilterChip
 import com.mediahub.android.core.designsystem.MediaHubIcon
+import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubListDivider
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
@@ -41,6 +43,7 @@ internal fun EpisodePicker(
     loading: Boolean,
     errorMessage: String?,
     onPlay: (EmbyEpisode) -> Unit,
+    onSearchSubtitles: (EmbyEpisode) -> Unit = {},
 ) {
     val seasons = remember(episodes) { episodes.map { it.item.season.coerceAtLeast(0) }.distinct().sorted() }
     var selectedSeason by remember(seasons) { mutableIntStateOf(seasons.firstOrNull() ?: 0) }
@@ -75,32 +78,45 @@ internal fun EpisodePicker(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 48.dp)
-                                .clickable(role = Role.Button) { onPlay(episode) }
-                                .semantics { contentDescription = playLabel }
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Column(Modifier.weight(1f)) {
-                                MediaHubText(
-                                    text = episodeLabel(episode),
-                                    color = MediaHubColors.TextPrimary,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                                if (progress.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp)
+                                    .clickable(role = Role.Button) { onPlay(episode) }
+                                    .semantics { contentDescription = playLabel }
+                                    .padding(horizontal = 6.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
                                     MediaHubText(
-                                        text = progress,
-                                        color = MediaHubColors.Accent,
-                                        fontSize = 12.sp,
-                                        modifier = Modifier.padding(top = 2.dp),
+                                        text = episodeLabel(episode),
+                                        color = MediaHubColors.TextPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
                                     )
+                                    if (progress.isNotEmpty()) {
+                                        MediaHubText(
+                                            text = progress,
+                                            color = MediaHubColors.Accent,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.padding(top = 2.dp),
+                                        )
+                                    }
                                 }
+                                MediaHubIcon(
+                                    imageVector = Lucide.Play,
+                                    contentDescription = null,
+                                    tint = MediaHubColors.Accent,
+                                    modifier = Modifier.size(18.dp),
+                                )
                             }
-                            MediaHubIcon(
-                                imageVector = Lucide.Play,
-                                contentDescription = null,
-                                tint = MediaHubColors.Accent,
-                                modifier = Modifier.size(18.dp),
+                            MediaHubIconButton(
+                                imageVector = Lucide.Captions,
+                                contentDescription = "搜中文字幕 ${episodeLabel(episode)}",
+                                onClick = { onSearchSubtitles(episode) },
                             )
                         }
                     }

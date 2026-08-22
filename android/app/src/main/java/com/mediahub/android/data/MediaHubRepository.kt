@@ -10,11 +10,13 @@ import com.mediahub.android.core.network.ApiException
 import com.mediahub.android.core.network.Drive115DeviceAuthorization
 import com.mediahub.android.core.network.Drive115Command
 import com.mediahub.android.core.network.Drive115File
+import com.mediahub.android.core.network.DiscoveryGenre
 import com.mediahub.android.core.network.DiscoveryItem
 import com.mediahub.android.core.network.EmbyEpisode
 import com.mediahub.android.core.network.EmbyItem
 import com.mediahub.android.core.network.EmbyItemDetail
 import com.mediahub.android.core.network.EmbyItemPage
+import com.mediahub.android.core.network.EmbyRemoteSubtitle
 import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.MediaHubApi
 import com.mediahub.android.core.network.LocalUploadEntry
@@ -129,6 +131,16 @@ class MediaHubRepository(
     suspend fun recommendations(mediaType: String, tmdbId: String, limit: Int = 24): List<DiscoveryItem> =
         authenticated { api.recommendations(it, mediaType, tmdbId, limit) }
 
+    suspend fun discoveryCatalog(
+        kind: String,
+        mediaType: String,
+        genreId: String? = null,
+        limit: Int = 12,
+    ): List<DiscoveryItem> = authenticated { api.discoveryCatalog(it, kind, mediaType, genreId, limit) }
+
+    suspend fun discoveryGenres(mediaType: String = "movie"): List<DiscoveryGenre> =
+        authenticated { api.discoveryGenres(it, mediaType) }
+
     suspend fun createTransfer(transferToken: String): TransferJob = authenticated { token ->
         api.createTransfer(token, transferToken, UUID.randomUUID().toString())
     }
@@ -197,6 +209,12 @@ class MediaHubRepository(
     suspend fun previewItemDelete(itemId: String) = authenticated { token -> api.previewItemDelete(token, itemId) }
 
     suspend fun deleteItem(itemId: String) = authenticated { token -> api.deleteItem(token, itemId) }
+
+    suspend fun searchRemoteSubtitles(itemId: String, language: String = "chi"): List<EmbyRemoteSubtitle> =
+        authenticated { token -> api.searchRemoteSubtitles(token, itemId, language) }
+
+    suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String) =
+        authenticated { token -> api.downloadRemoteSubtitle(token, itemId, subtitleId) }
 
     suspend fun providerSettings(): ProviderSettings = authenticated(api::providerSettings)
     suspend fun updateProviderSettings(input: ProviderSettingsUpdate): ProviderSettings = authenticated { api.updateProviderSettings(it, input) }

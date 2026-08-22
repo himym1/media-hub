@@ -361,6 +361,38 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         )
     }
 
+    suspend fun searchRemoteSubtitles(token: String, itemId: String, language: String = "chi"): List<EmbyRemoteSubtitle> {
+        val payload = JSONObject(request(
+            "/api/v1/integrations/emby/items/${encode(itemId)}/remote-subtitles?language=${encode(language)}",
+            token = token,
+        ))
+        return payload.getJSONArray("items").objects { value ->
+            EmbyRemoteSubtitle(
+                id = value.getString("id"),
+                name = value.getString("name"),
+                language = value.optString("language"),
+                format = value.optString("format"),
+                providerName = value.optString("providerName"),
+                author = value.optString("author"),
+                comment = value.optString("comment"),
+                communityRating = if (value.has("communityRating")) value.getDouble("communityRating") else null,
+                downloadCount = value.optInt("downloadCount"),
+                isHashMatch = value.optBoolean("isHashMatch"),
+                hearingImpaired = value.optBoolean("hearingImpaired"),
+                forced = value.optBoolean("forced"),
+            )
+        }
+    }
+
+    suspend fun downloadRemoteSubtitle(token: String, itemId: String, subtitleId: String) {
+        request(
+            "/api/v1/integrations/emby/items/${encode(itemId)}/remote-subtitles",
+            method = "POST",
+            token = token,
+            body = JSONObject().put("subtitleId", subtitleId).toString(),
+        )
+    }
+
 
     suspend fun search(token: String, query: String): SearchResponse {
         val encodedQuery = URLEncoder.encode(query, Charsets.UTF_8.name())
@@ -392,6 +424,28 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
     suspend fun trending(token: String, limit: Int = 12): List<DiscoveryItem> {
         val payload = JSONObject(request("/api/v1/discovery/trending?mediaType=all&limit=$limit", token = token))
         return payload.getJSONArray("items").objects(::parseDiscoveryItem)
+    }
+
+    suspend fun discoveryCatalog(
+        token: String,
+        kind: String,
+        mediaType: String,
+        genreId: String? = null,
+        limit: Int = 12,
+    ): List<DiscoveryItem> {
+        val query = buildString {
+            append("/api/v1/discovery/catalog?kind=${encode(kind)}&mediaType=${encode(mediaType)}&limit=$limit")
+            if (!genreId.isNullOrBlank()) append("&genreId=${encode(genreId)}")
+        }
+        val payload = JSONObject(request(query, token = token))
+        return payload.getJSONArray("items").objects(::parseDiscoveryItem)
+    }
+
+    suspend fun discoveryGenres(token: String, mediaType: String = "movie"): List<DiscoveryGenre> {
+        val payload = JSONObject(request("/api/v1/discovery/genres?mediaType=${encode(mediaType)}", token = token))
+        return payload.getJSONArray("genres").objects { item ->
+            DiscoveryGenre(id = item.getInt("id"), name = item.getString("name"))
+        }
     }
 
     suspend fun recommendations(token: String, mediaType: String, tmdbId: String, limit: Int = 12): List<DiscoveryItem> {

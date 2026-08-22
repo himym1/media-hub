@@ -38,6 +38,7 @@ type Client struct {
 
 type discoveryCacheEntry struct {
 	items   []DiscoveryItem
+	genres  []Genre
 	expires time.Time
 }
 
@@ -63,6 +64,11 @@ type DiscoveryItem struct {
 	Year      int    `json:"year"`
 	MediaType string `json:"mediaType"`
 	PosterURL string `json:"posterUrl,omitempty"`
+}
+
+type Genre struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 func NewClient(baseURL, token string, timeout time.Duration) *Client {
@@ -188,6 +194,102 @@ func (c *Client) Recommendations(ctx context.Context, mediaType, tmdbID string, 
 	return c.discovery(ctx, path.Join(endpointType, tmdbID, "recommendations"), mediaType, limit)
 }
 
+func (c *Client) Catalog(ctx context.Context, kind, mediaType, genreID string, limit int) ([]DiscoveryItem, error) {
+	if mediaType != "movie" && mediaType != "series" {
+		return nil, ErrUpstreamResponse
+	}
+	endpointType := mediaType
+	if endpointType == "series" {
+		endpointType = "tv"
+	}
+	switch kind {
+	case "popular":
+		return c.discovery(ctx, path.Join(endpointType, "popular"), mediaType, limit)
+	case "top_rated":
+		return c.discovery(ctx, path.Join(endpointType, "top_rated"), mediaType, limit)
+	case "genre":
+		if parsed, err := strconv.ParseInt(genreID, 10, 64); err != nil || parsed < 1 {
+			return nil, ErrUpstreamResponse
+		}
+		return c.discoverByGenre(ctx, endpointType, mediaType, genreID, limit)
+	default:
+		return nil, ErrUpstreamResponse
+	}
+}
+
+func (c *Client) Genres(ctx context.Context, mediaType string) ([]Genre, error) {
+	if mediaType != "movie" && mediaType != "series" {
+		return nil, ErrUpstreamResponse
+	}
+	endpointType := mediaType
+	if endpointType == "series" {
+		endpointType = "tv"
+	}
+	configuration := c.configuration()
+	if configuration.baseURL == "" || configuration.token == "" {
+		return nil, ErrNotConfigured
+	}
+	cacheKey := "genres|" + endpointType
+	if items, ok := c.cachedGenres(cacheKey); ok {
+		return items, nil
+	}
+	var response struct {
+		Genres []Genre `json:"genres"`
+	}
+	if err := c.getJSON(ctx, path.Join("genre", endpointType, "list"), url.Values{"language": {"zh-CN"}}, &response); err != nil {
+		return nil, err
+	}
+	genres := make([]Genre, 0, len(response.Genres))
+	for _, genre := range response.Genres {
+		if genre.ID < 1 || strings.TrimSpace(genre.Name) == "" {
+			continue
+		}
+		genres = append(genres, Genre{ID: genre.ID, Name: strings.TrimSpace(genre.Name)})
+	}
+	c.storeGenres(cacheKey, genres)
+	return cloneGenres(genres), nil
+}
+
+func (c *Client) discoverByGenre(ctx context.Context, endpointType, mediaType, genreID string, limit int) ([]DiscoveryItem, error) {
+	configuration := c.configuration()
+	if configuration.baseURL == "" || configuration.token == "" {
+		return nil, ErrNotConfigured
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	cacheKey := "discover|" + endpointType + "|genre=" + genreID + "|limit=" + strconv.Itoa(limit)
+	if items, ok := c.cachedDiscovery(cacheKey); ok {
+		return items, nil
+	}
+	query := url.Values{
+		"include_adult": {"false"},
+		"language":      {"zh-CN"},
+		"sort_by":       {"popularity.desc"},
+		"with_genres":   {genreID},
+	}
+	var response multiSearchResponse
+	if err := c.getJSON(ctx, path.Join("discover", endpointType), query, &response); err != nil {
+		return nil, err
+	}
+	items := make([]DiscoveryItem, 0, min(limit, len(response.Results)))
+	for _, result := range response.Results {
+		item := discoveryItem(result.ID, mediaType, result.Title, result.Name, result.ReleaseDate, result.FirstAirDate, result.PosterPath)
+		if item.TMDBID == "" {
+			continue
+		}
+		items = append(items, item)
+		if len(items) == limit {
+			break
+		}
+	}
+	c.storeDiscovery(cacheKey, items)
+	return items, nil
+}
+
 func (c *Client) discovery(ctx context.Context, endpointPath, fallbackMediaType string, limit int) ([]DiscoveryItem, error) {
 	configuration := c.configuration()
 	if configuration.baseURL == "" || configuration.token == "" {
@@ -244,6 +346,34 @@ func (c *Client) storeDiscovery(key string, items []DiscoveryItem) {
 		items:   cloneDiscoveryItems(items),
 		expires: time.Now().Add(discoveryCacheTTL),
 	}
+}
+
+func (c *Client) cachedGenres(key string) ([]Genre, bool) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	entry, ok := c.cache[key]
+	if !ok || time.Now().After(entry.expires) || len(entry.genres) == 0 {
+		return nil, false
+	}
+	return cloneGenres(entry.genres), true
+}
+
+func (c *Client) storeGenres(key string, genres []Genre) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.cache[key] = discoveryCacheEntry{
+		genres:  cloneGenres(genres),
+		expires: time.Now().Add(discoveryCacheTTL),
+	}
+}
+
+func cloneGenres(genres []Genre) []Genre {
+	if len(genres) == 0 {
+		return []Genre{}
+	}
+	cloned := make([]Genre, len(genres))
+	copy(cloned, genres)
+	return cloned
 }
 
 func cloneDiscoveryItems(items []DiscoveryItem) []DiscoveryItem {

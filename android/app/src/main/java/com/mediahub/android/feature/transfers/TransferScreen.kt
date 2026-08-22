@@ -89,13 +89,20 @@ internal fun TransferRoute(
     viewModel: TransferViewModel,
     detailId: String?,
     onDetailChanged: (String?) -> Unit,
+    active: Boolean = true,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    DisposableEffect(viewModel) {
-        viewModel.startPolling()
-        onDispose(viewModel::stopPolling)
+    DisposableEffect(viewModel, active) {
+        if (active) {
+            viewModel.startPolling()
+            onDispose(viewModel::stopPolling)
+        } else {
+            viewModel.stopPolling()
+            onDispose { }
+        }
     }
-    LaunchedEffect(detailId, uiState.jobs) {
+    LaunchedEffect(detailId, uiState.jobs, active) {
+        if (!active) return@LaunchedEffect
         if (detailId == null) {
             viewModel.closeDetail()
         } else if (uiState.jobs.any { it.id == detailId } && uiState.selectedId != detailId) {
@@ -105,7 +112,8 @@ internal fun TransferRoute(
             onDetailChanged(null)
         }
     }
-    LaunchedEffect(detailId, uiState.archivedCompletedId) {
+    LaunchedEffect(detailId, uiState.archivedCompletedId, active) {
+        if (!active) return@LaunchedEffect
         val completedId = uiState.archivedCompletedId ?: return@LaunchedEffect
         if (shouldCloseCompletedTransferDetail(detailId, completedId)) {
             viewModel.closeDetail()
@@ -113,7 +121,8 @@ internal fun TransferRoute(
         }
         viewModel.consumeArchivedCompletion(completedId)
     }
-    LaunchedEffect(detailId, uiState.deletedCompletedId) {
+    LaunchedEffect(detailId, uiState.deletedCompletedId, active) {
+        if (!active) return@LaunchedEffect
         val deletedId = uiState.deletedCompletedId ?: return@LaunchedEffect
         if (shouldCloseCompletedTransferDetail(detailId, deletedId)) {
             viewModel.closeDetail()

@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# One-command local verification. Safe to run from any directory.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/test <target>
+
+Targets:
+  android       JVM unit tests + debugDebug + lintDebug  (default)
+  android-apk   same as android, also assembleDebugAndroidTest
+  android-ui    instrumented Compose tests (needs emulator/device)
+  web           vitest + lint + quality + build
+  backend       go test ./...
+  all           backend + web + android
+
+Examples:
+  ./scripts/test
+  ./scripts/test android
+  ./scripts/test web
+  ./scripts/test all
+EOF
+}
+
+run_android() {
+  local extra_tasks=()
+  if [[ "${1:-}" == "apk" ]]; then
+    extra_tasks+=(:app:assembleDebugAndroidTest)
+  fi
+  ./android/gradlew -p android \
+    :app:testDebugUnitTest \
+    :app:assembleDebug \
+    "${extra_tasks[@]}" \
+    :app:lintDebug
+}
+
+run_android_ui() {
+  bash "$ROOT/scripts/run-android-ui-tests.sh"
+}
+
+run_web() {
+  pnpm --dir web test
+  pnpm --dir web lint
+  pnpm --dir web quality
+  pnpm --dir web build
+}
+
+run_backend() {
+  go -C backend test ./...
+}
+
+target="${1:-android}"
+case "$target" in
+  -h|--help|help)
+    usage
+    exit 0
+    ;;
+  android|a)
+    run_android
+    ;;
+  android-apk|apk)
+    run_android apk
+    ;;
+  android-ui|ui)
+    run_android_ui
+    ;;
+  web|w)
+    run_web
+    ;;
+  backend|go|b)
+    run_backend
+    ;;
+  all)
+    run_backend
+    run_web
+    run_android
+    ;;
+  *)
+    echo "Unknown target: $target" >&2
+    usage >&2
+    exit 1
+    ;;
+esac
+
+echo "OK: $target"

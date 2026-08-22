@@ -39,6 +39,8 @@ type SearchProvider interface {
 type DiscoveryProvider interface {
 	Trending(context.Context, string, int) ([]tmdb.DiscoveryItem, error)
 	Recommendations(context.Context, string, string, int) ([]tmdb.DiscoveryItem, error)
+	Catalog(context.Context, string, string, string, int) ([]tmdb.DiscoveryItem, error)
+	Genres(context.Context, string) ([]tmdb.Genre, error)
 }
 
 type StatisticsProvider interface {
@@ -69,6 +71,8 @@ type EmbyReader interface {
 	DeleteItem(context.Context, string) error
 	Episodes(context.Context, string) ([]emby.Episode, error)
 	PrimaryImage(context.Context, string, int) (emby.PrimaryImage, error)
+	SearchRemoteSubtitles(context.Context, string, string) ([]emby.RemoteSubtitle, error)
+	DownloadRemoteSubtitle(context.Context, string, string) error
 }
 
 type Drive115Reader interface {
@@ -207,6 +211,8 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("PUT /api/v1/settings/providers", h.protected(h.updateProviderSettings))
 	mux.Handle("GET /api/v1/search", h.protected(h.search))
 	mux.Handle("GET /api/v1/discovery/trending", h.protected(h.getTrending))
+	mux.Handle("GET /api/v1/discovery/catalog", h.protected(h.getDiscoveryCatalog))
+	mux.Handle("GET /api/v1/discovery/genres", h.protected(h.getDiscoveryGenres))
 	mux.Handle("GET /api/v1/discovery/{mediaType}/{tmdbId}/recommendations", h.protected(h.getRecommendations))
 	mux.Handle("GET /api/v1/integrations/sources/checkins", h.protected(h.listSourceCheckIns))
 	mux.Handle("POST /api/v1/integrations/sources/checkins/{id}/retry", h.protected(h.retrySourceCheckIn))
@@ -219,6 +225,8 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/integrations/emby/items/{id}/episodes", h.protected(h.getEmbyEpisodes))
 	mux.Handle("GET /api/v1/integrations/emby/items/{id}/primary-image", h.protected(h.getEmbyPrimaryImage))
 	mux.Handle("POST /api/v1/integrations/emby/items/{id}/refresh", h.protected(h.refreshEmbyItem))
+	mux.Handle("GET /api/v1/integrations/emby/items/{id}/remote-subtitles", h.protected(h.searchEmbyRemoteSubtitles))
+	mux.Handle("POST /api/v1/integrations/emby/items/{id}/remote-subtitles", h.protected(h.downloadEmbyRemoteSubtitle))
 	mux.Handle("GET /api/v1/integrations/emby/items/{id}/delete-preview", h.protected(h.previewEmbyItemDelete))
 	mux.Handle("POST /api/v1/integrations/emby/items/{id}/delete", h.protected(h.deleteEmbyItem))
 	mux.Handle("POST /api/v1/integrations/wecom/test", h.protected(h.testWeComNotification))

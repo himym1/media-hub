@@ -50,11 +50,13 @@ import com.composables.icons.lucide.BellPlus
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Film
 import com.composables.icons.lucide.Flame
+import com.composables.icons.lucide.LayoutGrid
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Settings2
 import com.composables.icons.lucide.Sparkles
+import com.composables.icons.lucide.Star
 import com.composables.icons.lucide.Tv
 import com.composables.icons.lucide.Wifi
 import com.composables.icons.lucide.X
@@ -64,6 +66,7 @@ import com.mediahub.android.core.designsystem.MediaHubBadge
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
+import com.mediahub.android.core.designsystem.MediaHubFilterChip
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubListDetail
@@ -75,6 +78,7 @@ import com.mediahub.android.core.designsystem.MediaHubShimmerBox
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.image.RemotePoster
+import com.mediahub.android.core.network.DiscoveryGenre
 import com.mediahub.android.core.network.DiscoveryItem
 import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.SearchCandidate
@@ -113,6 +117,7 @@ internal fun SearchRoute(
         onRecommendationSelected = viewModel::searchRecommendation,
         onShuffleRecommendations = viewModel::shuffleRecommendations,
         onCategorySelected = viewModel::onCategorySelected,
+        onGenreSelected = viewModel::selectGenre,
         onOpenServices = onOpenServices,
         onTransfer = viewModel::createTransfer,
         onSubscribe = viewModel::requestSubscription,
@@ -130,6 +135,7 @@ internal fun SearchScreen(
     onRecommendationSelected: (DiscoveryItem) -> Unit,
     onShuffleRecommendations: () -> Unit = {},
     onCategorySelected: (String) -> Unit = {},
+    onGenreSelected: (DiscoveryGenre?) -> Unit = {},
     onOpenServices: () -> Unit = {},
     onTransfer: (String) -> Unit = {},
     onSubscribe: (String) -> Unit = {},
@@ -159,7 +165,7 @@ internal fun SearchScreen(
             onCandidateSelected = onCandidateSelected,
             onRecommendationSelected = onRecommendationSelected,
             onShuffleRecommendations = onShuffleRecommendations,
-            onCategorySelected = onCategorySelected,
+            onGenreSelected = onGenreSelected,
             onOpenServices = onOpenServices,
             onOpenHealthDetail = { showHealthDialog = true },
             onTransfer = onTransfer,
@@ -333,6 +339,61 @@ internal fun SearchScreen(
                             onCategorySelected = onCategorySelected,
                             modifier = Modifier.padding(horizontal = 16.dp),
                         )
+                    }
+
+                    if (uiState.movieGenres.isNotEmpty() &&
+                        (uiState.selectedCategory == "all" || uiState.selectedCategory == "movie")
+                    ) {
+                        item(key = "genre-chips") {
+                            GenreFilterChips(
+                                genres = uiState.movieGenres,
+                                selectedGenreId = uiState.selectedGenreId,
+                                onGenreSelected = onGenreSelected,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    }
+
+                    if (uiState.selectedGenreId != null &&
+                        (uiState.genreItems.isNotEmpty() || uiState.loadingGenre)
+                    ) {
+                        item(key = "genre-browse") {
+                            DiscoveryGallerySection(
+                                title = uiState.selectedGenreName?.let { "${it}片" } ?: "类型精选",
+                                subtitle = if (uiState.loadingGenre) "正在加载…" else "点选后直接列出可转存版本",
+                                icon = Lucide.LayoutGrid,
+                                items = uiState.genreItems,
+                                onSelect = onTrendingSelected,
+                            )
+                        }
+                    }
+
+                    if ((uiState.selectedCategory == "all" || uiState.selectedCategory == "movie") &&
+                        uiState.topRatedMovies.isNotEmpty()
+                    ) {
+                        item(key = "top-rated-movies") {
+                            DiscoveryGallerySection(
+                                title = "高分电影",
+                                subtitle = "TMDB 评分靠前 · 点选直接列出可转存版本",
+                                icon = Lucide.Star,
+                                items = uiState.topRatedMovies,
+                                onSelect = onTrendingSelected,
+                            )
+                        }
+                    }
+
+                    if ((uiState.selectedCategory == "all" || uiState.selectedCategory == "series") &&
+                        uiState.popularSeries.isNotEmpty()
+                    ) {
+                        item(key = "popular-series") {
+                            DiscoveryGallerySection(
+                                title = "热门剧集",
+                                subtitle = "TMDB 热度靠前 · 点选直接列出可转存版本",
+                                icon = Lucide.Tv,
+                                items = uiState.popularSeries,
+                                onSelect = onTrendingSelected,
+                            )
+                        }
                     }
 
                     // 4. Personalized / Library-based Recommendations (猜你喜欢)
@@ -767,6 +828,37 @@ private fun HeroGalleryCarousel(
  * Filter pills for discovering specific media types
  */
 @Composable
+private fun GenreFilterChips(
+    genres: List<DiscoveryGenre>,
+    selectedGenreId: Int?,
+    onGenreSelected: (DiscoveryGenre?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item(key = "genre-all") {
+            MediaHubFilterChip(
+                label = "全部类型",
+                selected = selectedGenreId == null,
+                onClick = { onGenreSelected(null) },
+            )
+        }
+        items(genres.take(16), key = { it.id }) { genre ->
+            MediaHubFilterChip(
+                label = genre.name,
+                selected = selectedGenreId == genre.id,
+                onClick = {
+                    if (selectedGenreId == genre.id) onGenreSelected(null)
+                    else onGenreSelected(genre)
+                },
+            )
+        }
+    }
+}
+
+@Composable
 private fun CategoryFilterChips(
     selectedCategory: String,
     onCategorySelected: (String) -> Unit,
@@ -1029,7 +1121,7 @@ private fun SearchTwoPane(
     onCandidateSelected: (String) -> Unit,
     onRecommendationSelected: (DiscoveryItem) -> Unit,
     onShuffleRecommendations: () -> Unit = {},
-    onCategorySelected: (String) -> Unit = {},
+    onGenreSelected: (DiscoveryGenre?) -> Unit = {},
     onOpenServices: () -> Unit = {},
     onOpenHealthDetail: () -> Unit = {},
     onTransfer: (String) -> Unit = {},
@@ -1113,7 +1205,7 @@ private fun SearchTwoPane(
                         onOpenDetail = onOpenHealthDetail,
                         onSelect = onTrendingSelected,
                         onShuffleRecommendations = onShuffleRecommendations,
-                        onCategorySelected = onCategorySelected,
+                        onGenreSelected = onGenreSelected,
                     )
                 }
             }
@@ -1139,7 +1231,7 @@ private fun SearchIdleOverview(
     onOpenDetail: () -> Unit,
     onSelect: (DiscoveryItem) -> Unit,
     onShuffleRecommendations: () -> Unit,
-    onCategorySelected: (String) -> Unit,
+    onGenreSelected: (DiscoveryGenre?) -> Unit = {},
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1158,6 +1250,51 @@ private fun SearchIdleOverview(
             item {
                 HeroGalleryCarousel(
                     items = uiState.heroItems,
+                    onSelect = onSelect,
+                )
+            }
+        }
+        if (uiState.movieGenres.isNotEmpty()) {
+            item {
+                GenreFilterChips(
+                    genres = uiState.movieGenres,
+                    selectedGenreId = uiState.selectedGenreId,
+                    onGenreSelected = onGenreSelected,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+        }
+        if (uiState.selectedGenreId != null &&
+            (uiState.genreItems.isNotEmpty() || uiState.loadingGenre)
+        ) {
+            item {
+                DiscoveryGallerySection(
+                    title = uiState.selectedGenreName?.let { "${it}片" } ?: "类型精选",
+                    subtitle = if (uiState.loadingGenre) "正在加载…" else "点选后直接列出可转存版本",
+                    icon = Lucide.LayoutGrid,
+                    items = uiState.genreItems,
+                    onSelect = onSelect,
+                )
+            }
+        }
+        if (uiState.topRatedMovies.isNotEmpty()) {
+            item {
+                DiscoveryGallerySection(
+                    title = "高分电影",
+                    subtitle = "TMDB 评分靠前 · 点选直接列出可转存版本",
+                    icon = Lucide.Star,
+                    items = uiState.topRatedMovies,
+                    onSelect = onSelect,
+                )
+            }
+        }
+        if (uiState.popularSeries.isNotEmpty()) {
+            item {
+                DiscoveryGallerySection(
+                    title = "热门剧集",
+                    subtitle = "TMDB 热度靠前 · 点选直接列出可转存版本",
+                    icon = Lucide.Tv,
+                    items = uiState.popularSeries,
                     onSelect = onSelect,
                 )
             }

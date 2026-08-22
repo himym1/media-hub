@@ -53,14 +53,20 @@ internal fun SubscriptionRoute(
     draft: SearchCandidate?,
     navigator: SubscriptionNavigator,
     onDraftConsumed: () -> Unit,
+    active: Boolean = true,
 ) {
     val state by viewModel.uiState.collectAsState()
-    DisposableEffect(viewModel) {
-        viewModel.startPolling()
-        onDispose(viewModel::stopPolling)
+    DisposableEffect(viewModel, active) {
+        if (active) {
+            viewModel.startPolling()
+            onDispose(viewModel::stopPolling)
+        } else {
+            viewModel.stopPolling()
+            onDispose { }
+        }
     }
-    LaunchedEffect(draft) {
-        if (draft != null) {
+    LaunchedEffect(draft, active) {
+        if (active && draft != null) {
             viewModel.applyDraft(draft)
             if (!navigator.editorOpen) navigator.openEditor(null)
             onDraftConsumed()
@@ -74,7 +80,9 @@ internal fun SubscriptionRoute(
         navigator.editorItemId,
         navigator.editorKey,
         navigator.editorOpen,
+        active,
     ) {
+        if (!active) return@LaunchedEffect
         when (val resolution = resolveSubscriptionRoute(
             editorOpen = navigator.editorOpen,
             editorItemId = navigator.editorItemId,

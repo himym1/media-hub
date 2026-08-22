@@ -218,7 +218,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
 
       <div className="subscription-layout">
         <div className="subscription-list" aria-label="订阅列表">
-          {subscriptions.isLoading ? <div className="status-loading">正在读取订阅…</div> : null}
+          {subscriptions.isLoading && !subscriptions.data ? <div className="status-loading">正在读取订阅…</div> : null}
           {subscriptions.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>订阅读取失败</strong><span>{subscriptions.error.message}</span></div><button onClick={() => void subscriptions.refetch()} type="button">重试</button></div> : null}
           {subscriptions.data?.subscriptions.map((item) => (
             <button className={item.id === selectedId ? 'subscription-row selected' : 'subscription-row'} key={item.id} onClick={() => { setSelectedId(item.id); setEditor(editorFromSubscription(item)) }} type="button">

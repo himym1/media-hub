@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, CircleAlert, Film, FolderInput, RefreshCw, Search, X } from 'lucide-react'
+import { BellPlus, CircleAlert, Film, FolderInput, RefreshCw, Search, Star, Tv, X } from 'lucide-react'
 import {
   createTransfer,
+  getDiscoveryCatalog,
+  getDiscoveryGenres,
   getRecommendations,
   getTrending,
   searchMedia,
   type Candidate,
+  type DiscoveryGenre,
   type DiscoveryItem,
   type Integration,
 } from '../../shared/api/mediaHub'
@@ -73,12 +76,44 @@ export function DiscoveryView({
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
   })
+  const topRatedMovies = useQuery({
+    queryKey: ['discovery-catalog', 'top_rated', 'movie'],
+    queryFn: () => getDiscoveryCatalog('top_rated', 'movie', { limit: 12 }),
+    retry: false,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+  })
+  const popularSeries = useQuery({
+    queryKey: ['discovery-catalog', 'popular', 'series'],
+    queryFn: () => getDiscoveryCatalog('popular', 'series', { limit: 12 }),
+    retry: false,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+  })
+  const movieGenres = useQuery({
+    queryKey: ['discovery-genres', 'movie'],
+    queryFn: () => getDiscoveryGenres('movie'),
+    retry: false,
+    staleTime: 60 * 60_000,
+    gcTime: 2 * 60 * 60_000,
+  })
+  const [selectedGenre, setSelectedGenre] = useState<DiscoveryGenre | null>(null)
+  const genreBrowse = useQuery({
+    queryKey: ['discovery-catalog', 'genre', 'movie', selectedGenre?.id],
+    queryFn: () => getDiscoveryCatalog('genre', 'movie', { genreId: selectedGenre!.id, limit: 16 }),
+    enabled: Boolean(selectedGenre),
+    retry: false,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+  })
+  const [queuedTransferIds, setQueuedTransferIds] = useState<string[]>([])
   const transfer = useMutation({
     mutationFn: (candidate: Candidate) => {
       if (!candidate.transferToken) throw new Error('当前资源不能转存')
       return createTransfer(candidate.transferToken, crypto.randomUUID())
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, candidate) => {
+      setQueuedTransferIds((current) => current.includes(candidate.id) ? current : [...current, candidate.id])
       await queryClient.invalidateQueries({ queryKey: ['transfers'] })
       onTransferCreated()
     },
@@ -215,18 +250,75 @@ export function DiscoveryView({
         <div className="search-meta"><span>{sourceIntegration?.detail ?? '资源源尚未配置'}</span>{submittedQuery ? <><span>·</span><span>{search.data?.partial ? '部分结果' : '已列出可转存版本'}</span></> : null}</div>
       </section>
 
-      {!submittedQuery && trending.data?.items.length ? (
-        <section className="trending-band" aria-label="本周热门">
-          <div className="section-heading"><div><h2>本周热门</h2><p>点选后直接列出可转存版本</p></div></div>
-          <div className="trending-list">
-            {trending.data.items.map((item) => (
-              <button key={`${item.mediaType}-${item.tmdbId}`} onClick={() => openDiscoveryItem(item)} type="button">
-                <span className="trending-poster">{item.posterUrl ? <img alt="" height="210" loading="lazy" src={item.posterUrl} width="140" /> : <Film aria-hidden="true" size={20} />}</span>
-                <span><strong>{item.title}</strong><small>{item.year || '年份未知'} · {item.mediaType === 'movie' ? '电影' : '剧集'}</small></span>
-              </button>
-            ))}
-          </div>
-        </section>
+      {!submittedQuery ? (
+        <div className="discovery-idle">
+          {movieGenres.data?.genres.length ? (
+            <section className="genre-chip-band" aria-label="电影类型">
+              <div className="genre-chip-row" role="list">
+                <button
+                  aria-pressed={!selectedGenre}
+                  className={!selectedGenre ? 'genre-chip selected' : 'genre-chip'}
+                  onClick={() => setSelectedGenre(null)}
+                  role="listitem"
+                  type="button"
+                >
+                  全部类型
+                </button>
+                {movieGenres.data.genres.map((genre) => {
+                  const selected = selectedGenre?.id === genre.id
+                  return (
+                    <button
+                      aria-pressed={selected}
+                      className={selected ? 'genre-chip selected' : 'genre-chip'}
+                      key={genre.id}
+                      onClick={() => setSelectedGenre(selected ? null : genre)}
+                      role="listitem"
+                      type="button"
+                    >
+                      {genre.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          {selectedGenre ? (
+            <DiscoveryPosterBand
+              emptyLabel={genreBrowse.isFetching ? '正在加载…' : `暂无「${selectedGenre.name}」片源`}
+              items={genreBrowse.data?.items ?? []}
+              label={`${selectedGenre.name}片`}
+              loading={genreBrowse.isFetching && !genreBrowse.data?.items.length}
+              onSelect={openDiscoveryItem}
+              subtitle="点选后直接列出可转存版本"
+            />
+          ) : null}
+
+          <DiscoveryPosterBand
+            icon={<Star aria-hidden="true" size={16} />}
+            items={topRatedMovies.data?.items ?? []}
+            label="高分电影"
+            onSelect={openDiscoveryItem}
+            subtitle="TMDB 评分靠前 · 点选直接列出可转存版本"
+          />
+
+          <DiscoveryPosterBand
+            icon={<Tv aria-hidden="true" size={16} />}
+            items={popularSeries.data?.items ?? []}
+            label="热门剧集"
+            onSelect={openDiscoveryItem}
+            subtitle="TMDB 热度靠前 · 点选直接列出可转存版本"
+          />
+
+          {trending.data?.items.length ? (
+            <DiscoveryPosterBand
+              items={trending.data.items}
+              label="本周热门"
+              onSelect={openDiscoveryItem}
+              subtitle="点选后直接列出可转存版本"
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {search.data?.sourceErrors.length ? <div className="source-warning" role="status"><CircleAlert size={16} /><span>{search.data.sourceErrors.map((item) => item.message).join(' · ')}</span></div> : null}
@@ -250,10 +342,18 @@ export function DiscoveryView({
               </div>
             ) : null}
             {!search.isLoading && !search.isError ? rankedResults.map((candidate) => {
-              const transferring = transfer.isPending && transfer.variables.id === candidate.id
-              const available = candidate.transferState === 'available' && Boolean(candidate.transferToken)
+              const transferring = (transfer.isPending && transfer.variables?.id === candidate.id) ||
+                queuedTransferIds.includes(candidate.id) ||
+                candidate.transferState === 'transferring'
+              const available = candidate.transferState === 'available' && Boolean(candidate.transferToken) && !transferring
               const subscribable = candidate.transferState !== 'identity_required' && Boolean(candidate.tmdbId)
-              const availabilityLabel = available ? '可转存' : candidate.transferState === 'identity_required' ? '身份待确认' : '工作流不可用'
+              const availabilityLabel = transferring
+                ? '转存中'
+                : available
+                  ? '可转存'
+                  : candidate.transferState === 'identity_required'
+                    ? '身份待确认'
+                    : '工作流不可用'
               return (
                 <article className={selected?.id === candidate.id ? 'result-row selected' : 'result-row'} key={candidate.id}>
                   <div className="poster-wrap">{candidate.posterUrl ? <img alt={`${candidate.title} 海报`} height="144" loading="lazy" src={candidate.posterUrl} width="96" /> : <Film aria-hidden="true" size={24} />}<span>{candidate.mediaType === 'movie' ? '电影' : '剧集'}</span></div>
@@ -262,7 +362,7 @@ export function DiscoveryView({
                     <span className="source-line"><span className="source-badge">{candidate.provider ?? candidate.source}</span>{episodeLabel(candidate) ? <span>{episodeLabel(candidate)}</span> : null}<span>{candidate.release.resolution}</span><span>{candidate.release.videoCodec}</span>{candidate.release.dynamicRange ? <span>{candidate.release.dynamicRange}</span> : null}</span>
                     <span className="result-facts"><span>{candidate.release.audio ?? '音轨未知'}</span><span>·</span><span>{formatSize(candidate.release.sizeBytes)}</span></span>
                   </button>
-                  <div className="result-action"><span className={`availability ${available ? 'available' : 'unavailable'}`}><span />{availabilityLabel}</span><div className="result-commands"><IconButton disabled={!subscribable} label="创建订阅" onClick={() => onSubscribe(candidate)}><BellPlus size={15} /></IconButton><button disabled={!available || transferring} onClick={() => handleTransfer(candidate)} type="button">{transferring ? '提交中…' : '转存'}<FolderInput size={15} /></button></div></div>
+                  <div className="result-action"><span className={`availability ${transferring ? 'transferring' : available ? 'available' : 'unavailable'}`}><span />{availabilityLabel}</span><div className="result-commands"><IconButton disabled={!subscribable} label="创建订阅" onClick={() => onSubscribe(candidate)}><BellPlus size={15} /></IconButton><button disabled={!available || transferring} onClick={() => handleTransfer(candidate)} type="button">{transferring ? (transfer.isPending && transfer.variables?.id === candidate.id ? '提交中…' : '转存中') : '转存'}<FolderInput size={15} /></button></div></div>
                 </article>
               )
             }) : null}
@@ -287,4 +387,59 @@ function episodeLabel(candidate: Candidate) {
   return candidate.episodeStart === candidate.episodeEnd
     ? `S${candidate.season}E${candidate.episodeStart}`
     : `S${candidate.season}E${candidate.episodeStart}-${candidate.episodeEnd}`
+}
+
+function DiscoveryPosterBand({
+  label,
+  subtitle,
+  items,
+  onSelect,
+  icon,
+  loading = false,
+  emptyLabel,
+}: {
+  label: string
+  subtitle: string
+  items: DiscoveryItem[]
+  onSelect: (item: DiscoveryItem) => void
+  icon?: ReactNode
+  loading?: boolean
+  emptyLabel?: string
+}) {
+  if (!loading && items.length === 0 && !emptyLabel) return null
+  return (
+    <section className="trending-band" aria-label={label}>
+      <div className="section-heading">
+        <div>
+          <h2>{icon ? <span className="section-heading-icon">{icon}</span> : null}{label}</h2>
+          <p>{subtitle}</p>
+        </div>
+      </div>
+      {loading ? <p className="discovery-band-status" role="status">{emptyLabel ?? '正在加载…'}</p> : null}
+      {!loading && items.length === 0 && emptyLabel ? (
+        <p className="discovery-band-status" role="status">{emptyLabel}</p>
+      ) : null}
+      {items.length ? (
+        <div className="trending-list">
+          {items.map((item) => (
+            <button key={`${item.mediaType}-${item.tmdbId}`} onClick={() => onSelect(item)} type="button">
+              <span className="trending-poster">
+                {item.posterUrl ? (
+                  <img alt="" height="210" loading="lazy" src={item.posterUrl} width="140" />
+                ) : (
+                  <Film aria-hidden="true" size={20} />
+                )}
+              </span>
+              <span>
+                <strong>{item.title}</strong>
+                <small>
+                  {item.year || '年份未知'} · {item.mediaType === 'movie' ? '电影' : '剧集'}
+                </small>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
 }

@@ -263,7 +263,9 @@ class SubscriptionViewModel(
     }
 
     private suspend fun load(initial: Boolean) {
-        if (initial) _uiState.value = _uiState.value.copy(loading = true)
+        if (initial && _uiState.value.subscriptions.isEmpty()) {
+            _uiState.value = _uiState.value.copy(loading = true)
+        }
         try {
             val previousSelectedId = _uiState.value.selectedId
             val subscriptions = repository.subscriptions()
@@ -274,8 +276,10 @@ class SubscriptionViewModel(
             } else {
                 _uiState.value.availableSources
             }
+            val previous = _uiState.value.subscriptions
+            val unchanged = previous.map { it.id to it.updatedAt } == subscriptions.map { it.id to it.updatedAt }
             _uiState.value = _uiState.value.copy(
-                subscriptions = subscriptions,
+                subscriptions = if (unchanged) previous else subscriptions,
                 selectedId = selectedId,
                 editor = if (selectionRemoved) SubscriptionEditorState() else _uiState.value.editor,
                 runs = if (selectionRemoved) emptyList() else _uiState.value.runs,
@@ -284,7 +288,9 @@ class SubscriptionViewModel(
                 errorMessage = null,
                 initialized = true,
             )
-            if (selectedId != null) loadRuns(selectedId)
+            if (selectedId != null && (!unchanged || selectionRemoved || _uiState.value.runs.isEmpty())) {
+                loadRuns(selectedId)
+            }
         } catch (error: ApiException) {
             _uiState.value = _uiState.value.copy(loading = false, errorMessage = error.message ?: "订阅读取失败")
         } catch (_: Exception) {

@@ -689,7 +689,7 @@ func (c *Client) ApplyTMDBMetadata(ctx context.Context, itemID, title string, ye
 	if replaceAllImages {
 		query.Set("ReplaceAllImages", "true")
 	}
-	return c.postJSONBody(ctx, configuration, path.Join("Items", "RemoteSearch", "Apply", itemID), query, payload, nil)
+	return c.postJSONBody(ctx, configuration, path.Join("Items", "RemoteSearch", "Apply", itemID), query, payload, nil, false)
 }
 
 func (c *Client) refreshItem(ctx context.Context, itemID string) error {
@@ -890,7 +890,7 @@ func (c *Client) getJSONResponse(
 }
 
 func (c *Client) postJSON(ctx context.Context, configuration clientConfig, endpointPath string, query url.Values, target any) error {
-	return c.postJSONBody(ctx, configuration, endpointPath, query, map[string]any{}, target)
+	return c.postJSONBody(ctx, configuration, endpointPath, query, map[string]any{}, target, false)
 }
 
 func (c *Client) postJSONBody(
@@ -900,6 +900,7 @@ func (c *Client) postJSONBody(
 	query url.Values,
 	body any,
 	target any,
+	mapNotFound bool,
 ) error {
 	endpoint, err := endpointURL(configuration.baseURL, endpointPath, query)
 	if err != nil {
@@ -924,6 +925,9 @@ func (c *Client) postJSONBody(
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 		return ErrUnauthorized
+	}
+	if mapNotFound && response.StatusCode == http.StatusNotFound {
+		return ErrItemNotFound
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return ErrUpstreamResponse

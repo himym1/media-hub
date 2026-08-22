@@ -57,10 +57,11 @@ class TransferViewModel(
     }
 
     fun refresh() {
-        viewModelScope.launch { load(false) }
+        viewModelScope.launch { load(initial = false, userRefresh = true) }
     }
 
     fun select(id: String) {
+        if (_uiState.value.selectedId == id && _uiState.value.selected != null) return
         _uiState.value = _uiState.value.copy(selectedId = id, selected = null)
         viewModelScope.launch { loadDetail(id) }
     }
@@ -165,20 +166,25 @@ class TransferViewModel(
         }
     }
 
-    private suspend fun load(initial: Boolean) {
+    private suspend fun load(initial: Boolean, userRefresh: Boolean = false) {
         val archived = _uiState.value.archived
         _uiState.value = _uiState.value.copy(
             loading = initial && _uiState.value.jobs.isEmpty(),
-            refreshing = !initial,
+            refreshing = userRefresh,
         )
         try {
             val jobs = repository.transfers(archived)
             val notifications = if (archived) emptyList() else repository.transferNotifications()
             if (_uiState.value.archived != archived) return
             val selectedId = _uiState.value.selectedId?.takeIf { id -> jobs.any { it.id == id } }
+            val previousJobs = _uiState.value.jobs
+            val previousNotifications = _uiState.value.notifications
+            val jobsUnchanged = previousJobs.map { it.id to it.state } == jobs.map { it.id to it.state }
+            val notificationsUnchanged = previousNotifications.map { it.id to it.state } ==
+                notifications.map { it.id to it.state }
             _uiState.value = _uiState.value.copy(
-                jobs = jobs,
-                notifications = notifications,
+                jobs = if (jobsUnchanged) previousJobs else jobs,
+                notifications = if (notificationsUnchanged) previousNotifications else notifications,
                 selectedId = selectedId,
                 selected = _uiState.value.selected.takeIf { it?.id == selectedId },
                 loading = false,
@@ -190,7 +196,9 @@ class TransferViewModel(
                 errorMessage = null,
                 initialized = true,
             )
-            if (selectedId != null) loadDetail(selectedId)
+            if (selectedId != null && (_uiState.value.selected == null || !jobsUnchanged)) {
+                loadDetail(selectedId)
+            }
         } catch (error: ApiException) {
             if (_uiState.value.archived != archived) return
             _uiState.value = _uiState.value.copy(

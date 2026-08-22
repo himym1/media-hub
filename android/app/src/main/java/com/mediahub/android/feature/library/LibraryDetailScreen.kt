@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.Captions
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.CircleAlert
@@ -36,6 +37,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.X
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import com.mediahub.android.core.designsystem.BadgeVariant
@@ -49,11 +51,13 @@ import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubListDivider
 import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
+import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.image.PosterLoader
 import com.mediahub.android.core.network.EmbyItemDetail
 import com.mediahub.android.core.network.EmbyItem
+import com.mediahub.android.core.network.EmbyRemoteSubtitle
 import com.mediahub.android.playback.PlaybackFallback
 import java.net.URI
 
@@ -106,6 +110,9 @@ internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDeta
                                 PlaybackFallback(episode.appUrl, episode.externalUrl),
                             )
                         },
+                        onSearchSubtitles = { episode ->
+                            actions.onSearchSubtitles(episode.item.id, episode.item.name)
+                        },
                     )
                 }
             } else {
@@ -115,6 +122,28 @@ internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDeta
                         icon = Lucide.Play,
                         onClick = { actions.onPlayItem(detail.item, fallback) },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    )
+                }
+                item {
+                    MediaHubSecondaryButton(
+                        label = if (state.searchingSubtitles && state.subtitleTargetId == detail.item.id) {
+                            "正在搜索字幕…"
+                        } else {
+                            "搜中文字幕"
+                        },
+                        icon = Lucide.Captions,
+                        enabled = !state.searchingSubtitles && state.downloadingSubtitleId == null && !state.refreshing,
+                        onClick = { actions.onSearchSubtitles(detail.item.id, detail.item.name) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    )
+                }
+            }
+            if (state.subtitleTargetId != null || state.remoteSubtitles.isNotEmpty() || state.searchingSubtitles) {
+                item {
+                    RemoteSubtitlePanel(
+                        state = state,
+                        onDownload = actions.onDownloadSubtitle,
+                        onClear = actions.onClearSubtitles,
                     )
                 }
             }
@@ -131,6 +160,79 @@ internal fun LibraryDetailScreen(state: LibraryDetailState, actions: LibraryDeta
             item { TechnicalDetails(detail) }
             item { DeleteActions(state, actions) }
         }
+    }
+}
+
+@Composable
+private fun RemoteSubtitlePanel(
+    state: LibraryDetailState,
+    onDownload: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MediaHubSmallTitle(
+                text = state.subtitleTargetLabel?.let { "中文字幕 · $it" } ?: "中文字幕",
+                modifier = Modifier.weight(1f),
+            )
+            MediaHubIconButton(Lucide.X, "关闭字幕结果", onClear)
+        }
+        state.subtitleMessage?.let {
+            MediaHubText(text = it, color = MediaHubColors.TextMuted, fontSize = 12.sp)
+        }
+        if (state.searchingSubtitles) {
+            MediaHubText(text = "正在通过 Emby 搜索…", color = MediaHubColors.TextMuted, fontSize = 13.sp)
+        }
+        if (state.remoteSubtitles.isNotEmpty()) {
+            MediaHubCard {
+                state.remoteSubtitles.forEachIndexed { index, subtitle ->
+                    if (index > 0) MediaHubListDivider()
+                    RemoteSubtitleRow(
+                        subtitle = subtitle,
+                        downloading = state.downloadingSubtitleId == subtitle.id,
+                        enabled = state.downloadingSubtitleId == null,
+                        onDownload = { onDownload(subtitle.id) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RemoteSubtitleRow(
+    subtitle: EmbyRemoteSubtitle,
+    downloading: Boolean,
+    enabled: Boolean,
+    onDownload: () -> Unit,
+) {
+    val meta = listOfNotNull(
+        subtitle.format.takeIf { it.isNotBlank() }?.uppercase(),
+        subtitle.providerName.takeIf { it.isNotBlank() },
+        if (subtitle.isHashMatch) "精确匹配" else null,
+        if (subtitle.downloadCount > 0) "${subtitle.downloadCount} 次下载" else null,
+    ).joinToString(" · ")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            MediaHubText(text = subtitle.name, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            if (meta.isNotBlank()) {
+                MediaHubText(text = meta, color = MediaHubColors.TextMuted, fontSize = 12.sp)
+            }
+        }
+        MediaHubSecondaryButton(
+            label = if (downloading) "下载中…" else "下载",
+            enabled = enabled,
+            onClick = onDownload,
+        )
     }
 }
 

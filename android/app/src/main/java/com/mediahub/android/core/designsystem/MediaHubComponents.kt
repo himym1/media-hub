@@ -701,7 +701,7 @@ fun MediaHubBadge(
         MediaHubText(
             text = text,
             color = contentColor,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
         )
     }
@@ -797,7 +797,7 @@ fun MediaHubPipelineStepper(
                 }
                 MediaHubText(
                     text = step.label,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     color = when {
                         step.isFailed -> MediaHubColors.Error
                         step.isCurrent -> MediaHubColors.Accent

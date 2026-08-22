@@ -74,6 +74,9 @@ data class LibraryDetailActions(
     val onDelete: () -> Unit = {},
     val onConfirmDelete: () -> Unit = {},
     val onCancelDelete: () -> Unit = {},
+    val onSearchSubtitles: (itemId: String?, label: String?) -> Unit = { _, _ -> },
+    val onDownloadSubtitle: (String) -> Unit = {},
+    val onClearSubtitles: () -> Unit = {},
 )
 
 @Composable
@@ -84,10 +87,13 @@ internal fun LibraryRoute(
     onSelectedItemChanged: (String?) -> Unit,
     onPlayItem: (EmbyItem, PlaybackFallback) -> Unit,
     posterLoader: PosterLoader,
+    active: Boolean = true,
 ) {
     val browseState by browseViewModel.uiState.collectAsState()
     val detailState by detailViewModel.uiState.collectAsState()
-    LaunchedEffect(browseViewModel) { browseViewModel.refreshLibraries() }
+    LaunchedEffect(browseViewModel, active) {
+        if (active) browseViewModel.ensureLibrariesLoaded()
+    }
     LaunchedEffect(selectedItemId) { selectedItemId?.let(detailViewModel::load) }
     LaunchedEffect(detailState.deleted) {
         if (detailState.deleted) {
@@ -118,6 +124,9 @@ internal fun LibraryRoute(
         onDelete = detailViewModel::requestDelete,
         onConfirmDelete = detailViewModel::confirmDelete,
         onCancelDelete = detailViewModel::cancelDelete,
+        onSearchSubtitles = { itemId, label -> detailViewModel.searchChineseSubtitles(itemId, label) },
+        onDownloadSubtitle = detailViewModel::downloadRemoteSubtitle,
+        onClearSubtitles = detailViewModel::clearSubtitleResults,
     )
     MediaHubListDetail(
         detailOpen = selectedItemId != null,
@@ -264,7 +273,7 @@ private fun EmbyPosterCard(
                         MediaHubText(
                             text = status,
                             color = Color.White,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                         )
                     }

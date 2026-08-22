@@ -276,6 +276,73 @@ func (h *handler) refreshEmbyObject(w http.ResponseWriter, r *http.Request, libr
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
 }
 
+func (h *handler) searchEmbyRemoteSubtitles(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Emby == nil {
+		writeIntegrationUnavailable(w)
+		return
+	}
+	itemID := r.PathValue("id")
+	if !embyIDPattern.MatchString(itemID) {
+		writeInvalidEmbyID(w)
+		return
+	}
+	language := strings.TrimSpace(r.URL.Query().Get("language"))
+	if language == "" {
+		language = "chi"
+	}
+	if len(language) < 2 || len(language) > 16 {
+		writeProblem(w, problem{
+			Type:  "https://media-hub.local/problems/invalid-language",
+			Title: "字幕语言无效", Status: http.StatusBadRequest,
+			Code: "invalid_language",
+		})
+		return
+	}
+	items, err := h.dependencies.Emby.SearchRemoteSubtitles(r.Context(), itemID, language)
+	if err != nil {
+		writeIntegrationProblem(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *handler) downloadEmbyRemoteSubtitle(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Emby == nil {
+		writeIntegrationUnavailable(w)
+		return
+	}
+	itemID := r.PathValue("id")
+	if !embyIDPattern.MatchString(itemID) {
+		writeInvalidEmbyID(w)
+		return
+	}
+	var input struct {
+		SubtitleID string `json:"subtitleId"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&input); err != nil {
+		writeProblem(w, problem{
+			Type:  "https://media-hub.local/problems/invalid-request",
+			Title: "字幕下载请求无效", Status: http.StatusBadRequest,
+			Code: "invalid_request",
+		})
+		return
+	}
+	subtitleID := strings.TrimSpace(input.SubtitleID)
+	if subtitleID == "" || len(subtitleID) > 512 {
+		writeProblem(w, problem{
+			Type:  "https://media-hub.local/problems/invalid-subtitle-id",
+			Title: "字幕编号无效", Status: http.StatusBadRequest,
+			Code: "invalid_subtitle_id",
+		})
+		return
+	}
+	if err := h.dependencies.Emby.DownloadRemoteSubtitle(r.Context(), itemID, subtitleID); err != nil {
+		writeIntegrationProblem(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+}
+
 func readEmbyPage(w http.ResponseWriter, r *http.Request) (int, int, bool) {
 	offset := 0
 	limit := 50

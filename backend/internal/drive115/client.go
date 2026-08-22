@@ -41,22 +41,23 @@ var (
 )
 
 type Client struct {
-	mu              sync.RWMutex
-	cookie          string
-	userInfoURL     string
-	userProfileURL  string
-	filesURL        string
-	fileInfoURL     string
-	downloadURL     string
-	folderAddURL    string
-	fileMoveURL     string
-	fileRenameURL   string
-	fileDeleteURL   string
-	offlineInfoURL  string
-	offlineAddURL   string
-	shareSnapURL    string
-	shareReceiveURL string
-	client          *http.Client
+	mu                sync.RWMutex
+	cookie            string
+	sessionPersister  func(string)
+	userInfoURL       string
+	userProfileURL    string
+	filesURL          string
+	fileInfoURL       string
+	downloadURL       string
+	folderAddURL      string
+	fileMoveURL       string
+	fileRenameURL     string
+	fileDeleteURL     string
+	offlineInfoURL    string
+	offlineAddURL     string
+	shareSnapURL      string
+	shareReceiveURL   string
+	client            *http.Client
 }
 
 type Status struct {
@@ -98,10 +99,33 @@ func (c *Client) SetSession(value string) {
 	c.mu.Unlock()
 }
 
+func (c *Client) SetSessionPersister(persister func(string)) {
+	c.mu.Lock()
+	c.sessionPersister = persister
+	c.mu.Unlock()
+}
+
 func (c *Client) session() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.cookie
+}
+
+func (c *Client) absorbSessionCookies(response *http.Response) {
+	if response == nil || len(response.Cookies()) == 0 {
+		return
+	}
+	c.mu.Lock()
+	merged := mergeSessionCookieHeader(c.cookie, response.Cookies())
+	changed := merged != "" && merged != c.cookie
+	persister := c.sessionPersister
+	if changed {
+		c.cookie = merged
+	}
+	c.mu.Unlock()
+	if changed && persister != nil {
+		persister(merged)
+	}
 }
 
 func (c *Client) Check(ctx context.Context) integration.Health {
@@ -520,6 +544,7 @@ func (c *Client) getJSONWithSession(ctx context.Context, endpoint string, query 
 		return fmt.Errorf("request 115: %w", err)
 	}
 	defer response.Body.Close()
+	c.absorbSessionCookies(response)
 	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 		return ErrUnauthorized
 	}
@@ -538,6 +563,31 @@ func (c *Client) applyAuth(request *http.Request, cookie string) {
 	if cookie != "" {
 		request.Header.Set("Cookie", cookie)
 	}
+}
+
+func mergeSessionCookieHeader(current string, cookies []*http.Cookie) string {
+	values := map[string]string{}
+	for _, part := range strings.Split(current, ";") {
+		name, value, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if !ok || value == "" {
+			continue
+		}
+		switch strings.ToUpper(strings.TrimSpace(name)) {
+		case "UID", "CID", "SEID", "KID":
+			values[strings.ToUpper(strings.TrimSpace(name))] = value
+		}
+	}
+	for _, cookie := range cookies {
+		switch strings.ToUpper(cookie.Name) {
+		case "UID", "CID", "SEID", "KID":
+			if strings.TrimSpace(cookie.Value) != "" {
+				values[strings.ToUpper(cookie.Name)] = cookie.Value
+			}
+		}
+	}
+	return sessionCookie{
+		UID: values["UID"], CID: values["CID"], SEID: values["SEID"], KID: values["KID"],
+	}.header()
 }
 
 func parse115Time(raw json.RawMessage) int64 {

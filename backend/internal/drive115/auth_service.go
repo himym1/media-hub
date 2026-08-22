@@ -31,7 +31,10 @@ var (
 const (
 	qrTokenURL  = "https://qrcodeapi.115.com/api/1.0/web/1.0/token"
 	qrStatusURL = "https://qrcodeapi.115.com/get/status/"
-	qrLoginURL  = "https://passportapi.115.com/app/1.0/web/1.0/login/qrcode"
+	// qandroid sessions last much longer than web; web cookies often die in days
+	// and are invalidated when the same account logs into 115.com in a browser.
+	qrLoginApp = "qandroid"
+	qrLoginURL = "https://passportapi.115.com/app/1.0/qandroid/1.0/login/qrcode"
 )
 
 type AuthService struct {
@@ -64,12 +67,35 @@ type credentialPayload struct {
 }
 
 func NewAuthService(dataStore *store.Store, codec *securepayload.Codec, drive *Client, timeout time.Duration) *AuthService {
-	return &AuthService{
+	service := &AuthService{
 		store: dataStore, codec: codec, drive: drive,
 		httpClient: &http.Client{Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 		tokenURL:   qrTokenURL, statusURL: qrStatusURL, loginURL: qrLoginURL,
 		now: time.Now,
 	}
+	if drive != nil {
+		drive.SetSessionPersister(func(cookie string) {
+			service.persistRotatedSession(cookie)
+		})
+	}
+	return service
+}
+
+func (s *AuthService) persistRotatedSession(cookie string) {
+	if s == nil || s.store == nil || s.codec == nil || strings.TrimSpace(cookie) == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	admin, exists, err := s.store.Admin(ctx)
+	if err != nil || !exists {
+		return
+	}
+	sealed, err := s.codec.Seal(credentialPayload{Cookie: cookie})
+	if err != nil {
+		return
+	}
+	_ = s.store.UpsertProviderCredential(ctx, admin.ID, "115", sealed, s.now().UTC())
 }
 
 func (s *AuthService) Check(ctx context.Context) integration.Health {
@@ -286,7 +312,7 @@ func (s *AuthService) exchange(ctx context.Context, challenge authorizationChall
 			KID    string        `json:"KID"`
 		} `json:"data"`
 	}
-	httpResponse, err := s.postForm(ctx, s.loginURL, url.Values{"account": {challenge.UID}, "app": {"web"}}, &response)
+	httpResponse, err := s.postForm(ctx, s.loginURL, url.Values{"account": {challenge.UID}, "app": {qrLoginApp}}, &response)
 	if err != nil {
 		return "", err
 	}

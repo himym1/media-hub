@@ -70,7 +70,7 @@ export type Candidate = {
   provider?: string
   posterUrl?: string
   release: Release
-  transferState: 'available' | 'identity_required' | 'unavailable'
+  transferState: 'available' | 'identity_required' | 'unavailable' | 'transferring'
   transferToken?: string
 }
 
@@ -80,6 +80,11 @@ export type DiscoveryItem = {
   year: number
   mediaType: 'movie' | 'series'
   posterUrl?: string
+}
+
+export type DiscoveryGenre = {
+  id: number
+  name: string
 }
 
 export type SearchResponse = {
@@ -278,6 +283,21 @@ export type EmbyDeletePreview = {
   versionCount: number
 }
 
+export type EmbyRemoteSubtitle = {
+  id: string
+  name: string
+  language?: string
+  format?: string
+  providerName?: string
+  author?: string
+  comment?: string
+  communityRating?: number
+  downloadCount?: number
+  isHashMatch?: boolean
+  hearingImpaired?: boolean
+  forced?: boolean
+}
+
 export type Drive115Status = {
   authorized: boolean
   usedBytes?: number
@@ -416,6 +436,28 @@ export function getTrending(mediaType: 'all' | 'movie' | 'series' = 'all', limit
   return requestJSON<{ items: DiscoveryItem[] }>(`/api/v1/discovery/trending?mediaType=${mediaType}&limit=${limit}`)
 }
 
+export function getDiscoveryCatalog(
+  kind: 'popular' | 'top_rated' | 'genre',
+  mediaType: 'movie' | 'series',
+  options: { genreId?: string | number; limit?: number } = {},
+) {
+  const params = new URLSearchParams({
+    kind,
+    mediaType,
+    limit: String(options.limit ?? 12),
+  })
+  if (options.genreId != null && String(options.genreId) !== '') {
+    params.set('genreId', String(options.genreId))
+  }
+  return requestJSON<{ items: DiscoveryItem[] }>(`/api/v1/discovery/catalog?${params}`)
+}
+
+export function getDiscoveryGenres(mediaType: 'movie' | 'series' = 'movie') {
+  return requestJSON<{ genres: DiscoveryGenre[] }>(
+    `/api/v1/discovery/genres?mediaType=${mediaType}`,
+  )
+}
+
 export function getRecommendations(mediaType: 'movie' | 'series', tmdbId: string, limit = 12) {
   return requestJSON<{ items: DiscoveryItem[] }>(`/api/v1/discovery/${mediaType}/${encodeURIComponent(tmdbId)}/recommendations?limit=${limit}`)
 }
@@ -515,6 +557,24 @@ export function deleteEmbyItem(id: string) {
     headers: writeHeaders(),
     body: JSON.stringify({ confirmation: id }),
   })
+}
+
+export function searchEmbyRemoteSubtitles(id: string, language = 'chi') {
+  const params = new URLSearchParams({ language })
+  return requestJSON<{ items: EmbyRemoteSubtitle[] }>(
+    `/api/v1/integrations/emby/items/${encodeURIComponent(id)}/remote-subtitles?${params}`,
+  )
+}
+
+export function downloadEmbyRemoteSubtitle(id: string, subtitleId: string) {
+  return requestJSON<{ status: 'accepted' }>(
+    `/api/v1/integrations/emby/items/${encodeURIComponent(id)}/remote-subtitles`,
+    {
+      method: 'POST',
+      headers: writeHeaders(),
+      body: JSON.stringify({ subtitleId }),
+    },
+  )
 }
 
 export function getDrive115Status() {

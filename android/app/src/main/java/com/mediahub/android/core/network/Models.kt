@@ -186,6 +186,11 @@ data class DiscoveryItem(
     val posterUrl: String?,
 )
 
+data class DiscoveryGenre(
+    val id: Int,
+    val name: String,
+)
+
 data class SourceError(
     val source: String,
     val code: String,
@@ -350,6 +355,21 @@ data class EmbyDeletePreview(
     val deletesFiles: Boolean,
     val cloudKept: Boolean,
     val versionCount: Int = 1,
+)
+
+data class EmbyRemoteSubtitle(
+    val id: String,
+    val name: String,
+    val language: String = "",
+    val format: String = "",
+    val providerName: String = "",
+    val author: String = "",
+    val comment: String = "",
+    val communityRating: Double? = null,
+    val downloadCount: Int = 0,
+    val isHashMatch: Boolean = false,
+    val hearingImpaired: Boolean = false,
+    val forced: Boolean = false,
 )
 
 

@@ -15,11 +15,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -187,86 +191,110 @@ private fun AuthenticatedWorkspace(
     val inSystem = destination == MainDestination.Services
     val detailOpen = detail != null
     BackHandler(enabled = inSystem, onBack = appViewModel::closeSystem)
+
+    val searchViewModel = viewModel<SearchViewModel>(key = "search-$serverGeneration", factory = factory)
+    val transferViewModel = viewModel<TransferViewModel>(key = "transfers-$serverGeneration", factory = factory)
+    val subscriptionViewModel = viewModel<SubscriptionViewModel>(key = "subscriptions-$serverGeneration", factory = factory)
+    val libraryViewModel = viewModel<LibraryViewModel>(key = "library-$serverGeneration", factory = factory)
+    val libraryDetailViewModel = viewModel<LibraryDetailViewModel>(key = "library-detail-$serverGeneration", factory = factory)
+    val servicesViewModel = viewModel<ServicesViewModel>(key = "services-$serverGeneration", factory = factory)
+
     WorkspaceShell(
-            destination = destination,
-            detailOpen = detailOpen,
-            onSystemBack = appViewModel::closeSystem,
-            onOpenSystem = appViewModel::openSystem,
-            onPrimarySelected = appViewModel::showDestination,
-        ) {
-            when (destination) {
-                MainDestination.Search -> {
-                    val searchViewModel = viewModel<SearchViewModel>(key = "search-$serverGeneration", factory = factory)
-                    SearchRoute(
-                        viewModel = searchViewModel,
-                        onTransferCreated = { appViewModel.showDestination(MainDestination.Transfers) },
-                        onSubscriptionRequested = appViewModel::prepareSubscription,
-                        onOpenServices = appViewModel::openSystem,
-                    )
-                }
-                MainDestination.Transfers -> {
-                    val transferViewModel = viewModel<TransferViewModel>(key = "transfers-$serverGeneration", factory = factory)
-                    TransferRoute(
-                        viewModel = transferViewModel,
-                        detailId = (detail as? WorkspaceDetail.Transfer)?.transferId,
-                        onDetailChanged = { id ->
-                            if (id == null) appViewModel.closeDetail()
-                            else appViewModel.openDetail(WorkspaceDetail.Transfer(id))
+        destination = destination,
+        detailOpen = detailOpen,
+        onSystemBack = appViewModel::closeSystem,
+        onOpenSystem = appViewModel::openSystem,
+        onPrimarySelected = appViewModel::showDestination,
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            RetentionPane(active = !inSystem && destination == MainDestination.Search) {
+                SearchRoute(
+                    viewModel = searchViewModel,
+                    onTransferCreated = { appViewModel.showDestination(MainDestination.Transfers) },
+                    onSubscriptionRequested = appViewModel::prepareSubscription,
+                    onOpenServices = appViewModel::openSystem,
+                )
+            }
+            RetentionPane(active = !inSystem && destination == MainDestination.Transfers) {
+                TransferRoute(
+                    viewModel = transferViewModel,
+                    active = !inSystem && destination == MainDestination.Transfers,
+                    detailId = (detail as? WorkspaceDetail.Transfer)?.transferId,
+                    onDetailChanged = { id ->
+                        if (id == null) appViewModel.closeDetail()
+                        else appViewModel.openDetail(WorkspaceDetail.Transfer(id))
+                    },
+                )
+            }
+            RetentionPane(active = !inSystem && destination == MainDestination.Subscriptions) {
+                SubscriptionRoute(
+                    viewModel = subscriptionViewModel,
+                    active = !inSystem && destination == MainDestination.Subscriptions,
+                    draft = subscriptionDraft,
+                    navigator = SubscriptionNavigator(
+                        editorItemId = (detail as? WorkspaceDetail.SubscriptionEditor)?.subscriptionId,
+                        editorKey = (detail as? WorkspaceDetail.SubscriptionEditor)?.key,
+                        replaceEditor = { id, key ->
+                            appViewModel.openDetail(WorkspaceDetail.SubscriptionEditor(id, key))
                         },
-                    )
-                }
-                MainDestination.Subscriptions -> {
-                    val subscriptionViewModel = viewModel<SubscriptionViewModel>(key = "subscriptions-$serverGeneration", factory = factory)
-                    SubscriptionRoute(
-                        viewModel = subscriptionViewModel,
-                        draft = subscriptionDraft,
-                        navigator = SubscriptionNavigator(
-                            editorItemId = (detail as? WorkspaceDetail.SubscriptionEditor)?.subscriptionId,
-                            editorKey = (detail as? WorkspaceDetail.SubscriptionEditor)?.key,
-                            replaceEditor = { id, key ->
-                                appViewModel.openDetail(WorkspaceDetail.SubscriptionEditor(id, key))
-                            },
-                            openEditor = { id -> appViewModel.openDetail(WorkspaceDetail.SubscriptionEditor(id)) },
-                            closeEditor = appViewModel::closeDetail,
-                        ),
-                        onDraftConsumed = appViewModel::consumeSubscriptionDraft,
-                    )
-                }
-                MainDestination.Library -> {
-                    val libraryViewModel = viewModel<LibraryViewModel>(key = "library-$serverGeneration", factory = factory)
-                    val detailViewModel = viewModel<LibraryDetailViewModel>(key = "library-detail-$serverGeneration", factory = factory)
-                    LibraryRoute(
-                        browseViewModel = libraryViewModel,
-                        detailViewModel = detailViewModel,
-                        posterLoader = posterLoader,
-                        selectedItemId = (detail as? WorkspaceDetail.LibraryItem)?.itemId,
-                        onSelectedItemChanged = { id ->
-                            if (id == null) appViewModel.closeDetail()
-                            else appViewModel.openDetail(WorkspaceDetail.LibraryItem(id))
-                        },
-                        onPlayItem = { item, fallback ->
-                            context.startActivity(
-                                PlayerActivity.intent(
-                                    context,
-                                    PlaybackRequest(EmbyItemTarget(item.id), item.name, serverIdentity, fallback),
-                                ),
-                            )
-                        },
-                    )
-                }
-                MainDestination.Services -> {
-                    val servicesViewModel = viewModel<ServicesViewModel>(key = "services-$serverGeneration", factory = factory)
-                    ServicesRoute(
-                        viewModel = servicesViewModel,
-                        onLogout = {
-                            context.startService(MediaHubPlaybackService.invalidateIntent(context))
-                            appViewModel.logout()
-                        },
-                        onChangeServer = onChangeServer,
-                    )
-                }
+                        openEditor = { id -> appViewModel.openDetail(WorkspaceDetail.SubscriptionEditor(id)) },
+                        closeEditor = appViewModel::closeDetail,
+                    ),
+                    onDraftConsumed = appViewModel::consumeSubscriptionDraft,
+                )
+            }
+            RetentionPane(active = !inSystem && destination == MainDestination.Library) {
+                LibraryRoute(
+                    browseViewModel = libraryViewModel,
+                    detailViewModel = libraryDetailViewModel,
+                    active = !inSystem && destination == MainDestination.Library,
+                    posterLoader = posterLoader,
+                    selectedItemId = (detail as? WorkspaceDetail.LibraryItem)?.itemId,
+                    onSelectedItemChanged = { id ->
+                        if (id == null) appViewModel.closeDetail()
+                        else appViewModel.openDetail(WorkspaceDetail.LibraryItem(id))
+                    },
+                    onPlayItem = { item, fallback ->
+                        context.startActivity(
+                            PlayerActivity.intent(
+                                context,
+                                PlaybackRequest(EmbyItemTarget(item.id), item.name, serverIdentity, fallback),
+                            ),
+                        )
+                    },
+                )
+            }
+            if (inSystem) {
+                ServicesRoute(
+                    viewModel = servicesViewModel,
+                    onLogout = {
+                        context.startService(MediaHubPlaybackService.invalidateIntent(context))
+                        appViewModel.logout()
+                    },
+                    onChangeServer = onChangeServer,
+                )
             }
         }
+    }
+}
+
+/** Keep tab UI mounted so scroll, posters, and ViewModel state survive destination switches. */
+@Composable
+private fun RetentionPane(
+    active: Boolean,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(if (active) 1f else 0f)
+            .graphicsLayer { alpha = if (active) 1f else 0f }
+            .semantics {
+                if (!active) hideFromAccessibility()
+            },
+    ) {
+        content()
+    }
 }
 
 @Composable

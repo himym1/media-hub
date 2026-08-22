@@ -220,10 +220,21 @@ class ServicesViewModel(
         _uiState.value = _uiState.value.copy(authorizingDrive = false)
     }
 
-    fun refresh() {
+    fun ensureLoaded() {
+        if (_uiState.value.integrations.isNotEmpty() || _uiState.value.providerSettings != null) {
+            refresh(showLoading = false)
+        } else {
+            refresh(showLoading = true)
+        }
+    }
+
+    fun refresh(showLoading: Boolean = _uiState.value.integrations.isEmpty()) {
         if (_uiState.value.loading) return
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(loading = true, errorMessage = null)
+            _uiState.value = _uiState.value.copy(
+                loading = showLoading,
+                errorMessage = null,
+            )
             try {
                 val integrations = repository.overview()
                 val statistics = try { repository.operationalStatistics() } catch (_: Exception) { null }
