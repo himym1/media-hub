@@ -192,6 +192,11 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 					candidate.EpisodeEnd = episodeEnd
 				}
 			}
+			if candidate.MediaType == "series" && candidate.EpisodeStart == 0 {
+				candidate.Season = 1
+				candidate.EpisodeStart = 1
+				candidate.EpisodeEnd = 1
+			}
 			if !supportsTransfer || candidate.SourceRef == "" {
 				continue
 			}

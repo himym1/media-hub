@@ -108,6 +108,9 @@ func (s *Service) SelectionToken(candidate search.Candidate) string {
 	if _, ok := s.workflowConfiguration().Target(candidate.MediaType); !ok {
 		return ""
 	}
+	if candidate.MediaType == "series" && (candidate.Season == 0 || candidate.EpisodeStart == 0 || candidate.EpisodeEnd == 0) {
+		return ""
+	}
 	if candidate.Revision == 0 || candidate.Revision != s.search.CurrentRevision() {
 		return ""
 	}
