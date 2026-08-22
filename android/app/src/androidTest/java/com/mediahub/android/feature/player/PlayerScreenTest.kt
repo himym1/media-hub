@@ -115,7 +115,7 @@ class PlayerScreenTest {
         composeRule.setContent {
             MediaHubTheme {
                 PlayerScreen(
-                    state = PlayerUiState.Error("当前媒体暂无直链", retryable = false),
+                    state = PlayerUiState.Error("暂时无法获取直链，请稍后重试", retryable = true),
                     title = "演示影片",
                     controller = null,
                     isPictureInPicture = false,
@@ -128,7 +128,7 @@ class PlayerScreenTest {
                 )
             }
         }
-        composeRule.onNodeWithText("当前媒体暂无直链").assertExists()
+        composeRule.onNodeWithText("暂时无法获取直链，请稍后重试").assertExists()
         composeRule.onNodeWithText("重试").assertDoesNotExist()
     }
 }

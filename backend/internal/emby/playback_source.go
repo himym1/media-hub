@@ -41,7 +41,7 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 	if err := c.getJSONWithNotFound(ctx, configuration, itemPath, url.Values{"Fields": {"MediaSources,UserData"}}, true, &item); err != nil {
 		return playback.SourceMedia{}, normalizePlaybackError(err)
 	}
-	if item.ID != target.ItemID || item.Name == "" || item.Type == "Series" {
+	if item.ID != target.ItemID || item.Name == "" || !isPlayableItemType(item.Type) {
 		return playback.SourceMedia{}, playback.ErrNotFound
 	}
 	query := url.Values{}
@@ -61,6 +61,7 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 		}
 	}
 	hasCloudSource := false
+	var lastResolveErr error
 	for _, source := range response.MediaSources {
 		if !validEmbyIdentifier(source.ID) || (!is115Source(source) && !is115Item(item)) {
 			continue
@@ -77,18 +78,29 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 				StartPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
 			}, nil
 		}
-		if errors.Is(err, errNoExternalPlayback) {
-			continue
-		}
 		if errors.Is(err, playback.ErrSourceUnauthorized) {
 			return playback.SourceMedia{}, err
 		}
-		return playback.SourceMedia{}, fmt.Errorf("%w: Emby playback facade request failed", playback.ErrUnavailable)
+		if err != nil && !errors.Is(err, errNoExternalPlayback) {
+			lastResolveErr = err
+		}
 	}
 	if !hasCloudSource {
 		return playback.SourceMedia{}, playback.ErrNotFound
 	}
+	if lastResolveErr != nil {
+		return playback.SourceMedia{}, fmt.Errorf("%w: %v", playback.ErrUnavailable, lastResolveErr)
+	}
 	return playback.SourceMedia{}, playback.ErrUnavailable
+}
+
+func isPlayableItemType(itemType string) bool {
+	switch strings.TrimSpace(itemType) {
+	case "Movie", "Episode", "Video":
+		return true
+	default:
+		return false
+	}
 }
 
 type cloudPlayback struct {

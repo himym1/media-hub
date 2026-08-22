@@ -121,7 +121,7 @@ class PlaybackCommandCoordinatorTest {
             playbackResolutionFailure(ApiException(404, "playable_media_not_found", "ignored"), false),
         )
         assertEquals(
-            PlaybackFailure("当前媒体暂无直链", false),
+            PlaybackFailure("暂时无法获取直链，请稍后重试", true),
             playbackResolutionFailure(ApiException(502, "direct_playback_unavailable", "ignored"), false),
         )
         assertEquals(PlaybackFailure("无法连接 Media Hub", true), playbackResolutionFailure(IOException(), false))

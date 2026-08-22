@@ -119,6 +119,53 @@ func TestResolveEmbyItemRejectsServerHostedStreamWithoutRedirect(t *testing.T) {
 	}
 }
 
+func TestResolveEmbyItemRejectsNonPlayableTypes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Users/user-1/Items/folder-1":
+			_, _ = w.Write([]byte(`{"Id":"folder-1","Name":"Season Folder","Type":"Folder","Path":"/library/show/season.strm"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "emby-key", time.Second, "user-1")
+	_, err := client.ResolveEmbyItem(context.Background(), playback.EmbyItemTarget{ItemID: "folder-1"}, "player-ua")
+	if !errors.Is(err, playback.ErrNotFound) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestResolveEmbyItemFallsBackToSecondMediaSource(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("X-Emby-Token") != "emby-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch request.URL.Path {
+		case "/Users/user-1/Items/item-1":
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Episode 1","Type":"Episode","Path":"/library/episode.strm"}`))
+		case "/Items/item-1/PlaybackInfo":
+			_, _ = w.Write([]byte(`{"PlaySessionId":"play-session-1","MediaSources":[{"Id":"source-1","Path":"/library/broken.strm","Container":"strm"},{"Id":"source-2","Path":"https://qms.local/115/url/video.mkv?pickcode=abcd1234","Container":"strm"}]}`))
+		case "/Videos/item-1/stream.strm":
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "emby-key", time.Second, "user-1")
+	media, err := client.ResolveEmbyItem(context.Background(), playback.EmbyItemTarget{ItemID: "item-1"}, "player-ua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if media.PickCode != "abcd1234" || media.Name != "Episode 1" {
+		t.Fatalf("media = %#v", media)
+	}
+}
+
 func TestResolveEmbyItemUsesImmutablePlaybackFacadeAfterCredentialReconfigure(t *testing.T) {
 	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {

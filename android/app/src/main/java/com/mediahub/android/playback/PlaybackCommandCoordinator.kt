@@ -184,7 +184,7 @@ internal fun playbackResolutionFailure(error: Exception, refresh: Boolean): Play
         "playback_source_not_configured" -> PlaybackFailure("直接播放尚未配置", false)
         "playback_source_unauthorized" -> PlaybackFailure("播放源授权已失效", false)
         "playable_media_not_found" -> PlaybackFailure("当前媒体无法直接播放", false)
-        "direct_playback_unavailable" -> PlaybackFailure("当前媒体暂无直链", false)
+        "direct_playback_unavailable" -> PlaybackFailure("暂时无法获取直链，请稍后重试", true)
         else -> PlaybackFailure(error.message.orEmpty().ifBlank { "暂时无法直接播放" }, true)
     }
     error is IOException -> PlaybackFailure("无法连接 Media Hub", true)
