@@ -1,4 +1,5 @@
 package com.mediahub.android.playback
+import androidx.media3.common.PlaybackException
 import com.mediahub.android.core.network.ApiException
 import java.io.IOException
 
@@ -65,9 +66,23 @@ internal class PlaybackCommandCoordinator(
         recovery.onReady()
     }
 
-    fun onPlayerError(responseCode: Int?) {
+    fun onPlayerError(error: PlaybackException) {
+        handlePlayerError(playbackHttpStatus(error), error)
+    }
+
+    internal fun handlePlayerErrorForTest(responseCode: Int?) {
+        handlePlayerError(responseCode, error = null)
+    }
+
+    private fun handlePlayerError(responseCode: Int?, error: PlaybackException?) {
         val request = currentRequest ?: return
         if (host.currentMediaId != request.mediaId || refreshing) return
+        if (responseCode == null && error != null && isDecoderPlaybackError(error)) {
+            host.pause()
+            host.stopSession()
+            host.publishError(playbackConnectionFailure(null, error))
+            return
+        }
         val action = recovery.recover(
             responseCode = responseCode,
             request = request,
@@ -77,12 +92,13 @@ internal class PlaybackCommandCoordinator(
         if (action == null) {
             host.pause()
             host.stopSession()
-            host.publishError(playbackConnectionFailure(responseCode))
+            host.publishError(playbackConnectionFailure(responseCode, error))
             return
         }
         launchLatest { command ->
             host.stopSessionAndFlush()
             if (!isCurrent(command) || currentRequest?.mediaId != action.request.mediaId) return@launchLatest
+            host.clearMedia()
             resolveAndApply(
                 action.request,
                 action.positionMs,
@@ -146,7 +162,7 @@ internal data class PlaybackRecoveryAction(
 )
 
 internal class PlaybackRecoveryCoordinator {
-    private var acquired = false
+    private var refreshAttempts = 0
 
     fun recover(
         responseCode: Int?,
@@ -154,23 +170,61 @@ internal class PlaybackRecoveryCoordinator {
         positionMs: Long,
         autoPlay: Boolean,
     ): PlaybackRecoveryAction? {
-        if (acquired) return null
+        if (refreshAttempts >= 2) return null
         if (responseCode != null && !isRefreshableHttpStatus(responseCode)) return null
-        acquired = true
-        return PlaybackRecoveryAction(request, positionMs, autoPlay)
+        refreshAttempts++
+        val restartPosition = when {
+            responseCode == 416 -> 0L
+            refreshAttempts == 2 && positionMs > 0L -> 0L
+            else -> positionMs
+        }
+        return PlaybackRecoveryAction(request, restartPosition, autoPlay)
     }
 
     fun onReady() {
-        acquired = false
+        refreshAttempts = 0
     }
 }
 
 internal fun isRefreshableHttpStatus(responseCode: Int): Boolean =
-    responseCode in setOf(401, 403, 404, 410, 416, 502, 503, 504)
+    responseCode in setOf(401, 403, 404, 410, 416, 500, 502, 503, 504)
 
-internal fun playbackConnectionFailure(responseCode: Int?): PlaybackFailure {
-    val suffix = responseCode?.let { " (HTTP $it)" }.orEmpty()
+internal fun playbackConnectionFailure(responseCode: Int?, error: PlaybackException? = null): PlaybackFailure {
+    val suffix = when {
+        responseCode != null -> " (HTTP $responseCode)"
+        error != null -> playbackErrorDetail(error)
+        else -> ""
+    }
     return PlaybackFailure("视频连接中断$suffix", retryable = true)
+}
+
+internal fun playbackHttpStatus(error: PlaybackException): Int? {
+    var cause: Throwable? = error
+    while (cause != null) {
+        if (cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
+            return cause.responseCode
+        }
+        cause = cause.cause
+    }
+    return null
+}
+
+internal fun isDecoderPlaybackError(error: PlaybackException): Boolean =
+    error.errorCode in setOf(
+        PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+        PlaybackException.ERROR_CODE_DECODING_FAILED,
+        PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+    )
+
+internal fun playbackErrorDetail(error: PlaybackException): String = when (error.errorCode) {
+    PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+    PlaybackException.ERROR_CODE_DECODING_FAILED,
+    PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+    -> "（设备无法解码此视频）"
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+    -> "（网络连接失败）"
+    else -> "（${error.errorCodeName}）"
 }
 
 internal fun matchesServerIdentity(request: PlaybackRequest, configuredIdentity: String): Boolean =

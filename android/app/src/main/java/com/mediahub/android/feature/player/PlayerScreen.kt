@@ -128,6 +128,7 @@ internal data class PlayerActions(
     val onBack: () -> Unit,
     val onToggleOrientation: () -> Unit,
     val onEnterPictureInPicture: () -> Unit,
+    val onOpenFallback: (() -> Unit)? = null,
 )
 
 internal data class SeekGestureState(
@@ -486,6 +487,13 @@ internal fun PlayerScreen(
                         PlayerLiquidPillButton(
                             label = "重试",
                             onClick = actions.onRetry,
+                            modifier = Modifier.height(48.dp),
+                        )
+                    }
+                    actions.onOpenFallback?.let { openFallback ->
+                        PlayerLiquidPillButton(
+                            label = "用 Emby 打开",
+                            onClick = openFallback,
                             modifier = Modifier.height(48.dp),
                         )
                     }

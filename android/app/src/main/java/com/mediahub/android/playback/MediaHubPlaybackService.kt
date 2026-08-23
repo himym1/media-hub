@@ -13,7 +13,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
@@ -41,7 +40,10 @@ class MediaHubPlaybackService : MediaSessionService() {
         sessionReporter = PlaybackSessionReporter {
             (application as MediaHubApplication).container.requireConfigured().playbackRepository
         }
-        httpFactory = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
+        httpFactory = DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(30_000)
+            .setReadTimeoutMs(60_000)
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, httpFactory)))
             .setAudioAttributes(AudioAttributes.DEFAULT, true)
@@ -103,13 +105,12 @@ class MediaHubPlaybackService : MediaSessionService() {
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                val status = playbackHttpStatus(error)
                 Log.w(
                     TAG,
-                    "player error code=${error.errorCodeName} http=$status message=${error.message}",
+                    "player error code=${error.errorCodeName} http=${playbackHttpStatus(error)} message=${error.message}",
                     error,
                 )
-                commandCoordinator.onPlayerError(status)
+                commandCoordinator.onPlayerError(error)
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -152,6 +153,8 @@ class MediaHubPlaybackService : MediaSessionService() {
             .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder().setTitle(descriptor.title).build())
             .build()
         val startPositionMs = positionMs.takeIf { it > 0L } ?: descriptor.startPositionMs
+        player.stop()
+        player.clearMediaItems()
         player.setMediaItem(item, startPositionMs)
         player.prepare()
         player.playWhenReady = autoPlay
@@ -193,11 +196,3 @@ class MediaHubPlaybackService : MediaSessionService() {
 }
 
 
-private fun playbackHttpStatus(error: PlaybackException): Int? {
-    var cause: Throwable? = error
-    while (cause != null) {
-        if (cause is HttpDataSource.InvalidResponseCodeException) return cause.responseCode
-        cause = cause.cause
-    }
-    return null
-}

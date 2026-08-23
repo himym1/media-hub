@@ -41,6 +41,7 @@ import com.mediahub.android.playback.EmbyItemTarget
 import com.mediahub.android.playback.MediaHubPlaybackService
 import com.mediahub.android.playback.PlaybackRequest
 import com.mediahub.android.playback.PlaybackRequestIntentCodec
+import com.mediahub.android.playback.openPlaybackFallback
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class PlayerActivity : ComponentActivity() {
@@ -92,6 +93,9 @@ class PlayerActivity : ComponentActivity() {
                         onBack = ::closePlayer,
                         onToggleOrientation = ::toggleOrientation,
                         onEnterPictureInPicture = ::enterPictureInPicture,
+                        onOpenFallback = request.fallback?.let { fallback ->
+                            { openPlaybackFallback(this@PlayerActivity, fallback) }
+                        },
                     ),
                 )
                 }

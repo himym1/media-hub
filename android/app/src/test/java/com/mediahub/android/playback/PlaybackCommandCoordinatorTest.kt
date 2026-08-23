@@ -54,9 +54,9 @@ class PlaybackCommandCoordinatorTest {
         host.positionMs = 91_234L
         host.playWhenReady = false
 
-        coordinator.onPlayerError(403)
+        coordinator.handlePlayerErrorForTest(403)
         yield()
-        assertEquals(listOf("stop-session-flush", "loading", "resolve"), host.events)
+        assertEquals(listOf("stop-session-flush", "clear", "loading", "resolve"), host.events)
         refreshResult.complete(descriptor("refresh"))
         yield()
 
@@ -66,24 +66,28 @@ class PlaybackCommandCoordinatorTest {
     }
 
     @Test
-    fun fatalErrorPausesStopsSessionAndPublishesError() = runBlocking {
+    fun transientHttpErrorRefreshesStreamBeforeGivingUp() = runBlocking {
         val host = FakePlaybackCommandHost().apply {
             currentMediaId = "movie"
             hasMediaItem = true
         }
         val coordinator = PlaybackCommandCoordinator(this, host)
-        val result = CompletableDeferred<PlaybackDescriptor>()
-        host.resolveResults += result
+        val initial = CompletableDeferred<PlaybackDescriptor>()
+        val refresh = CompletableDeferred<PlaybackDescriptor>()
+        host.resolveResults += initial
+        host.resolveResults += refresh
         coordinator.submitPlay(request("movie"), force = false)
         yield()
-        result.complete(descriptor("movie"))
+        initial.complete(descriptor("movie"))
         yield()
+        coordinator.onReady()
         host.events.clear()
 
-        coordinator.onPlayerError(500)
-
-        assertEquals(listOf("pause", "stop-session", "error:视频连接中断 (HTTP 500)"), host.events)
-        assertEquals(playbackConnectionFailure(500), host.failure)
+        coordinator.handlePlayerErrorForTest(500)
+        yield()
+        assertEquals(listOf("stop-session-flush", "clear", "loading", "resolve"), host.events)
+        refresh.complete(descriptor("refresh"))
+        yield()
         coordinator.close()
     }
 
