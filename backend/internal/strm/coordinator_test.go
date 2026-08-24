@@ -30,12 +30,12 @@ func (s sessionStub) SessionUserID(context.Context) (string, error) {
 	return "103539243", s.err
 }
 
-func TestCoordinatorHealthUsesBuiltinMode(t *testing.T) {
+func TestCoordinatorHealthReportsUnwritableMount(t *testing.T) {
 	coordinator := NewCoordinator(nil, &coordinatorSyncer{}, sessionStub{}, nil, func() config.Workflow {
-		return config.Workflow{SyncMode: config.SyncModeQMediaSync}
+		return config.Workflow{}
 	}, nil)
 	health := coordinator.Check(context.Background())
-	if health.ID != "strm" || health.Status != integration.StatusUnconfigured {
+	if health.ID != "strm" || health.Status != integration.StatusDegraded || health.Detail != "STRM 挂载不可写" {
 		t.Fatalf("health=%#v", health)
 	}
 }
@@ -53,7 +53,7 @@ func TestCoordinatorLibrarySyncUsesLibraryRoot(t *testing.T) {
 	if _, err := coordinator.SyncLibrary(context.Background(), LibrarySyncInput{MediaType: "movie", Full: true}); err != nil {
 		t.Fatal(err)
 	}
-	if !syncer.req.LibraryRoot || !syncer.req.Prune || syncer.req.FileID != "100" || syncer.req.MinVideoSize != DefaultMinVideoSize {
+	if !syncer.req.LibraryRoot || !syncer.req.Prune || !syncer.req.ContinueOnError || syncer.req.FileID != "100" || syncer.req.MinVideoSize != DefaultMinVideoSize {
 		t.Fatalf("request=%#v", syncer.req)
 	}
 }

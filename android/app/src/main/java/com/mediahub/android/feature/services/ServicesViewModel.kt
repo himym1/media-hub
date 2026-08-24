@@ -239,7 +239,7 @@ class ServicesViewModel(
                 errorMessage = null,
             )
             try {
-                val integrations = repository.overview()
+                val integrations = repository.overview().filter { it.id != "qmediasync" }
                 val statistics = try { repository.operationalStatistics() } catch (_: Exception) { null }
                 val sourceCheckIns = try { repository.sourceCheckIns() } catch (_: Exception) { emptyList() }
                 val strmStatus = try { repository.strmStatus() } catch (_: Exception) { null }
@@ -315,7 +315,7 @@ private fun ProviderSettings.toUpdate() = ProviderSettingsUpdate(
     tmdbBaseUrl = tmdbBaseUrl,
     tmdbAccessToken = SecretUpdate(),
     wecom = wecom.toUpdate(),
-    workflow = workflow,
+    workflow = workflow.copy(syncMode = "builtin"),
     checkIn = checkIn,
     sources = sources.map { ProviderSourceSettingsUpdate(id = it.id, baseUrl = it.baseUrl, account = it.account, authMode = it.authMode) },
 )

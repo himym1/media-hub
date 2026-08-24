@@ -81,12 +81,6 @@ internal fun ProviderSettingsPanel(
             SecretField("TMDB Read Access Token", settings.tmdbAccessToken, draft.tmdbAccessToken) {
                 onDraftChange(draft.copy(tmdbAccessToken = it))
             }
-            if (draft.workflow.syncMode != "builtin") {
-                LabeledField("QMediaSync 地址", draft.qmediaSyncBaseUrl) { onDraftChange(draft.copy(qmediaSyncBaseUrl = it)) }
-                SecretField("QMediaSync API Key", settings.qmediaSyncApiKey, draft.qmediaSyncApiKey) {
-                    onDraftChange(draft.copy(qmediaSyncApiKey = it))
-                }
-            }
             LabeledField("Emby 地址", draft.embyBaseUrl) { onDraftChange(draft.copy(embyBaseUrl = it)) }
             SecretField("Emby API Key", settings.embyApiKey, draft.embyApiKey) {
                 onDraftChange(draft.copy(embyApiKey = it))
@@ -95,38 +89,23 @@ internal fun ProviderSettingsPanel(
             SecretField("Emby 用户密码", settings.embyPassword, draft.embyPassword) {
                 onDraftChange(draft.copy(embyPassword = it))
             }
+            MediaHubText("Media Hub 从 NAS 访问 Emby，请填局域网地址。公网域名会在容器里回环，容易变成 502。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             MediaHubText("从 Emby 删除媒体需要该用户的登录密码；仅 API Key 无法删除。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             MediaHubText("115 网盘请在「概览」页扫码授权，无需开放平台开发者账号。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
         }
 
-        SettingsSection("工作流目录映射", "转存目录、STRM 写入路径与 Emby 库。内置模式把播放地址写到 Media Hub /115/url/", Lucide.ServerCog) {
-            MediaHubSegmentedControl(
-                options = listOf("qmediasync" to "QMediaSync", "builtin" to "内置写入"),
-                selected = draft.workflow.syncMode.ifBlank { "qmediasync" },
-                onSelected = { onDraftChange(draft.copy(workflow = draft.workflow.copy(syncMode = it))) },
-                role = Role.RadioButton,
-                raised = false,
-            )
-            if (draft.workflow.syncMode != "builtin") {
-                MediaHubText("QMediaSync 已弃用，仅保留回滚。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+        SettingsSection("工作流目录映射", "转存目录、STRM 写入路径与 Emby 库。播放地址写到 Media Hub /115/url/", Lucide.ServerCog) {
+            LabeledField("STRM 基址", draft.workflow.strmBaseUrl) {
+                onDraftChange(draft.copy(workflow = draft.workflow.copy(strmBaseUrl = it, syncMode = "builtin")))
             }
-            if (draft.workflow.syncMode == "builtin") {
-                LabeledField("STRM 基址", draft.workflow.strmBaseUrl) {
-                    onDraftChange(draft.copy(workflow = draft.workflow.copy(strmBaseUrl = it)))
-                }
-                LabeledField("STRM 根挂载", draft.workflow.strmRootMount) {
-                    onDraftChange(draft.copy(workflow = draft.workflow.copy(strmRootMount = it)))
-                }
-            } else {
-                LabeledField("QMediaSync Account ID", draft.workflow.qMediaSyncAccountId.toString(), KeyboardType.Number) {
-                    onDraftChange(draft.copy(workflow = draft.workflow.copy(qMediaSyncAccountId = it.toIntOrNull() ?: 0)))
-                }
+            LabeledField("STRM 根挂载", draft.workflow.strmRootMount) {
+                onDraftChange(draft.copy(workflow = draft.workflow.copy(strmRootMount = it, syncMode = "builtin")))
             }
-            WorkflowTargetEditor("电影", draft.workflow.movie, draft.workflow.syncMode == "builtin") {
-                onDraftChange(draft.copy(workflow = draft.workflow.copy(movie = it)))
+            WorkflowTargetEditor("电影", draft.workflow.movie) {
+                onDraftChange(draft.copy(workflow = draft.workflow.copy(movie = it, syncMode = "builtin")))
             }
-            WorkflowTargetEditor("剧集", draft.workflow.series, draft.workflow.syncMode == "builtin") {
-                onDraftChange(draft.copy(workflow = draft.workflow.copy(series = it)))
+            WorkflowTargetEditor("剧集", draft.workflow.series) {
+                onDraftChange(draft.copy(workflow = draft.workflow.copy(series = it, syncMode = "builtin")))
             }
         }
 
@@ -321,10 +300,10 @@ private fun SecretField(label: String, status: SecretStatus, value: SecretUpdate
 }
 
 @Composable
-private fun WorkflowTargetEditor(label: String, target: WorkflowTargetSettings, builtin: Boolean, onChange: (WorkflowTargetSettings) -> Unit) {
+private fun WorkflowTargetEditor(label: String, target: WorkflowTargetSettings, onChange: (WorkflowTargetSettings) -> Unit) {
     MediaHubText(label, color = MediaHubColors.TextStrong, fontSize = 12.sp, fontWeight = FontWeight.Medium)
     LabeledField("$label 115 目标目录 ID", target.destinationId) { onChange(target.copy(destinationId = it)) }
-    LabeledField(if (builtin) "$label STRM 目标路径" else "$label QMediaSync 目标路径", target.qMediaSyncTargetPath) {
+    LabeledField("$label STRM 目标路径", target.qMediaSyncTargetPath) {
         onChange(target.copy(qMediaSyncTargetPath = it))
     }
     LabeledField("$label Emby 媒体库 ID", target.embyLibraryId) { onChange(target.copy(embyLibraryId = it)) }

@@ -14,7 +14,6 @@ import (
 	"media-hub/backend/internal/integration"
 	"media-hub/backend/internal/localupload"
 	"media-hub/backend/internal/playback"
-	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/settings"
 	"media-hub/backend/internal/statistics"
@@ -55,10 +54,6 @@ type Authenticator interface {
 	ValidateCSRF(auth.Principal, string) error
 	Logout(context.Context, auth.Principal) error
 	ChangePassword(context.Context, auth.Principal, string, string) error
-}
-
-type QMediaSyncReader interface {
-	ReadStatus(context.Context) (qms.Status, error)
 }
 
 type EmbyReader interface {
@@ -171,7 +166,6 @@ type Dependencies struct {
 	Search           SearchProvider
 	Discovery        DiscoveryProvider
 	Statistics       StatisticsProvider
-	QMediaSync       QMediaSyncReader
 	Emby             EmbyReader
 	EmbyPosterCache  EmbyPosterCache
 	Drive115         Drive115Reader
@@ -230,7 +224,6 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/discovery/{mediaType}/{tmdbId}/recommendations", h.protected(h.getRecommendations))
 	mux.Handle("GET /api/v1/integrations/sources/checkins", h.protected(h.listSourceCheckIns))
 	mux.Handle("POST /api/v1/integrations/sources/checkins/{id}/retry", h.protected(h.retrySourceCheckIn))
-	mux.Handle("GET /api/v1/integrations/qmediasync/status", h.protected(h.getQMediaSyncStatus))
 	mux.Handle("GET /api/v1/integrations/strm/status", h.protected(h.getSTRMStatus))
 	mux.Handle("POST /api/v1/integrations/strm/sync", h.protected(h.syncSTRMLibrary))
 	mux.HandleFunc("GET /115/url/{name}", h.redirectSTRM)
@@ -314,8 +307,19 @@ func (h *handler) getSystemOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, systemOverview{
-		Integrations: h.dependencies.Overview.Overview(r.Context()),
+		Integrations: withoutRetiredIntegrations(h.dependencies.Overview.Overview(r.Context())),
 	})
+}
+
+func withoutRetiredIntegrations(items []integration.Health) []integration.Health {
+	visible := make([]integration.Health, 0, len(items))
+	for _, item := range items {
+		if item.ID == "qmediasync" {
+			continue
+		}
+		visible = append(visible, item)
+	}
+	return visible
 }
 
 func securityHeaders(next http.Handler) http.Handler {

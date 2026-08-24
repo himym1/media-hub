@@ -3,7 +3,6 @@ package workflow
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -13,7 +12,6 @@ import (
 
 	"media-hub/backend/internal/config"
 	"media-hub/backend/internal/emby"
-	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/selection"
 	"media-hub/backend/internal/store"
@@ -57,10 +55,13 @@ func TestUnknownSourceAccessIsNotAutomaticallyRepeated(t *testing.T) {
 	searchService := search.NewService(accessUnknownSourceStub{calls: &calls})
 	service := NewService(
 		dataStore, searchService, codec,
-		qms.NewClient("http://qms.local", "qms-key", time.Second),
 		emby.NewClient("http://emby.local", "emby-key", time.Second),
 		nil,
-		config.Workflow{QMediaSyncAccountID: 1, Movie: config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"}},
+		config.Workflow{
+			StrmBaseURL:   "https://media.example",
+			StrmRootMount: "/media",
+			Movie:         config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
+		},
 		nil,
 		nil,
 		nil,
@@ -115,102 +116,8 @@ func TestUnknownSourceAccessIsNotAutomaticallyRepeated(t *testing.T) {
 	}
 }
 
-func TestUnknownQMediaSyncSubmissionIsNotAutomaticallyRepeated(t *testing.T) {
-	ctx := context.Background()
-	calls := 0
-	qmsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if request.URL.Path == "/api/sync/manual" {
-			calls++
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer qmsServer.Close()
-
-	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dataStore.Close()
-	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
-		t.Fatal(err)
-	}
-	admin, _, err := dataStore.Admin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
-	if err != nil {
-		t.Fatal(err)
-	}
-	searchService := search.NewService(transferSourceStub{})
-	service := NewService(
-		dataStore,
-		searchService,
-		codec,
-		qms.NewClient(qmsServer.URL, "qms-key", time.Second),
-		emby.NewClient("http://emby.local", "emby-key", time.Second),
-		nil,
-		config.Workflow{
-			QMediaSyncAccountID: 3,
-			Movie:               config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
-		},
-		nil,
-		nil,
-		nil,
-	)
-	token := service.SelectionToken(search.Candidate{
-		ID: "framehdr:item-1", Title: "Movie", MediaType: "movie", TMDBID: "123", SourceID: "framehdr",
-		SourceRef: "private-reference", TransferState: "available", Revision: searchService.CurrentRevision(),
-	})
-	publicJob, _, err := service.Enqueue(ctx, admin.ID, token, "request_worker")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for range 3 {
-		job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := service.processJob(ctx, job); err != nil {
-			t.Fatal(err)
-		}
-	}
-	job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if job.State != "needs_attention" || calls != 1 {
-		t.Fatalf("state=%q submission calls=%d", job.State, calls)
-	}
-	if err := service.processJob(ctx, job); err != nil {
-		t.Fatal(err)
-	}
-	if calls != 1 {
-		t.Fatalf("uncertain submission was repeated %d times", calls)
-	}
-}
-
 func TestWorkflowCompletesOnlyAfterEmbyPlaybackIsReady(t *testing.T) {
 	ctx := context.Background()
-	qmsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		switch request.URL.Path {
-		case "/api/sync/manual":
-			var payload qms.ManualSyncRequest
-			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || payload.PathID != "file-1" || payload.Path != "Media/Movies" || payload.TargetPath != "/strm/movies" || payload.AccountID != 3 {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			_, _ = w.Write([]byte(`{"code":200,"message":"ok"}`))
-		case "/api/sync/records":
-			_, _ = w.Write([]byte(`{"code":200,"data":{"total":1,"records":[{"id":1,"base_cid":"file-1","status":2,"created_at":2000000000,"finish_at":2000000001}]}}`))
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer qmsServer.Close()
 	embyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("X-Emby-Token") != "emby-key" {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -254,17 +161,18 @@ func TestWorkflowCompletesOnlyAfterEmbyPlaybackIsReady(t *testing.T) {
 	searchService := search.NewService(transferSourceStub{})
 	service := NewService(
 		dataStore, searchService, codec,
-		qms.NewClient(qmsServer.URL, "qms-key", time.Second),
 		emby.NewClient(embyServer.URL, "emby-key", time.Second),
 		nil,
 		config.Workflow{
-			QMediaSyncAccountID: 3,
-			Movie:               config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
+			StrmBaseURL:   "https://media.example",
+			StrmRootMount: "/media",
+			Movie:         config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
 		},
 		func(context.Context, string) (string, error) { return "Media/Movies", nil },
 		nil,
 		nil,
 	)
+	service.UseSTRMSyncer(&strmStub{})
 	token := service.SelectionToken(search.Candidate{
 		ID: "framehdr:item-1", Title: "Movie", Year: 2026, MediaType: "movie", TMDBID: "123", SourceID: "framehdr",
 		SourceRef: "private-reference", TransferState: "available", Revision: searchService.CurrentRevision(),
@@ -292,79 +200,6 @@ func TestWorkflowCompletesOnlyAfterEmbyPlaybackIsReady(t *testing.T) {
 	}
 }
 
-func TestQMediaSyncAuthExpirySurfacesFailReason(t *testing.T) {
-	ctx := context.Background()
-	qmsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		switch request.URL.Path {
-		case "/api/sync/manual":
-			_, _ = w.Write([]byte(`{"code":200,"message":"ok"}`))
-		case "/api/sync/records":
-			_, _ = w.Write([]byte(`{"code":200,"data":{"total":1,"records":[{"id":1,"base_cid":"file-1","status":3,"created_at":2000000000,"fail_reason":"115账号授权失效，请在网盘账号管理中重新授权"}]}}`))
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer qmsServer.Close()
-
-	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dataStore.Close()
-	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
-		t.Fatal(err)
-	}
-	admin, _, err := dataStore.Admin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
-	if err != nil {
-		t.Fatal(err)
-	}
-	searchService := search.NewService(transferSourceStub{})
-	service := NewService(
-		dataStore, searchService, codec,
-		qms.NewClient(qmsServer.URL, "qms-key", time.Second),
-		emby.NewClient("http://emby.local", "emby-key", time.Second),
-		nil,
-		config.Workflow{
-			QMediaSyncAccountID: 3,
-			Movie:               config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
-		},
-		func(context.Context, string) (string, error) { return "Media/Movies", nil },
-		nil,
-		nil,
-	)
-	token := service.SelectionToken(search.Candidate{
-		ID: "framehdr:item-1", Title: "Movie", Year: 2026, MediaType: "movie", TMDBID: "123", SourceID: "framehdr",
-		SourceRef: "private-reference", TransferState: "available", Revision: searchService.CurrentRevision(),
-	})
-	publicJob, _, err := service.Enqueue(ctx, admin.ID, token, "request_sync_fail")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for range 6 {
-		job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := service.processJob(ctx, job); err != nil {
-			t.Fatal(err)
-		}
-	}
-	job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if job.State != "failed" || job.ErrorCode != qms.CodeSyncAuthExpired {
-		t.Fatalf("state=%q code=%q message=%q", job.State, job.ErrorCode, job.ErrorMessage)
-	}
-	if job.ErrorMessage != "QMediaSync 的 115 授权已失效，请到 QMediaSync「网盘账号」重新授权后再重试任务" {
-		t.Fatalf("message=%q", job.ErrorMessage)
-	}
-}
-
 type strmStub struct {
 	calls   int
 	request strm.Request
@@ -380,14 +215,8 @@ func (s *strmStub) Sync(_ context.Context, request strm.Request) (strm.Result, e
 	return strm.Result{Created: 1}, nil
 }
 
-func TestBuiltinSyncSkipsQMediaSyncAndRefreshesEmby(t *testing.T) {
+func TestBuiltinSyncWritesSTRMAndRefreshesEmby(t *testing.T) {
 	ctx := context.Background()
-	qmsCalls := 0
-	qmsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		qmsCalls++
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer qmsServer.Close()
 	embyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("X-Emby-Token") != "emby-key" {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -428,12 +257,11 @@ func TestBuiltinSyncSkipsQMediaSyncAndRefreshesEmby(t *testing.T) {
 	syncer := &strmStub{}
 	service := NewService(
 		dataStore, searchService, codec,
-		qms.NewClient(qmsServer.URL, "qms-key", time.Second),
 		emby.NewClient(embyServer.URL, "emby-key", time.Second),
 		nil,
 		config.Workflow{
 			SyncMode:      config.SyncModeBuiltin,
-			StrmBaseURL:   "https://qms.example",
+			StrmBaseURL:   "https://media.example",
 			StrmRootMount: "/media",
 			Movie:         config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/media/电影", EmbyLibraryID: "library-movies"},
 		},
@@ -463,10 +291,10 @@ func TestBuiltinSyncSkipsQMediaSyncAndRefreshesEmby(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if job.State != "completed" || syncer.calls != 1 || qmsCalls != 0 {
-		t.Fatalf("state=%q strm=%d qms=%d", job.State, syncer.calls, qmsCalls)
+	if job.State != "completed" || syncer.calls != 1 {
+		t.Fatalf("state=%q strm=%d", job.State, syncer.calls)
 	}
-	if syncer.request.FileID != "file-1" || syncer.request.TargetPath != "/media/电影" || syncer.request.StrmBaseURL != "https://qms.example" || !syncer.request.Prune {
+	if syncer.request.FileID != "file-1" || syncer.request.TargetPath != "/media/电影" || syncer.request.StrmBaseURL != "https://media.example" || !syncer.request.Prune {
 		t.Fatalf("request=%#v", syncer.request)
 	}
 	events, err := dataStore.TransferEvents(ctx, admin.ID, publicJob.ID)
@@ -505,12 +333,11 @@ func TestBuiltinSyncAuthExpiryIsRetryable(t *testing.T) {
 	searchService := search.NewService(transferSourceStub{})
 	service := NewService(
 		dataStore, searchService, codec,
-		qms.NewClient("http://qms.local", "qms-key", time.Second),
 		emby.NewClient("http://emby.local", "emby-key", time.Second),
 		nil,
 		config.Workflow{
 			SyncMode:      config.SyncModeBuiltin,
-			StrmBaseURL:   "https://qms.example",
+			StrmBaseURL:   "https://media.example",
 			StrmRootMount: "/media",
 			Movie:         config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/media/电影", EmbyLibraryID: "library-movies"},
 		},
@@ -548,9 +375,9 @@ func TestBuiltinSyncAuthExpiryIsRetryable(t *testing.T) {
 func TestNotificationMessageIncludesJobError(t *testing.T) {
 	message := notificationMessage(store.TransferNotification{
 		Title: "Movie", EventType: "failed",
-		ErrorMessage: "QMediaSync 的 115 授权已失效，请到 QMediaSync「网盘账号」重新授权后再重试任务",
+		ErrorMessage: "115 授权已失效，请在概览页重新扫码后再重试任务",
 	})
-	if message != "Media Hub\n《Movie》处理失败\nQMediaSync 的 115 授权已失效，请到 QMediaSync「网盘账号」重新授权后再重试任务" {
+	if message != "Media Hub\n《Movie》处理失败\n115 授权已失效，请在概览页重新扫码后再重试任务" {
 		t.Fatalf("message=%q", message)
 	}
 }

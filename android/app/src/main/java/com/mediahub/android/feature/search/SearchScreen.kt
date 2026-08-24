@@ -1515,7 +1515,6 @@ private fun ReleaseRow(
 private fun integrationDescription(key: String): String = when (key.lowercase()) {
     "115" -> "PKCE 授权驱动 · 云端直链与存储调度"
     "emby" -> "媒体库同步 · 视频回放与 STRM 指向"
-    "qmediasync", "qms" -> "STRM 直链生成 · 已弃用，仅作回滚"
     "strm" -> "内置 STRM · 115 会话写入与播放重定向"
     "tmdb" -> "影视信息刮削 · 猜你喜欢与热门推荐"
     "wecom" -> "企业微信通知 · 任务完成与异常提醒"

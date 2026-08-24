@@ -22,12 +22,13 @@ type Request struct {
 	IsFile        bool
 	LibraryRoot   bool
 	Prune         bool
-	Incremental   bool
-	DryRun        bool
-	MinVideoSize  int64
-	KnownFolders  map[string]int64
-	StrmBaseURL   string
-	StrmRootMount string
+	Incremental      bool
+	DryRun           bool
+	ContinueOnError  bool
+	MinVideoSize     int64
+	KnownFolders     map[string]int64
+	StrmBaseURL      string
+	StrmRootMount    string
 }
 
 type Result struct {
@@ -36,12 +37,17 @@ type Result struct {
 	Updated  int
 	Skipped  int
 	Removed  int
+	Failed   int
 	Folders  map[string]int64
 	Duration time.Duration
 }
 
 func (r Result) Summary() string {
-	return fmt.Sprintf("扫描 %d，新建 %d，更新 %d，跳过 %d，删除 %d，用时 %s", r.Scanned, r.Created, r.Updated, r.Skipped, r.Removed, r.Duration.Round(time.Millisecond))
+	summary := fmt.Sprintf("扫描 %d，新建 %d，更新 %d，跳过 %d，删除 %d，用时 %s", r.Scanned, r.Created, r.Updated, r.Skipped, r.Removed, r.Duration.Round(time.Millisecond))
+	if r.Failed > 0 {
+		return fmt.Sprintf("%s，失败 %d", summary, r.Failed)
+	}
+	return summary
 }
 
 type Syncer interface {

@@ -51,7 +51,7 @@ function createDraft(settings: ProviderSettings): Draft {
     },
     workflow: {
       ...structuredClone(settings.workflow),
-      syncMode: settings.workflow.syncMode || 'qmediasync',
+      syncMode: 'builtin',
       strmBaseUrl: settings.workflow.strmBaseUrl || '',
       strmRootMount: settings.workflow.strmRootMount || '',
     },
@@ -74,7 +74,7 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
   const [draft, setDraft] = useState<Draft>(() => createDraft(settings))
   useEffect(() => setDraft(createDraft(settings)), [settings])
 
-  const updateSecret = (provider: 'qmediaSync' | 'emby' | 'tmdb', field: 'apiKey' | 'accessToken', value: SecretUpdate) => {
+  const updateSecret = (provider: 'emby' | 'tmdb', field: 'apiKey' | 'accessToken', value: SecretUpdate) => {
     setDraft((current) => ({ ...current, [provider]: { ...current[provider], [field]: value } } as Draft))
   }
 
@@ -85,7 +85,7 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
       <section className="settings-group" aria-labelledby="core-services-heading">
         <div className="settings-group-header">
           <h3 id="core-services-heading"><Film size={17} />核心媒体服务</h3>
-          <p>配置影视信息刮削、网盘存储与媒体服务器。内置 STRM 仍用现有 115 扫码会话，不另开 QMediaSync 授权。</p>
+          <p>配置影视信息刮削、网盘存储与媒体服务器。内置 STRM 使用现有 115 扫码会话写入播放地址。</p>
         </div>
         <div className="provider-settings-grid">
           <fieldset>
@@ -95,19 +95,13 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
             {settings.tmdb.accessToken.configured ? <label className="inline-check"><input checked={draft.tmdb.accessToken.clear} name="tmdb-clear-token" onChange={(event) => updateSecret('tmdb', 'accessToken', { value: '', clear: event.target.checked })} type="checkbox" />清除已保存 Token</label> : null}
           </fieldset>
 
-          {draft.workflow.syncMode !== 'builtin' ? <fieldset>
-            <legend>QMediaSync</legend>
-            <label><span>服务地址</span><input {...machineFieldProps} name="qmediasync-base-url" onChange={(event) => setDraft((current) => ({ ...current, qmediaSync: { ...current.qmediaSync, baseUrl: event.target.value } }))} type="url" value={draft.qmediaSync.baseUrl} /></label>
-            <label><span>API Key · {secretHint(settings.qmediaSync.apiKey.configured)}</span><input {...machineFieldProps} autoComplete="new-password" name="qmediasync-api-key" onChange={(event) => updateSecret('qmediaSync', 'apiKey', { ...draft.qmediaSync.apiKey, value: event.target.value })} type="password" value={draft.qmediaSync.apiKey.value} /></label>
-            {settings.qmediaSync.apiKey.configured ? <label className="inline-check"><input checked={draft.qmediaSync.apiKey.clear} name="qmediasync-clear-api-key" onChange={(event) => updateSecret('qmediaSync', 'apiKey', { value: '', clear: event.target.checked })} type="checkbox" />清除已保存 API Key</label> : null}
-          </fieldset> : null}
-
           <fieldset>
             <legend>Emby</legend>
             <label><span>服务地址</span><input {...machineFieldProps} name="emby-base-url" onChange={(event) => setDraft((current) => ({ ...current, emby: { ...current.emby, baseUrl: event.target.value } }))} type="url" value={draft.emby.baseUrl} /></label>
             <label><span>API Key · {secretHint(settings.emby.apiKey.configured)}</span><input {...machineFieldProps} autoComplete="new-password" name="emby-api-key" onChange={(event) => updateSecret('emby', 'apiKey', { ...draft.emby.apiKey, value: event.target.value })} type="password" value={draft.emby.apiKey.value} /></label>
             <label><span>用户 ID</span><input {...machineFieldProps} name="emby-user-id" onChange={(event) => setDraft((current) => ({ ...current, emby: { ...current.emby, userId: event.target.value } }))} value={draft.emby.userId} /></label>
             <label><span>用户密码 · {secretHint(settings.emby.password.configured)}</span><input {...machineFieldProps} autoComplete="new-password" name="emby-password" onChange={(event) => setDraft((current) => ({ ...current, emby: { ...current.emby, password: { ...current.emby.password, value: event.target.value } } }))} type="password" value={draft.emby.password.value} /></label>
+            <p className="settings-note">Media Hub 从 NAS 访问 Emby，请填局域网地址。公网域名会在容器里回环，容易变成 502。</p>
             <p className="settings-note">从 Emby 删除媒体需要该用户的登录密码；仅 API Key 无法删除。</p>
             {settings.emby.apiKey.configured ? <label className="inline-check"><input checked={draft.emby.apiKey.clear} name="emby-clear-api-key" onChange={(event) => updateSecret('emby', 'apiKey', { value: '', clear: event.target.checked })} type="checkbox" />清除已保存 API Key</label> : null}
             {settings.emby.password.configured ? <label className="inline-check"><input checked={draft.emby.password.clear} name="emby-clear-password" onChange={(event) => setDraft((current) => ({ ...current, emby: { ...current.emby, password: { value: '', clear: event.target.checked } } }))} type="checkbox" />清除已保存用户密码</label> : null}
@@ -127,24 +121,15 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
         </div>
         <fieldset className="workflow-settings">
           <div>
-            <div aria-label="STRM 同步方式" className="source-auth-mode" role="group">
-              {(['qmediasync', 'builtin'] as const).map((mode) => (
-                <button aria-pressed={draft.workflow.syncMode === mode} key={mode} onClick={() => { onDirty(); setDraft((current) => ({ ...current, workflow: { ...current.workflow, syncMode: mode } })) }} type="button">{mode === 'qmediasync' ? 'QMediaSync' : '内置写入'}</button>
-              ))}
-            </div>
-            {draft.workflow.syncMode !== 'builtin' ? <p className="settings-note">QMediaSync 已弃用，仅保留回滚。新部署在挂载与基址就绪后默认走内置写入。</p> : null}
-            {draft.workflow.syncMode === 'builtin' ? <>
-              <label><span>STRM 基址</span><input {...machineFieldProps} name="strm-base-url" onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, strmBaseUrl: event.target.value } }))} placeholder="https://media.himym.us.ci" type="url" value={draft.workflow.strmBaseUrl} /></label>
-              <label><span>STRM 根挂载</span><input {...machineFieldProps} name="strm-root-mount" onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, strmRootMount: event.target.value } }))} placeholder="/media" value={draft.workflow.strmRootMount} /></label>
-            </> : <label><span>QMediaSync Account ID</span><input {...machineFieldProps} min="0" name="qmediasync-account-id" onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, qMediaSyncAccountId: Number(event.target.value) || 0 } }))} type="number" value={draft.workflow.qMediaSyncAccountId} /></label>}
+            <label><span>STRM 基址</span><input {...machineFieldProps} name="strm-base-url" onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, strmBaseUrl: event.target.value } }))} placeholder="https://media.himym.us.ci" type="url" value={draft.workflow.strmBaseUrl} /></label>
+            <label><span>STRM 根挂载</span><input {...machineFieldProps} name="strm-root-mount" onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, strmRootMount: event.target.value } }))} placeholder="/media" value={draft.workflow.strmRootMount} /></label>
           </div>
           {(['movie', 'series'] as const).map((mediaType) => {
             const target = draft.workflow[mediaType]
             const label = mediaType === 'movie' ? '电影' : '剧集'
-            const pathLabel = draft.workflow.syncMode === 'builtin' ? 'STRM 目标路径' : 'QMediaSync 目标路径'
             return <div className="workflow-target" key={mediaType}><strong>{label}</strong>
               <label><span>115 目标目录 ID</span><input {...machineFieldProps} name={`${mediaType}-destination-id`} onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, [mediaType]: { ...target, destinationId: event.target.value } } }))} value={target.destinationId} /></label>
-              <label><span>{pathLabel}</span><input {...machineFieldProps} name={`${mediaType}-qmediasync-target-path`} onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, [mediaType]: { ...target, qMediaSyncTargetPath: event.target.value } } }))} value={target.qMediaSyncTargetPath} /></label>
+              <label><span>STRM 目标路径</span><input {...machineFieldProps} name={`${mediaType}-strm-target-path`} onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, [mediaType]: { ...target, qMediaSyncTargetPath: event.target.value } } }))} value={target.qMediaSyncTargetPath} /></label>
               <label><span>Emby 媒体库 ID</span><input {...machineFieldProps} name={`${mediaType}-emby-library-id`} onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, [mediaType]: { ...target, embyLibraryId: event.target.value } } }))} value={target.embyLibraryId} /></label>
             </div>
           })}

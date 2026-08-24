@@ -82,7 +82,7 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
     refetchInterval: 5_000,
   })
 
-  const integrations = overview.data?.integrations ?? []
+  const integrations = (overview.data?.integrations ?? []).filter((item) => item.id !== 'qmediasync')
   const connectedCount = integrations.filter((item) => item.status === 'healthy').length
   const configuredCount = integrations.filter((item) => item.status !== 'unconfigured').length
   const connectionLabel = overview.isLoading && integrations.length === 0

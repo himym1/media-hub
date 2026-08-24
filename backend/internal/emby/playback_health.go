@@ -7,7 +7,7 @@ import (
 	"media-hub/backend/internal/integration"
 )
 
-// PlaybackChecker reports deployment-level QMediaSync emby302 readiness separately from ordinary Emby health.
+// PlaybackChecker reports the Emby playback probe URL separately from ordinary Emby library health.
 type PlaybackChecker struct {
 	client *Client
 }
@@ -20,13 +20,13 @@ func (checker *PlaybackChecker) Check(ctx context.Context) integration.Health {
 	health := integration.Health{ID: "emby-playback", Label: "Media3 播放入口"}
 	if checker == nil || checker.client == nil {
 		health.Status = integration.StatusUnconfigured
-		health.Detail = "尚未配置 QMediaSync 播放入口"
+		health.Detail = "尚未配置 Emby 播放入口"
 		return health
 	}
 	configuration := checker.client.configuration()
 	if configuration.playbackBaseURL == "" {
 		health.Status = integration.StatusUnconfigured
-		health.Detail = "尚未配置 QMediaSync 播放入口"
+		health.Detail = "尚未配置 Emby 播放入口"
 		return health
 	}
 	if configuration.apiKey == "" {
@@ -38,7 +38,7 @@ func (checker *PlaybackChecker) Check(ctx context.Context) integration.Health {
 	playbackConfiguration.baseURL = configuration.playbackBaseURL
 	if _, err := checker.client.readServerInfo(ctx, playbackConfiguration, "System/Info", true); err == nil {
 		health.Status = integration.StatusHealthy
-		health.Detail = "QMediaSync 播放入口在线"
+		health.Detail = "Emby 播放入口在线"
 		return health
 	} else if errors.Is(err, ErrUnauthorized) {
 		health.Status = integration.StatusDegraded
@@ -46,7 +46,7 @@ func (checker *PlaybackChecker) Check(ctx context.Context) integration.Health {
 		return health
 	}
 	health.Status = integration.StatusUnavailable
-	health.Detail = "无法连接 QMediaSync 播放入口"
+	health.Detail = "无法连接 Emby 播放入口"
 	return health
 }
 

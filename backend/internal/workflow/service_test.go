@@ -10,7 +10,6 @@ import (
 
 	"media-hub/backend/internal/config"
 	"media-hub/backend/internal/emby"
-	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/selection"
 	"media-hub/backend/internal/store"
@@ -56,12 +55,12 @@ func TestSelectionTokenAndEnqueueAreIdempotent(t *testing.T) {
 		dataStore,
 		searchService,
 		codec,
-		qms.NewClient("http://qms.local", "qms-key", time.Second),
 		emby.NewClient("http://emby.local", "emby-key", time.Second),
 		nil,
 		config.Workflow{
-			QMediaSyncAccountID: 3,
-			Movie:               config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
+			StrmBaseURL:   "https://media.example",
+			StrmRootMount: "/media",
+			Movie:         config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
 		},
 		nil,
 		nil,
@@ -98,12 +97,12 @@ func TestSelectionTokenAllowsShareWithoutTMDB(t *testing.T) {
 		nil,
 		searchService,
 		codec,
-		qms.NewClient("http://qms.local", "qms-key", time.Second),
 		emby.NewClient("http://emby.local", "emby-key", time.Second),
 		nil,
 		config.Workflow{
-			QMediaSyncAccountID: 3,
-			Movie:               config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
+			StrmBaseURL:   "https://media.example",
+			StrmRootMount: "/media",
+			Movie:         config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
 		},
 		nil,
 		nil,
@@ -120,7 +119,7 @@ func TestSelectionTokenAllowsShareWithoutTMDB(t *testing.T) {
 }
 
 func TestEnqueueRejectsInvalidSelection(t *testing.T) {
-	service := NewService(nil, search.NewService(), nil, nil, nil, nil, config.Workflow{}, nil, nil, nil)
+	service := NewService(nil, search.NewService(), nil, nil, nil, config.Workflow{}, nil, nil, nil)
 	_, _, err := service.Enqueue(context.Background(), 1, "invalid", "request_one")
 	if !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("enqueue error = %v", err)

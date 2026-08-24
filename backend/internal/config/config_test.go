@@ -25,6 +25,8 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 		"MEDIA_HUB_SOURCE_FRAME_URL":         "https://frame.local/api",
 		"MEDIA_HUB_DATA_ENCRYPTION_KEY":      "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
 		"MEDIA_HUB_QMS_ACCOUNT_ID":           "7",
+		"MEDIA_HUB_STRM_BASE_URL":            "https://media.example",
+		"MEDIA_HUB_STRM_ROOT_MOUNT":          "/media",
 		"MEDIA_HUB_115_MOVIE_DESTINATION_ID": "100",
 		"MEDIA_HUB_QMS_MOVIE_TARGET_PATH":    "/media/movies",
 		"MEDIA_HUB_EMBY_MOVIE_LIBRARY_ID":    "library-movies",
@@ -65,7 +67,7 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 	if loaded.Sources[0].ID != "framehdr" || loaded.Sources[0].BaseURL != "https://frame.local/api" {
 		t.Fatal("unexpected source configuration")
 	}
-	if loaded.DataEncryptionKey == "" || loaded.Workflow.QMediaSyncAccountID != 7 || loaded.Workflow.NormalizedSyncMode() != SyncModeQMediaSync {
+	if loaded.DataEncryptionKey == "" || loaded.Workflow.QMediaSyncAccountID != 7 || loaded.Workflow.NormalizedSyncMode() != SyncModeBuiltin {
 		t.Fatal("unexpected workflow configuration")
 	}
 	if loaded.AndroidReleaseDir != "/srv/media-hub/releases" {
@@ -279,8 +281,8 @@ func TestNormalizedSyncModeInfersBuiltinWhenMountAndBaseURLSet(t *testing.T) {
 		t.Fatalf("mode=%q", workflow.NormalizedSyncMode())
 	}
 	workflow.SyncMode = SyncModeQMediaSync
-	if workflow.NormalizedSyncMode() != SyncModeQMediaSync {
-		t.Fatal("explicit qmediasync must win")
+	if workflow.NormalizedSyncMode() != SyncModeBuiltin || !workflow.UsesBuiltinSync() {
+		t.Fatal("qmediasync is retired and always normalizes to builtin")
 	}
 }
 

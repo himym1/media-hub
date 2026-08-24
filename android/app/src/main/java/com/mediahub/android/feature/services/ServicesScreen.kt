@@ -349,18 +349,18 @@ private fun LazyListScope.servicesSectionItems(
                             MediaHubSmallTitle(text = "内置 STRM")
                             MediaHubCard {
                                 MediaHubPreferenceRow(
-                                    title = if (status.mode == "builtin") "内置写入" else "当前仍用 QMediaSync",
+                                    title = "内置写入",
                                     summary = when {
                                         status.running -> "正在同步"
                                         status.lastSummary.isNotBlank() -> status.lastSummary
                                         status.lastError.isNotBlank() -> status.lastError
-                                        else -> if (status.mode == "builtin") "挂载${if (status.mountWritable) "可写" else "不可写"} · 115 ${if (status.sessionOk) "有效" else "不可用"}" else "已弃用，仅作回滚"
+                                        else -> "挂载${if (status.mountWritable) "可写" else "不可写"} · 115 ${if (status.sessionOk) "有效" else "不可用"}"
                                     },
                                     onClick = onSyncSTRM,
                                     end = {
                                         MediaHubButton(
                                             label = if (uiState.syncingSTRM || status.running) "正在同步" else "立即同步",
-                                            enabled = status.mode == "builtin" && !uiState.syncingSTRM && !status.running,
+                                            enabled = !uiState.syncingSTRM && !status.running,
                                             onClick = onSyncSTRM,
                                         )
                                     },

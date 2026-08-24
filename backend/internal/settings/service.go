@@ -123,8 +123,7 @@ func (s *Service) ReadinessConfiguration() (bool, int) {
 	value := s.snapshot()
 	_, movieReady := value.Workflow.Target("movie")
 	_, seriesReady := value.Workflow.Target("series")
-	qmsReady := value.Workflow.UsesBuiltinSync() || (value.QMediaSync.BaseURL != "" && value.QMediaSync.APIKey != "")
-	coreReady := qmsReady &&
+	coreReady := value.Workflow.UsesBuiltinSync() &&
 		value.Emby.BaseURL != "" && value.Emby.APIKey != "" &&
 		value.TMDB.BaseURL != "" && value.TMDB.AccessToken != "" &&
 		movieReady && seriesReady
@@ -176,9 +175,7 @@ func merge(current Values, input Update) Values {
 		sanitizeWeComDelivery(&current.WeCom)
 	}
 	nextWorkflow := input.Workflow.Config()
-	if nextWorkflow.SyncMode == "" {
-		nextWorkflow.SyncMode = current.Workflow.NormalizedSyncMode()
-	}
+	nextWorkflow.SyncMode = config.SyncModeBuiltin
 	if nextWorkflow.StrmBaseURL == "" {
 		nextWorkflow.StrmBaseURL = current.Workflow.StrmBaseURL
 	}
@@ -278,11 +275,6 @@ func validate(value Values) error {
 	}
 	if mount := strings.TrimSpace(value.Workflow.StrmRootMount); mount != "" && !filepath.IsAbs(mount) {
 		return fmt.Errorf("%w: STRM root mount must be an absolute path", ErrInvalid)
-	}
-	if value.Workflow.UsesBuiltinSync() {
-		if value.Workflow.StrmBaseURL == "" || value.Workflow.StrmRootMount == "" {
-			return fmt.Errorf("%w: builtin STRM sync requires a base URL and root mount", ErrInvalid)
-		}
 	}
 	if len(value.Workflow.SyncMode) > 20 || len(value.Workflow.StrmBaseURL) > 2048 || len(value.Workflow.StrmRootMount) > 2048 {
 		return fmt.Errorf("%w: workflow setting is too long", ErrInvalid)

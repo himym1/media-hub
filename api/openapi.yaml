@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.19.41
+  version: 0.20.0
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -404,28 +404,6 @@ paths:
         '401': { $ref: '#/components/responses/ProblemResponse' }
         '502': { $ref: '#/components/responses/ProblemResponse' }
         '503': { $ref: '#/components/responses/ProblemResponse' }
-  /integrations/qmediasync/status:
-    get:
-      operationId: getQMediaSyncStatus
-      summary: Read QMediaSync version and recent synchronization records
-      security:
-        - cookieAuth: []
-        - bearerAuth: []
-      responses:
-        '200':
-          description: QMediaSync status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/QMediaSyncStatus'
-        '401':
-          $ref: '#/components/responses/ProblemResponse'
-        '502':
-          $ref: '#/components/responses/ProblemResponse'
-        '503':
-          $ref: '#/components/responses/ProblemResponse'
-        '504':
-          $ref: '#/components/responses/ProblemResponse'
   /integrations/strm/status:
     get:
       operationId: getSTRMStatus
@@ -1771,7 +1749,7 @@ components:
       type: object
       required: [qMediaSyncAccountId, movie, series]
       properties:
-        syncMode: { type: string, enum: [qmediasync, builtin], default: qmediasync }
+        syncMode: { type: string, enum: [qmediasync, builtin], default: builtin, description: Always treated as builtin; qmediasync is accepted from older clients }
         strmBaseUrl: { type: string, maxLength: 2048, description: URL written into .strm files during builtin sync }
         strmRootMount: { type: string, maxLength: 2048, description: Absolute container path of the STRM library root }
         qMediaSyncAccountId: { type: integer, minimum: 0, maximum: 4294967295 }
@@ -2037,7 +2015,7 @@ components:
       type: object
       required: [mode, running, mountPath, mountWritable, sessionOk]
       properties:
-        mode: { type: string, enum: [qmediasync, builtin] }
+        mode: { type: string, enum: [qmediasync, builtin], default: builtin }
         running: { type: boolean }
         mountPath: { type: string }
         mountWritable: { type: boolean }
@@ -2053,50 +2031,6 @@ components:
         mediaType: { type: string, enum: [movie, series, all], default: all }
         full: { type: boolean, default: false }
         dryRun: { type: boolean, default: false }
-    QMediaSyncStatus:
-      type: object
-      required: [version, recentSyncs, totalSyncs]
-      properties:
-        version:
-          type: string
-        releaseDate:
-          type: string
-        recentSyncs:
-          type: array
-          items:
-            $ref: '#/components/schemas/QMediaSyncRecord'
-        totalSyncs:
-          type: integer
-          minimum: 0
-    QMediaSyncRecord:
-      type: object
-      required: [id, state, totalFiles, newStrm, newMetadata, newUploads]
-      properties:
-        id:
-          type: string
-        state:
-          type: string
-          enum: [queued, running, completed, failed, unknown]
-        totalFiles:
-          type: integer
-          minimum: 0
-        newStrm:
-          type: integer
-          minimum: 0
-        newMetadata:
-          type: integer
-          minimum: 0
-        newUploads:
-          type: integer
-          minimum: 0
-        failReason:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-        finishedAt:
-          type: string
-          format: date-time
     EmbyLibraryResponse:
       type: object
       required: [libraries]

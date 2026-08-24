@@ -12,7 +12,7 @@ export type Integration = {
 export type SecretStatus = { configured: boolean }
 export type SecretUpdate = { value: string; clear: boolean }
 export type WorkflowTargetSettings = { destinationId: string; qMediaSyncTargetPath: string; embyLibraryId: string }
-export type WorkflowSyncMode = 'qmediasync' | 'builtin'
+export type WorkflowSyncMode = 'builtin' | 'qmediasync'
 export type CheckInSettings = { enabled: boolean; hour: number; minute: number; sources: Array<'framehdr' | 'juying'> }
 export type ProviderSettings = {
   qmediaSync: { baseUrl: string; apiKey: SecretStatus }
@@ -235,23 +235,6 @@ export type STRMStatus = {
   lastSummary?: string
   lastSyncAt?: number
   lastMediaType?: string
-}
-
-export type QMediaSyncStatus = {
-  version: string
-  releaseDate?: string
-  totalSyncs: number
-  recentSyncs: {
-    id: string
-    state: 'queued' | 'running' | 'completed' | 'failed' | 'unknown'
-    totalFiles: number
-    newStrm: number
-    newMetadata: number
-    newUploads: number
-    failReason?: string
-    createdAt?: string
-    finishedAt?: string
-  }[]
 }
 
 export type EmbyLibrary = {
@@ -522,10 +505,6 @@ export function testWeComNotification() {
     method: 'POST',
     headers: writeHeaders(false),
   })
-}
-
-export function getQMediaSyncStatus() {
-  return requestJSON<QMediaSyncStatus>('/api/v1/integrations/qmediasync/status')
 }
 
 export function getSTRMStatus() {

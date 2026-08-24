@@ -100,6 +100,10 @@ func (s *Syncer) Sync(ctx context.Context, req strm.Request) (strm.Result, error
 			created, updated, writeErr = strm.WriteFile(dest, content)
 			return writeErr
 		}); err != nil {
+			if req.ContinueOnError {
+				result.Failed++
+				continue
+			}
 			result.Duration = time.Since(started)
 			return result, err
 		}
@@ -112,19 +116,27 @@ func (s *Syncer) Sync(ctx context.Context, req strm.Request) (strm.Result, error
 			result.Skipped++
 		}
 	}
-	if req.Prune && !req.DryRun {
+	if req.Prune && !req.DryRun && result.Failed == 0 {
 		removed, pruneErr := strm.Prune(req.StrmRootMount, base, keep)
 		if pruneErr != nil {
-			result.Duration = time.Since(started)
-			return result, pruneErr
+			if req.ContinueOnError {
+				result.Failed++
+			} else {
+				result.Duration = time.Since(started)
+				return result, pruneErr
+			}
+		} else {
+			result.Removed = removed
 		}
-		result.Removed = removed
 	}
-	if result.Created+result.Updated+result.Skipped+result.Removed == 0 {
+	if result.Created+result.Updated+result.Skipped+result.Removed == 0 && result.Failed == 0 {
 		result.Duration = time.Since(started)
 		return result, strm.ErrNoVideos
 	}
 	result.Duration = time.Since(started)
+	if result.Failed > 0 {
+		return result, strm.ErrPathUnwritable
+	}
 	return result, nil
 }
 

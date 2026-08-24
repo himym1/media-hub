@@ -26,7 +26,6 @@ import (
 	"media-hub/backend/internal/localupload"
 	"media-hub/backend/internal/mediaidentity"
 	"media-hub/backend/internal/playback"
-	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/securepayload"
 	"media-hub/backend/internal/selection"
@@ -92,11 +91,6 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("initialize secure operation payloads: %w", err)
 	}
-	qmsClient := qms.NewClient(
-		configuration.QMediaSync.BaseURL,
-		configuration.QMediaSync.APIKey,
-		configuration.ProbeTimeout,
-	)
 	embyClient := emby.NewConfiguredClient(emby.RuntimeConfig{
 		BaseURL: configuration.Emby.BaseURL, APIKey: configuration.Emby.APIKey,
 		UserID: configuration.Emby.UserID, Password: configuration.Emby.Password,
@@ -132,7 +126,7 @@ func run(logger *slog.Logger) error {
 	wecomClient := wecom.NewConfiguredClient(configuration.WeCom, wecomTimeout)
 	searchService := search.NewServiceWithIdentity(tmdbClient)
 	workflowService := workflow.NewService(
-		dataStore, searchService, selectionCodec, qmsClient, embyClient, wecomClient, configuration.Workflow,
+		dataStore, searchService, selectionCodec, embyClient, wecomClient, configuration.Workflow,
 		drive115AuthService.FolderPath,
 		func(ctx context.Context, fileID, name string) error {
 			return drive115AuthService.ExecuteFileCommand(ctx, "rename", map[string]any{
@@ -173,7 +167,6 @@ func run(logger *slog.Logger) error {
 	settingsService := settings.NewService(
 		dataStore, securePayloadCodec, settings.FromConfig(configuration),
 		func(value settings.Values) {
-			qmsClient.Configure(value.QMediaSync.BaseURL, value.QMediaSync.APIKey)
 			embyClient.Configure(emby.RuntimeConfig{
 				BaseURL: value.Emby.BaseURL, APIKey: value.Emby.APIKey,
 				UserID: value.Emby.UserID, Password: value.Emby.Password,
@@ -211,7 +204,6 @@ func run(logger *slog.Logger) error {
 		drive115AuthService,
 		tmdbClient,
 		wecomClient,
-		qmsClient,
 		embyClient,
 		emby.NewPlaybackChecker(embyClient),
 		checkinService,
@@ -263,7 +255,7 @@ func run(logger *slog.Logger) error {
 		Addr: configuration.Address,
 		Handler: httpapi.NewRouter(version, httpapi.Dependencies{
 			Auth: authService, Overview: overview, Search: searchService, Discovery: tmdbClient,
-			QMediaSync: qmsClient, Emby: embyClient, EmbyPosterCache: posterCache, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
+			Emby: embyClient, EmbyPosterCache: posterCache, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
 			Playback: playback.NewService(drive115AuthService, embyClient),
 			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService, SourceCheckIns: checkinService,
 			Settings: settingsService, WeComTester: wecomClient, STRM: strmCoordinator,

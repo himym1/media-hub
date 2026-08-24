@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"media-hub/backend/internal/config"
-	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/selection"
 	"media-hub/backend/internal/store"
@@ -307,46 +306,7 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 			}
 		}
 	}
-	if workflowConfiguration.UsesBuiltinSync() {
-		return s.submitBuiltinSync(ctx, job, provider, sourcePath, isFile, target)
-	}
-
-	job.State = "submitting_sync"
-	job.ErrorCode = ""
-	job.ErrorMessage = ""
-	if err := s.save(ctx, &job, "transferred", "提交 QMediaSync"); err != nil {
-		return err
-	}
-
-	err = s.qms.SubmitManualSync(ctx, qms.ManualSyncRequest{
-		PathID:     provider.FileID,
-		Path:       sourcePath,
-		TargetPath: target.QMediaSyncTargetPath,
-		IsFile:     isFile,
-		AccountID:  workflowConfiguration.QMediaSyncAccountID,
-	})
-	if err != nil {
-		if errors.Is(err, qms.ErrSubmissionUnknown) {
-			job.State = "needs_attention"
-			job.ResumeState = "transferred"
-			job.ErrorCode = "sync_submission_unknown"
-			job.ErrorMessage = "同步提交结果未知"
-			job.Retryable = true
-			return s.save(ctx, &job, "submitting_sync", "需要确认后重试")
-		}
-		code := "sync_rejected"
-		message := "QMediaSync 拒绝了同步请求"
-		if errors.Is(err, qms.ErrUnauthorized) || errors.Is(err, qms.ErrMissingAPIKey) {
-			code = "sync_unauthorized"
-			message = "QMediaSync 鉴权失败"
-		}
-		return s.fail(ctx, &job, "submitting_sync", code, message, true, "transferred")
-	}
-	job.State = "syncing"
-	job.Attempts = 0
-	job.NextAttemptAt = s.now().UTC().Add(syncPollDelay).Unix()
-	job.Retryable = false
-	return s.save(ctx, &job, "submitting_sync", "QMediaSync 已接收任务")
+	return s.submitBuiltinSync(ctx, job, provider, sourcePath, isFile, target)
 }
 
 func (s *Service) submitBuiltinSync(
@@ -408,36 +368,11 @@ func (s *Service) pollSync(ctx context.Context, job store.TransferJob) error {
 	if err != nil || provider.FileID == "" {
 		return s.fail(ctx, &job, "syncing", "provider_state_invalid", "资源转存结果无法解密", false, "")
 	}
-	record, found, err := s.qms.FindSyncByBaseCID(ctx, provider.FileID, time.Unix(job.CreatedAt, 0).UTC())
-	if err != nil {
-		job.Attempts++
-		if job.Attempts >= maxAutomaticTries {
-			return s.fail(ctx, &job, "syncing", "sync_status_unavailable", "无法读取同步状态", true, "syncing")
-		}
-		job.NextAttemptAt = s.now().UTC().Add(backoff(job.Attempts)).Unix()
-		return s.save(ctx, &job, "syncing", "等待同步状态恢复")
+	target, ok := s.workflowConfiguration().Target(job.MediaType)
+	if !ok {
+		return s.fail(ctx, &job, "syncing", "strm_unconfigured", "内置 STRM 同步未配置", true, "transferred")
 	}
-	job.Attempts = 0
-	if !found {
-		if s.now().UTC().Sub(time.Unix(job.CreatedAt, 0).UTC()) > 24*time.Hour {
-			return s.fail(ctx, &job, "syncing", "sync_record_missing", "未找到对应的同步记录", true, "transferred")
-		}
-		job.NextAttemptAt = s.now().UTC().Add(syncPollDelay).Unix()
-		return s.save(ctx, &job, "syncing", "")
-	}
-	switch record.State {
-	case "completed":
-		job.State = "refreshing_emby"
-		job.Attempts = 0
-		job.NextAttemptAt = 0
-		return s.save(ctx, &job, "syncing", "STRM 同步完成")
-	case "failed":
-		code, message := qms.PublicSyncFailure(record.OriginalFailReason())
-		return s.fail(ctx, &job, "syncing", code, message, true, "transferred")
-	default:
-		job.NextAttemptAt = s.now().UTC().Add(syncPollDelay).Unix()
-		return s.save(ctx, &job, "syncing", "")
-	}
+	return s.submitBuiltinSync(ctx, job, provider, provider.Path, provider.IsFile, target)
 }
 
 func (s *Service) refreshEmby(ctx context.Context, job store.TransferJob) error {

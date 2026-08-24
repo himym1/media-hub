@@ -13,7 +13,6 @@ import (
 
 	"media-hub/backend/internal/config"
 	"media-hub/backend/internal/emby"
-	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/selection"
 	"media-hub/backend/internal/settings"
@@ -43,18 +42,17 @@ type Notifier interface {
 
 type SourcePathResolver func(context.Context, string) (string, error)
 
-// SourceRenamer renames a 115 file or folder before QMediaSync so STRM directories
+// SourceRenamer renames a 115 file or folder before STRM sync so directories
 // inherit a stable Title (Year) name instead of release watermarks.
 type SourceRenamer func(context.Context, string, string) error
 
-// TransferredContentValidator inspects a transferred 115 folder before QMediaSync.
+// TransferredContentValidator inspects a transferred 115 folder before STRM sync.
 type TransferredContentValidator func(context.Context, string, string) error
 
 type Service struct {
 	store             *store.Store
 	search            *search.Service
 	codec             *selection.Codec
-	qms               *qms.Client
 	emby              *emby.Client
 	notifier          Notifier
 	resolveSourcePath SourcePathResolver
@@ -72,7 +70,6 @@ func NewService(
 	dataStore *store.Store,
 	searchService *search.Service,
 	codec *selection.Codec,
-	qmsClient *qms.Client,
 	embyClient *emby.Client,
 	notifier Notifier,
 	workflowConfig config.Workflow,
@@ -81,7 +78,7 @@ func NewService(
 	validateTransfer TransferredContentValidator,
 ) *Service {
 	return &Service{
-		store: dataStore, search: searchService, codec: codec, qms: qmsClient, emby: embyClient,
+		store: dataStore, search: searchService, codec: codec, emby: embyClient,
 		notifier: notifier, workflow: workflowConfig, resolveSourcePath: resolveSourcePath,
 		renameSource: renameSource, validateTransfer: validateTransfer, now: time.Now,
 		wake: make(chan struct{}, 1), done: make(chan struct{}),
@@ -114,10 +111,12 @@ func (s *Service) syncConfigured() bool {
 	if s.emby == nil || !s.emby.Configured() {
 		return false
 	}
-	if s.workflowConfiguration().UsesBuiltinSync() {
-		return s.strmSyncer() != nil
+	workflow := s.workflowConfiguration()
+	if _, ok := workflow.Target("movie"); ok {
+		return true
 	}
-	return s.qms != nil && s.qms.Configured()
+	_, ok := workflow.Target("series")
+	return ok
 }
 
 func (s *Service) workflowConfiguration() config.Workflow {

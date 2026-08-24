@@ -13,23 +13,9 @@ import (
 
 	"media-hub/backend/internal/drive115"
 	"media-hub/backend/internal/emby"
-	"media-hub/backend/internal/qms"
 )
 
 var embyIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
-
-func (h *handler) getQMediaSyncStatus(w http.ResponseWriter, r *http.Request) {
-	if h.dependencies.QMediaSync == nil {
-		writeIntegrationUnavailable(w)
-		return
-	}
-	status, err := h.dependencies.QMediaSync.ReadStatus(r.Context())
-	if err != nil {
-		writeIntegrationProblem(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, status)
-}
 
 func (h *handler) getEmbyLibraries(w http.ResponseWriter, r *http.Request) {
 	if h.dependencies.Emby == nil {
@@ -417,9 +403,7 @@ func writeIntegrationProblem(w http.ResponseWriter, err error) {
 			Title: "外部服务响应超时", Status: http.StatusGatewayTimeout,
 			Code: "integration_timeout",
 		})
-	case errors.Is(err, qms.ErrNotConfigured),
-		errors.Is(err, qms.ErrMissingAPIKey),
-		errors.Is(err, emby.ErrNotConfigured),
+	case errors.Is(err, emby.ErrNotConfigured),
 		errors.Is(err, emby.ErrMissingAPIKey),
 		errors.Is(err, drive115.ErrNotConfigured):
 		writeProblem(w, problem{
@@ -427,8 +411,7 @@ func writeIntegrationProblem(w http.ResponseWriter, err error) {
 			Title: "集成配置不完整", Status: http.StatusServiceUnavailable,
 			Code: "integration_incomplete",
 		})
-	case errors.Is(err, qms.ErrUnauthorized),
-		errors.Is(err, emby.ErrUnauthorized),
+	case errors.Is(err, emby.ErrUnauthorized),
 		errors.Is(err, drive115.ErrUnauthorized):
 		writeProblem(w, problem{
 			Type:  "https://media-hub.local/problems/integration-unauthorized",

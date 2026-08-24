@@ -178,7 +178,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
     suspend fun strmStatus(token: String): STRMStatus {
         val item = JSONObject(request("/api/v1/integrations/strm/status", token = token))
         return STRMStatus(
-            mode = item.optString("mode").ifBlank { "qmediasync" },
+            mode = item.optString("mode").ifBlank { "builtin" },
             running = item.optBoolean("running"),
             mountPath = item.optString("mountPath"),
             mountWritable = item.optBoolean("mountWritable"),
@@ -809,15 +809,15 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
 )
 
     private fun parseProviderSettings(item: JSONObject): ProviderSettings {
-        val qms = item.getJSONObject("qmediaSync")
+        val qms = item.optJSONObject("qmediaSync") ?: JSONObject()
         val emby = item.getJSONObject("emby")
         val drive = item.getJSONObject("drive115")
         val tmdb = item.getJSONObject("tmdb")
         val wecom = item.getJSONObject("wecom")
         val workflow = item.getJSONObject("workflow")
         return ProviderSettings(
-            qmediaSyncBaseUrl = qms.getString("baseUrl"),
-            qmediaSyncApiKey = SecretStatus(qms.getJSONObject("apiKey").getBoolean("configured")),
+            qmediaSyncBaseUrl = qms.optString("baseUrl"),
+            qmediaSyncApiKey = SecretStatus(qms.optJSONObject("apiKey")?.optBoolean("configured") == true),
             embyBaseUrl = emby.getString("baseUrl"),
             embyApiKey = SecretStatus(emby.getJSONObject("apiKey").getBoolean("configured")),
             embyUserId = emby.getString("userId"),
@@ -860,7 +860,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
     )
 
     private fun parseWorkflowSettings(item: JSONObject) = WorkflowSettings(
-        syncMode = item.optString("syncMode").ifBlank { "qmediasync" },
+        syncMode = "builtin",
         strmBaseUrl = item.optString("strmBaseUrl"),
         strmRootMount = item.optString("strmRootMount"),
         qMediaSyncAccountId = item.getInt("qMediaSyncAccountId"),
@@ -888,7 +888,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
             .put("toUser", input.wecom.toUser)
             .put("chatId", input.wecom.chatId))
         .put("workflow", JSONObject()
-            .put("syncMode", input.workflow.syncMode.ifBlank { "qmediasync" })
+            .put("syncMode", "builtin")
             .put("strmBaseUrl", input.workflow.strmBaseUrl)
             .put("strmRootMount", input.workflow.strmRootMount)
             .put("qMediaSyncAccountId", input.workflow.qMediaSyncAccountId)

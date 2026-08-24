@@ -98,7 +98,7 @@ func (c *Coordinator) Check(ctx context.Context) integration.Health {
 	workflow := c.workflow()
 	if !workflow.UsesBuiltinSync() {
 		health.Status = integration.StatusUnconfigured
-		health.Detail = "当前使用 QMediaSync 生成 STRM"
+		health.Detail = "尚未配置内置 STRM"
 		return health
 	}
 	if c.session == nil {
@@ -129,7 +129,7 @@ func (c *Coordinator) Check(ctx context.Context) integration.Health {
 }
 
 func (c *Coordinator) Status(ctx context.Context) (Status, error) {
-	status := Status{Mode: ModeQMediaSync}
+	status := Status{Mode: ModeBuiltin}
 	if c == nil || c.workflow == nil {
 		return status, nil
 	}
@@ -254,16 +254,17 @@ func (c *Coordinator) syncOneLibrary(ctx context.Context, input LibrarySyncInput
 	}
 	started := c.now().UTC().Unix()
 	result, err := c.syncer.Sync(ctx, Request{
-		FileID:        target.DestinationID,
-		TargetPath:    target.QMediaSyncTargetPath,
-		LibraryRoot:   true,
-		Prune:         full,
-		Incremental:   !full,
-		DryRun:        input.DryRun,
-		MinVideoSize:  DefaultMinVideoSize,
-		KnownFolders:  known,
-		StrmBaseURL:   workflow.StrmBaseURL,
-		StrmRootMount: workflow.StrmRootMount,
+		FileID:          target.DestinationID,
+		TargetPath:      target.QMediaSyncTargetPath,
+		LibraryRoot:     true,
+		Prune:           full,
+		Incremental:     !full,
+		DryRun:          input.DryRun,
+		ContinueOnError: true,
+		MinVideoSize:    DefaultMinVideoSize,
+		KnownFolders:    known,
+		StrmBaseURL:     workflow.StrmBaseURL,
+		StrmRootMount:   workflow.StrmRootMount,
 	})
 	finished := c.now().UTC().Unix()
 	c.recordError(ctx, err)

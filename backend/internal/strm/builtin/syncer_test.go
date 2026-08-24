@@ -165,6 +165,42 @@ func TestSyncIncrementalSkipsUnchangedFolders(t *testing.T) {
 	}
 }
 
+func TestSyncContinuesOtherFilesWhenOneWriteFails(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "电影")
+	blockedDir := filepath.Join(target, "Blocked (2018)")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(blockedDir, []byte("not-a-directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	syncer := New(filesStub{
+		userID: "1",
+		byID: map[string][]drive115.FileItem{
+			"dest": {
+				{ID: "blocked-dir", Name: "Blocked (2018)", Kind: "folder"},
+				{ID: "keep-dir", Name: "Keep (2018)", Kind: "folder"},
+			},
+			"blocked-dir": {{ID: "blocked", Name: "Blocked.mkv", Kind: "file", PickCode: "pick-blocked"}},
+			"keep-dir":    {{ID: "ok", Name: "Keep.mkv", Kind: "file", PickCode: "pick-ok"}},
+		},
+	})
+	result, err := syncer.Sync(context.Background(), strm.Request{
+		FileID: "dest", TargetPath: target, LibraryRoot: true, ContinueOnError: true, Prune: true,
+		StrmBaseURL: "https://media.example", StrmRootMount: root,
+	})
+	if !errors.Is(err, strm.ErrPathUnwritable) || result.Failed == 0 || result.Created != 1 {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+	if _, statErr := os.Stat(filepath.Join(target, "Keep (2018)", "Keep.strm")); statErr != nil {
+		t.Fatal(statErr)
+	}
+	if info, statErr := os.Stat(blockedDir); statErr != nil || info.IsDir() {
+		t.Fatal("failed write should not replace the blocking path")
+	}
+}
+
 func TestSyncDoesNotClearSessionOnListFailure(t *testing.T) {
 	syncer := New(filesStub{userID: "1", err: drive115.ErrUpstreamResponse})
 	_, err := syncer.Sync(context.Background(), strm.Request{

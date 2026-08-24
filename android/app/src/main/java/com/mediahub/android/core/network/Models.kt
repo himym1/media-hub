@@ -20,7 +20,7 @@ data class SecretStatus(val configured: Boolean)
 data class SecretUpdate(val value: String = "", val clear: Boolean = false)
 data class WorkflowTargetSettings(val destinationId: String, val qMediaSyncTargetPath: String, val embyLibraryId: String)
 data class WorkflowSettings(
-    val syncMode: String = "qmediasync",
+    val syncMode: String = "builtin",
     val strmBaseUrl: String = "",
     val strmRootMount: String = "",
     val qMediaSyncAccountId: Int,

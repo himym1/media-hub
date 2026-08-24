@@ -148,7 +148,7 @@ class SecondStageLayoutTest {
                         uiState = ServicesUiState(
                             integrations = listOf(
                                 IntegrationHealth("emby", "Emby", "healthy", "媒体库在线"),
-                                IntegrationHealth("emby-playback", "Media3 播放入口", "healthy", "QMediaSync 播放入口在线"),
+                                IntegrationHealth("emby-playback", "Media3 播放入口", "healthy", "Emby 播放入口在线"),
                             ),
                             statistics = OperationalStatistics(4, 1, 2, 1, 0, 3, 2, 8, 1, 0, 0, 0),
                         ),

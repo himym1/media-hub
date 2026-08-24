@@ -191,14 +191,9 @@ test('settings tabs support arrow keys and protect unsaved provider changes', as
   await expect(page).toHaveURL(/settings=providers/)
   await expect(page.getByRole('tab', { name: '服务接入' })).toBeFocused()
 
-  await expect(page.getByRole('group', { name: 'STRM 同步方式' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'QMediaSync' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByLabel('QMediaSync Account ID')).toBeVisible()
-  await page.getByRole('button', { name: '内置写入' }).click()
   await expect(page.getByLabel('STRM 基址')).toBeVisible()
   await expect(page.getByLabel('STRM 根挂载')).toBeVisible()
-  await expect(page.getByLabel('QMediaSync Account ID')).toBeHidden()
-  await page.getByRole('button', { name: 'QMediaSync' }).click()
+  await expect(page.getByLabel('STRM 目标路径').first()).toBeVisible()
 
   const tmdbUrl = page.getByRole('textbox', { name: 'API 地址' }).first()
   await tmdbUrl.fill('https://tmdb.example/3')

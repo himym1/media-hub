@@ -102,17 +102,7 @@ type Workflow struct {
 }
 
 func (w Workflow) NormalizedSyncMode() string {
-	switch strings.ToLower(strings.TrimSpace(w.SyncMode)) {
-	case SyncModeBuiltin:
-		return SyncModeBuiltin
-	case SyncModeQMediaSync:
-		return SyncModeQMediaSync
-	default:
-		if strings.TrimSpace(w.StrmBaseURL) != "" && strings.TrimSpace(w.StrmRootMount) != "" {
-			return SyncModeBuiltin
-		}
-		return SyncModeQMediaSync
-	}
+	return SyncModeBuiltin
 }
 
 func (w Workflow) UsesBuiltinSync() bool {
@@ -136,10 +126,7 @@ func (w Workflow) Target(mediaType string) (WorkflowTarget, bool) {
 		return WorkflowTarget{}, false
 	}
 	ready := target.DestinationID != "" && target.QMediaSyncTargetPath != "" && target.EmbyLibraryID != ""
-	if w.UsesBuiltinSync() {
-		return target, ready && w.StrmBaseURL != "" && w.StrmRootMount != ""
-	}
-	return target, ready && w.QMediaSyncAccountID != 0
+	return target, ready && w.StrmBaseURL != "" && w.StrmRootMount != ""
 }
 
 type SearchSource struct {
@@ -340,7 +327,6 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 			{ID: "115", Label: "115", BaseURL: drive115URL},
 			{ID: "tmdb", Label: "TMDB", BaseURL: tmdbConfig.BaseURL},
 			{ID: "wecom", Label: "企业微信", BaseURL: wecomConfig.BaseURL},
-			{ID: "qmediasync", Label: "QMediaSync", BaseURL: qms.BaseURL},
 			{ID: "emby", Label: "Emby", BaseURL: emby.BaseURL},
 		},
 	}, nil
