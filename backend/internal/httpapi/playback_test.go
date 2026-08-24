@@ -136,9 +136,9 @@ func TestCreateEmbyDescriptorUsesSeparatePlaybackFacadeEndToEnd(t *testing.T) {
 	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		case "/Users/user-1/Items/item-1":
-			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","UserData":{"PlaybackPositionTicks":420000000}}`))
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/strm/movie.strm","UserData":{"PlaybackPositionTicks":420000000},"MediaSources":[{"Id":"source-1","Path":"/strm/movie.strm","Container":"mkv"}]}`))
 		case "/Items/item-1/PlaybackInfo":
-			_, _ = w.Write([]byte(`{"PlaySessionId":"play-session-1","MediaSources":[{"Id":"source-1","Path":"/strm/movie.strm","Container":"mkv"}]}`))
+			w.WriteHeader(http.StatusGatewayTimeout)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

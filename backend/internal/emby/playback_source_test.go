@@ -23,12 +23,12 @@ func TestResolveEmbyItemAndReportPlaybackSession(t *testing.T) {
 		}
 		switch request.URL.Path {
 		case "/Users/user-1/Items/item-1":
-			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/private/movie.strm","UserData":{"PlaybackPositionTicks":420000000},"MediaSources":[{"Id":"source-1","Path":"/private/movie.strm"}]}`))
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/private/movie.strm","UserData":{"PlaybackPositionTicks":420000000},"MediaSources":[{"Id":"source-1","Path":"http://qms.local/115/url/video.mkv?pickcode=abcd1234","Container":"strm"}]}`))
 		case "/Items/item-1/PlaybackInfo":
-			_, _ = w.Write([]byte(`{"PlaySessionId":"play-session-1","MediaSources":[{"Id":"source-1","Path":"/private/movie.strm","DirectStreamUrl":"http://qms.local/115/url/video.mkv?pickcode=abcd1234","Container":"strm"}]}`))
+			w.WriteHeader(http.StatusGatewayTimeout)
 		case "/Sessions/Playing", "/Sessions/Playing/Progress", "/Sessions/Playing/Stopped":
 			var payload map[string]any
-			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || payload["ItemId"] != "item-1" || payload["MediaSourceId"] != "source-1" || payload["PlaySessionId"] != "play-session-1" {
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || payload["ItemId"] != "item-1" || payload["MediaSourceId"] != "source-1" || payload["PlaySessionId"] == "" {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -70,13 +70,41 @@ func TestResolveEmbyItemAndReportPlaybackSession(t *testing.T) {
 	}
 }
 
+func TestResolveEmbyItemUsesItemPickCodeWithoutPlaybackInfo(t *testing.T) {
+	playbackInfoHits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Items/item-1":
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/media3/115-strm/movie.strm","UserData":{"PlaybackPositionTicks":120000000},"MediaSources":[{"Id":"source-1","Path":"https://media.example/115/url/video.mkv?pickcode=abcd1234","Container":"strm"}]}`))
+		case "/Items/item-1/PlaybackInfo":
+			playbackInfoHits++
+			w.WriteHeader(http.StatusGatewayTimeout)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "emby-key", time.Second)
+	media, err := client.ResolveEmbyItem(context.Background(), playback.EmbyItemTarget{ItemID: "item-1"}, "player-ua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if media.PickCode != "abcd1234" || media.URL != "" || media.Name != "Movie" || media.StartPositionMS != 12_000 || media.Session == nil {
+		t.Fatalf("media = %#v", media)
+	}
+	if playbackInfoHits != 0 {
+		t.Fatalf("PlaybackInfo hits = %d, want 0", playbackInfoHits)
+	}
+}
+
 func TestResolveEmbyItemAcceptsExternalRedirectWithoutExposingToken(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		case "/Items/item-1":
-			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie"}`))
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/private/movie.strm","MediaSources":[{"Id":"source-1","Path":"/private/movie.strm","Container":"mkv"}]}`))
 		case "/Items/item-1/PlaybackInfo":
-			_, _ = w.Write([]byte(`{"MediaSources":[{"Id":"source-1","Path":"/private/movie.strm","Container":"mkv"}]}`))
+			w.WriteHeader(http.StatusGatewayTimeout)
 		case "/Videos/item-1/stream.mkv":
 			if request.Header.Get("Range") != "" || request.Header.Get("X-Emby-Token") != "emby-key" || request.URL.Query().Get("EnableRedirection") != "true" {
 				w.WriteHeader(http.StatusBadRequest)
@@ -145,9 +173,9 @@ func TestResolveEmbyItemFallsBackToSecondMediaSource(t *testing.T) {
 		}
 		switch request.URL.Path {
 		case "/Users/user-1/Items/item-1":
-			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Episode 1","Type":"Episode","Path":"/library/episode.strm"}`))
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Episode 1","Type":"Episode","Path":"/library/episode.strm","MediaSources":[{"Id":"source-1","Path":"/library/broken.strm","Container":"strm"},{"Id":"source-2","Path":"https://qms.local/115/url/video.mkv?pickcode=abcd1234","Container":"strm"}]}`))
 		case "/Items/item-1/PlaybackInfo":
-			_, _ = w.Write([]byte(`{"PlaySessionId":"play-session-1","MediaSources":[{"Id":"source-1","Path":"/library/broken.strm","Container":"strm"},{"Id":"source-2","Path":"https://qms.local/115/url/video.mkv?pickcode=abcd1234","Container":"strm"}]}`))
+			w.WriteHeader(http.StatusGatewayTimeout)
 		case "/Videos/item-1/stream.strm":
 			w.WriteHeader(http.StatusInternalServerError)
 		default:
@@ -170,9 +198,9 @@ func TestResolveEmbyItemUsesImmutablePlaybackFacadeAfterCredentialReconfigure(t 
 	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		case "/Items/item-1":
-			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie"}`))
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/strm/movie.strm","MediaSources":[{"Id":"source-1","Path":"/strm/movie.strm","Container":"mkv"}]}`))
 		case "/Items/item-1/PlaybackInfo":
-			_, _ = w.Write([]byte(`{"PlaySessionId":"session-1","MediaSources":[{"Id":"source-1","Path":"/strm/movie.strm","Container":"mkv"}]}`))
+			w.WriteHeader(http.StatusGatewayTimeout)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -206,9 +234,9 @@ func TestResolveEmbyItemPreservesPlaybackFacadeUnauthorized(t *testing.T) {
 	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		case "/Items/item-1":
-			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie"}`))
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/strm/movie.strm","MediaSources":[{"Id":"source-1","Path":"/strm/movie.strm","Container":"strm"}]}`))
 		case "/Items/item-1/PlaybackInfo":
-			_, _ = w.Write([]byte(`{"MediaSources":[{"Id":"source-1","Path":"/strm/movie.strm"}]}`))
+			w.WriteHeader(http.StatusGatewayTimeout)
 		}
 	}))
 	defer origin.Close()
@@ -230,7 +258,7 @@ func TestResolveEmbyItemExtractsPickCodeFromQMSRedirect(t *testing.T) {
 		case "/Items/item-1":
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
 		case "/Items/item-1/PlaybackInfo":
-			_, _ = w.Write([]byte(`{"PlaySessionId":"session-1","MediaSources":[{"Id":"source-1","Path":"/library/movie.strm","Container":"strm"}]}`))
+			w.WriteHeader(http.StatusGatewayTimeout)
 		case "/Videos/item-1/stream.strm":
 			w.Header().Set("Location", "http://qms.local/115/url/video.mkv?pickcode=abcd1234")
 			w.WriteHeader(http.StatusTemporaryRedirect)
@@ -255,7 +283,7 @@ func TestResolveEmbyItemUses115CDNRedirectWithoutPickCode(t *testing.T) {
 		case "/Items/item-1":
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
 		case "/Items/item-1/PlaybackInfo":
-			_, _ = w.Write([]byte(`{"PlaySessionId":"session-1","MediaSources":[{"Id":"source-1","Path":"/library/movie.strm","Container":"strm"}]}`))
+			w.WriteHeader(http.StatusGatewayTimeout)
 		case "/Videos/item-1/stream.strm":
 			w.Header().Set("Location", "https://cdnfhnfile.115.com/video.mkv?t=1")
 			w.WriteHeader(http.StatusTemporaryRedirect)
@@ -287,7 +315,7 @@ func TestResolveEmbyItemFollowsUnsignedSecondHopForPickCode(t *testing.T) {
 		case "/Items/item-1":
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
 		case "/Items/item-1/PlaybackInfo":
-			_, _ = w.Write([]byte(`{"MediaSources":[{"Id":"source-1","Path":"/library/movie.strm","Container":"strm"}]}`))
+			w.WriteHeader(http.StatusGatewayTimeout)
 		case "/Videos/item-1/stream.strm":
 			w.Header().Set("Location", upstream.URL+"/next")
 			w.WriteHeader(http.StatusTemporaryRedirect)
@@ -312,7 +340,7 @@ func TestResolveEmbyItemReadsPickCodeFromStrmScheme(t *testing.T) {
 		case "/Items/item-1":
 			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"Movie","Type":"Movie","Path":"/library/movie.strm"}`))
 		case "/Items/item-1/PlaybackInfo":
-			_, _ = w.Write([]byte(`{"MediaSources":[{"Id":"source-1","Path":"/library/movie.strm","Container":"strm"}]}`))
+			w.WriteHeader(http.StatusGatewayTimeout)
 		case "/Items/item-1/Download":
 			_, _ = w.Write([]byte("115://abcd1234\n"))
 		default:

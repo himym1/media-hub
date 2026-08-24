@@ -44,29 +44,16 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 	if item.ID != target.ItemID || item.Name == "" || !isPlayableItemType(item.Type) {
 		return playback.SourceMedia{}, playback.ErrNotFound
 	}
-	query := url.Values{}
-	if configuration.userID != "" {
-		query.Set("UserId", configuration.userID)
+	sources := cloudSourcesForItem(item)
+	if len(sources) == 0 {
+		return playback.SourceMedia{}, playback.ErrNotFound
 	}
-	var response playbackInfoResponse
-	if err := c.postJSON(ctx, configuration, path.Join("Items", target.ItemID, "PlaybackInfo"), query, &response); err != nil {
-		return playback.SourceMedia{}, normalizePlaybackError(err)
+	playSessionID, err := randomPlaybackID()
+	if err != nil {
+		return playback.SourceMedia{}, playback.ErrUnavailable
 	}
-	playSessionID := strings.TrimSpace(response.PlaySessionID)
-	if playSessionID == "" {
-		var err error
-		playSessionID, err = randomPlaybackID()
-		if err != nil {
-			return playback.SourceMedia{}, playback.ErrUnavailable
-		}
-	}
-	hasCloudSource := false
 	var lastResolveErr error
-	for _, source := range response.MediaSources {
-		if !validEmbyIdentifier(source.ID) || (!is115Source(source) && !is115Item(item)) {
-			continue
-		}
-		hasCloudSource = true
+	for _, source := range sources {
 		session, err := c.playbackSession(target.ItemID, source.ID, playSessionID)
 		if err != nil {
 			return playback.SourceMedia{}, playback.ErrUnavailable
@@ -85,13 +72,26 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 			lastResolveErr = err
 		}
 	}
-	if !hasCloudSource {
-		return playback.SourceMedia{}, playback.ErrNotFound
-	}
 	if lastResolveErr != nil {
 		return playback.SourceMedia{}, fmt.Errorf("%w: %v", playback.ErrUnavailable, lastResolveErr)
 	}
 	return playback.SourceMedia{}, playback.ErrUnavailable
+}
+
+func cloudSourcesForItem(item baseItem) []mediaSource {
+	sources := make([]mediaSource, 0, len(item.MediaSources))
+	for _, source := range item.MediaSources {
+		if validEmbyIdentifier(source.ID) && (is115Source(source) || is115Item(item)) {
+			sources = append(sources, source)
+		}
+	}
+	if len(sources) > 0 {
+		return sources
+	}
+	if is115Item(item) && validEmbyIdentifier(item.ID) {
+		return []mediaSource{{ID: item.ID, Path: item.Path, Container: "strm"}}
+	}
+	return nil
 }
 
 func isPlayableItemType(itemType string) bool {
