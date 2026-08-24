@@ -8,6 +8,7 @@
 backend/bin/
 backend/coverage.out
 backend/data/
+backend/vendor/
 /data/
 
 # Web

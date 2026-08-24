@@ -3,6 +3,17 @@ name: release
 on:
   push:
     tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semver without v prefix, e.g. 0.19.41'
+        required: true
+        type: string
+      skip_image:
+        description: 'Skip Docker image build (APK only)'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -47,7 +58,12 @@ jobs:
         id: version
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            version="${{ github.event.inputs.version }}"
+            version="${version#v}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
           IFS=. read -r major minor patch <<< "$version"
           [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ ]]
           code=$((major * 1000000 + minor * 1000 + patch))
@@ -61,6 +77,7 @@ jobs:
           printf '%s\n' '24333f8a63b6825ea9c5514f83c2829b004d1fee' > "$ANDROID_SDK_ROOT/licenses/android-sdk-license"
           printf '%s\n' '84831b9409646161cecb50b75fc18d2b' > "$ANDROID_SDK_ROOT/licenses/android-sdk-preview-license"
       - name: Build amd64 image on NAS
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.skip_image != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
