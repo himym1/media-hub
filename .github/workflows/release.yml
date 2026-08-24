@@ -96,7 +96,7 @@ jobs:
           backend_new = (
               "FROM golang:1.25-bookworm AS backend\n"
               "ARG VERSION=dev\n"
-              "ARG GOPROXY=https://goproxy.cn,direct\n"
+              "ARG GOPROXY=https://goproxy.cn\n"
               "ENV GOPROXY=$GOPROXY\n"
               "ENV GOSUMDB=off\n"
               "WORKDIR /src\n"
@@ -121,7 +121,7 @@ jobs:
           # Synology Docker cannot reliably reach module proxies without host networking.
           timeout 20m docker build --network=host --platform linux/amd64 \
             --build-arg VERSION="$GITHUB_REF_NAME" \
-            --build-arg GOPROXY=https://goproxy.cn,direct \
+            --build-arg GOPROXY=https://goproxy.cn \
             -t "$image:${{ steps.version.outputs.name }}" \
             -t "$image:${GITHUB_SHA}" .
       - name: Build signed release APK

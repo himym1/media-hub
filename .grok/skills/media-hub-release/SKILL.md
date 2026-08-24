@@ -24,6 +24,7 @@ One private release path. Web is baked into the image. Android is the signed APK
 - Do not commit `.env`, keystores, tokens, cookies, or NAS exports
 - Do not drop SQLite tables
 - Backup NAS before `compose up`
+- After a user-facing fix is complete, ship the next patch without asking.
 
 ## 1. Version
 

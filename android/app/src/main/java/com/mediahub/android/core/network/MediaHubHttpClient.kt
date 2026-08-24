@@ -27,13 +27,14 @@ class MediaHubHttpClient(baseUrl: String) {
         body: String? = null,
         token: String? = null,
         headers: Map<String, String> = emptyMap(),
+        readTimeoutMs: Int = READ_TIMEOUT_MS,
     ): String = withContext(Dispatchers.IO) {
         require(path.startsWith('/')) { "Media Hub API path must be absolute" }
         val connection = URL(baseUrl + path).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = method
             connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
+            connection.readTimeout = readTimeoutMs
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("User-Agent", "Media-Hub-Android/${BuildConfig.VERSION_NAME}")
@@ -120,9 +121,10 @@ class MediaHubHttpClient(baseUrl: String) {
         }
     }
 
-    private companion object {
-        const val CONNECT_TIMEOUT_MS = 5_000
+    companion object {
         const val READ_TIMEOUT_MS = 15_000
-        const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+        const val SUBTITLE_READ_TIMEOUT_MS = 40_000
+        private const val CONNECT_TIMEOUT_MS = 5_000
+        private const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
     }
 }

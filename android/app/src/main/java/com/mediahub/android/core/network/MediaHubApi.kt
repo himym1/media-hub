@@ -389,6 +389,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         val payload = JSONObject(request(
             "/api/v1/integrations/emby/items/${encode(itemId)}/remote-subtitles?language=${encode(language)}",
             token = token,
+            readTimeoutMs = MediaHubHttpClient.SUBTITLE_READ_TIMEOUT_MS,
         ))
         return payload.getJSONArray("items").objects { value ->
             EmbyRemoteSubtitle(
@@ -414,6 +415,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
             method = "POST",
             token = token,
             body = JSONObject().put("subtitleId", subtitleId).toString(),
+            readTimeoutMs = MediaHubHttpClient.SUBTITLE_READ_TIMEOUT_MS,
         )
     }
 
@@ -923,7 +925,8 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         body: String? = null,
         token: String? = null,
         headers: Map<String, String> = emptyMap(),
-    ): String = http.request(path, method, body, token, headers)
+        readTimeoutMs: Int = MediaHubHttpClient.READ_TIMEOUT_MS,
+    ): String = http.request(path, method, body, token, headers, readTimeoutMs)
 
     private fun parseError(status: Int, body: String): ApiException {
         val payload = runCatching { JSONObject(body) }.getOrNull()

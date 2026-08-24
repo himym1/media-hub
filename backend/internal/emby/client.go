@@ -50,11 +50,12 @@ type clientConfig struct {
 }
 
 type Client struct {
-	mutex        sync.RWMutex
-	config       clientConfig
-	client       *http.Client
-	imageClient  *http.Client
-	sessionToken string
+	mutex          sync.RWMutex
+	config         clientConfig
+	client         *http.Client
+	imageClient    *http.Client
+	subtitleClient *http.Client
+	sessionToken   string
 }
 
 type ServerInfo struct {
@@ -166,6 +167,10 @@ func NewConfiguredClient(configuration RuntimeConfig, timeout time.Duration) *Cl
 	if imageTimeout < 45*time.Second {
 		imageTimeout = 45 * time.Second
 	}
+	subtitleTimeout := timeout
+	if subtitleTimeout < defaultSubtitleTimeout {
+		subtitleTimeout = defaultSubtitleTimeout
+	}
 	redirectPolicy := func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
@@ -177,6 +182,10 @@ func NewConfiguredClient(configuration RuntimeConfig, timeout time.Duration) *Cl
 		},
 		imageClient: &http.Client{
 			Timeout:       imageTimeout,
+			CheckRedirect: redirectPolicy,
+		},
+		subtitleClient: &http.Client{
+			Timeout:       subtitleTimeout,
 			CheckRedirect: redirectPolicy,
 		},
 	}

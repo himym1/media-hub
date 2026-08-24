@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -397,7 +398,7 @@ func writeIntegrationProblem(w http.ResponseWriter, err error) {
 			Type:  "https://media-hub.local/problems/emby-item-not-found",
 			Title: "Emby 媒体不存在", Status: http.StatusNotFound, Code: "emby_item_not_found",
 		})
-	case errors.Is(err, context.DeadlineExceeded):
+	case isIntegrationTimeout(err):
 		writeProblem(w, problem{
 			Type:  "https://media-hub.local/problems/integration-timeout",
 			Title: "外部服务响应超时", Status: http.StatusGatewayTimeout,
@@ -437,6 +438,14 @@ func writeIntegrationProblem(w http.ResponseWriter, err error) {
 			Code: "integration_unavailable",
 		})
 	}
+}
+
+func isIntegrationTimeout(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var timeout net.Error
+	return errors.As(err, &timeout) && timeout.Timeout()
 }
 
 func writeIntegrationUnavailable(w http.ResponseWriter) {

@@ -18,8 +18,8 @@ val releaseProperties = Properties().apply {
     }
 }
 
-val releaseVersionCode = providers.gradleProperty("MEDIA_HUB_VERSION_CODE").orElse("20001").get().toInt()
-val releaseVersionName = providers.gradleProperty("MEDIA_HUB_VERSION_NAME").orElse("0.20.1").get()
+val releaseVersionCode = providers.gradleProperty("MEDIA_HUB_VERSION_CODE").orElse("20002").get().toInt()
+val releaseVersionName = providers.gradleProperty("MEDIA_HUB_VERSION_NAME").orElse("0.20.2").get()
 
 val mediaHubApiBaseUrl = providers.gradleProperty("MEDIA_HUB_API_BASE_URL")
     .orElse("https://media.himym.us.ci")
