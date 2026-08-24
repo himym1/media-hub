@@ -4,6 +4,7 @@ const integrations = [
   { id: 'tmdb', label: 'TMDB', status: 'healthy', detail: '元数据在线' },
   { id: '115', label: '115', status: 'healthy', detail: '授权有效' },
   { id: 'qmediasync', label: 'QMediaSync', status: 'healthy', detail: '同步服务在线' },
+  { id: 'strm', label: '内置 STRM', status: 'unconfigured', detail: '当前使用 QMediaSync 生成 STRM' },
   { id: 'emby', label: 'Emby', status: 'healthy', detail: '媒体库在线' },
   { id: 'sources', label: '资源源', status: 'healthy', detail: '4 个资源源可用' },
   { id: 'source-checkin', label: '资源签到', status: 'healthy', detail: '今日资源源签到已完成' },
@@ -46,6 +47,9 @@ const providerSettings = {
   tmdb: { baseUrl: 'https://api.themoviedb.org/3', accessToken: { configured: true } },
   wecom: { baseUrl: 'https://qyapi.weixin.qq.com', corpId: '', secret: { configured: false }, sendMode: 'app', agentId: 0, toUser: '@all', chatId: '' },
   workflow: {
+    syncMode: 'qmediasync',
+    strmBaseUrl: '',
+    strmRootMount: '',
     qMediaSyncAccountId: 1,
     movie: { destinationId: '1', qMediaSyncTargetPath: '/movie', embyLibraryId: 'movie' },
     series: { destinationId: '2', qMediaSyncTargetPath: '/series', embyLibraryId: 'series' },
@@ -106,6 +110,8 @@ async function respond(route: Route, authenticated: boolean, state: FixtureState
   if (path.includes('/recommendations')) return json(route, { items: [] })
   if (path === '/api/v1/statistics/summary') return json(route, { transfersTotal: 1, transfersActive: 0, transfersCompleted: 1, transfersFailed: 0, transfersNeedsAttention: 0, subscriptionsTotal: 0, subscriptionsEnabled: 0, runsTotal: 0, runsFailed: 0, commandsPending: 0, commandsNeedsAttention: 0, notificationsNeedsAttention: 0 })
   if (path === '/api/v1/integrations/qmediasync/status') return json(route, { version: '0.14.23', totalSyncs: 1, recentSyncs: [] })
+  if (path === '/api/v1/integrations/strm/status') return json(route, { mode: 'qmediasync', running: false, mountPath: '', mountWritable: false, sessionOk: false })
+  if (path === '/api/v1/integrations/strm/sync' && request.method() === 'POST') return json(route, { status: 'accepted' }, 202)
   if (path === '/api/v1/integrations/sources/checkins') return json(route, { items: [{ sourceId: 'framehdr', label: '帧影', state: 'completed', message: '今日已签到', retryable: false, updatedAt: '2026-08-21T03:00:00Z' }] })
   if (path === '/api/v1/integrations/115/status') return json(route, { authorized: true, usedBytes: 1_000_000, totalBytes: 2_000_000 })
   if (path === '/api/v1/integrations/emby/libraries') return json(route, { libraries: [{ id: 'movie', name: '电影', collectionType: 'movies' }] })

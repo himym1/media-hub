@@ -33,6 +33,8 @@ import (
 	"media-hub/backend/internal/settings"
 	"media-hub/backend/internal/statistics"
 	"media-hub/backend/internal/store"
+	"media-hub/backend/internal/strm"
+	"media-hub/backend/internal/strm/builtin"
 	"media-hub/backend/internal/subscription"
 	"media-hub/backend/internal/tmdb"
 	"media-hub/backend/internal/webui"
@@ -156,6 +158,17 @@ func run(logger *slog.Logger) error {
 			return nil
 		},
 	)
+	strmCoordinator := strm.NewCoordinator(
+		dataStore,
+		builtin.New(drive115AuthService),
+		drive115AuthService,
+		strm.NewRedirectCache(drive115AuthService),
+		workflowService.Workflow,
+		logger,
+	)
+	strmCoordinator.UseAlerter(wecomClient)
+	strmCoordinator.UseLibraryRefresher(embyClient)
+	workflowService.UseSTRMSyncer(strmCoordinator)
 	checkinService := checkin.NewService(dataStore, searchService, wecomClient)
 	settingsService := settings.NewService(
 		dataStore, securePayloadCodec, settings.FromConfig(configuration),
@@ -187,6 +200,11 @@ func run(logger *slog.Logger) error {
 		}
 		logger.Info("wecom delivery ready", "configured", wecomClient.Configured(), "mode", settingsService.Values().WeCom.DeliveryMode())
 	}
+	if workflow := workflowService.Workflow(); workflow.UsesBuiltinSync() {
+		if err := strm.MountWritable(workflow.StrmRootMount); err != nil {
+			logger.Info("builtin strm mount is not writable", "path", workflow.StrmRootMount)
+		}
+	}
 	subscriptionService := subscription.NewService(dataStore, searchService, workflowService, embyClient)
 	overview := integration.NewOverviewService(
 		searchService,
@@ -197,6 +215,7 @@ func run(logger *slog.Logger) error {
 		embyClient,
 		emby.NewPlaybackChecker(embyClient),
 		checkinService,
+		strmCoordinator,
 	)
 	statisticsService := statistics.NewService(dataStore)
 	localUploadService := localupload.NewService(dataStore, securePayloadCodec, configuration.LocalUploadRoots)
@@ -231,6 +250,7 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("start source check-in worker: %w", err)
 	}
 	checkinWorkerStarted := true
+	strmCoordinator.Start(runtimeContext)
 	workerStarted := false
 	if selectionCodec != nil || wecomClient.Configured() {
 		if err := workflowService.Start(runtimeContext); err != nil {
@@ -246,7 +266,7 @@ func run(logger *slog.Logger) error {
 			QMediaSync: qmsClient, Emby: embyClient, EmbyPosterCache: posterCache, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
 			Playback: playback.NewService(drive115AuthService, embyClient),
 			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService, SourceCheckIns: checkinService,
-			Settings: settingsService, WeComTester: wecomClient,
+			Settings: settingsService, WeComTester: wecomClient, STRM: strmCoordinator,
 			SecureCookies: configuration.SecureCookies,
 			Web:           webui.Handler(),
 		}),

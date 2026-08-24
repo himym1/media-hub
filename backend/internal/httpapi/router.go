@@ -18,6 +18,7 @@ import (
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/settings"
 	"media-hub/backend/internal/statistics"
+	"media-hub/backend/internal/strm"
 	"media-hub/backend/internal/subscription"
 	"media-hub/backend/internal/tmdb"
 	"media-hub/backend/internal/workflow"
@@ -153,6 +154,12 @@ type WeComNotificationTester interface {
 	Send(context.Context, string) (bool, error)
 }
 
+type STRMService interface {
+	Status(context.Context) (strm.Status, error)
+	EnqueueLibrarySync(strm.LibrarySyncInput) error
+	Redirect(context.Context, string, string, string) (string, error)
+}
+
 type ProviderSettings interface {
 	Get(context.Context, int64) (settings.View, error)
 	Update(context.Context, int64, settings.Update) (settings.View, error)
@@ -177,6 +184,7 @@ type Dependencies struct {
 	Subscriptions    SubscriptionManager
 	Settings         ProviderSettings
 	WeComTester      WeComNotificationTester
+	STRM             STRMService
 	SecureCookies    bool
 	AndroidReleases  AndroidReleaseProvider
 	SourceCheckIns   SourceCheckInService
@@ -223,6 +231,9 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/integrations/sources/checkins", h.protected(h.listSourceCheckIns))
 	mux.Handle("POST /api/v1/integrations/sources/checkins/{id}/retry", h.protected(h.retrySourceCheckIn))
 	mux.Handle("GET /api/v1/integrations/qmediasync/status", h.protected(h.getQMediaSyncStatus))
+	mux.Handle("GET /api/v1/integrations/strm/status", h.protected(h.getSTRMStatus))
+	mux.Handle("POST /api/v1/integrations/strm/sync", h.protected(h.syncSTRMLibrary))
+	mux.HandleFunc("GET /115/url/{name}", h.redirectSTRM)
 	mux.Handle("GET /api/v1/integrations/emby/libraries", h.protected(h.getEmbyLibraries))
 	mux.Handle("GET /api/v1/integrations/emby/items", h.protected(h.searchEmbyItems))
 	mux.Handle("GET /api/v1/integrations/emby/libraries/{id}/items", h.protected(h.browseEmbyLibraryItems))

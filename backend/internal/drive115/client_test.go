@@ -36,7 +36,7 @@ func TestListFilesMapsWebFoldersAndFiles(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		_, _ = w.Write([]byte(`{"state":true,"count":2,"data":[{"cid":"10","pid":"0","n":"Movies"},{"fid":"20","cid":"10","n":"a.mkv","s":8,"t":1700000000}]}`))
+		_, _ = w.Write([]byte(`{"state":true,"count":2,"data":[{"cid":"10","pid":"0","n":"Movies"},{"fid":"20","cid":"10","n":"a.mkv","s":8,"t":1700000000,"pc":"pick-20"}]}`))
 	}))
 	defer server.Close()
 	client := NewClient("UID=uid; CID=cid; SEID=seid", time.Second)
@@ -45,8 +45,15 @@ func TestListFilesMapsWebFoldersAndFiles(t *testing.T) {
 	if err != nil || total != 2 || len(items) != 2 {
 		t.Fatalf("items=%#v total=%d err=%v", items, total, err)
 	}
-	if items[0].Kind != "folder" || items[0].ID != "10" || items[1].Kind != "file" || items[1].ID != "20" || items[1].ParentID != "10" {
+	if items[0].Kind != "folder" || items[0].ID != "10" || items[1].Kind != "file" || items[1].ID != "20" || items[1].ParentID != "10" || items[1].PickCode != "pick-20" {
 		t.Fatalf("unexpected items: %#v", items)
+	}
+}
+
+func TestSessionUserIDReadsNumericUID(t *testing.T) {
+	client := NewClient("UID=103539243_session; CID=cid; SEID=seid", time.Second)
+	if client.SessionUserID() != "103539243" {
+		t.Fatalf("userid=%q", client.SessionUserID())
 	}
 }
 

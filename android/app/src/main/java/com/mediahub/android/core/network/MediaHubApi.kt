@@ -175,6 +175,30 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         request("/api/v1/integrations/wecom/test", method = "POST", token = token)
     }
 
+    suspend fun strmStatus(token: String): STRMStatus {
+        val item = JSONObject(request("/api/v1/integrations/strm/status", token = token))
+        return STRMStatus(
+            mode = item.optString("mode").ifBlank { "qmediasync" },
+            running = item.optBoolean("running"),
+            mountPath = item.optString("mountPath"),
+            mountWritable = item.optBoolean("mountWritable"),
+            sessionOk = item.optBoolean("sessionOk"),
+            lastError = item.optString("lastError"),
+            lastSummary = item.optString("lastSummary"),
+            lastSyncAt = item.optLong("lastSyncAt"),
+            lastMediaType = item.optString("lastMediaType"),
+        )
+    }
+
+    suspend fun syncSTRMLibrary(token: String, mediaType: String = "all", full: Boolean = false) {
+        request(
+            "/api/v1/integrations/strm/sync",
+            method = "POST",
+            token = token,
+            body = JSONObject().put("mediaType", mediaType).put("full", full).toString(),
+        )
+    }
+
 
     suspend fun operationalStatistics(token: String): OperationalStatistics {
         val item = JSONObject(request("/api/v1/statistics/summary", token = token))
@@ -836,6 +860,9 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
     )
 
     private fun parseWorkflowSettings(item: JSONObject) = WorkflowSettings(
+        syncMode = item.optString("syncMode").ifBlank { "qmediasync" },
+        strmBaseUrl = item.optString("strmBaseUrl"),
+        strmRootMount = item.optString("strmRootMount"),
         qMediaSyncAccountId = item.getInt("qMediaSyncAccountId"),
         movie = parseWorkflowTarget(item.getJSONObject("movie")),
         series = parseWorkflowTarget(item.getJSONObject("series")),
@@ -860,7 +887,13 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
             .put("agentId", input.wecom.agentId)
             .put("toUser", input.wecom.toUser)
             .put("chatId", input.wecom.chatId))
-        .put("workflow", JSONObject().put("qMediaSyncAccountId", input.workflow.qMediaSyncAccountId).put("movie", workflowTargetBody(input.workflow.movie)).put("series", workflowTargetBody(input.workflow.series)))
+        .put("workflow", JSONObject()
+            .put("syncMode", input.workflow.syncMode.ifBlank { "qmediasync" })
+            .put("strmBaseUrl", input.workflow.strmBaseUrl)
+            .put("strmRootMount", input.workflow.strmRootMount)
+            .put("qMediaSyncAccountId", input.workflow.qMediaSyncAccountId)
+            .put("movie", workflowTargetBody(input.workflow.movie))
+            .put("series", workflowTargetBody(input.workflow.series)))
         .put("checkIn", JSONObject()
             .put("enabled", input.checkIn.enabled)
             .put("hour", input.checkIn.hour)

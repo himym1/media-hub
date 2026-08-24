@@ -76,14 +76,16 @@ internal fun ProviderSettingsPanel(
             return@Column
         }
 
-        SettingsSection("核心媒体服务", "TMDB、QMediaSync 与 Emby 连接配置", Lucide.Film, defaultExpanded = true) {
+        SettingsSection("核心媒体服务", "TMDB、网盘同步与 Emby 连接配置", Lucide.Film, defaultExpanded = true) {
             LabeledField("TMDB API 地址", draft.tmdbBaseUrl) { onDraftChange(draft.copy(tmdbBaseUrl = it)) }
             SecretField("TMDB Read Access Token", settings.tmdbAccessToken, draft.tmdbAccessToken) {
                 onDraftChange(draft.copy(tmdbAccessToken = it))
             }
-            LabeledField("QMediaSync 地址", draft.qmediaSyncBaseUrl) { onDraftChange(draft.copy(qmediaSyncBaseUrl = it)) }
-            SecretField("QMediaSync API Key", settings.qmediaSyncApiKey, draft.qmediaSyncApiKey) {
-                onDraftChange(draft.copy(qmediaSyncApiKey = it))
+            if (draft.workflow.syncMode != "builtin") {
+                LabeledField("QMediaSync 地址", draft.qmediaSyncBaseUrl) { onDraftChange(draft.copy(qmediaSyncBaseUrl = it)) }
+                SecretField("QMediaSync API Key", settings.qmediaSyncApiKey, draft.qmediaSyncApiKey) {
+                    onDraftChange(draft.copy(qmediaSyncApiKey = it))
+                }
             }
             LabeledField("Emby 地址", draft.embyBaseUrl) { onDraftChange(draft.copy(embyBaseUrl = it)) }
             SecretField("Emby API Key", settings.embyApiKey, draft.embyApiKey) {
@@ -97,14 +99,33 @@ internal fun ProviderSettingsPanel(
             MediaHubText("115 网盘请在「概览」页扫码授权，无需开放平台开发者账号。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
         }
 
-        SettingsSection("工作流目录映射", "QMediaSync 映射账号及媒体库目标路径", Lucide.ServerCog) {
-            LabeledField("QMediaSync Account ID", draft.workflow.qMediaSyncAccountId.toString(), KeyboardType.Number) {
-                onDraftChange(draft.copy(workflow = draft.workflow.copy(qMediaSyncAccountId = it.toIntOrNull() ?: 0)))
+        SettingsSection("工作流目录映射", "转存目录、STRM 写入路径与 Emby 库。内置模式把播放地址写到 Media Hub /115/url/", Lucide.ServerCog) {
+            MediaHubSegmentedControl(
+                options = listOf("qmediasync" to "QMediaSync", "builtin" to "内置写入"),
+                selected = draft.workflow.syncMode.ifBlank { "qmediasync" },
+                onSelected = { onDraftChange(draft.copy(workflow = draft.workflow.copy(syncMode = it))) },
+                role = Role.RadioButton,
+                raised = false,
+            )
+            if (draft.workflow.syncMode != "builtin") {
+                MediaHubText("QMediaSync 已弃用，仅保留回滚。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             }
-            WorkflowTargetEditor("电影", draft.workflow.movie) {
+            if (draft.workflow.syncMode == "builtin") {
+                LabeledField("STRM 基址", draft.workflow.strmBaseUrl) {
+                    onDraftChange(draft.copy(workflow = draft.workflow.copy(strmBaseUrl = it)))
+                }
+                LabeledField("STRM 根挂载", draft.workflow.strmRootMount) {
+                    onDraftChange(draft.copy(workflow = draft.workflow.copy(strmRootMount = it)))
+                }
+            } else {
+                LabeledField("QMediaSync Account ID", draft.workflow.qMediaSyncAccountId.toString(), KeyboardType.Number) {
+                    onDraftChange(draft.copy(workflow = draft.workflow.copy(qMediaSyncAccountId = it.toIntOrNull() ?: 0)))
+                }
+            }
+            WorkflowTargetEditor("电影", draft.workflow.movie, draft.workflow.syncMode == "builtin") {
                 onDraftChange(draft.copy(workflow = draft.workflow.copy(movie = it)))
             }
-            WorkflowTargetEditor("剧集", draft.workflow.series) {
+            WorkflowTargetEditor("剧集", draft.workflow.series, draft.workflow.syncMode == "builtin") {
                 onDraftChange(draft.copy(workflow = draft.workflow.copy(series = it)))
             }
         }
@@ -300,10 +321,12 @@ private fun SecretField(label: String, status: SecretStatus, value: SecretUpdate
 }
 
 @Composable
-private fun WorkflowTargetEditor(label: String, target: WorkflowTargetSettings, onChange: (WorkflowTargetSettings) -> Unit) {
+private fun WorkflowTargetEditor(label: String, target: WorkflowTargetSettings, builtin: Boolean, onChange: (WorkflowTargetSettings) -> Unit) {
     MediaHubText(label, color = MediaHubColors.TextStrong, fontSize = 12.sp, fontWeight = FontWeight.Medium)
     LabeledField("$label 115 目标目录 ID", target.destinationId) { onChange(target.copy(destinationId = it)) }
-    LabeledField("$label QMediaSync 目标路径", target.qMediaSyncTargetPath) { onChange(target.copy(qMediaSyncTargetPath = it)) }
+    LabeledField(if (builtin) "$label STRM 目标路径" else "$label QMediaSync 目标路径", target.qMediaSyncTargetPath) {
+        onChange(target.copy(qMediaSyncTargetPath = it))
+    }
     LabeledField("$label Emby 媒体库 ID", target.embyLibraryId) { onChange(target.copy(embyLibraryId = it)) }
 }
 

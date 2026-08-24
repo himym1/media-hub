@@ -252,7 +252,7 @@ export function DiscoveryView({
 
       {!submittedQuery ? (
         <div className="discovery-idle">
-          {movieGenres.data?.genres.length ? (
+          {movieGenres.data?.genres?.length ? (
             <section className="genre-chip-band" aria-label="电影类型">
               <div className="genre-chip-row" role="list">
                 <button

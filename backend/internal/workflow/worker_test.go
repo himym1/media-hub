@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/selection"
 	"media-hub/backend/internal/store"
+	"media-hub/backend/internal/strm"
 )
 
 type accessUnknownSourceStub struct{ calls *int }
@@ -360,6 +362,186 @@ func TestQMediaSyncAuthExpirySurfacesFailReason(t *testing.T) {
 	}
 	if job.ErrorMessage != "QMediaSync 的 115 授权已失效，请到 QMediaSync「网盘账号」重新授权后再重试任务" {
 		t.Fatalf("message=%q", job.ErrorMessage)
+	}
+}
+
+type strmStub struct {
+	calls   int
+	request strm.Request
+	err     error
+}
+
+func (s *strmStub) Sync(_ context.Context, request strm.Request) (strm.Result, error) {
+	s.calls++
+	s.request = request
+	if s.err != nil {
+		return strm.Result{}, s.err
+	}
+	return strm.Result{Created: 1}, nil
+}
+
+func TestBuiltinSyncSkipsQMediaSyncAndRefreshesEmby(t *testing.T) {
+	ctx := context.Background()
+	qmsCalls := 0
+	qmsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		qmsCalls++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer qmsServer.Close()
+	embyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("X-Emby-Token") != "emby-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch request.URL.Path {
+		case "/Items/library-movies/Refresh":
+			w.WriteHeader(http.StatusNoContent)
+		case "/Items/RemoteSearch/Apply/emby-item":
+			w.WriteHeader(http.StatusNoContent)
+		case "/Items":
+			_, _ = w.Write([]byte(`{"Items":[{"Id":"emby-item","Name":"Movie","Type":"Movie","ProductionYear":2026}],"TotalRecordCount":1}`))
+		case "/Items/emby-item/PlaybackInfo":
+			_, _ = w.Write([]byte(`{"MediaSources":[{"Id":"media-source"}]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer embyServer.Close()
+
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	searchService := search.NewService(transferSourceStub{})
+	syncer := &strmStub{}
+	service := NewService(
+		dataStore, searchService, codec,
+		qms.NewClient(qmsServer.URL, "qms-key", time.Second),
+		emby.NewClient(embyServer.URL, "emby-key", time.Second),
+		nil,
+		config.Workflow{
+			SyncMode:      config.SyncModeBuiltin,
+			StrmBaseURL:   "https://qms.example",
+			StrmRootMount: "/media",
+			Movie:         config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/media/电影", EmbyLibraryID: "library-movies"},
+		},
+		func(context.Context, string) (string, error) { return "电影/Movie (2018)", nil },
+		nil,
+		nil,
+	)
+	service.UseSTRMSyncer(syncer)
+	token := service.SelectionToken(search.Candidate{
+		ID: "framehdr:item-1", Title: "Movie", Year: 2026, MediaType: "movie", TMDBID: "123", SourceID: "framehdr",
+		SourceRef: "private-reference", TransferState: "available", Revision: searchService.CurrentRevision(),
+	})
+	publicJob, _, err := service.Enqueue(ctx, admin.ID, token, "request_builtin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 7 {
+		job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := service.processJob(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != "completed" || syncer.calls != 1 || qmsCalls != 0 {
+		t.Fatalf("state=%q strm=%d qms=%d", job.State, syncer.calls, qmsCalls)
+	}
+	if syncer.request.FileID != "file-1" || syncer.request.TargetPath != "/media/电影" || syncer.request.StrmBaseURL != "https://qms.example" || !syncer.request.Prune {
+		t.Fatalf("request=%#v", syncer.request)
+	}
+	events, err := dataStore.TransferEvents(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, event := range events {
+		if strings.Contains(event.Message, "STRM 同步完成") && strings.Contains(event.Message, "新建 1") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("events=%#v", events)
+	}
+}
+
+func TestBuiltinSyncAuthExpiryIsRetryable(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	searchService := search.NewService(transferSourceStub{})
+	service := NewService(
+		dataStore, searchService, codec,
+		qms.NewClient("http://qms.local", "qms-key", time.Second),
+		emby.NewClient("http://emby.local", "emby-key", time.Second),
+		nil,
+		config.Workflow{
+			SyncMode:      config.SyncModeBuiltin,
+			StrmBaseURL:   "https://qms.example",
+			StrmRootMount: "/media",
+			Movie:         config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/media/电影", EmbyLibraryID: "library-movies"},
+		},
+		func(context.Context, string) (string, error) { return "电影/Movie (2018)", nil },
+		nil,
+		nil,
+	)
+	service.UseSTRMSyncer(&strmStub{err: strm.ErrAuthExpired})
+	token := service.SelectionToken(search.Candidate{
+		ID: "framehdr:item-1", Title: "Movie", Year: 2026, MediaType: "movie", TMDBID: "123", SourceID: "framehdr",
+		SourceRef: "private-reference", TransferState: "available", Revision: searchService.CurrentRevision(),
+	})
+	publicJob, _, err := service.Enqueue(ctx, admin.ID, token, "request_strm_auth")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := service.processJob(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != "failed" || job.ErrorCode != "strm_auth_expired" || !job.Retryable || job.ResumeState != "transferred" {
+		t.Fatalf("state=%q code=%q retryable=%v resume=%q", job.State, job.ErrorCode, job.Retryable, job.ResumeState)
 	}
 }
 

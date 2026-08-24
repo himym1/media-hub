@@ -65,7 +65,7 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 	if loaded.Sources[0].ID != "framehdr" || loaded.Sources[0].BaseURL != "https://frame.local/api" {
 		t.Fatal("unexpected source configuration")
 	}
-	if loaded.DataEncryptionKey == "" || loaded.Workflow.QMediaSyncAccountID != 7 {
+	if loaded.DataEncryptionKey == "" || loaded.Workflow.QMediaSyncAccountID != 7 || loaded.Workflow.NormalizedSyncMode() != SyncModeQMediaSync {
 		t.Fatal("unexpected workflow configuration")
 	}
 	if loaded.AndroidReleaseDir != "/srv/media-hub/releases" {
@@ -270,6 +270,33 @@ func TestLocalUploadRootsRequireAbsolutePaths(t *testing.T) {
 	}
 	if len(configuration.LocalUploadRoots) != 2 {
 		t.Fatalf("roots = %v", configuration.LocalUploadRoots)
+	}
+}
+
+func TestNormalizedSyncModeInfersBuiltinWhenMountAndBaseURLSet(t *testing.T) {
+	workflow := Workflow{StrmBaseURL: "https://media.himym.us.ci", StrmRootMount: "/media"}
+	if workflow.NormalizedSyncMode() != SyncModeBuiltin || !workflow.UsesBuiltinSync() {
+		t.Fatalf("mode=%q", workflow.NormalizedSyncMode())
+	}
+	workflow.SyncMode = SyncModeQMediaSync
+	if workflow.NormalizedSyncMode() != SyncModeQMediaSync {
+		t.Fatal("explicit qmediasync must win")
+	}
+}
+
+func TestWorkflowTargetBuiltinDoesNotRequireQMSAccount(t *testing.T) {
+	workflow := Workflow{
+		SyncMode:      SyncModeBuiltin,
+		StrmBaseURL:   "https://qms.example",
+		StrmRootMount: "/media",
+		Movie:         WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/media/电影", EmbyLibraryID: "15075"},
+	}
+	if target, ok := workflow.Target("movie"); !ok || target.EmbyLibraryID != "15075" {
+		t.Fatalf("builtin target ok=%v %#v", ok, target)
+	}
+	workflow.StrmBaseURL = ""
+	if _, ok := workflow.Target("movie"); ok {
+		t.Fatal("builtin target must require STRM base URL")
 	}
 }
 

@@ -1,11 +1,43 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.19.40
+  version: 0.19.41
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
 paths:
+  /115/url/{name}:
+    servers:
+      - url: /
+    get:
+      operationId: redirectSTRMPlayback
+      summary: Redirect a STRM pickcode to a 115 HTTPS CDN URL without proxying media bytes
+      security: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 256 }
+        - name: pickcode
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        - name: userid
+          in: query
+          required: false
+          schema: { type: string, maxLength: 32 }
+      responses:
+        '302':
+          description: Temporary redirect to the 115 CDN URL
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        '400':
+          $ref: '#/components/responses/ProblemResponse'
+        '502':
+          $ref: '#/components/responses/ProblemResponse'
+        '503':
+          $ref: '#/components/responses/ProblemResponse'
   /health:
     get:
       operationId: getHealth
@@ -393,6 +425,56 @@ paths:
         '503':
           $ref: '#/components/responses/ProblemResponse'
         '504':
+          $ref: '#/components/responses/ProblemResponse'
+  /integrations/strm/status:
+    get:
+      operationId: getSTRMStatus
+      summary: Read built-in STRM mount, session, and last sync health
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Built-in STRM status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/STRMStatus'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '503':
+          $ref: '#/components/responses/ProblemResponse'
+  /integrations/strm/sync:
+    post:
+      operationId: syncSTRMLibrary
+      summary: Start a built-in STRM library sync
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/STRMSyncRequest'
+      responses:
+        '202':
+          description: Library sync accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties: { status: { type: string, enum: [accepted] } }
+        '400':
+          $ref: '#/components/responses/ProblemResponse'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '409':
+          $ref: '#/components/responses/ProblemResponse'
+        '503':
           $ref: '#/components/responses/ProblemResponse'
   /integrations/emby/libraries:
     get:
@@ -1689,6 +1771,9 @@ components:
       type: object
       required: [qMediaSyncAccountId, movie, series]
       properties:
+        syncMode: { type: string, enum: [qmediasync, builtin], default: qmediasync }
+        strmBaseUrl: { type: string, maxLength: 2048, description: URL written into .strm files during builtin sync }
+        strmRootMount: { type: string, maxLength: 2048, description: Absolute container path of the STRM library root }
         qMediaSyncAccountId: { type: integer, minimum: 0, maximum: 4294967295 }
         movie: { $ref: '#/components/schemas/WorkflowTargetSettings' }
         series: { $ref: '#/components/schemas/WorkflowTargetSettings' }
@@ -1948,6 +2033,26 @@ components:
         retryable: { type: boolean }
         lastSuccessAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    STRMStatus:
+      type: object
+      required: [mode, running, mountPath, mountWritable, sessionOk]
+      properties:
+        mode: { type: string, enum: [qmediasync, builtin] }
+        running: { type: boolean }
+        mountPath: { type: string }
+        mountWritable: { type: boolean }
+        sessionOk: { type: boolean }
+        lastError: { type: string }
+        lastSummary: { type: string }
+        lastSyncAt: { type: integer, format: int64 }
+        lastMediaType: { type: string }
+    STRMSyncRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        mediaType: { type: string, enum: [movie, series, all], default: all }
+        full: { type: boolean, default: false }
+        dryRun: { type: boolean, default: false }
     QMediaSyncStatus:
       type: object
       required: [version, recentSyncs, totalSyncs]

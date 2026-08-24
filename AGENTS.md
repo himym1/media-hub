@@ -5,7 +5,7 @@
 - Media Hub is a single-user, single-NAS media automation control plane.
 - The repository contains one backend, one Web client, and one Android client.
 - Media payloads must never be proxied through Media Hub. Playback remains 115 CDN to player.
-- QMediaSync owns STRM generation. Emby owns library management and playback APIs.
+- Media Hub owns STRM generation and `/115/url/` 302 playback when builtin sync is enabled. Empty `syncMode` plus both `strmBaseUrl` and `strmRootMount` infers builtin. QMediaSync remains a rollback adapter. Emby owns library management and playback APIs.
 - MoviePilot and local NAS upload workflows are outside the MVP.
 
 ## Architecture

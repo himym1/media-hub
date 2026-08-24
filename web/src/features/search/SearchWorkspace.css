@@ -371,7 +371,7 @@ h1 em { color: #d7f36a; font-style: normal; }
 .provider-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .notification-card { max-width: 600px; }
 .notification-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
-.provider-settings fieldset > label:not(.inline-check), .source-setting-row > label { display: grid; gap: 6px; margin-top: 12px; color: var(--text-muted); font-size: 12px; }
+.provider-settings fieldset > label:not(.inline-check), .workflow-settings > div > label:not(.inline-check), .source-setting-row > label { display: grid; gap: 6px; margin-top: 12px; color: var(--text-muted); font-size: 12px; }
 .provider-settings input { width: 100%; min-width: 0; min-height: 44px; height: 44px; padding: 0 12px; color: var(--text); border: 1px solid var(--border-strong); border-radius: 6px; outline: 0; background: var(--surface-input); font: inherit; font-size: 13px; transition: border-color .18s ease, box-shadow .18s ease; }
 .provider-settings input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
 .provider-settings input[type='checkbox'] { width: 16px; height: 16px; padding: 0; accent-color: var(--accent); }
@@ -380,6 +380,8 @@ h1 em { color: #d7f36a; font-style: normal; }
 .provider-settings input:disabled { opacity: .55; }
 .settings-note { color: var(--text-muted); font-size: 12px; line-height: 1.55; }
 .workflow-settings { display: grid; grid-template-columns: minmax(180px, .45fr) repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.workflow-settings > div { display: grid; gap: 10px; }
+.workflow-settings .source-auth-mode { width: 100%; max-width: 220px; }
 .workflow-target { display: grid; gap: 2px; padding-left: 15px; border-left: 1px solid var(--border); }
 .workflow-target strong { color: var(--accent); font-size: 13px; font-weight: 600; }
 .source-settings { display: grid; gap: 1px; padding: 0 !important; overflow: hidden; background: var(--border) !important; }

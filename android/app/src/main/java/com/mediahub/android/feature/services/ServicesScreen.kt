@@ -101,6 +101,7 @@ internal fun ServicesRoute(
         },
         onInstallUpdate = { path -> if (installUpdate(context, java.io.File(path))) viewModel.consumeDownloadedUpdate() },
         onLogout = onLogout,
+        onSyncSTRM = viewModel::syncSTRMLibrary,
     )
 }
 
@@ -123,6 +124,7 @@ internal fun ServicesScreen(
     onDownloadUpdate: (com.mediahub.android.core.network.AndroidRelease) -> Unit,
     onInstallUpdate: (String) -> Unit,
     onLogout: () -> Unit,
+    onSyncSTRM: () -> Unit = {},
 ) {
     val section = rememberSaveable { androidx.compose.runtime.mutableStateOf("overview") }
     if (LocalTwoPane.current) {
@@ -146,6 +148,7 @@ internal fun ServicesScreen(
             onDownloadUpdate = onDownloadUpdate,
             onInstallUpdate = onInstallUpdate,
             onLogout = onLogout,
+            onSyncSTRM = onSyncSTRM,
         )
         return
     }
@@ -194,6 +197,7 @@ internal fun ServicesScreen(
                 onDownloadUpdate = onDownloadUpdate,
                 onInstallUpdate = onInstallUpdate,
                 onLogout = onLogout,
+                onSyncSTRM = onSyncSTRM,
             )
         }
     }
@@ -220,6 +224,7 @@ private fun ServicesTwoPane(
     onDownloadUpdate: (com.mediahub.android.core.network.AndroidRelease) -> Unit,
     onInstallUpdate: (String) -> Unit,
     onLogout: () -> Unit,
+    onSyncSTRM: () -> Unit = {},
 ) {
     MediaHubListDetail(
         detailOpen = true,
@@ -286,6 +291,7 @@ private fun ServicesTwoPane(
                         onDownloadUpdate = onDownloadUpdate,
                         onInstallUpdate = onInstallUpdate,
                         onLogout = onLogout,
+                        onSyncSTRM = onSyncSTRM,
                     )
                 }
             }
@@ -312,6 +318,7 @@ private fun LazyListScope.servicesSectionItems(
     onDownloadUpdate: (com.mediahub.android.core.network.AndroidRelease) -> Unit,
     onInstallUpdate: (String) -> Unit,
     onLogout: () -> Unit,
+    onSyncSTRM: () -> Unit = {},
 ) {
     when (section) {
                 "overview" -> {
@@ -334,6 +341,30 @@ private fun LazyListScope.servicesSectionItems(
                             uiState.integrations.forEach { integration ->
                                 MediaHubListDivider()
                                 ServiceRow(integration)
+                            }
+                        }
+                    }
+                    uiState.strmStatus?.let { status ->
+                        item(key = "strm") {
+                            MediaHubSmallTitle(text = "内置 STRM")
+                            MediaHubCard {
+                                MediaHubPreferenceRow(
+                                    title = if (status.mode == "builtin") "内置写入" else "当前仍用 QMediaSync",
+                                    summary = when {
+                                        status.running -> "正在同步"
+                                        status.lastSummary.isNotBlank() -> status.lastSummary
+                                        status.lastError.isNotBlank() -> status.lastError
+                                        else -> if (status.mode == "builtin") "挂载${if (status.mountWritable) "可写" else "不可写"} · 115 ${if (status.sessionOk) "有效" else "不可用"}" else "已弃用，仅作回滚"
+                                    },
+                                    onClick = onSyncSTRM,
+                                    end = {
+                                        MediaHubButton(
+                                            label = if (uiState.syncingSTRM || status.running) "正在同步" else "立即同步",
+                                            enabled = status.mode == "builtin" && !uiState.syncingSTRM && !status.running,
+                                            onClick = onSyncSTRM,
+                                        )
+                                    },
+                                )
                             }
                         }
                     }

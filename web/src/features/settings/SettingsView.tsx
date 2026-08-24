@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Activity, CalendarCheck, Database, Film, HardDrive, KeyRound, LogOut, QrCode, RefreshCw, Server, SlidersHorizontal, Waypoints } from 'lucide-react'
+import { Activity, CalendarCheck, Database, FileVideo, Film, HardDrive, KeyRound, LogOut, QrCode, RefreshCw, Server, SlidersHorizontal, Waypoints } from 'lucide-react'
 import {
   changePassword,
   getDrive115Status,
@@ -8,10 +8,12 @@ import {
   getOperationalStatistics,
   getProviderSettings,
   getQMediaSyncStatus,
+  getSTRMStatus,
   getSourceCheckIns,
   pollDrive115Authorization,
   retrySourceCheckIn,
   startDrive115Authorization,
+  syncSTRMLibrary,
   testWeComNotification,
   updateProviderSettings,
   type Integration,
@@ -75,6 +77,7 @@ export function SettingsView({ integrations, onDirtyChange, onLogout, onRefresh 
     onDirtyChange(dirty)
   }, [onDirtyChange])
   const qms = useQuery({ queryKey: ['qms-status'], queryFn: getQMediaSyncStatus, enabled: section === 'overview', retry: false })
+  const strm = useQuery({ queryKey: ['strm-status'], queryFn: getSTRMStatus, enabled: section === 'overview', retry: false, refetchInterval: (state) => state.state.data?.running ? 3_000 : false })
   const drive = useQuery({ queryKey: ['drive-115-status'], queryFn: getDrive115Status, enabled: section === 'overview', retry: false })
   const refetchDrive = drive.refetch
   const emby = useQuery({ queryKey: ['emby-libraries'], queryFn: getEmbyLibraries, enabled: section === 'overview', retry: false })
@@ -86,7 +89,14 @@ export function SettingsView({ integrations, onDirtyChange, onLogout, onRefresh 
     onSuccess: async (value) => {
       queryClient.setQueryData(['provider-settings'], value)
       updateProviderDirty(false)
-      await Promise.all([qms.refetch(), drive.refetch(), emby.refetch(), checkins.refetch(), queryClient.invalidateQueries({ queryKey: ['system-overview'] })])
+      await Promise.all([qms.refetch(), strm.refetch(), drive.refetch(), emby.refetch(), checkins.refetch(), queryClient.invalidateQueries({ queryKey: ['system-overview'] })])
+      onRefresh()
+    },
+  })
+  const syncSTRM = useMutation({
+    mutationFn: () => syncSTRMLibrary({ mediaType: 'all' }),
+    onSuccess: async () => {
+      await Promise.all([strm.refetch(), queryClient.invalidateQueries({ queryKey: ['system-overview'] })])
       onRefresh()
     },
   })
@@ -162,6 +172,7 @@ export function SettingsView({ integrations, onDirtyChange, onLogout, onRefresh 
   const refreshAll = () => {
     onRefresh()
     void qms.refetch()
+    void strm.refetch()
     void drive.refetch()
     void emby.refetch()
     void statistics.refetch()
@@ -183,9 +194,20 @@ export function SettingsView({ integrations, onDirtyChange, onLogout, onRefresh 
 
       {section === 'overview' ? <div aria-labelledby="settings-tab-overview" className="settings-section" id="settings-panel-overview" role="tabpanel">
         {statistics.data ? <section className="statistics-strip" aria-label="运营摘要"><div><Activity size={18} /><span>运营摘要</span></div><dl><div><dt>进行中任务</dt><dd>{statistics.data.transfersActive}</dd></div><div><dt>需要处理</dt><dd>{statistics.data.transfersNeedsAttention + statistics.data.commandsNeedsAttention + statistics.data.notificationsNeedsAttention}</dd></div><div><dt>启用订阅</dt><dd>{statistics.data.subscriptionsEnabled}</dd></div><div><dt>失败运行</dt><dd>{statistics.data.runsFailed}</dd></div></dl></section> : null}
-        <div className="service-grid">{integrations.map((integration) => { const Icon = integration.id === '115' ? HardDrive : integration.id === 'qmediasync' ? Waypoints : integration.id === 'emby' ? Film : integration.id === 'source-checkin' ? CalendarCheck : Server; return <article className={`service-card ${integration.status}`} key={integration.id}><Icon size={20} /><div><strong>{integration.label}</strong><span>{integration.detail}</span></div><span className={`state-chip ${integration.status}`}>{statusLabel[integration.status]}</span></article> })}</div>
+        <div className="service-grid">{integrations.map((integration) => { const Icon = integration.id === '115' ? HardDrive : integration.id === 'strm' ? FileVideo : integration.id === 'qmediasync' ? Waypoints : integration.id === 'emby' ? Film : integration.id === 'source-checkin' ? CalendarCheck : Server; return <article className={`service-card ${integration.status}`} key={integration.id}><Icon size={20} /><div><strong>{integration.label}</strong><span>{integration.detail}</span></div><span className={`state-chip ${integration.status}`}>{statusLabel[integration.status]}</span></article> })}</div>
         <div className="diagnostic-grid">
-          <section className="diagnostic-block"><div className="diagnostic-title"><Waypoints size={18} /><strong>QMediaSync</strong></div><dl><div><dt>版本</dt><dd>{qms.data?.version ?? '不可用'}</dd></div><div><dt>同步记录</dt><dd>{qms.data?.totalSyncs ?? 0}</dd></div><div><dt>最近同步</dt><dd>{syncStateLabel(qms.data?.recentSyncs[0]?.state)}</dd></div>{qms.data?.recentSyncs[0]?.failReason ? <div><dt>失败原因</dt><dd>{qms.data.recentSyncs[0].failReason}</dd></div> : null}</dl></section>
+          <section className="diagnostic-block"><div className="diagnostic-title"><FileVideo size={18} /><strong>内置 STRM</strong></div>
+            <dl>
+              <div><dt>模式</dt><dd>{strm.data?.mode === 'builtin' ? '内置写入' : 'QMediaSync'}</dd></div>
+              <div><dt>挂载</dt><dd>{strm.data?.mountWritable ? '可写' : (strm.data?.mountPath ? '不可写' : '未配置')}</dd></div>
+              <div><dt>115 会话</dt><dd>{strm.data?.sessionOk ? '有效' : '不可用'}</dd></div>
+              <div><dt>最近同步</dt><dd>{strm.data?.running ? '进行中' : (strm.data?.lastSummary || '尚无记录')}</dd></div>
+              {strm.data?.lastError ? <div><dt>失败原因</dt><dd>{strm.data.lastError}</dd></div> : null}
+            </dl>
+            <button className="secondary-command" disabled={syncSTRM.isPending || strm.data?.running || strm.data?.mode !== 'builtin'} onClick={() => syncSTRM.mutate()} type="button">{syncSTRM.isPending || strm.data?.running ? '正在同步…' : '立即同步'}</button>
+            {syncSTRM.isError ? <span className="form-error" role="alert">{syncSTRM.error.message}</span> : null}
+          </section>
+          {strm.data?.mode !== 'builtin' ? <section className="diagnostic-block"><div className="diagnostic-title"><Waypoints size={18} /><strong>QMediaSync</strong></div><p className="settings-note">已弃用，仅作回滚。新转存请改用内置写入。</p><dl><div><dt>版本</dt><dd>{qms.data?.version ?? '不可用'}</dd></div><div><dt>同步记录</dt><dd>{qms.data?.totalSyncs ?? 0}</dd></div><div><dt>最近同步</dt><dd>{syncStateLabel(qms.data?.recentSyncs[0]?.state)}</dd></div>{qms.data?.recentSyncs[0]?.failReason ? <div><dt>失败原因</dt><dd>{qms.data.recentSyncs[0].failReason}</dd></div> : null}</dl></section> : null}
           <section className="diagnostic-block drive-authorization"><div className="diagnostic-title"><HardDrive size={18} /><strong>115</strong></div><dl><div><dt>授权</dt><dd>{drive.data?.authorized ? '有效' : '不可用'}</dd></div><div><dt>已使用</dt><dd>{formatCapacity(drive.data?.usedBytes)}</dd></div><div><dt>总容量</dt><dd>{formatCapacity(drive.data?.totalBytes)}</dd></div></dl>{authorization.data?.qrImage && authorizationStatus.data?.state !== 'confirmed' ? <div className="qr-box"><img alt="115 扫码授权二维码" height="148" src={authorization.data.qrImage} width="148" /></div> : null}<button className="secondary-command" disabled={authorization.isPending || authorizationStatus.data?.state === 'pending'} onClick={() => authorization.mutate()} type="button"><QrCode size={15} />{authorizationStatus.data?.state === 'confirmed' ? '重新授权' : authorizationStatus.data?.state === 'pending' ? '等待扫码确认' : '扫码授权'}</button>{authorization.isError ? <span className="form-error" role="alert">{authorization.error.message}</span> : null}</section>
           <section className="diagnostic-block"><div className="diagnostic-title"><Database size={18} /><strong>Emby</strong></div><dl><div><dt>媒体库</dt><dd>{emby.data?.libraries.length ?? 0}</dd></div><div><dt>读取状态</dt><dd>{emby.isSuccess ? '正常' : '不可用'}</dd></div></dl></section>
           <section className="diagnostic-block source-checkins"><div className="diagnostic-title"><CalendarCheck size={18} /><strong>资源签到</strong></div>

@@ -57,7 +57,8 @@ The Web build is embedded into the Go server image for deployment. Development k
 - `sources`: one adapter per external resource provider.
 - `transfer`: 115 destination resolution and transfer execution.
 - `workflow`: durable stage machine, retries, and compensation rules.
-- `qms`: QMediaSync synchronization adapter.
+- `qms`: QMediaSync synchronization adapter kept for rollback when `workflow.syncMode=qmediasync`.
+- `strm`: built-in STRM writer, scheduled library sync, prune, health, and public `/115/url/` 302 used when `workflow.syncMode=builtin` (see [builtin-strm-plan.md](../development/builtin-strm-plan.md)). Empty mode plus both STRM base URL and root mount infers builtin.
 - `emby`: duplicate checks, refresh, index checks, and playback readiness.
 - `playback`: resolves typed trusted 115 and Emby item targets, owns opaque progress sessions, and validates upstream HTTPS descriptions without proxying media.
 - `notify`: enterprise WeChat delivery with idempotent event keys.
@@ -74,8 +75,8 @@ Modules depend inward on domain contracts. Provider-specific response types do n
 3. A transfer job and first append-only event are committed in one database transaction.
 4. Worker asks the configured source adapter to transfer the release to 115 with a deterministic idempotency key.
 5. Worker verifies asynchronous transfer completion through the adapter status endpoint.
-6. Worker requests QMediaSync synchronization only after the transfer result is persisted.
-7. Worker correlates QMediaSync records by the returned 115 `base_cid`.
+6. Worker requests STRM synchronization only after the transfer result is persisted (`qmediasync` or `builtin`).
+7. In QMediaSync mode, the worker correlates records by the returned 115 `base_cid`. In builtin mode it writes `.strm` files under the mounted library path, records a sync summary, and continues. Playback URLs resolve through Media Hub `GET /115/url/{name}` to 115 HTTPS CDN; bytes are never proxied.
 8. Worker refreshes the mapped Emby library and matches the item by TMDB ID.
 9. Worker requires Emby `PlaybackInfo` to contain a media source before completion.
 10. Worker persists notification submission before sending one Enterprise WeChat application-chat message.

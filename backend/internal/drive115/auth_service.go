@@ -434,6 +434,24 @@ func (s *AuthService) ListFiles(ctx context.Context, parentID string, limit, off
 	return s.drive.ListFiles(ctx, parentID, limit, offset)
 }
 
+func (s *AuthService) FileInfo(ctx context.Context, fileID string) (FileItem, error) {
+	if err := s.prepareSession(ctx); err != nil {
+		return FileItem{}, err
+	}
+	return s.drive.FileInfo(ctx, fileID)
+}
+
+func (s *AuthService) SessionUserID(ctx context.Context) (string, error) {
+	if err := s.prepareSession(ctx); err != nil {
+		return "", err
+	}
+	userID := s.drive.SessionUserID()
+	if userID == "" {
+		return "", ErrUnauthorized
+	}
+	return userID, nil
+}
+
 func (s *AuthService) ResolveDrive115(ctx context.Context, target playback.Drive115Target, playbackUserAgent string) (playback.SourceMedia, error) {
 	if err := s.prepareSession(ctx); err != nil {
 		return playback.SourceMedia{}, normalizePlaybackSourceError(err)

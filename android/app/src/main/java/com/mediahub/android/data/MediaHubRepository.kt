@@ -18,6 +18,7 @@ import com.mediahub.android.core.network.EmbyItemDetail
 import com.mediahub.android.core.network.EmbyItemPage
 import com.mediahub.android.core.network.EmbyRemoteSubtitle
 import com.mediahub.android.core.network.IntegrationHealth
+import com.mediahub.android.core.network.STRMStatus
 import com.mediahub.android.core.network.MediaHubApi
 import com.mediahub.android.core.network.LocalUploadEntry
 import com.mediahub.android.core.network.LocalUploadJob
@@ -81,6 +82,11 @@ class MediaHubRepository(
         authenticated { api.downloadAndroidRelease(it, release, destination) }
 
     suspend fun overview(): List<IntegrationHealth> = authenticated { token -> api.overview(token) }
+
+    suspend fun strmStatus(): STRMStatus = authenticated(api::strmStatus)
+
+    suspend fun syncSTRMLibrary(mediaType: String = "all", full: Boolean = false) =
+        authenticated { api.syncSTRMLibrary(it, mediaType, full) }
 
     suspend fun sourceCheckIns(): List<SourceCheckIn> = authenticated(api::sourceCheckIns)
 

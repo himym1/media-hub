@@ -8,10 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"media-hub/backend/internal/config"
 	"media-hub/backend/internal/qms"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/selection"
 	"media-hub/backend/internal/store"
+	"media-hub/backend/internal/strm"
 	"media-hub/backend/internal/wecom"
 )
 
@@ -305,6 +307,10 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 			}
 		}
 	}
+	if workflowConfiguration.UsesBuiltinSync() {
+		return s.submitBuiltinSync(ctx, job, provider, sourcePath, isFile, target)
+	}
+
 	job.State = "submitting_sync"
 	job.ErrorCode = ""
 	job.ErrorMessage = ""
@@ -341,6 +347,60 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 	job.NextAttemptAt = s.now().UTC().Add(syncPollDelay).Unix()
 	job.Retryable = false
 	return s.save(ctx, &job, "submitting_sync", "QMediaSync 已接收任务")
+}
+
+func (s *Service) submitBuiltinSync(
+	ctx context.Context,
+	job store.TransferJob,
+	provider selection.ProviderPayload,
+	sourcePath string,
+	isFile bool,
+	target config.WorkflowTarget,
+) error {
+	workflowConfiguration := s.workflowConfiguration()
+	syncer := s.strmSyncer()
+	if syncer == nil {
+		return s.fail(ctx, &job, "transferred", "strm_unconfigured", "内置 STRM 同步未配置", true, "transferred")
+	}
+	job.State = "submitting_sync"
+	job.ErrorCode = ""
+	job.ErrorMessage = ""
+	if err := s.save(ctx, &job, "transferred", "开始写入 STRM"); err != nil {
+		return err
+	}
+	result, err := syncer.Sync(ctx, strm.Request{
+		FileID:        provider.FileID,
+		SourcePath:    sourcePath,
+		TargetPath:    target.QMediaSyncTargetPath,
+		IsFile:        isFile,
+		Prune:         true,
+		StrmBaseURL:   workflowConfiguration.StrmBaseURL,
+		StrmRootMount: workflowConfiguration.StrmRootMount,
+	})
+	if err != nil {
+		code, message := builtinSyncFailure(err)
+		return s.fail(ctx, &job, "submitting_sync", code, message, true, "transferred")
+	}
+	job.State = "refreshing_emby"
+	job.Attempts = 0
+	job.NextAttemptAt = 0
+	job.Retryable = false
+	return s.save(ctx, &job, "submitting_sync", "STRM 同步完成（"+result.Summary()+"）")
+}
+
+func builtinSyncFailure(err error) (string, string) {
+	switch {
+	case errors.Is(err, strm.ErrAuthExpired):
+		return "strm_auth_expired", "115 授权已失效，请在概览页重新扫码后再重试任务"
+	case errors.Is(err, strm.ErrPathUnwritable):
+		return "strm_path_unwritable", "STRM 目录不可写，请检查 Media Hub 的媒体库挂载"
+	case errors.Is(err, strm.ErrNoVideos):
+		return "strm_list_failed", "转存目录里没有可生成 STRM 的视频文件"
+	case errors.Is(err, strm.ErrInvalidRequest):
+		return "strm_list_failed", "STRM 同步参数不完整"
+	default:
+		return "strm_list_failed", "无法列出 115 文件并写入 STRM"
+	}
 }
 
 func (s *Service) pollSync(ctx context.Context, job store.TransferJob) error {

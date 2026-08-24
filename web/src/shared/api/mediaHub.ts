@@ -12,6 +12,7 @@ export type Integration = {
 export type SecretStatus = { configured: boolean }
 export type SecretUpdate = { value: string; clear: boolean }
 export type WorkflowTargetSettings = { destinationId: string; qMediaSyncTargetPath: string; embyLibraryId: string }
+export type WorkflowSyncMode = 'qmediasync' | 'builtin'
 export type CheckInSettings = { enabled: boolean; hour: number; minute: number; sources: Array<'framehdr' | 'juying'> }
 export type ProviderSettings = {
   qmediaSync: { baseUrl: string; apiKey: SecretStatus }
@@ -19,7 +20,7 @@ export type ProviderSettings = {
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretStatus }
   wecom: { baseUrl: string; corpId: string; secret: SecretStatus; sendMode: 'app' | 'appchat'; agentId: number; toUser: string; chatId: string }
-  workflow: { qMediaSyncAccountId: number; movie: WorkflowTargetSettings; series: WorkflowTargetSettings }
+  workflow: { syncMode: WorkflowSyncMode; strmBaseUrl: string; strmRootMount: string; qMediaSyncAccountId: number; movie: WorkflowTargetSettings; series: WorkflowTargetSettings }
   checkIn: CheckInSettings
   sources: { id: string; label: string; baseUrl: string; account: string; authMode: string; token: SecretStatus }[]
 }
@@ -222,6 +223,18 @@ export type SessionResponse = {
 export type LoginResponse = SessionResponse & {
   csrfToken?: string
   token?: string
+}
+
+export type STRMStatus = {
+  mode: WorkflowSyncMode
+  running: boolean
+  mountPath: string
+  mountWritable: boolean
+  sessionOk: boolean
+  lastError?: string
+  lastSummary?: string
+  lastSyncAt?: number
+  lastMediaType?: string
 }
 
 export type QMediaSyncStatus = {
@@ -513,6 +526,18 @@ export function testWeComNotification() {
 
 export function getQMediaSyncStatus() {
   return requestJSON<QMediaSyncStatus>('/api/v1/integrations/qmediasync/status')
+}
+
+export function getSTRMStatus() {
+  return requestJSON<STRMStatus>('/api/v1/integrations/strm/status')
+}
+
+export function syncSTRMLibrary(input: { mediaType?: 'movie' | 'series' | 'all'; full?: boolean; dryRun?: boolean } = {}) {
+  return requestJSON<{ status: 'accepted' }>('/api/v1/integrations/strm/sync', {
+    method: 'POST',
+    headers: writeHeaders(),
+    body: JSON.stringify({ mediaType: input.mediaType ?? 'all', full: Boolean(input.full), dryRun: Boolean(input.dryRun) }),
+  })
 }
 
 export function getEmbyLibraries() {

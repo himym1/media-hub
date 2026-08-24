@@ -13,6 +13,7 @@ import com.mediahub.android.core.network.ProviderSettingsUpdate
 import com.mediahub.android.core.network.ProviderSourceSettingsUpdate
 import com.mediahub.android.core.network.SecretUpdate
 import com.mediahub.android.core.network.SourceCheckIn
+import com.mediahub.android.core.network.STRMStatus
 import com.mediahub.android.data.MediaHubRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -25,6 +26,8 @@ data class ServicesUiState(
     val integrations: List<IntegrationHealth> = emptyList(),
     val statistics: OperationalStatistics? = null,
     val sourceCheckIns: List<SourceCheckIn> = emptyList(),
+    val strmStatus: STRMStatus? = null,
+    val syncingSTRM: Boolean = false,
     val retryingCheckInId: String? = null,
     val providerSettings: ProviderSettings? = null,
     val settingsDraft: ProviderSettingsUpdate? = null,
@@ -239,12 +242,14 @@ class ServicesViewModel(
                 val integrations = repository.overview()
                 val statistics = try { repository.operationalStatistics() } catch (_: Exception) { null }
                 val sourceCheckIns = try { repository.sourceCheckIns() } catch (_: Exception) { emptyList() }
+                val strmStatus = try { repository.strmStatus() } catch (_: Exception) { null }
                 val providerSettings = try { repository.providerSettings() } catch (_: Exception) { null }
                 val current = _uiState.value
                 _uiState.value = current.copy(
                     integrations = integrations,
                     statistics = statistics,
                     sourceCheckIns = sourceCheckIns,
+                    strmStatus = strmStatus,
                     providerSettings = providerSettings ?: current.providerSettings,
                     settingsDraft = if (!current.settingsExpanded && providerSettings != null) providerSettings.toUpdate() else current.settingsDraft,
                     loading = false,
@@ -259,6 +264,22 @@ class ServicesViewModel(
                     loading = false,
                     errorMessage = "无法读取服务状态",
                 )
+            }
+        }
+    }
+
+    fun syncSTRMLibrary() {
+        if (_uiState.value.syncingSTRM || _uiState.value.strmStatus?.running == true) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(syncingSTRM = true, errorMessage = null)
+            try {
+                repository.syncSTRMLibrary()
+                val status = try { repository.strmStatus() } catch (_: Exception) { _uiState.value.strmStatus }
+                _uiState.value = _uiState.value.copy(strmStatus = status, syncingSTRM = false)
+            } catch (error: ApiException) {
+                _uiState.value = _uiState.value.copy(syncingSTRM = false, errorMessage = error.message ?: "STRM 同步失败")
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(syncingSTRM = false, errorMessage = "无法启动 STRM 同步")
             }
         }
     }

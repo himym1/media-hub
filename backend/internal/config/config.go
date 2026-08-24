@@ -87,10 +87,36 @@ func (configuration WeCom) DeliveryMode() string {
 	return WeComSendModeApp
 }
 
+const (
+	SyncModeQMediaSync = "qmediasync"
+	SyncModeBuiltin    = "builtin"
+)
+
 type Workflow struct {
+	SyncMode            string
+	StrmBaseURL         string
+	StrmRootMount       string
 	QMediaSyncAccountID uint
 	Movie               WorkflowTarget
 	Series              WorkflowTarget
+}
+
+func (w Workflow) NormalizedSyncMode() string {
+	switch strings.ToLower(strings.TrimSpace(w.SyncMode)) {
+	case SyncModeBuiltin:
+		return SyncModeBuiltin
+	case SyncModeQMediaSync:
+		return SyncModeQMediaSync
+	default:
+		if strings.TrimSpace(w.StrmBaseURL) != "" && strings.TrimSpace(w.StrmRootMount) != "" {
+			return SyncModeBuiltin
+		}
+		return SyncModeQMediaSync
+	}
+}
+
+func (w Workflow) UsesBuiltinSync() bool {
+	return w.NormalizedSyncMode() == SyncModeBuiltin
 }
 
 type WorkflowTarget struct {
@@ -100,9 +126,6 @@ type WorkflowTarget struct {
 }
 
 func (w Workflow) Target(mediaType string) (WorkflowTarget, bool) {
-	if w.QMediaSyncAccountID == 0 {
-		return WorkflowTarget{}, false
-	}
 	var target WorkflowTarget
 	switch mediaType {
 	case "movie":
@@ -112,7 +135,11 @@ func (w Workflow) Target(mediaType string) (WorkflowTarget, bool) {
 	default:
 		return WorkflowTarget{}, false
 	}
-	return target, target.DestinationID != "" && target.QMediaSyncTargetPath != "" && target.EmbyLibraryID != ""
+	ready := target.DestinationID != "" && target.QMediaSyncTargetPath != "" && target.EmbyLibraryID != ""
+	if w.UsesBuiltinSync() {
+		return target, ready && w.StrmBaseURL != "" && w.StrmRootMount != ""
+	}
+	return target, ready && w.QMediaSyncAccountID != 0
 }
 
 type SearchSource struct {
@@ -164,6 +191,21 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 	qmsAccountID, err := uintValue(lookup, "MEDIA_HUB_QMS_ACCOUNT_ID")
 	if err != nil {
 		return Config{}, err
+	}
+	syncMode := strings.ToLower(strings.TrimSpace(stringValue(lookup, "MEDIA_HUB_STRM_SYNC_MODE", "")))
+	if syncMode != "" && syncMode != SyncModeQMediaSync && syncMode != SyncModeBuiltin {
+		return Config{}, fmt.Errorf("MEDIA_HUB_STRM_SYNC_MODE must be qmediasync or builtin")
+	}
+	strmBaseURL, err := baseURLValue(lookup, "MEDIA_HUB_STRM_BASE_URL")
+	if err != nil {
+		return Config{}, err
+	}
+	strmRootMount := stringValue(lookup, "MEDIA_HUB_STRM_ROOT_MOUNT", "")
+	if strmRootMount != "" {
+		strmRootMount = filepath.Clean(strmRootMount)
+		if !filepath.IsAbs(strmRootMount) {
+			return Config{}, fmt.Errorf("MEDIA_HUB_STRM_ROOT_MOUNT must be an absolute path")
+		}
 	}
 	adminPassword := secretValue(lookup, "MEDIA_HUB_ADMIN_PASSWORD")
 	if adminPassword != "" && (len(adminPassword) < 12 || len(adminPassword) > 1024) {
@@ -275,6 +317,9 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		TMDB:                   tmdbConfig,
 		WeCom:                  wecomConfig,
 		Workflow: Workflow{
+			SyncMode:            syncMode,
+			StrmBaseURL:         strmBaseURL,
+			StrmRootMount:       strmRootMount,
 			QMediaSyncAccountID: qmsAccountID,
 			Movie: WorkflowTarget{
 				DestinationID:        stringValue(lookup, "MEDIA_HUB_115_MOVIE_DESTINATION_ID", ""),

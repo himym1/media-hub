@@ -1,0 +1,8 @@
+services:
+  media-hub:
+    environment:
+      MEDIA_HUB_STRM_ROOT_MOUNT: ${MEDIA_HUB_STRM_ROOT_MOUNT:-/media}
+      MEDIA_HUB_STRM_BASE_URL: ${MEDIA_HUB_STRM_BASE_URL:-https://media.himym.us.ci}
+      MEDIA_HUB_STRM_SYNC_MODE: ${MEDIA_HUB_STRM_SYNC_MODE:-}
+    volumes:
+      - ${MEDIA_HUB_STRM_HOST_PATH:-/volume2/media/115-strm}:${MEDIA_HUB_STRM_ROOT_MOUNT:-/media}:rw

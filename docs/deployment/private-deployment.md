@@ -51,6 +51,28 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
 
    `install-layout.sh` 会安装覆盖文件并创建 mode `0700` 的 `tunnel/`。把专用 SSH 私钥安装为 `tunnel/id_ed25519`、mode `0600`，不要输出或提交它。覆盖文件在 Media Hub 默认网络中运行 `mikan-egress`，并等待隧道健康后启动 Media Hub，因此不依赖其他 Compose 项目或外部网络。代理必须是无凭据的 HTTP(S) URL；不要把全局 `HTTP_PROXY` / `HTTPS_PROXY` 注入 Media Hub。
 
+   内置 STRM（`workflow.syncMode=builtin`）需要把 Emby 正在扫描的 STRM 根目录挂进 Media Hub。生产 NAS 已确认：
+
+   ```text
+   宿主机: /volume2/media/115-strm
+   QMS / Media Hub 容器: /media
+   Emby 容器: /media3/115-strm   # /volume2/media -> /media3
+   子目录: 电影/  电视剧/
+   STRM URL 基址: https://media.himym.us.ci
+   播放重定向: 同源 GET /115/url/video{ext}?pickcode=&userid=
+   ```
+
+   启用覆盖文件，不要改默认 `compose.yaml`：
+
+   ```text
+   COMPOSE_FILE=compose.yaml:compose.strm.yaml
+   MEDIA_HUB_STRM_HOST_PATH=/volume2/media/115-strm
+   MEDIA_HUB_STRM_ROOT_MOUNT=/media
+   MEDIA_HUB_STRM_BASE_URL=https://media.himym.us.ci
+   ```
+
+   也可与蜜柑出口叠加：`compose.yaml:compose.mikan-egress.yaml:compose.strm.yaml`。覆盖文件默认不写 `MEDIA_HUB_STRM_SYNC_MODE`；只要基址和挂载都在，就按 builtin 处理。显式设置 `MEDIA_HUB_STRM_SYNC_MODE=qmediasync` 可回滚。新写入的 `.strm` 指向 Media Hub `/115/url/`；存量文件要等一次全量库同步才会改写。QMS 容器只在回滚时需要。
+
    Android从Emby媒体库进入Media3时，可将播放重定向解析交给QMediaSync内置的`emby302`内网端口：
 
    ```text

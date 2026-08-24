@@ -222,6 +222,21 @@ type FileItem struct {
 	Kind      string `json:"kind"`
 	Size      int64  `json:"size"`
 	UpdatedAt int64  `json:"updatedAt"`
+	PickCode  string `json:"pickCode,omitempty"`
+}
+
+func (c *Client) SessionUserID() string {
+	return shareUserID(c.session())
+}
+
+func (c *Client) FileInfo(ctx context.Context, fileID string) (FileItem, error) {
+	info, err := c.playbackFileInfo(ctx, fileID)
+	if err != nil {
+		return FileItem{}, err
+	}
+	return FileItem{
+		ID: info.FileID, ParentID: info.ParentID, Name: info.Name, Kind: "file", PickCode: info.PickCode,
+	}, nil
 }
 
 func (c *Client) ListFiles(ctx context.Context, parentID string, limit, offset int) ([]FileItem, int, error) {
@@ -251,14 +266,16 @@ func (c *Client) ListFiles(ctx context.Context, parentID string, limit, offset i
 		State bool `json:"state"`
 		Count int  `json:"count"`
 		Data  []struct {
-			FileID   string          `json:"fid"`
-			Category string          `json:"cid"`
-			ParentID string          `json:"pid"`
-			Name     string          `json:"n"`
-			AltName  string          `json:"fn"`
-			Size     json.Number     `json:"s"`
-			AltSize  json.Number     `json:"fs"`
-			Updated  json.RawMessage `json:"t"`
+			FileID      string          `json:"fid"`
+			Category    string          `json:"cid"`
+			ParentID    string          `json:"pid"`
+			Name        string          `json:"n"`
+			AltName     string          `json:"fn"`
+			Size        json.Number     `json:"s"`
+			AltSize     json.Number     `json:"fs"`
+			Updated     json.RawMessage `json:"t"`
+			PickCode    string          `json:"pc"`
+			AltPickCode string          `json:"pick_code"`
 		} `json:"data"`
 	}
 	if err := c.getJSONWithSession(ctx, c.filesURL, query, cookie, &payload); err != nil {
@@ -289,7 +306,10 @@ func (c *Client) ListFiles(ctx context.Context, parentID string, limit, offset i
 		if size == 0 {
 			size, _ = value.AltSize.Int64()
 		}
-		items = append(items, FileItem{ID: id, ParentID: parent, Name: name, Kind: kind, Size: size, UpdatedAt: parse115Time(value.Updated)})
+		items = append(items, FileItem{
+			ID: id, ParentID: parent, Name: name, Kind: kind, Size: size, UpdatedAt: parse115Time(value.Updated),
+			PickCode: firstNonBlank(value.PickCode, value.AltPickCode),
+		})
 	}
 	return items, payload.Count, nil
 }

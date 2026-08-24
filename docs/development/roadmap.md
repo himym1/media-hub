@@ -77,6 +77,20 @@ Implementation status: native control paths exist for the main workflow, but the
 
 Implementation status: backup imports map recognized subscriptions to native source IDs instead of `subx`. `/migration/subx/readiness` also blocks on an enabled fallback, explicitly fallback-bound subscriptions, queued/submitting/uncertain commands, retryable failed commands, missing or unhealthy core providers, absent healthy native sources, and incomplete parallel acceptance.
 
+## Phase 6: Built-in STRM Sync (replace QMediaSync)
+
+Full phased plan: [builtin-strm-plan.md](./builtin-strm-plan.md).
+
+- [x] **A — MVP:** transfer-triggered STRM write via `drive115`, `syncMode` toggle, Emby refresh unchanged. Production mount is `/volume2/media/115-strm` → `/media`. NAS E2E still pending.
+- [x] **B — Reliability:** retry/backoff, transfer sync summaries, health API, WeCom auth alerts, mount checks.
+- [x] **C — Incremental sync:** scheduled and manual library scans, pickcode rewrite, 115 list throttle, 100 MB minimum size.
+- [x] **D — Builtin redirect:** Media Hub `GET /115/url/{name}` 302 to 115 HTTPS CDN; bytes are never proxied.
+- [x] **E — Hygiene:** prune stale `.strm` and empty dirs; full sync dry-run via API.
+- [x] **F — Deprecation:** empty mode + mount + base URL infers builtin; QMS UI marked rollback-only; `qms` package kept.
+- [ ] **G — Optional:** OpenList/Baidu drivers, multi-account (demand-driven only).
+
+Exit gate: fresh deployment needs only Media Hub + Emby + 115; transfer-to-playback works with one 115 authorization and no QMediaSync container.
+
 ## Deferred
 
 - Web built-in player.

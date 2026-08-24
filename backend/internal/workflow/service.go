@@ -18,6 +18,7 @@ import (
 	"media-hub/backend/internal/selection"
 	"media-hub/backend/internal/settings"
 	"media-hub/backend/internal/store"
+	"media-hub/backend/internal/strm"
 )
 
 var (
@@ -59,6 +60,7 @@ type Service struct {
 	resolveSourcePath SourcePathResolver
 	renameSource      SourceRenamer
 	validateTransfer  TransferredContentValidator
+	strm              strm.Syncer
 	mutex             sync.RWMutex
 	workflow          config.Workflow
 	now               func() time.Time
@@ -92,6 +94,32 @@ func (s *Service) Configure(workflowConfig config.Workflow) {
 	s.mutex.Unlock()
 }
 
+func (s *Service) Workflow() config.Workflow {
+	return s.workflowConfiguration()
+}
+
+func (s *Service) UseSTRMSyncer(syncer strm.Syncer) {
+	s.mutex.Lock()
+	s.strm = syncer
+	s.mutex.Unlock()
+}
+
+func (s *Service) strmSyncer() strm.Syncer {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.strm
+}
+
+func (s *Service) syncConfigured() bool {
+	if s.emby == nil || !s.emby.Configured() {
+		return false
+	}
+	if s.workflowConfiguration().UsesBuiltinSync() {
+		return s.strmSyncer() != nil
+	}
+	return s.qms != nil && s.qms.Configured()
+}
+
 func (s *Service) workflowConfiguration() config.Workflow {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
@@ -102,7 +130,7 @@ func (s *Service) SelectionToken(candidate search.Candidate) string {
 	if s.codec == nil || candidate.TransferState != "available" || candidate.SourceRef == "" {
 		return ""
 	}
-	if s.qms == nil || !s.qms.Configured() || s.emby == nil || !s.emby.Configured() {
+	if !s.syncConfigured() {
 		return ""
 	}
 	if _, ok := s.workflowConfiguration().Target(candidate.MediaType); !ok {
@@ -136,7 +164,7 @@ func (s *Service) Enqueue(ctx context.Context, userID int64, selectionToken, ide
 	if s.codec == nil {
 		return Job{}, false, ErrUnavailable
 	}
-	if s.qms == nil || !s.qms.Configured() || s.emby == nil || !s.emby.Configured() {
+	if !s.syncConfigured() {
 		return Job{}, false, ErrTargetUnavailable
 	}
 	if !idempotencyPattern.MatchString(idempotencyKey) {
