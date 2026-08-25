@@ -2,9 +2,12 @@ package com.mediahub.android.app
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mediahub.android.BuildConfig
+import com.mediahub.android.core.network.AndroidRelease
 import com.mediahub.android.core.network.ApiException
 import com.mediahub.android.core.network.SearchCandidate
 import com.mediahub.android.data.MediaHubRepository
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,6 +88,13 @@ sealed interface AppState {
     data class Error(val message: String) : AppState
 }
 
+data class AppUpdatePrompt(
+    val release: AndroidRelease,
+    val downloading: Boolean = false,
+    val downloadedPath: String? = null,
+    val errorMessage: String? = null,
+)
+
 class AppViewModel(
     private val repository: MediaHubRepository,
 ) : ViewModel() {
@@ -98,11 +108,17 @@ class AppViewModel(
     private val _subscriptionDraft = MutableStateFlow<SearchCandidate?>(null)
     val subscriptionDraft: StateFlow<SearchCandidate?> = _subscriptionDraft.asStateFlow()
 
+    private val _updatePrompt = MutableStateFlow<AppUpdatePrompt?>(null)
+    val updatePrompt: StateFlow<AppUpdatePrompt?> = _updatePrompt.asStateFlow()
+    private var dismissedUpdateCode: Int? = null
+
     init {
         viewModelScope.launch {
             repository.sessionExpired.collect {
                 _route.value = navigation.reset()
                 _subscriptionDraft.value = null
+                _updatePrompt.value = null
+                dismissedUpdateCode = null
                 _state.value = AppState.Unauthenticated
             }
         }
@@ -113,7 +129,12 @@ class AppViewModel(
         viewModelScope.launch {
             _state.value = AppState.Loading
             _state.value = try {
-                if (repository.restoreSession()) AppState.Authenticated else AppState.Unauthenticated
+                if (repository.restoreSession()) {
+                    checkForUpdate()
+                    AppState.Authenticated
+                } else {
+                    AppState.Unauthenticated
+                }
             } catch (error: ApiException) {
                 AppState.Error(error.message ?: "无法连接 Media Hub")
             } catch (_: Exception) {
@@ -124,6 +145,52 @@ class AppViewModel(
 
     fun onAuthenticated() {
         _state.value = AppState.Authenticated
+        checkForUpdate()
+    }
+
+    fun dismissUpdate() {
+        dismissedUpdateCode = _updatePrompt.value?.release?.versionCode
+        _updatePrompt.value = null
+    }
+
+    fun downloadUpdate(destination: File) {
+        val prompt = _updatePrompt.value ?: return
+        if (prompt.downloading) return
+        viewModelScope.launch {
+            _updatePrompt.value = prompt.copy(downloading = true, errorMessage = null)
+            try {
+                val downloaded = repository.downloadAndroidRelease(prompt.release, destination)
+                _updatePrompt.value = _updatePrompt.value?.copy(
+                    downloading = false,
+                    downloadedPath = downloaded.file.absolutePath,
+                )
+            } catch (error: ApiException) {
+                _updatePrompt.value = _updatePrompt.value?.copy(
+                    downloading = false,
+                    errorMessage = error.message ?: "更新下载失败",
+                )
+            } catch (_: Exception) {
+                _updatePrompt.value = _updatePrompt.value?.copy(
+                    downloading = false,
+                    errorMessage = "更新下载或校验失败",
+                )
+            }
+        }
+    }
+
+    fun consumeDownloadedUpdate() {
+        _updatePrompt.value = _updatePrompt.value?.copy(downloadedPath = null)
+    }
+
+    private fun checkForUpdate() {
+        viewModelScope.launch {
+            val latest = runCatching { repository.latestAndroidRelease() }.getOrNull() ?: return@launch
+            val release = newerAndroidRelease(BuildConfig.VERSION_CODE, latest) ?: return@launch
+            if (dismissedUpdateCode == release.versionCode) return@launch
+            val current = _updatePrompt.value
+            if (current?.release?.versionCode == release.versionCode) return@launch
+            _updatePrompt.value = AppUpdatePrompt(release)
+        }
     }
 
     fun prepareSubscription(candidate: SearchCandidate) {
@@ -162,6 +229,8 @@ class AppViewModel(
             runCatching { repository.logout() }
             _route.value = navigation.reset()
             _subscriptionDraft.value = null
+            _updatePrompt.value = null
+            dismissedUpdateCode = null
             _state.value = AppState.Unauthenticated
         }
     }

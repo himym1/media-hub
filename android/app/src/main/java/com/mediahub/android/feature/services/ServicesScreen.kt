@@ -1,8 +1,5 @@
 package com.mediahub.android.feature.services
 
-import android.content.Intent
-import android.provider.Settings
-import androidx.core.content.FileProvider
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.background
@@ -96,10 +93,13 @@ internal fun ServicesRoute(
         onChangeServer = onChangeServer,
         onCheckForUpdate = viewModel::checkForUpdate,
         onDownloadUpdate = { release ->
-            val directory = java.io.File(context.cacheDir, "updates").apply { mkdirs() }
-            viewModel.downloadUpdate(java.io.File(directory, "media-hub-${release.versionCode}.apk"))
+            viewModel.downloadUpdate(com.mediahub.android.app.androidUpdateFile(context, release.versionCode))
         },
-        onInstallUpdate = { path -> if (installUpdate(context, java.io.File(path))) viewModel.consumeDownloadedUpdate() },
+        onInstallUpdate = { path ->
+            if (com.mediahub.android.app.installAndroidUpdate(context, java.io.File(path))) {
+                viewModel.consumeDownloadedUpdate()
+            }
+        },
         onLogout = onLogout,
         onSyncSTRM = viewModel::syncSTRMLibrary,
     )
@@ -599,22 +599,6 @@ private fun ServiceRow(integration: IntegrationHealth) {
             MediaHubBadge(text = statusLabel(integration.status), variant = variant)
         },
     )
-}
-
-private fun installUpdate(context: android.content.Context, file: java.io.File): Boolean {
-    if (!context.packageManager.canRequestPackageInstalls()) {
-        context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-            data = android.net.Uri.parse("package:${context.packageName}")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        })
-        return false
-    }
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
-    context.startActivity(Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, "application/vnd.android.package-archive")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-    })
-    return true
 }
 
 private fun decodeQRImage(dataURL: String): androidx.compose.ui.graphics.ImageBitmap? {

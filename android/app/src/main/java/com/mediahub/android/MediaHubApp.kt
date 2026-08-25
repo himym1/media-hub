@@ -48,9 +48,12 @@ import com.mediahub.android.app.showsWorkspaceNavigationRail
 import com.mediahub.android.app.showsWorkspaceTopBar
 import com.mediahub.android.app.MediaHubViewModelFactory
 import com.mediahub.android.app.ServerViewModelStoreHolder
+import com.mediahub.android.app.androidUpdateFile
+import com.mediahub.android.app.installAndroidUpdate
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCenteredPane
 import com.mediahub.android.core.designsystem.MediaHubColors
+import com.mediahub.android.core.designsystem.MediaHubConfirmDialog
 import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubNavItem
@@ -189,6 +192,7 @@ private fun AuthenticatedWorkspace(
     val destination = route.destination
     val detail = route.detail
     val subscriptionDraft by appViewModel.subscriptionDraft.collectAsState()
+    val updatePrompt by appViewModel.updatePrompt.collectAsState()
     val inSystem = destination == MainDestination.Services
     val detailOpen = detail != null
     BackHandler(enabled = inSystem, onBack = appViewModel::closeSystem)
@@ -275,6 +279,39 @@ private fun AuthenticatedWorkspace(
                         appViewModel.logout()
                     },
                     onChangeServer = onChangeServer,
+                )
+            }
+            updatePrompt?.let { prompt ->
+                val release = prompt.release
+                MediaHubConfirmDialog(
+                    visible = true,
+                    title = "发现新版本 ${release.versionName}",
+                    message = listOfNotNull(
+                        release.notes.takeIf { it.isNotBlank() },
+                        prompt.errorMessage,
+                        when {
+                            prompt.downloading -> "正在下载并校验"
+                            prompt.downloadedPath != null -> "下载完成，安装后即可使用"
+                            else -> null
+                        },
+                    ).joinToString("\n"),
+                    confirmLabel = when {
+                        prompt.downloading -> "正在下载"
+                        prompt.downloadedPath != null -> "安装"
+                        else -> "下载"
+                    },
+                    cancelLabel = "稍后",
+                    onConfirm = {
+                        val path = prompt.downloadedPath
+                        if (path != null) {
+                            if (installAndroidUpdate(context, java.io.File(path))) {
+                                appViewModel.consumeDownloadedUpdate()
+                            }
+                        } else if (!prompt.downloading) {
+                            appViewModel.downloadUpdate(androidUpdateFile(context, release.versionCode))
+                        }
+                    },
+                    onDismiss = appViewModel::dismissUpdate,
                 )
             }
         }
