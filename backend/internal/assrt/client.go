@@ -39,12 +39,13 @@ type clientConfig struct {
 }
 
 type Hit struct {
-	ID       int
-	Name     string
-	Language string
-	Format   string
-	Site     string
-	Comment  string
+	ID        int
+	Name      string
+	VideoName string
+	Language  string
+	Format    string
+	Site      string
+	Comment   string
 }
 
 type ClientConfig struct {
@@ -218,12 +219,13 @@ func publicHit(item subtitleInfo) Hit {
 		name = strings.TrimSpace(item.VideoName)
 	}
 	return Hit{
-		ID:       item.ID,
-		Name:     bounded(name, 240),
-		Language: languageCode(item.Lang.LangList, item.Lang.Desc),
-		Format:   formatName(item.Subtype),
-		Site:     bounded(item.ReleaseSite, 80),
-		Comment:  bounded(item.Lang.Desc, 80),
+		ID:        item.ID,
+		Name:      bounded(name, 240),
+		VideoName: bounded(item.VideoName, 240),
+		Language:  languageCode(item.Lang.LangList, item.Lang.Desc),
+		Format:    formatName(item.Subtype),
+		Site:      bounded(item.ReleaseSite, 80),
+		Comment:   bounded(item.Lang.Desc, 80),
 	}
 }
 

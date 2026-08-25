@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,6 +57,29 @@ func TestSearchUsesAssrtForChineseAndSkipsEmptyEmby(t *testing.T) {
 	}
 	if stub.embyCalls != 0 {
 		t.Fatalf("emby was consulted %d times", stub.embyCalls)
+	}
+}
+
+func TestSearchSkipsUnrelatedAssrtHitsAndUsesFilename(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		query := request.URL.Query().Get("q")
+		switch {
+		case strings.Contains(query, "Signal 2016 E01"):
+			_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[{"id":9,"native_name":"信号/Signal/시그널","videoname":"Signal.2016","subtype":"Srt","lang":{"desc":"简体","langlist":{"langchs":true}}}]}}`))
+		default:
+			_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[{"id":8,"native_name":"【王冠 The.Crown】S01E01","subtype":"Ass","lang":{"desc":"简体","langlist":{"langchs":true}}}]}}`))
+		}
+	}))
+	defer server.Close()
+	stub := &embyStub{target: emby.SubtitleTarget{
+		ID: "ep-1", Type: "Episode", Name: "第一集", SeriesName: "信号", OriginalTitle: "Signal",
+		Year: 2016, Season: 1, Episode: 1,
+		Path: "/media3/115-strm/电视剧/信号 (2016)/Signal 2016 E01 UHDTV HEVC 10bit 60fps DD2.0-HThoreau.strm",
+	}}
+	service := New(stub, assrt.NewClient(server.URL, "token", time.Second), nil)
+	hits, err := service.Search(context.Background(), "ep-1", "chi")
+	if err != nil || len(hits) != 1 || hits[0].ID != "assrt:9" {
+		t.Fatalf("hits=%#v err=%v", hits, err)
 	}
 }
 

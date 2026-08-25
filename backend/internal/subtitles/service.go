@@ -61,17 +61,21 @@ func (s *Service) searchAssrt(ctx context.Context, itemID string) ([]emby.Remote
 	if err != nil {
 		return nil, err
 	}
-	seen := make(map[int]struct{})
-	results := make([]emby.RemoteSubtitle, 0, 16)
-	for _, query := range assrt.Queries(assrt.SearchTarget{
+	search := assrt.SearchTarget{
 		Title: target.Name, SeriesName: target.SeriesName, OriginalTitle: target.OriginalTitle,
 		FileName: target.Path, Year: target.Year, Season: target.Season, Episode: target.Episode, Type: target.Type,
-	}) {
+	}
+	seen := make(map[int]struct{})
+	results := make([]emby.RemoteSubtitle, 0, 16)
+	for _, query := range assrt.Queries(search) {
 		hits, err := s.assrt.Search(ctx, query.Text, query.FileName)
 		if err != nil {
 			return nil, err
 		}
 		for _, hit := range hits {
+			if !assrt.Relevant(hit, search) {
+				continue
+			}
 			if _, exists := seen[hit.ID]; exists {
 				continue
 			}
