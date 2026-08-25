@@ -13,5 +13,8 @@ class LibraryPagingTest {
         assertEquals(0, nextLibraryPage(current = 1, delta = -1, total = 25))
         assertNull(nextLibraryPage(current = 0, delta = -1, total = 25))
         assertNull(nextLibraryPage(current = 1, delta = 1, total = 25))
+        assertEquals(true, libraryHasMore(itemCount = 24, total = 25, searching = false))
+        assertEquals(false, libraryHasMore(itemCount = 25, total = 25, searching = false))
+        assertEquals(false, libraryHasMore(itemCount = 8, total = 25, searching = true))
     }
 }

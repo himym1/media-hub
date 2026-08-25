@@ -1,20 +1,20 @@
 package com.mediahub.android.feature.library
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,10 +22,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ArrowLeft
@@ -38,15 +39,13 @@ import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.X
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
+import com.mediahub.android.app.LocalTwoPane
 import com.mediahub.android.core.designsystem.BadgeVariant
 import com.mediahub.android.core.designsystem.MediaHubBadge
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubConfirmDialog
-import com.mediahub.android.core.designsystem.MediaHubDestructiveButton
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubListDivider
@@ -54,6 +53,8 @@ import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
+import com.mediahub.android.core.designsystem.MediaHubTextButton
+import com.mediahub.android.core.designsystem.MediaHubTopAppBar
 import com.mediahub.android.core.image.PosterLoader
 import com.mediahub.android.core.network.EmbyItemDetail
 import com.mediahub.android.core.network.EmbyItem
@@ -69,103 +70,103 @@ internal fun LibraryDetailScreen(
     actions: LibraryDetailActions,
     posterLoader: PosterLoader,
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 36.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MediaHubIconButton(Lucide.ArrowLeft, "返回媒体列表", actions.onClose)
-                MediaHubText(
-                    text = "媒体详情",
-                    modifier = Modifier.weight(1f).padding(start = 4.dp),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
+    val twoPane = LocalTwoPane.current
+    Column(modifier = Modifier.fillMaxSize()) {
+        MediaHubTopAppBar(
+            title = state.item?.item?.name ?: "媒体详情",
+            navigationIcon = {
+                if (!twoPane) {
+                    MediaHubIconButton(Lucide.ArrowLeft, "返回媒体列表", actions.onClose)
+                }
+            },
+            actions = {
                 MediaHubIconButton(
                     imageVector = Lucide.RefreshCw,
                     contentDescription = "刷新媒体元数据",
                     enabled = !state.refreshing,
                     onClick = actions.onRefresh,
                 )
-            }
-            state.errorMessage?.let { DetailErrorLine(it) }
+            },
+        )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            state.errorMessage?.let { item { DetailErrorLine(it) } }
             state.actionMessage?.let {
-                MediaHubText(text = it, color = MediaHubColors.Source, fontSize = 12.sp)
+                item { MediaHubText(text = it, color = MediaHubColors.Source, fontSize = 12.sp) }
             }
-        }
-        if (state.loading) {
-            item { MediaHubText(text = "正在读取媒体详情…", color = MediaHubColors.TextMuted, fontSize = 13.sp) }
-        }
-        state.item?.let { detail ->
-            val fallback = PlaybackFallback(detail.appUrl, detail.externalUrl)
-            item { DetailIdentity(detail, posterLoader) }
-            if (detail.item.type == "Series") {
-                item {
-                    EpisodePicker(
-                        episodes = state.episodes,
-                        loading = state.loadingEpisodes,
-                        errorMessage = state.episodesError,
-                        seriesTitle = detail.item.name,
-                        onPlay = { episode ->
-                            actions.onPlayItem(
-                                episode.item,
-                                PlaybackFallback(episode.appUrl, episode.externalUrl),
+            if (state.loading) {
+                item { MediaHubText(text = "正在读取媒体详情…", color = MediaHubColors.TextMuted, fontSize = 13.sp) }
+            }
+            state.item?.let { detail ->
+                val fallback = PlaybackFallback(detail.appUrl, detail.externalUrl)
+                item { DetailIdentity(detail, posterLoader) }
+                if (detail.item.type == "Series") {
+                    item {
+                        EpisodePicker(
+                            episodes = state.episodes,
+                            loading = state.loadingEpisodes,
+                            errorMessage = state.episodesError,
+                            seriesTitle = detail.item.name,
+                            onPlay = { episode ->
+                                actions.onPlayItem(
+                                    episode.item,
+                                    PlaybackFallback(episode.appUrl, episode.externalUrl),
+                                )
+                            },
+                            onSearchSubtitles = { episode ->
+                                actions.onSearchSubtitles(episode.item.id, episodeLabel(episode, detail.item.name))
+                            },
+                        )
+                    }
+                } else {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            MediaHubButton(
+                                label = playbackActionLabel(detail.item),
+                                icon = Lucide.Play,
+                                onClick = { actions.onPlayItem(detail.item, fallback) },
+                                modifier = Modifier.weight(1f),
                             )
-                        },
-                        onSearchSubtitles = { episode ->
-                            actions.onSearchSubtitles(episode.item.id, episodeLabel(episode, detail.item.name))
-                        },
-                    )
+                            MediaHubSecondaryButton(
+                                label = if (subtitleState.searching && subtitleState.targetId == detail.item.id) {
+                                    "搜索中…"
+                                } else {
+                                    "字幕"
+                                },
+                                icon = Lucide.Captions,
+                                enabled = !subtitleState.searching && subtitleState.downloadingId == null && !state.refreshing,
+                                onClick = { actions.onSearchSubtitles(detail.item.id, detail.item.name) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
                 }
-            } else {
+                if (subtitleState.targetId != null || subtitleState.remoteSubtitles.isNotEmpty() || subtitleState.searching) {
+                    item {
+                        RemoteSubtitlePanel(
+                            state = subtitleState,
+                            onDownload = actions.onDownloadSubtitle,
+                            onClear = actions.onClearSubtitles,
+                        )
+                    }
+                }
                 item {
-                    MediaHubButton(
-                        label = playbackActionLabel(detail.item),
-                        icon = Lucide.Play,
-                        onClick = { actions.onPlayItem(detail.item, fallback) },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                    )
-                }
-                item {
-                    MediaHubSecondaryButton(
-                        label = if (subtitleState.searching && subtitleState.targetId == detail.item.id) {
-                            "正在搜索字幕…"
-                        } else {
-                            "搜中文字幕"
-                        },
-                        icon = Lucide.Captions,
-                        enabled = !subtitleState.searching && subtitleState.downloadingId == null && !state.refreshing,
-                        onClick = { actions.onSearchSubtitles(detail.item.id, detail.item.name) },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    )
-                }
-            }
-            if (subtitleState.targetId != null || subtitleState.remoteSubtitles.isNotEmpty() || subtitleState.searching) {
-                item {
-                    RemoteSubtitlePanel(
-                        state = subtitleState,
-                        onDownload = actions.onDownloadSubtitle,
-                        onClear = actions.onClearSubtitles,
-                    )
-                }
-            }
-            item {
-                MediaHubSmallTitle(text = "剧情简介")
-                MediaHubCard(insideMargin = PaddingValues(16.dp)) {
+                    MediaHubSmallTitle(text = "剧情简介")
                     MediaHubText(
                         text = detail.overview ?: "暂未提供简介。",
                         color = MediaHubColors.TextSecondary,
-                        fontSize = 13.sp,
+                        fontSize = 14.sp,
                     )
                 }
+                item { TechnicalDetails(detail) }
+                item { DeleteActions(state, actions) }
             }
-            item { TechnicalDetails(detail) }
-            item { DeleteActions(state, actions) }
         }
     }
 }
@@ -222,25 +223,17 @@ private fun RemoteSubtitleRow(
         if (subtitle.isHashMatch) "精确匹配" else null,
         if (subtitle.downloadCount > 0) "${subtitle.downloadCount} 次下载" else null,
     ).joinToString(" · ")
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            MediaHubText(text = subtitle.name, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            if (meta.isNotBlank()) {
-                MediaHubText(text = meta, color = MediaHubColors.TextMuted, fontSize = 12.sp)
-            }
-        }
-        MediaHubSecondaryButton(
-            label = if (downloading) "下载中…" else "下载",
-            enabled = enabled,
-            onClick = onDownload,
-        )
-    }
+    MediaHubPreferenceRow(
+        title = subtitle.name,
+        summary = meta.takeIf { it.isNotBlank() },
+        end = {
+            MediaHubTextButton(
+                label = if (downloading) "下载中…" else "下载",
+                enabled = enabled,
+                onClick = onDownload,
+            )
+        },
+    )
 }
 
 @Composable
@@ -252,61 +245,54 @@ private fun DetailIdentity(detail: EmbyItemDetail, posterLoader: PosterLoader) {
         detail.runtimeMinutes?.takeIf { it > 0 }?.let { "$it 分钟" },
     )
     val rating = detail.communityRating?.takeIf { it > 0.0 }
-    MediaHubCard(insideMargin = PaddingValues(20.dp)) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .width(112.dp)
+                .clip(RoundedCornerShape(14.dp)),
         ) {
-            Box(
-                modifier = Modifier
-                    .width(150.dp)
-                    .clip(RoundedCornerShape(12.dp)),
-            ) {
-                EmbyPoster(
-                    itemId = detail.item.id,
-                    loader = posterLoader,
-                    contentDescription = "${detail.item.name} 封面",
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            EmbyPoster(
+                itemId = detail.item.id,
+                loader = posterLoader,
+                contentDescription = "${detail.item.name} 封面",
+                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             MediaHubText(
                 text = detail.item.name,
-                fontSize = 21.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = MediaHubColors.TextStrong,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
-            if (facts.isNotEmpty() || rating != null) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (rating != null) {
-                        MediaHubBadge(
-                            text = "★ %.1f".format(rating),
-                            variant = BadgeVariant.Warning,
-                        )
-                    }
-                    facts.forEach { fact ->
-                        MediaHubBadge(
-                            text = fact,
-                            variant = BadgeVariant.Neutral,
-                        )
-                    }
-                }
+            if (facts.isNotEmpty()) {
+                MediaHubText(
+                    text = facts.joinToString(" · "),
+                    color = MediaHubColors.TextMuted,
+                    fontSize = 13.sp,
+                )
+            }
+            if (rating != null) {
+                MediaHubBadge(
+                    text = "★ %.1f".format(rating),
+                    variant = BadgeVariant.Warning,
+                )
             }
             if (genres.isNotEmpty()) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    genres.take(3).forEach { genre ->
-                        MediaHubBadge(
-                            text = genre,
-                            variant = BadgeVariant.Primary,
-                        )
-                    }
-                }
+                MediaHubText(
+                    text = genres.take(3).joinToString(" · "),
+                    color = MediaHubColors.TextSecondary,
+                    fontSize = 12.sp,
+                )
             }
         }
     }
@@ -316,9 +302,10 @@ private fun DetailIdentity(detail: EmbyItemDetail, posterLoader: PosterLoader) {
 private fun DeleteActions(state: LibraryDetailState, actions: LibraryDetailActions) {
     val preview = state.deletePreview
     Column(modifier = Modifier.fillMaxWidth()) {
-        MediaHubDestructiveButton(
+        MediaHubTextButton(
             label = if (state.deleting) "正在删除…" else "从 Emby 删除",
             icon = Lucide.Trash2,
+            destructive = true,
             enabled = !state.deleting && !state.refreshing,
             onClick = actions.onDelete,
             modifier = Modifier.fillMaxWidth(),
@@ -344,22 +331,20 @@ private fun DeleteActions(state: LibraryDetailState, actions: LibraryDetailActio
 private fun TechnicalDetails(detail: EmbyItemDetail) {
     var expanded by remember(detail.item.id) { mutableStateOf(false) }
     MediaHubCard {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .semantics { stateDescription = if (expanded) "已展开" else "已收起" }
-                .clickable(role = Role.Button) { expanded = !expanded }
-                .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MediaHubText(text = "媒体信息", modifier = Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            MediaHubIcon(
-                if (expanded) Lucide.ChevronUp else Lucide.ChevronDown,
-                contentDescription = null,
-                modifier = Modifier.size(17.dp),
-            )
-        }
+        MediaHubPreferenceRow(
+            title = "媒体信息",
+            summary = if (expanded) null else "原名、TMDB 与媒体源",
+            modifier = Modifier.semantics { stateDescription = if (expanded) "已展开" else "已收起" },
+            onClick = { expanded = !expanded },
+            end = {
+                MediaHubIcon(
+                    if (expanded) Lucide.ChevronUp else Lucide.ChevronDown,
+                    contentDescription = if (expanded) "收起" else "展开",
+                    tint = MediaHubColors.TextMuted,
+                    modifier = Modifier.size(18.dp),
+                )
+            },
+        )
         if (expanded) {
             MediaHubListDivider()
             visibleOriginalTitle(detail)?.let { DetailTechnicalLine("原名", it) }

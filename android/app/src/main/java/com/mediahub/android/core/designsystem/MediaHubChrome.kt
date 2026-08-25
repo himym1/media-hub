@@ -1,6 +1,7 @@
 package com.mediahub.android.core.designsystem
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,14 +9,18 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
@@ -26,6 +31,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -33,10 +41,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.EllipsisVertical
 import com.composables.icons.lucide.Lucide
 
 data class MediaHubNavItem(
@@ -83,6 +96,8 @@ fun MediaHubTopAppBar(
                     text = title,
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 if (subtitle.isNotBlank()) {
                     Text(
@@ -121,6 +136,7 @@ fun MediaHubNavigationBar(
             NavigationBarItem(
                 selected = selected,
                 onClick = { onSelected(item.key) },
+                modifier = Modifier.semantics { this.contentDescription = item.label },
                 icon = {
                     MediaHubIcon(
                         imageVector = item.icon,
@@ -163,6 +179,7 @@ fun MediaHubNavigationRail(
             NavigationRailItem(
                 selected = selected,
                 onClick = { onSelected(item.key) },
+                modifier = Modifier.semantics { this.contentDescription = item.label },
                 icon = {
                     MediaHubIcon(
                         imageVector = item.icon,
@@ -183,6 +200,60 @@ fun MediaHubNavigationRail(
                     )
                 },
             )
+        }
+    }
+}
+
+@Composable
+fun MediaHubTabRow(
+    options: List<Pair<String, String>>,
+    selected: String,
+    onSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (options.isEmpty()) return
+    val selectedIndex = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+    val tabs: @Composable () -> Unit = {
+        options.forEach { (value, label) ->
+            val active = value == selected
+            Tab(
+                selected = active,
+                onClick = { onSelected(value) },
+                modifier = Modifier.heightIn(min = 48.dp),
+                text = {
+                    Text(
+                        text = label,
+                        fontSize = 14.sp,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                selectedContentColor = MaterialTheme.colorScheme.primary,
+                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+    if (options.size <= 4) {
+        TabRow(
+            selectedTabIndex = selectedIndex,
+            modifier = modifier.fillMaxWidth(),
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+            divider = {},
+        ) {
+            tabs()
+        }
+    } else {
+        ScrollableTabRow(
+            selectedTabIndex = selectedIndex,
+            modifier = modifier.fillMaxWidth(),
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+            edgePadding = 0.dp,
+            divider = {},
+        ) {
+            tabs()
         }
     }
 }
@@ -244,6 +315,9 @@ fun MediaHubPreferenceRow(
     modifier: Modifier = Modifier,
     summary: String? = null,
     enabled: Boolean = true,
+    selected: Boolean = false,
+    role: Role? = null,
+    contentDescription: String? = null,
     onClick: (() -> Unit)? = null,
     start: (@Composable () -> Unit)? = null,
     end: (@Composable RowScope.() -> Unit)? = null,
@@ -259,10 +333,22 @@ fun MediaHubPreferenceRow(
         modifier = modifier
             .heightIn(min = 48.dp)
             .then(
-                if (onClick == null) {
+                if (contentDescription == null) {
                     Modifier
                 } else {
-                    Modifier.clickable(enabled = enabled, onClick = onClick)
+                    Modifier.semantics { this.contentDescription = contentDescription }
+                },
+            )
+            .then(
+                when {
+                    onClick == null -> Modifier
+                    role != null -> Modifier.selectable(
+                        selected = selected,
+                        enabled = enabled,
+                        role = role,
+                        onClick = onClick,
+                    )
+                    else -> Modifier.clickable(enabled = enabled, onClick = onClick)
                 },
             ),
         supportingContent = summary?.let {
@@ -287,8 +373,58 @@ fun MediaHubPreferenceRow(
                 )
             }
         },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        colors = ListItemDefaults.colors(
+            containerColor = if (selected) MediaHubColors.SurfaceSelected else Color.Transparent,
+        ),
     )
+}
+
+data class MediaHubMenuAction(
+    val label: String,
+    val enabled: Boolean = true,
+    val onClick: () -> Unit,
+)
+
+@Composable
+fun MediaHubOverflowMenu(
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    contentDescription: String,
+    actions: List<MediaHubMenuAction>,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        MediaHubIconButton(
+            imageVector = Lucide.EllipsisVertical,
+            contentDescription = contentDescription,
+            onClick = { onExpandedChange(!expanded) },
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { onExpandedChange(false) },
+        ) {
+            actions.forEach { action ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = action.label,
+                            fontSize = 15.sp,
+                            color = if (action.enabled) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MediaHubColors.TextMuted
+                            },
+                        )
+                    },
+                    onClick = {
+                        onExpandedChange(false)
+                        action.onClick()
+                    },
+                    enabled = action.enabled,
+                )
+            }
+        }
+    }
 }
 
 @Composable

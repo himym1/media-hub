@@ -43,11 +43,13 @@ import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubListDivider
 import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
+import com.mediahub.android.core.designsystem.MediaHubTextButton
 import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubSwitchRow
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextField
+import com.mediahub.android.core.designsystem.MediaHubTopAppBar
 import com.mediahub.android.core.network.SubscriptionRun
 
 internal data class SubscriptionEditorActions(
@@ -76,26 +78,22 @@ internal fun SubscriptionEditorScreen(
     var confirmingDelete by remember(state.selectedId) { mutableStateOf(false) }
     var sourcesExpanded by remember(state.selectedId) { mutableStateOf(false) }
     var advancedExpanded by remember(state.selectedId) { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxSize()) {
+        MediaHubTopAppBar(
+            title = if (existing) "编辑订阅" else "新建订阅",
+            subtitle = "身份、版本偏好与调度",
+            navigationIcon = {
+                MediaHubIconButton(
+                    Lucide.ArrowLeft, "返回订阅列表", onBack, enabled = actions.backEnabled,
+                )
+            },
+        )
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MediaHubIconButton(
-                    Lucide.ArrowLeft, "返回订阅列表", onBack, enabled = actions.backEnabled,
-                )
-                Column(Modifier.weight(1f)) {
-                    MediaHubText(text = if (existing) "编辑订阅" else "新建订阅", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
-                    MediaHubText(text = "身份、版本偏好与调度", color = MediaHubColors.TextMuted, fontSize = 12.sp)
-                }
-            }
-            state.errorMessage?.let { ErrorLine(it) }
-        }
+        state.errorMessage?.let { item { ErrorLine(it) } }
         item { MediaHubSmallTitle(text = "媒体身份") }
         item {
             MediaHubCard(insideMargin = PaddingValues(16.dp)) {
@@ -235,7 +233,7 @@ internal fun SubscriptionEditorScreen(
                         modifier = Modifier.weight(1f),
                     )
                     MediaHubSecondaryButton(
-                        label = "立即运行",
+                        label = "运行",
                         icon = Lucide.Play,
                         enabled = !state.saving,
                         onClick = onRun,
@@ -244,9 +242,10 @@ internal fun SubscriptionEditorScreen(
                 }
             }
             item {
-                MediaHubSecondaryButton(
+                MediaHubTextButton(
                     label = "删除订阅",
                     icon = Lucide.Trash2,
+                    destructive = true,
                     onClick = { confirmingDelete = true },
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -278,6 +277,7 @@ internal fun SubscriptionEditorScreen(
                 }
             }
         }
+    }
     }
 }
 

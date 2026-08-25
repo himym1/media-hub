@@ -49,12 +49,10 @@ import com.mediahub.android.core.network.WorkflowTargetSettings
 internal fun ProviderSettingsPanel(
     settings: ProviderSettings?,
     draft: ProviderSettingsUpdate?,
-    expanded: Boolean,
     saving: Boolean,
     saved: Boolean,
     testing: Boolean,
     tested: Boolean,
-    onToggle: () -> Unit,
     onDraftChange: (ProviderSettingsUpdate) -> Unit,
     onSave: () -> Unit,
     onTest: () -> Unit,
@@ -64,13 +62,6 @@ internal fun ProviderSettingsPanel(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         MediaHubSmallTitle(text = "服务设置")
-        MediaHubButton(
-            label = if (expanded) "收起设置" else "编辑服务设置",
-            icon = if (expanded) Lucide.ChevronUp else Lucide.ChevronDown,
-            onClick = onToggle,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        if (!expanded) return@Column
         if (settings == null || draft == null) {
             MediaHubText("正在读取加密设置", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             return@Column

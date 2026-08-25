@@ -43,9 +43,15 @@ Visual density: 6 / 10
 - Search remains the first screen. Idle discovery uses a compact card strip; result rows sit in one grouped card and selected state carries the emphasis.
 - The workspace uses Material 3 Scaffold, TopAppBar, and NavigationBar. Main destinations show global top/bottom navigation; system and detail routes replace the bottom bar instead of stacking another toolbar.
 - Services and Operations form one system layer with explicit back navigation. Settings use SmallTitle plus grouped preference rows. Operations shows one of 115 files, local upload, or archive organization at a time.
-- Library rows use stable 2:3 posters; movie details expose Media3 as the primary action, and series details require an episode selection.
+- Library collections switch with a tab row (电影 / 电视剧), not a row of chips or filled buttons.
+- Library search is a docked pill field. The grid appends the next Emby page on scroll instead of website-style prev/next controls.
+- Library rows use stable 2:3 posters. Movie details use a TopAppBar, horizontal poster + facts, and one play/subtitle action row. Series details require episode selection. Destructive delete is a text action, not a stacked brick.
+- Exclusive in-screen destinations (discovery categories, transfer current/archived, system sections) use tab rows. Filter chips stay compact pills for many additive options.
+- Service health opens a `MediaHubDialog`. Close and refresh controls stay at 48 dp; poster chrome never uses text smaller than 12 sp.
 - Transfer status and subscription editing are independent detail routes with one toolbar and no bottom navigation.
-- Secondary subscription commands live behind one overflow control so 320 dp widths and large text retain room for the page title.
+- Secondary subscription commands live behind a `DropdownMenu` overflow so 320 dp widths and large text retain room for the page title.
+- Empty states are unframed icon + title + message, not a nested card.
+- Provider settings open directly on the 服务配置 tab; do not hide them behind an extra expand row.
 - Long-running task state is shown as an unframed vertical timeline with expandable evidence.
 - Touch targets are at least 48 dp.
 - System back, predictive back, edge-to-edge, dynamic type, and dark mode are supported.
@@ -104,6 +110,11 @@ MediaHubPreferenceRow
 MediaHubSwitchRow
 MediaHubCheckboxRow
 MediaHubFilterChip
+MediaHubSegmentedControl
+MediaHubTabRow
+MediaHubTextButton
+MediaHubOverflowMenu
+MediaHubDialog
 MediaHubEmptyState
 MediaHubSmallTitle
 ```

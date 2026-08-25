@@ -56,7 +56,8 @@ import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextField
-import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
+import com.mediahub.android.core.designsystem.MediaHubTabRow
+import com.mediahub.android.core.designsystem.MediaHubTextButton
 import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.OperationalStatistics
 
@@ -80,7 +81,6 @@ internal fun ServicesRoute(
     ServicesScreen(
         uiState = uiState,
         onRefresh = viewModel::refresh,
-        onToggleSettings = viewModel::toggleSettings,
         onSettingsDraftChange = viewModel::setSettingsDraft,
         onSaveSettings = viewModel::saveSettings,
         onTestWeCom = viewModel::testWeComNotification,
@@ -109,7 +109,6 @@ internal fun ServicesRoute(
 internal fun ServicesScreen(
     uiState: ServicesUiState,
     onRefresh: () -> Unit,
-    onToggleSettings: () -> Unit,
     onSettingsDraftChange: (com.mediahub.android.core.network.ProviderSettingsUpdate) -> Unit,
     onSaveSettings: () -> Unit,
     onTestWeCom: () -> Unit,
@@ -133,7 +132,6 @@ internal fun ServicesScreen(
             onSectionChanged = { section.value = it },
             uiState = uiState,
             onRefresh = onRefresh,
-            onToggleSettings = onToggleSettings,
             onSettingsDraftChange = onSettingsDraftChange,
             onSaveSettings = onSaveSettings,
             onTestWeCom = onTestWeCom,
@@ -157,11 +155,11 @@ internal fun ServicesScreen(
             .fillMaxSize()
             .padding(horizontal = 12.dp),
     ) {
-        MediaHubSegmentedControl(
+        MediaHubTabRow(
             options = serviceSectionOptions,
             selected = section.value,
             onSelected = { section.value = it },
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp),
         )
         uiState.errorMessage?.let { message ->
             Row(
@@ -182,7 +180,6 @@ internal fun ServicesScreen(
                 section = section.value,
                 uiState = uiState,
                 onRefresh = onRefresh,
-                onToggleSettings = onToggleSettings,
                 onSettingsDraftChange = onSettingsDraftChange,
                 onSaveSettings = onSaveSettings,
                 onTestWeCom = onTestWeCom,
@@ -209,7 +206,6 @@ private fun ServicesTwoPane(
     onSectionChanged: (String) -> Unit,
     uiState: ServicesUiState,
     onRefresh: () -> Unit,
-    onToggleSettings: () -> Unit,
     onSettingsDraftChange: (com.mediahub.android.core.network.ProviderSettingsUpdate) -> Unit,
     onSaveSettings: () -> Unit,
     onTestWeCom: () -> Unit,
@@ -276,7 +272,6 @@ private fun ServicesTwoPane(
                         section = section,
                         uiState = uiState,
                         onRefresh = onRefresh,
-                        onToggleSettings = onToggleSettings,
                         onSettingsDraftChange = onSettingsDraftChange,
                         onSaveSettings = onSaveSettings,
                         onTestWeCom = onTestWeCom,
@@ -303,7 +298,6 @@ private fun LazyListScope.servicesSectionItems(
     section: String,
     uiState: ServicesUiState,
     onRefresh: () -> Unit,
-    onToggleSettings: () -> Unit,
     onSettingsDraftChange: (com.mediahub.android.core.network.ProviderSettingsUpdate) -> Unit,
     onSaveSettings: () -> Unit,
     onTestWeCom: () -> Unit,
@@ -358,8 +352,8 @@ private fun LazyListScope.servicesSectionItems(
                                     },
                                     onClick = onSyncSTRM,
                                     end = {
-                                        MediaHubButton(
-                                            label = if (uiState.syncingSTRM || status.running) "正在同步" else "立即同步",
+                                        MediaHubTextButton(
+                                            label = if (uiState.syncingSTRM || status.running) "正在同步" else "同步",
                                             enabled = !uiState.syncingSTRM && !status.running,
                                             onClick = onSyncSTRM,
                                         )
@@ -382,8 +376,8 @@ private fun LazyListScope.servicesSectionItems(
                                         summary = checkInSummary(item.state, item.message),
                                         onClick = { onRetryCheckIn(item.sourceId) },
                                         end = {
-                                            MediaHubButton(
-                                                label = if (uiState.retryingCheckInId == item.sourceId) "正在签到" else "立即签到",
+                                            MediaHubTextButton(
+                                                label = if (uiState.retryingCheckInId == item.sourceId) "正在签到" else "签到",
                                                 enabled = item.state != "running" && uiState.retryingCheckInId == null,
                                                 onClick = { onRetryCheckIn(item.sourceId) },
                                             )
@@ -436,12 +430,10 @@ private fun LazyListScope.servicesSectionItems(
                         ProviderSettingsPanel(
                             settings = uiState.providerSettings,
                             draft = uiState.settingsDraft,
-                            expanded = uiState.settingsExpanded,
                             saving = uiState.savingSettings,
                             saved = uiState.settingsSaved,
                             testing = uiState.testingWeCom,
                             tested = uiState.weComTested,
-                            onToggle = onToggleSettings,
                             onDraftChange = onSettingsDraftChange,
                             onSave = onSaveSettings,
                             onTest = onTestWeCom,
@@ -561,7 +553,7 @@ private fun LazyListScope.servicesSectionItems(
 
 @Composable
 private fun OperationalSummary(statistics: OperationalStatistics) {
-    MediaHubSmallTitle(text = "运营摘要")
+    MediaHubSmallTitle(text = "概况")
     MediaHubCard {
         MediaHubPreferenceRow(title = "进行中", summary = "${statistics.transfersActive}")
         MediaHubListDivider()

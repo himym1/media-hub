@@ -1,7 +1,6 @@
 package com.mediahub.android.feature.search
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -45,7 +43,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.composables.icons.lucide.BellPlus
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Film
@@ -54,29 +51,32 @@ import com.composables.icons.lucide.LayoutGrid
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
-import com.composables.icons.lucide.Settings2
 import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.Star
 import com.composables.icons.lucide.Tv
 import com.composables.icons.lucide.Wifi
-import com.composables.icons.lucide.X
 import com.mediahub.android.app.LocalTwoPane
 import com.mediahub.android.core.designsystem.BadgeVariant
 import com.mediahub.android.core.designsystem.MediaHubBadge
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
+import com.mediahub.android.core.designsystem.MediaHubDialog
+import com.mediahub.android.core.designsystem.MediaHubEmptyState
 import com.mediahub.android.core.designsystem.MediaHubFilterChip
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubListDetail
 import com.mediahub.android.core.designsystem.MediaHubListDivider
+import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSearchBar
 import com.mediahub.android.core.designsystem.MediaHubSearchField
 import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubShimmerBox
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
+import com.mediahub.android.core.designsystem.MediaHubTabRow
 import com.mediahub.android.core.designsystem.MediaHubText
+import com.mediahub.android.core.designsystem.MediaHubTextButton
 import com.mediahub.android.core.image.RemotePoster
 import com.mediahub.android.core.network.DiscoveryGenre
 import com.mediahub.android.core.network.DiscoveryItem
@@ -166,6 +166,7 @@ internal fun SearchScreen(
             onRecommendationSelected = onRecommendationSelected,
             onShuffleRecommendations = onShuffleRecommendations,
             onGenreSelected = onGenreSelected,
+            onCategorySelected = onCategorySelected,
             onOpenServices = onOpenServices,
             onOpenHealthDetail = { showHealthDialog = true },
             onTransfer = onTransfer,
@@ -274,7 +275,7 @@ internal fun SearchScreen(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        MediaHubButton(
+                        MediaHubSecondaryButton(
                             label = "订阅",
                             icon = Lucide.BellPlus,
                             enabled = selectedCandidate.tmdbId != null && selectedCandidate.transferState != "identity_required",
@@ -333,8 +334,8 @@ internal fun SearchScreen(
                     }
 
                     // 3. Category Filter Chips
-                    item(key = "category-chips") {
-                        CategoryFilterChips(
+                    item(key = "category-tabs") {
+                        CategoryTabs(
                             selectedCategory = uiState.selectedCategory,
                             onCategorySelected = onCategorySelected,
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -360,7 +361,7 @@ internal fun SearchScreen(
                         item(key = "genre-browse") {
                             DiscoveryGallerySection(
                                 title = uiState.selectedGenreName?.let { "${it}片" } ?: "类型精选",
-                                subtitle = if (uiState.loadingGenre) "正在加载…" else "点选后直接列出可转存版本",
+                                subtitle = if (uiState.loadingGenre) "正在加载…" else "",
                                 icon = Lucide.LayoutGrid,
                                 items = uiState.genreItems,
                                 onSelect = onTrendingSelected,
@@ -374,7 +375,7 @@ internal fun SearchScreen(
                         item(key = "top-rated-movies") {
                             DiscoveryGallerySection(
                                 title = "高分电影",
-                                subtitle = "TMDB 评分靠前 · 点选直接列出可转存版本",
+                                subtitle = "TMDB 高分",
                                 icon = Lucide.Star,
                                 items = uiState.topRatedMovies,
                                 onSelect = onTrendingSelected,
@@ -388,7 +389,7 @@ internal fun SearchScreen(
                         item(key = "popular-series") {
                             DiscoveryGallerySection(
                                 title = "热门剧集",
-                                subtitle = "TMDB 热度靠前 · 点选直接列出可转存版本",
+                                subtitle = "TMDB 热度",
                                 icon = Lucide.Tv,
                                 items = uiState.popularSeries,
                                 onSelect = onTrendingSelected,
@@ -402,7 +403,7 @@ internal fun SearchScreen(
                             item(key = "library-recs") {
                                 DiscoveryGallerySection(
                                     title = "猜你喜欢",
-                                    subtitle = uiState.libraryRecommendationSeed?.let { "基于《$it》 · 点选直接列出可转存版本" } ?: "点选后直接列出可转存版本",
+                                    subtitle = uiState.libraryRecommendationSeed?.let { "基于《$it》" } ?: "",
                                     icon = Lucide.Sparkles,
                                     items = uiState.libraryRecommendations,
                                     onSelect = onRecommendationSelected,
@@ -413,29 +414,20 @@ internal fun SearchScreen(
                             }
                         } else if (uiState.selectedCategory == "recommended") {
                             item(key = "empty-recs") {
-                                MediaHubCard(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    insideMargin = PaddingValues(20.dp),
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
-                                    Column(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        MediaHubIcon(Lucide.Sparkles, contentDescription = null, tint = MediaHubColors.Accent, modifier = Modifier.size(28.dp))
-                                        MediaHubText(text = "正在准备猜你喜欢内容", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = MediaHubColors.TextStrong)
-                                        MediaHubText(
-                                            text = "在 Emby 媒体库收录影片或点击下方刷新，系统将自动生成深度关联推荐",
-                                            fontSize = 12.sp,
-                                            color = MediaHubColors.TextMuted,
-                                        )
-                                        MediaHubButton(
-                                            label = "刷新推荐",
-                                            icon = Lucide.RefreshCw,
-                                            onClick = onRefreshOverview,
-                                            modifier = Modifier.padding(top = 4.dp),
-                                        )
-                                    }
+                                    MediaHubEmptyState(
+                                        title = "还没有推荐",
+                                        message = "在片库播放几部影片，或点刷新后会出现",
+                                        icon = Lucide.Sparkles,
+                                    )
+                                    MediaHubTextButton(
+                                        label = "刷新推荐",
+                                        icon = Lucide.RefreshCw,
+                                        onClick = onRefreshOverview,
+                                    )
                                 }
                             }
                         }
@@ -447,8 +439,8 @@ internal fun SearchScreen(
                     ) {
                         item(key = "trending-movies") {
                             DiscoveryGallerySection(
-                                title = "院线热映",
-                                subtitle = "点选后直接列出可转存版本",
+                                title = "热门电影",
+                                subtitle = "",
                                 icon = Lucide.Film,
                                 items = uiState.trendingMovies,
                                 onSelect = onTrendingSelected,
@@ -463,7 +455,7 @@ internal fun SearchScreen(
                         item(key = "trending-series") {
                             DiscoveryGallerySection(
                                 title = "连载热播",
-                                subtitle = "点选后直接列出可转存版本",
+                                subtitle = "",
                                 icon = Lucide.Tv,
                                 items = uiState.trendingSeries,
                                 onSelect = onTrendingSelected,
@@ -475,8 +467,8 @@ internal fun SearchScreen(
                     if (uiState.selectedCategory == "all" && uiState.trending.size > 5) {
                         item(key = "more-trending") {
                             DiscoveryGallerySection(
-                                title = "本周爆款榜",
-                                subtitle = "点选后直接列出可转存版本",
+                                title = "本周热门",
+                                subtitle = "",
                                 icon = Lucide.Flame,
                                 items = uiState.trending.drop(5),
                                 onSelect = onTrendingSelected,
@@ -489,9 +481,6 @@ internal fun SearchScreen(
     }
 }
 
-/**
- * Dedicated System Health Details Modal Dialog
- */
 @Composable
 private fun SystemHealthDetailDialog(
     integrations: List<IntegrationHealth>,
@@ -500,131 +489,43 @@ private fun SystemHealthDetailDialog(
     onOpenServices: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        MediaHubCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp),
-            insideMargin = PaddingValues(20.dp),
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column {
-                        MediaHubText(
-                            text = "系统服务集成状态",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MediaHubColors.TextStrong,
-                        )
-                        MediaHubText(
-                            text = "核心驱动与媒体控制平面健康检查",
-                            fontSize = 12.sp,
-                            color = MediaHubColors.TextMuted,
-                            modifier = Modifier.padding(top = 2.dp),
-                        )
-                    }
-                    MediaHubIconButton(
-                        imageVector = Lucide.X,
-                        contentDescription = "关闭",
-                        onClick = onDismiss,
-                        modifier = Modifier.size(32.dp),
-                    )
+    MediaHubDialog(
+        title = "服务状态",
+        onDismiss = onDismiss,
+        confirmLabel = "服务设置",
+        onConfirm = onOpenServices,
+    ) {
+        if (integrations.isEmpty()) {
+            MediaHubText(
+                text = "正在读取服务状态…",
+                fontSize = 13.sp,
+                color = MediaHubColors.TextMuted,
+                modifier = Modifier.padding(vertical = 12.dp),
+            )
+        } else {
+            integrations.forEachIndexed { index, item ->
+                if (index > 0) MediaHubListDivider()
+                val (badgeLabel, badgeVariant) = when (item.status) {
+                    "healthy" -> "正常" to BadgeVariant.Success
+                    "unconfigured" -> "未配置" to BadgeVariant.Warning
+                    "unauthorized" -> "鉴权失效" to BadgeVariant.Error
+                    "degraded" -> "异常" to BadgeVariant.Error
+                    else -> item.status to BadgeVariant.Neutral
                 }
-
-                MediaHubListDivider()
-
-                // Integration list
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (integrations.isEmpty()) {
-                        MediaHubText(
-                            text = "正在检测系统服务健康状态…",
-                            fontSize = 13.sp,
-                            color = MediaHubColors.TextMuted,
-                            modifier = Modifier.padding(vertical = 12.dp),
-                        )
-                    } else {
-                        integrations.forEach { item ->
-                            val isHealthy = item.status == "healthy"
-                            val (badgeLabel, badgeVariant) = when (item.status) {
-                                "healthy" -> "正常" to BadgeVariant.Success
-                                "unconfigured" -> "未配置" to BadgeVariant.Warning
-                                "unauthorized" -> "鉴权失效" to BadgeVariant.Error
-                                "degraded" -> "异常" to BadgeVariant.Error
-                                else -> item.status to BadgeVariant.Neutral
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MediaHubColors.CardBackground.copy(alpha = 0.5f))
-                                    .border(1.dp, MediaHubColors.BorderSubtle, RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(if (isHealthy) MediaHubColors.Success else MediaHubColors.Warning),
-                                    )
-                                    Column {
-                                        MediaHubText(
-                                            text = item.label,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MediaHubColors.TextStrong,
-                                        )
-                                        MediaHubText(
-                                            text = item.detail.ifBlank { integrationDescription(item.id) },
-                                            fontSize = 11.sp,
-                                            color = MediaHubColors.TextMuted,
-                                            modifier = Modifier.padding(top = 1.dp),
-                                        )
-                                    }
-                                }
-                                MediaHubBadge(text = badgeLabel, variant = badgeVariant)
-                            }
-                        }
-                    }
-                }
-
-                MediaHubListDivider()
-
-                // Actions
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    MediaHubSecondaryButton(
-                        label = if (refreshing) "检测中…" else "重新检测",
-                        icon = Lucide.RefreshCw,
-                        enabled = !refreshing,
-                        modifier = Modifier.weight(0.42f),
-                        onClick = onRefresh,
-                    )
-                    MediaHubButton(
-                        label = "服务设置",
-                        icon = Lucide.Settings2,
-                        modifier = Modifier.weight(0.58f),
-                        onClick = onOpenServices,
-                    )
-                }
+                MediaHubPreferenceRow(
+                    title = item.label,
+                    summary = item.detail.ifBlank { integrationDescription(item.id) },
+                    onClick = onOpenServices,
+                    end = { MediaHubBadge(text = badgeLabel, variant = badgeVariant) },
+                )
             }
         }
+        MediaHubTextButton(
+            label = if (refreshing) "检测中…" else "重新检测",
+            icon = Lucide.RefreshCw,
+            enabled = !refreshing,
+            onClick = onRefresh,
+        )
     }
 }
 
@@ -646,9 +547,9 @@ private fun SystemHealthPillBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(MediaHubColors.CardBackground.copy(alpha = 0.85f))
-            .border(1.dp, MediaHubColors.BorderSubtle, RoundedCornerShape(20.dp))
+            .background(MediaHubColors.SurfaceHigh)
             .clickable(onClick = onOpenDetail)
             .padding(horizontal = 14.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -690,7 +591,6 @@ private fun SystemHealthPillBar(
             contentDescription = "刷新服务状态与发现",
             enabled = !refreshing,
             onClick = onRefresh,
-            modifier = Modifier.size(32.dp),
         )
     }
 }
@@ -715,10 +615,9 @@ private fun HeroGalleryCarousel(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(185.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .height(200.dp)
+                .clip(RoundedCornerShape(18.dp))
                 .background(MediaHubColors.CardBackground)
-                .border(1.dp, MediaHubColors.BorderSubtle, RoundedCornerShape(14.dp))
                 .clickable { onSelect(currentItem) },
         ) {
             RemotePoster(
@@ -750,51 +649,28 @@ private fun HeroGalleryCarousel(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    MediaHubBadge(
-                        text = "🔥 本周热播 TOP ${safeIndex + 1}",
-                        variant = BadgeVariant.Primary,
-                    )
-                    MediaHubBadge(
-                        text = if (currentItem.mediaType == "movie") "电影" else "剧集",
-                        variant = BadgeVariant.Neutral,
-                    )
-                }
+                MediaHubBadge(
+                    text = if (currentItem.mediaType == "movie") "电影" else "剧集",
+                    variant = BadgeVariant.Neutral,
+                )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        MediaHubText(
-                            text = currentItem.title,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MediaHubColors.TextStrong,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        )
-                        MediaHubText(
-                            text = buildString {
-                                if (currentItem.year > 0) append("${currentItem.year}年 · ")
-                                append(if (currentItem.mediaType == "movie") "电影频道" else "连载剧集")
-                                append(" · 全网高热度")
-                            },
-                            fontSize = 12.sp,
-                            color = MediaHubColors.TextSecondary,
-                            modifier = Modifier.padding(top = 2.dp),
-                        )
-                    }
-
-                    MediaHubButton(
-                        label = "立即搜源",
-                        icon = Lucide.Search,
-                        onClick = { onSelect(currentItem) },
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    MediaHubText(
+                        text = currentItem.title,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MediaHubColors.TextStrong,
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                    MediaHubText(
+                        text = listOfNotNull(
+                            currentItem.year.takeIf { it > 0 }?.toString(),
+                            if (currentItem.mediaType == "movie") "电影" else "剧集",
+                        ).joinToString(" · "),
+                        fontSize = 12.sp,
+                        color = MediaHubColors.TextSecondary,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
             }
@@ -811,13 +687,18 @@ private fun HeroGalleryCarousel(
                     val isSelected = index == safeIndex
                     Box(
                         modifier = Modifier
-                            .padding(horizontal = 3.dp)
-                            .height(4.dp)
-                            .width(if (isSelected) 18.dp else 6.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(if (isSelected) MediaHubColors.Accent else MediaHubColors.BorderStrong)
+                            .size(48.dp)
                             .clickable { currentIndex = index },
-                    )
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .height(4.dp)
+                                .width(if (isSelected) 18.dp else 6.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(if (isSelected) MediaHubColors.Accent else MediaHubColors.BorderStrong),
+                        )
+                    }
                 }
             }
         }
@@ -859,48 +740,22 @@ private fun GenreFilterChips(
 }
 
 @Composable
-private fun CategoryFilterChips(
+private fun CategoryTabs(
     selectedCategory: String,
     onCategorySelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val categories = listOf(
-        "all" to "✨ 全部发现",
-        "recommended" to "🎯 猜你喜欢",
-        "movie" to "🎬 热门电影",
-        "series" to "📺 热门剧集",
+    MediaHubTabRow(
+        options = listOf(
+            "all" to "全部",
+            "recommended" to "推荐",
+            "movie" to "电影",
+            "series" to "剧集",
+        ),
+        selected = selectedCategory,
+        onSelected = onCategorySelected,
+        modifier = modifier,
     )
-
-    LazyRow(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(categories) { (key, label) ->
-            val isSelected = selectedCategory == key
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        if (isSelected) MediaHubColors.Accent.copy(alpha = 0.18f) else MediaHubColors.CardBackground,
-                    )
-                    .border(
-                        1.dp,
-                        if (isSelected) MediaHubColors.Accent else MediaHubColors.BorderSubtle,
-                        RoundedCornerShape(16.dp),
-                    )
-                    .clickable { onCategorySelected(key) }
-                    .padding(horizontal = 14.dp, vertical = 7.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                MediaHubText(
-                    text = label,
-                    fontSize = 13.sp,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isSelected) MediaHubColors.Accent else MediaHubColors.TextSecondary,
-                )
-            }
-        }
-    }
 }
 
 /**
@@ -909,7 +764,7 @@ private fun CategoryFilterChips(
 @Composable
 private fun DiscoveryGallerySection(
     title: String,
-    subtitle: String,
+    subtitle: String = "",
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     items: List<DiscoveryItem>,
     onSelect: (DiscoveryItem) -> Unit,
@@ -942,16 +797,18 @@ private fun DiscoveryGallerySection(
                     MediaHubText(
                         text = title,
                         fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
                         color = MediaHubColors.TextStrong,
                     )
                 }
-                MediaHubText(
-                    text = subtitle,
-                    modifier = Modifier.padding(top = 2.dp),
-                    fontSize = 12.sp,
-                    color = MediaHubColors.TextMuted,
-                )
+                if (subtitle.isNotBlank()) {
+                    MediaHubText(
+                        text = subtitle,
+                        modifier = Modifier.padding(top = 2.dp),
+                        fontSize = 12.sp,
+                        color = MediaHubColors.TextMuted,
+                    )
+                }
             }
             if (actionLabel != null && onAction != null) {
                 Row(
@@ -1006,32 +863,14 @@ private fun DiscoveryItemCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MediaHubColors.CardBackground)
-                .border(1.dp, MediaHubColors.BorderSubtle, RoundedCornerShape(10.dp)),
+                .clip(RoundedCornerShape(12.dp))
+                .background(MediaHubColors.CardBackground),
         ) {
             RemotePoster(
                 url = item.posterUrl,
                 contentDescription = item.title,
                 modifier = Modifier.fillMaxSize(),
             )
-
-            // Top Floating Tag
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(6.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xCC0B0D10))
-                    .padding(horizontal = 5.dp, vertical = 2.dp),
-            ) {
-                MediaHubText(
-                    text = if (item.mediaType == "movie") "电影" else "剧集",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MediaHubColors.TextSecondary,
-                )
-            }
         }
 
         MediaHubText(
@@ -1045,7 +884,10 @@ private fun DiscoveryItemCard(
         )
 
         MediaHubText(
-            text = if (item.year > 0) "${item.year} 年" else "热播中",
+            text = listOfNotNull(
+                item.year.takeIf { it > 0 }?.toString(),
+                if (item.mediaType == "movie") "电影" else "剧集",
+            ).joinToString(" · "),
             modifier = Modifier.padding(top = 2.dp, start = 2.dp, end = 2.dp),
             color = MediaHubColors.TextMuted,
             fontSize = 12.sp,
@@ -1122,6 +964,7 @@ private fun SearchTwoPane(
     onRecommendationSelected: (DiscoveryItem) -> Unit,
     onShuffleRecommendations: () -> Unit = {},
     onGenreSelected: (DiscoveryGenre?) -> Unit = {},
+    onCategorySelected: (String) -> Unit = {},
     onOpenServices: () -> Unit = {},
     onOpenHealthDetail: () -> Unit = {},
     onTransfer: (String) -> Unit = {},
@@ -1206,6 +1049,7 @@ private fun SearchTwoPane(
                         onSelect = onTrendingSelected,
                         onShuffleRecommendations = onShuffleRecommendations,
                         onGenreSelected = onGenreSelected,
+                        onCategorySelected = onCategorySelected,
                     )
                 }
             }
@@ -1232,6 +1076,7 @@ private fun SearchIdleOverview(
     onSelect: (DiscoveryItem) -> Unit,
     onShuffleRecommendations: () -> Unit,
     onGenreSelected: (DiscoveryGenre?) -> Unit = {},
+    onCategorySelected: (String) -> Unit = {},
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1254,7 +1099,16 @@ private fun SearchIdleOverview(
                 )
             }
         }
-        if (uiState.movieGenres.isNotEmpty()) {
+        item {
+            CategoryTabs(
+                selectedCategory = uiState.selectedCategory,
+                onCategorySelected = onCategorySelected,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        }
+        if (uiState.movieGenres.isNotEmpty() &&
+            (uiState.selectedCategory == "all" || uiState.selectedCategory == "movie")
+        ) {
             item {
                 GenreFilterChips(
                     genres = uiState.movieGenres,
@@ -1270,40 +1124,46 @@ private fun SearchIdleOverview(
             item {
                 DiscoveryGallerySection(
                     title = uiState.selectedGenreName?.let { "${it}片" } ?: "类型精选",
-                    subtitle = if (uiState.loadingGenre) "正在加载…" else "点选后直接列出可转存版本",
+                    subtitle = if (uiState.loadingGenre) "正在加载…" else "",
                     icon = Lucide.LayoutGrid,
                     items = uiState.genreItems,
                     onSelect = onSelect,
                 )
             }
         }
-        if (uiState.topRatedMovies.isNotEmpty()) {
+        if ((uiState.selectedCategory == "all" || uiState.selectedCategory == "movie") &&
+            uiState.topRatedMovies.isNotEmpty()
+        ) {
             item {
                 DiscoveryGallerySection(
                     title = "高分电影",
-                    subtitle = "TMDB 评分靠前 · 点选直接列出可转存版本",
+                    subtitle = "TMDB 高分",
                     icon = Lucide.Star,
                     items = uiState.topRatedMovies,
                     onSelect = onSelect,
                 )
             }
         }
-        if (uiState.popularSeries.isNotEmpty()) {
+        if ((uiState.selectedCategory == "all" || uiState.selectedCategory == "series") &&
+            uiState.popularSeries.isNotEmpty()
+        ) {
             item {
                 DiscoveryGallerySection(
                     title = "热门剧集",
-                    subtitle = "TMDB 热度靠前 · 点选直接列出可转存版本",
+                    subtitle = "TMDB 热度",
                     icon = Lucide.Tv,
                     items = uiState.popularSeries,
                     onSelect = onSelect,
                 )
             }
         }
-        if (uiState.libraryRecommendations.isNotEmpty()) {
+        if ((uiState.selectedCategory == "all" || uiState.selectedCategory == "recommended") &&
+            uiState.libraryRecommendations.isNotEmpty()
+        ) {
             item {
                 DiscoveryGallerySection(
                     title = "猜你喜欢",
-                    subtitle = uiState.libraryRecommendationSeed?.let { "基于《$it》 · 点选直接列出可转存版本" } ?: "点选后直接列出可转存版本",
+                    subtitle = uiState.libraryRecommendationSeed?.let { "基于《$it》" } ?: "",
                     icon = Lucide.Sparkles,
                     items = uiState.libraryRecommendations,
                     onSelect = onSelect,
@@ -1313,11 +1173,11 @@ private fun SearchIdleOverview(
                 )
             }
         }
-        if (uiState.trending.isNotEmpty()) {
+        if (uiState.selectedCategory == "all" && uiState.trending.isNotEmpty()) {
             item {
                 DiscoveryGallerySection(
                     title = "热门精选",
-                    subtitle = "点选后直接列出可转存版本",
+                    subtitle = "",
                     icon = Lucide.Flame,
                     items = uiState.trending,
                     onSelect = onSelect,
@@ -1358,36 +1218,29 @@ private fun SearchCandidateDetail(
                     color = MediaHubColors.TextMuted,
                     fontSize = 13.sp,
                 )
-            }
-            item {
-                MediaHubCard(insideMargin = PaddingValues(16.dp)) {
-                    MediaHubText(
-                        text = buildString {
-                            append(candidate.release.resolution)
-                            append(" · ")
-                            append(candidate.release.videoCodec)
-                            candidate.release.dynamicRange?.let { append(" · ").append(it) }
-                            candidate.release.audio?.let { append(" · ").append(it) }
-                        },
-                        color = MediaHubColors.TextSecondary,
-                        fontSize = 13.sp,
-                    )
-                    MediaHubText(
-                        text = formatBytes(candidate.release.sizeBytes),
-                        modifier = Modifier.padding(top = 8.dp),
-                        color = MediaHubColors.TextMuted,
-                        fontSize = 12.sp,
-                    )
-                    if (candidate.transferState.isNotEmpty() && candidate.transferState != "unknown") {
-                        val (label, variant) = when (candidate.transferState) {
-                            "available" -> "可转存" to BadgeVariant.Success
-                            "transferring" -> "转存中" to BadgeVariant.Primary
-                            "transferred" -> "已转存" to BadgeVariant.Success
-                            "identity_required" -> "身份待确认" to BadgeVariant.Warning
-                            else -> candidate.transferState to BadgeVariant.Neutral
-                        }
-                        MediaHubBadge(text = label, variant = variant, modifier = Modifier.padding(top = 8.dp))
+                MediaHubText(
+                    text = buildString {
+                        append(candidate.release.resolution)
+                        append(" · ")
+                        append(candidate.release.videoCodec)
+                        candidate.release.dynamicRange?.let { append(" · ").append(it) }
+                        candidate.release.audio?.let { append(" · ").append(it) }
+                        append(" · ")
+                        append(formatBytes(candidate.release.sizeBytes))
+                    },
+                    modifier = Modifier.padding(top = 8.dp),
+                    color = MediaHubColors.TextSecondary,
+                    fontSize = 13.sp,
+                )
+                if (candidate.transferState.isNotEmpty() && candidate.transferState != "unknown") {
+                    val (label, variant) = when (candidate.transferState) {
+                        "available" -> "可转存" to BadgeVariant.Success
+                        "transferring" -> "转存中" to BadgeVariant.Primary
+                        "transferred" -> "已转存" to BadgeVariant.Success
+                        "identity_required" -> "身份待确认" to BadgeVariant.Warning
+                        else -> candidate.transferState to BadgeVariant.Neutral
                     }
+                    MediaHubBadge(text = label, variant = variant, modifier = Modifier.padding(top = 8.dp))
                 }
             }
             uiState.transferMessage?.let { message ->
@@ -1408,7 +1261,7 @@ private fun SearchCandidateDetail(
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            MediaHubButton(
+            MediaHubSecondaryButton(
                 label = "订阅",
                 icon = Lucide.BellPlus,
                 enabled = candidate.tmdbId != null && candidate.transferState != "identity_required",
@@ -1448,77 +1301,53 @@ private fun ReleaseRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 52.dp)
-            .selectable(
-                selected = selected,
-                onClick = onClick,
-                role = Role.RadioButton,
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MediaHubText(
-                text = candidateDisplayTitle(candidate),
-                modifier = Modifier.weight(1f).padding(end = 10.dp),
-                color = MediaHubColors.TextStrong,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            MediaHubBadge(
-                text = candidate.provider ?: candidate.source,
-                variant = BadgeVariant.Source,
-            )
-        }
-        MediaHubText(
-            text = buildString {
-                append(candidate.release.resolution)
-                append(" · ")
-                append(candidate.release.videoCodec)
-                candidate.release.dynamicRange?.let { append(" · ").append(it) }
-                candidate.release.audio?.let { append(" · ").append(it) }
-            },
-            color = MediaHubColors.TextSecondary,
-            fontSize = 12.sp,
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MediaHubText(
-                text = formatBytes(candidate.release.sizeBytes),
-                color = MediaHubColors.TextMuted,
-                fontSize = 12.sp,
-            )
-            if (candidate.transferState.isNotEmpty() && candidate.transferState != "unknown") {
-                val (label, variant) = when (candidate.transferState) {
-                    "available" -> "可转存" to BadgeVariant.Success
-                    "transferring" -> "转存中" to BadgeVariant.Primary
-                    "transferred" -> "已转存" to BadgeVariant.Success
-                    "identity_required" -> "身份待确认" to BadgeVariant.Warning
-                    else -> candidate.transferState to BadgeVariant.Neutral
-                }
-                MediaHubBadge(text = label, variant = variant)
-            }
-        }
+    val facts = buildString {
+        append(candidate.release.resolution)
+        append(" · ")
+        append(candidate.release.videoCodec)
+        candidate.release.dynamicRange?.let { append(" · ").append(it) }
+        candidate.release.audio?.let { append(" · ").append(it) }
+        append(" · ")
+        append(formatBytes(candidate.release.sizeBytes))
     }
+    val transferBadge = if (candidate.transferState.isNotEmpty() && candidate.transferState != "unknown") {
+        when (candidate.transferState) {
+            "available" -> "可转存" to BadgeVariant.Success
+            "transferring" -> "转存中" to BadgeVariant.Primary
+            "transferred" -> "已转存" to BadgeVariant.Success
+            "identity_required" -> "身份待确认" to BadgeVariant.Warning
+            else -> candidate.transferState to BadgeVariant.Neutral
+        }
+    } else {
+        null
+    }
+    MediaHubPreferenceRow(
+        title = candidateDisplayTitle(candidate),
+        summary = facts,
+        selected = selected,
+        role = Role.RadioButton,
+        onClick = onClick,
+        end = {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                MediaHubBadge(
+                    text = candidate.provider ?: candidate.source,
+                    variant = BadgeVariant.Source,
+                )
+                transferBadge?.let { (label, variant) ->
+                    MediaHubBadge(text = label, variant = variant)
+                }
+            }
+        },
+    )
 }
 
 private fun integrationDescription(key: String): String = when (key.lowercase()) {
-    "115" -> "PKCE 授权驱动 · 云端直链与存储调度"
-    "emby" -> "媒体库同步 · 视频回放与 STRM 指向"
-    "strm" -> "内置 STRM · 115 会话写入与播放重定向"
-    "tmdb" -> "影视信息刮削 · 猜你喜欢与热门推荐"
-    "wecom" -> "企业微信通知 · 任务完成与异常提醒"
-    else -> "后台自动化服务与媒体控制平面"
+    "115" -> "云盘授权与直链"
+    "emby" -> "媒体库与播放"
+    "strm" -> "STRM 写入"
+    "tmdb" -> "影视信息与推荐"
+    "wecom" -> "任务通知"
+    else -> "外部服务"
 }
 
 private fun statusLabel(status: String): String = when (status) {

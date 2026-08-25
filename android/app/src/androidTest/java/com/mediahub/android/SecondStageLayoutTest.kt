@@ -133,7 +133,7 @@ class SecondStageLayoutTest {
 
         composeRule.onNodeWithTag("search-list-pane").assertExists()
         composeRule.onNodeWithTag("search-detail-pane").assertExists()
-        composeRule.onNodeWithText(candidate.title).assertExists()
+        composeRule.onAllNodesWithText(candidate.title)[0].assertExists()
         composeRule.onNodeWithText("开始转存").assertExists()
         saveScreenshot("mediahub-search-tablet")
     }
@@ -153,7 +153,6 @@ class SecondStageLayoutTest {
                             statistics = OperationalStatistics(4, 1, 2, 1, 0, 3, 2, 8, 1, 0, 0, 0),
                         ),
                         onRefresh = {},
-                        onToggleSettings = {},
                         onSettingsDraftChange = {},
                         onSaveSettings = {},
                         onTestWeCom = {},
@@ -193,7 +192,6 @@ class SecondStageLayoutTest {
                             statistics = OperationalStatistics(4, 1, 2, 1, 0, 3, 2, 8, 1, 0, 0, 0),
                         ),
                         onRefresh = {},
-                        onToggleSettings = {},
                         onSettingsDraftChange = {},
                         onSaveSettings = {},
                         onTestWeCom = {},
@@ -257,7 +255,7 @@ class SecondStageLayoutTest {
         composeRule.onNodeWithContentDescription("刷新当前工具").performClick()
         assertEquals(1, uploadRefreshes)
         composeRule.onNodeWithText("归档整理").performClick()
-        composeRule.onNodeWithText("原生归档整理").assertExists()
+        composeRule.onNodeWithText("预览建议后勾选，再保存并确认计划。").assertExists()
         composeRule.onAllNodesWithText("当前服务器未配置本地上传目录").assertCountEquals(0)
         composeRule.onNodeWithText("归档读取失败").assertExists()
         composeRule.onNodeWithContentDescription("刷新当前工具").performClick()

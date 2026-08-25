@@ -30,8 +30,8 @@ import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubListDetail
 import com.mediahub.android.core.designsystem.MediaHubListDivider
 import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
-import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
+import com.mediahub.android.core.designsystem.MediaHubTabRow
 import com.mediahub.android.core.designsystem.MediaHubText
 
 private val operationSections = listOf(
@@ -189,7 +189,7 @@ internal fun OperationsScreen(
             }
         }
         item {
-            MediaHubSegmentedControl(
+            MediaHubTabRow(
                 options = operationSections,
                 selected = section,
                 onSelected = onSectionChanged,

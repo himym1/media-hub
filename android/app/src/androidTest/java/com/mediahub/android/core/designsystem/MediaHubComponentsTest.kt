@@ -15,6 +15,7 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -50,6 +51,49 @@ class MediaHubComponentsTest {
         composeRule.onNodeWithText("Provider").assertIsNotSelected().assertHasClickAction().performClick()
         composeRule.onNodeWithText("Provider").assertIsSelected().assertHeightIsAtLeast(48.dp)
         saveScreenshot(composeRule.onNodeWithTag("settings-sections").captureToImage(), "mediahub-segmented-control.png")
+    }
+
+    @Test
+    fun tabRowExposesSelectionAndMinimumTouchHeight() {
+        var selected by mutableStateOf("movies")
+        composeRule.setContent {
+            MediaHubTheme {
+                MediaHubTabRow(
+                    options = listOf("movies" to "电影", "shows" to "电视剧"),
+                    selected = selected,
+                    onSelected = { selected = it },
+                    modifier = Modifier.testTag("library-tabs"),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("电影").assertIsSelected().assertHeightIsAtLeast(48.dp)
+        composeRule.onNodeWithText("电视剧").assertIsNotSelected().assertHasClickAction().performClick()
+        composeRule.onNodeWithText("电视剧").assertIsSelected().assertHeightIsAtLeast(48.dp)
+        saveScreenshot(composeRule.onNodeWithTag("library-tabs").captureToImage(), "mediahub-tab-row.png")
+    }
+
+    @Test
+    fun overflowMenuExposesActionsAndMinimumTouchHeight() {
+        var imported = false
+        composeRule.setContent {
+            MediaHubTheme {
+                MediaHubOverflowMenu(
+                    expanded = true,
+                    onExpandedChange = {},
+                    contentDescription = "更多订阅操作",
+                    actions = listOf(
+                        MediaHubMenuAction("导入订阅") { imported = true },
+                        MediaHubMenuAction("导出订阅") {},
+                    ),
+                    modifier = Modifier.testTag("subscription-overflow"),
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("更多订阅操作").assertHasClickAction().assertHeightIsAtLeast(48.dp)
+        composeRule.onNodeWithText("导入订阅").assertHasClickAction().performClick()
+        composeRule.runOnIdle { assertTrue(imported) }
     }
 
     @Test

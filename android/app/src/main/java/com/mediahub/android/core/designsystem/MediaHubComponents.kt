@@ -54,6 +54,8 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -188,6 +190,48 @@ fun MediaHubSecondaryButton(
 }
 
 @Composable
+fun MediaHubTextButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    destructive: Boolean = false,
+    icon: ImageVector? = null,
+) {
+    TextButton(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 48.dp),
+        enabled = enabled,
+        colors = ButtonDefaults.textButtonColors(
+            contentColor = if (destructive) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.primary
+            },
+        ),
+    ) {
+        if (icon != null) {
+            MediaHubIcon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = if (destructive) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
 fun MediaHubIconButton(
     imageVector: ImageVector,
     contentDescription: String,
@@ -265,7 +309,7 @@ fun MediaHubSearchField(
     enabled: Boolean = true,
     placeholder: String = "搜索电影或电视剧",
 ) {
-    OutlinedTextField(
+    TextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier
@@ -274,7 +318,7 @@ fun MediaHubSearchField(
             .semantics { contentDescription = placeholder },
         enabled = enabled,
         singleLine = true,
-        label = { Text(placeholder) },
+        placeholder = { Text(placeholder) },
         leadingIcon = {
             MediaHubIcon(Lucide.Search, contentDescription = null, tint = MediaHubColors.TextMuted)
         },
@@ -298,7 +342,15 @@ fun MediaHubSearchField(
         },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-        shape = MaterialTheme.shapes.large,
+        shape = RoundedCornerShape(28.dp),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+        ),
     )
 }
 
@@ -582,6 +634,42 @@ fun MediaHubConfirmDialog(
 }
 
 @Composable
+fun MediaHubDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    dismissLabel: String = "关闭",
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = title,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp), content = content)
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = confirmLabel, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(dismissLabel)
+            }
+        },
+        shape = MaterialTheme.shapes.extraLarge,
+    )
+}
+
+@Composable
 fun MediaHubFilterChip(
     label: String,
     selected: Boolean,
@@ -590,21 +678,25 @@ fun MediaHubFilterChip(
     enabled: Boolean = true,
     role: Role = Role.RadioButton,
 ) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        enabled = enabled,
+    Box(
         modifier = modifier
             .heightIn(min = 48.dp)
             .selectable(selected = selected, enabled = enabled, role = role, onClick = onClick),
-        label = {
-            Text(
-                text = label,
-                fontSize = 13.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            )
-        },
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        FilterChip(
+            selected = selected,
+            onClick = onClick,
+            enabled = enabled,
+            label = {
+                Text(
+                    text = label,
+                    fontSize = 12.sp,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                )
+            },
+        )
+    }
 }
 
 @Composable
@@ -662,42 +754,38 @@ fun MediaHubEmptyState(
     icon: ImageVector,
     modifier: Modifier = Modifier,
 ) {
-    MediaHubCard(
-        modifier = modifier.fillMaxWidth(),
-        insideMargin = PaddingValues(vertical = 40.dp, horizontal = 24.dp),
-        elevated = false,
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 40.dp, horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                MediaHubIcon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(28.dp),
-                )
-            }
-            MediaHubText(
-                text = title,
-                modifier = Modifier.padding(top = 16.dp),
-                color = MediaHubColors.TextStrong,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            MediaHubText(
-                text = message,
-                modifier = Modifier.padding(top = 6.dp),
-                color = MediaHubColors.TextMuted,
-                fontSize = 12.sp,
+            MediaHubIcon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(28.dp),
             )
         }
+        MediaHubText(
+            text = title,
+            modifier = Modifier.padding(top = 16.dp),
+            color = MediaHubColors.TextStrong,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        MediaHubText(
+            text = message,
+            modifier = Modifier.padding(top = 6.dp),
+            color = MediaHubColors.TextMuted,
+            fontSize = 12.sp,
+        )
     }
 }
 

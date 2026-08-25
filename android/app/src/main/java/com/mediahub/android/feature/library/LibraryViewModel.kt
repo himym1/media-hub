@@ -25,6 +25,7 @@ data class LibraryBrowseState(
     val page: Int = 0,
     val loadingLibraries: Boolean = false,
     val loadingItems: Boolean = false,
+    val loadingMore: Boolean = false,
     val refreshing: Boolean = false,
     val errorMessage: String? = null,
     val actionMessage: String? = null,
@@ -36,7 +37,13 @@ class LibraryViewModel(
     private val _uiState = MutableStateFlow(LibraryBrowseState())
     val uiState: StateFlow<LibraryBrowseState> = _uiState.asStateFlow()
     private var contentJob: Job? = null
+    private var moreJob: Job? = null
     private var librariesJob: Job? = null
+
+    private fun cancelContent() {
+        contentJob?.cancel()
+        moreJob?.cancel()
+    }
 
     /** First open loads; revisits keep the current grid and only soft-refresh in background. */
     fun ensureLibrariesLoaded() {
@@ -50,6 +57,7 @@ class LibraryViewModel(
 
     fun refreshLibraries(force: Boolean = true) {
         librariesJob?.cancel()
+        moreJob?.cancel()
         librariesJob = viewModelScope.launch {
             val keepGrid = !force && _uiState.value.items.isNotEmpty() && _uiState.value.submittedQuery.isEmpty()
             _uiState.value = _uiState.value.copy(
@@ -101,7 +109,7 @@ class LibraryViewModel(
             page = 0,
             actionMessage = null,
         )
-        contentJob?.cancel()
+        cancelContent()
         contentJob = viewModelScope.launch { loadLibraryPage(id, 0, keepExisting = false) }
     }
 
@@ -115,9 +123,9 @@ class LibraryViewModel(
             clearSearch()
             return
         }
-        contentJob?.cancel()
+        cancelContent()
         contentJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(submittedQuery = query, loadingItems = true, errorMessage = null)
+            _uiState.value = _uiState.value.copy(submittedQuery = query, loadingItems = true, loadingMore = false, errorMessage = null)
             try {
                 val items = repository.items(query)
                 _uiState.value = _uiState.value.copy(items = items, total = items.size, page = 0, loadingItems = false)
@@ -135,17 +143,19 @@ class LibraryViewModel(
         val libraryId = _uiState.value.selectedLibraryId
         _uiState.value = _uiState.value.copy(query = "", submittedQuery = "", page = 0, errorMessage = null)
         if (libraryId != null) {
-            contentJob?.cancel()
+            cancelContent()
             contentJob = viewModelScope.launch { loadLibraryPage(libraryId, 0, keepExisting = false) }
         }
     }
 
-    fun changePage(delta: Int) {
-        if (_uiState.value.submittedQuery.isNotEmpty()) return
-        val libraryId = _uiState.value.selectedLibraryId ?: return
-        val page = nextLibraryPage(_uiState.value.page, delta, _uiState.value.total) ?: return
-        contentJob?.cancel()
-        contentJob = viewModelScope.launch { loadLibraryPage(libraryId, page, keepExisting = false) }
+    fun loadMore() {
+        val state = _uiState.value
+        if (state.submittedQuery.isNotEmpty() || state.loadingItems || state.loadingMore) return
+        val libraryId = state.selectedLibraryId ?: return
+        if (!libraryHasMore(state.items.size, state.total, searching = false)) return
+        val page = nextLibraryPage(state.page, 1, state.total) ?: return
+        moreJob?.cancel()
+        moreJob = viewModelScope.launch { loadLibraryPage(libraryId, page, append = true) }
     }
 
     fun reloadItems() {
@@ -155,9 +165,9 @@ class LibraryViewModel(
             return
         }
         val libraryId = _uiState.value.selectedLibraryId ?: return
-        contentJob?.cancel()
+        cancelContent()
         contentJob = viewModelScope.launch {
-            loadLibraryPage(libraryId, _uiState.value.page, keepExisting = _uiState.value.items.isNotEmpty())
+            loadLibraryPage(libraryId, 0, keepExisting = _uiState.value.items.isNotEmpty())
         }
     }
 
@@ -170,7 +180,7 @@ class LibraryViewModel(
                 repository.refreshLibrary(id)
                 _uiState.value = _uiState.value.copy(refreshing = false, actionMessage = "已请求 Emby 刷新媒体库")
                 if (_uiState.value.submittedQuery.isEmpty()) {
-                    loadLibraryPage(id, _uiState.value.page, keepExisting = true)
+                    loadLibraryPage(id, 0, keepExisting = true)
                 }
             } catch (error: ApiException) {
                 fail(error.message ?: "媒体库刷新失败", refreshing = true)
@@ -180,26 +190,46 @@ class LibraryViewModel(
         }
     }
 
-    private suspend fun loadLibraryPage(libraryId: String, page: Int, keepExisting: Boolean) {
-        val showLoading = !keepExisting || _uiState.value.items.isEmpty()
+    private suspend fun loadLibraryPage(
+        libraryId: String,
+        page: Int,
+        keepExisting: Boolean = false,
+        append: Boolean = false,
+    ) {
+        val showLoading = !append && (!keepExisting || _uiState.value.items.isEmpty())
         _uiState.value = _uiState.value.copy(
             loadingItems = showLoading,
+            loadingMore = append,
             errorMessage = null,
         )
         try {
-            val result = repository.libraryItems(libraryId, page * LibraryPageSize, LibraryPageSize)
+            val start = if (keepExisting && !append && _uiState.value.items.isNotEmpty()) 0 else page * LibraryPageSize
+            val limit = if (keepExisting && !append && _uiState.value.items.isNotEmpty()) {
+                _uiState.value.items.size.coerceAtLeast(LibraryPageSize)
+            } else {
+                LibraryPageSize
+            }
+            val result = repository.libraryItems(libraryId, start, limit)
             if (_uiState.value.selectedLibraryId == libraryId && _uiState.value.submittedQuery.isEmpty()) {
-                val unchanged = _uiState.value.page == page &&
+                val items = if (append) {
+                    val seen = _uiState.value.items.map { it.id }.toHashSet()
+                    _uiState.value.items + result.items.filter { it.id !in seen }
+                } else {
+                    result.items
+                }
+                val resolvedPage = if (append) page else ((items.size - 1).coerceAtLeast(0) / LibraryPageSize)
+                val unchanged = !append &&
                     _uiState.value.total == result.total &&
-                    _uiState.value.items.map { it.id } == result.items.map { it.id }
+                    _uiState.value.items.map { it.id } == items.map { it.id }
                 if (unchanged) {
-                    _uiState.value = _uiState.value.copy(loadingItems = false)
+                    _uiState.value = _uiState.value.copy(loadingItems = false, loadingMore = false)
                 } else {
                     _uiState.value = _uiState.value.copy(
-                        items = result.items,
+                        items = items,
                         total = result.total,
-                        page = page,
+                        page = resolvedPage,
                         loadingItems = false,
+                        loadingMore = false,
                     )
                 }
             }
@@ -220,6 +250,7 @@ class LibraryViewModel(
         _uiState.value = _uiState.value.copy(
             loadingLibraries = if (libraries) false else _uiState.value.loadingLibraries,
             loadingItems = false,
+            loadingMore = false,
             refreshing = if (refreshing) false else _uiState.value.refreshing,
             errorMessage = message,
         )
@@ -232,3 +263,6 @@ internal fun nextLibraryPage(current: Int, delta: Int, total: Int): Int? {
     val next = current + delta
     return next.takeIf { it >= 0 && it < libraryPageCount(total) }
 }
+
+internal fun libraryHasMore(itemCount: Int, total: Int, searching: Boolean): Boolean =
+    !searching && itemCount < total.coerceAtLeast(0)

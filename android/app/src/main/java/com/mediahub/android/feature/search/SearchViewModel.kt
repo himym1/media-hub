@@ -208,7 +208,7 @@ class SearchViewModel(
             } else if (trendingItems.size >= 2) {
                 publishRecommendationPage(
                     pool = trendingItems.shuffled(),
-                    seedTitle = "全网热播精选",
+                    seedTitle = "热门精选",
                     page = 0,
                 )
             }
@@ -307,7 +307,7 @@ class SearchViewModel(
         if (trendingFallback.size >= 2) {
             publishRecommendationPage(
                 pool = trendingFallback.shuffled(),
-                seedTitle = "全网热播精选",
+                seedTitle = "热门精选",
                 page = 0,
             )
         }

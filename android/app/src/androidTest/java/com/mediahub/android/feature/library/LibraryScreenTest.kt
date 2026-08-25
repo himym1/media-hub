@@ -57,16 +57,23 @@ class LibraryScreenTest {
     @Test
     fun browseUsesContinuousRowsAndScopedActions() {
         var selectedItem = ""
+        var selectedLibrary = "movies"
         composeRule.setContent {
             MediaHubTheme {
                 LibraryScreen(
                     uiState = LibraryBrowseState(
-                        libraries = listOf(MediaLibrary(id = "movies", name = "电影", collectionType = "movies")),
-                        selectedLibraryId = "movies",
+                        libraries = listOf(
+                            MediaLibrary(id = "movies", name = "电影", collectionType = "movies"),
+                            MediaLibrary(id = "shows", name = "电视剧", collectionType = "tvshows"),
+                        ),
+                        selectedLibraryId = selectedLibrary,
                         items = listOf(EmbyItem(id = "item-1", name = "验收影片", type = "Movie", year = 2026, tmdbId = "100", playbackPositionMs = 2_500_000)),
                         total = 1,
                     ),
-                    actions = browseActions(onSelectItem = { selectedItem = it }),
+                    actions = browseActions(
+                        onSelectItem = { selectedItem = it },
+                        onSelectLibrary = { selectedLibrary = it },
+                    ),
                     posterLoader = posterLoader,
                 )
             }
@@ -74,11 +81,17 @@ class LibraryScreenTest {
 
         composeRule.onNode(hasText("电影") and isSelectable())
             .assertIsSelected().assertHasClickAction().assertHeightIsAtLeast(48.dp)
+        composeRule.onNode(hasText("电视剧") and isSelectable())
+            .assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
         composeRule.onNodeWithText("验收影片").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
-        composeRule.onNodeWithText("电影 · 2026 · 继续 41:40").assertIsDisplayed()
+        composeRule.onNodeWithText("电影 · 2026").assertIsDisplayed()
+        composeRule.onNodeWithText("继续 41:40").assertIsDisplayed()
         composeRule.onAllNodesWithText("TMDB 100").assertCountEquals(0)
         composeRule.onNodeWithContentDescription("刷新当前媒体库").assertHasClickAction().assertHeightIsAtLeast(48.dp)
-        composeRule.runOnIdle { assertEquals("item-1", selectedItem) }
+        composeRule.runOnIdle {
+            assertEquals("item-1", selectedItem)
+            assertEquals("shows", selectedLibrary)
+        }
         saveScreenshot("mediahub-library-browse")
     }
 
@@ -190,15 +203,18 @@ class LibraryScreenTest {
         composeRule.onNodeWithContentDescription("播放 第 2 集").assertHasClickAction()
     }
 
-    private fun browseActions(onSelectItem: (String) -> Unit) = LibraryBrowseActions(
+    private fun browseActions(
+        onSelectItem: (String) -> Unit,
+        onSelectLibrary: (String) -> Unit = {},
+    ) = LibraryBrowseActions(
         onQueryChanged = {},
         onSearch = {},
         onClearSearch = {},
         onRefreshLibraries = {},
         onRefreshSelectedLibrary = {},
-        onSelectLibrary = {},
+        onSelectLibrary = onSelectLibrary,
         onSelectItem = onSelectItem,
-        onChangePage = {},
+        onLoadMore = {},
     )
 
     private fun detailActions(onPlay: (EmbyItem, PlaybackFallback) -> Unit) = LibraryDetailActions(

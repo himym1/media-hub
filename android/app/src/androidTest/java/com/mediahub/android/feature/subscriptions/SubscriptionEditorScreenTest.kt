@@ -46,11 +46,13 @@ class SubscriptionEditorScreenTest {
         }
 
         composeRule.onNodeWithText("TMDB ID").assertIsDisplayed()
+        val list = composeRule.onNode(hasScrollToIndexAction())
+        list.performScrollToNode(hasText("标准"))
         composeRule.onNodeWithText("标准").assertIsSelected().assertHeightIsAtLeast(48.dp)
         composeRule.onAllNodesWithText("原始标题").assertCountEquals(0)
 
-        composeRule.onNodeWithText("资源来源").performScrollTo().assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
-        val list = composeRule.onNode(hasScrollToIndexAction())
+        list.performScrollToNode(hasText("资源来源"))
+        composeRule.onNodeWithText("资源来源").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
         val sourceHelp = "来源清单暂不可用；不选择时会搜索全部来源。"
         list.performScrollToNode(hasText(sourceHelp))
         composeRule.onNodeWithText(sourceHelp).assertIsDisplayed()

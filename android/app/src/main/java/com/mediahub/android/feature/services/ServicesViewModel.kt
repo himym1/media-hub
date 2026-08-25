@@ -31,7 +31,7 @@ data class ServicesUiState(
     val retryingCheckInId: String? = null,
     val providerSettings: ProviderSettings? = null,
     val settingsDraft: ProviderSettingsUpdate? = null,
-    val settingsExpanded: Boolean = false,
+    val settingsDirty: Boolean = false,
     val savingSettings: Boolean = false,
     val settingsSaved: Boolean = false,
     val testingWeCom: Boolean = false,
@@ -149,12 +149,13 @@ class ServicesViewModel(
         }
     }
 
-    fun toggleSettings() {
-        _uiState.value = _uiState.value.copy(settingsExpanded = !_uiState.value.settingsExpanded, settingsSaved = false)
-    }
-
     fun setSettingsDraft(value: ProviderSettingsUpdate) {
-        _uiState.value = _uiState.value.copy(settingsDraft = value, settingsSaved = false, weComTested = false)
+        _uiState.value = _uiState.value.copy(
+            settingsDraft = value,
+            settingsDirty = true,
+            settingsSaved = false,
+            weComTested = false,
+        )
     }
 
     fun saveSettings() {
@@ -167,6 +168,7 @@ class ServicesViewModel(
                 _uiState.value = _uiState.value.copy(
                     providerSettings = settings,
                     settingsDraft = settings.toUpdate(),
+                    settingsDirty = false,
                     savingSettings = false,
                     settingsSaved = true,
                 )
@@ -251,7 +253,7 @@ class ServicesViewModel(
                     sourceCheckIns = sourceCheckIns,
                     strmStatus = strmStatus,
                     providerSettings = providerSettings ?: current.providerSettings,
-                    settingsDraft = if (!current.settingsExpanded && providerSettings != null) providerSettings.toUpdate() else current.settingsDraft,
+                    settingsDraft = if (!current.settingsDirty && providerSettings != null) providerSettings.toUpdate() else current.settingsDraft,
                     loading = false,
                 )
             } catch (error: ApiException) {

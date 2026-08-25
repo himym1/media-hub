@@ -1,15 +1,11 @@
 package com.mediahub.android.feature.library
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -17,24 +13,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Captions
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Play
 import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubColors
-import com.mediahub.android.core.designsystem.MediaHubFilterChip
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubListDivider
+import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
+import com.mediahub.android.core.designsystem.MediaHubTabRow
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.network.EmbyEpisode
 import com.mediahub.android.core.network.EmbyItem
@@ -66,69 +57,32 @@ internal fun EpisodePicker(
             episodes.isEmpty() -> MediaHubText(text = "Emby 暂未提供可播放分集", color = MediaHubColors.TextMuted, fontSize = 13.sp)
             else -> {
                 if (seasons.size > 1) {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(seasons, key = { it }) { season ->
-                            MediaHubFilterChip(
-                                label = if (season > 0) "第 ${season} 季" else "特别篇",
-                                selected = season == selectedSeason,
-                                onClick = { selectedSeason = season },
-                                role = Role.Tab,
-                            )
-                        }
-                    }
+                    MediaHubTabRow(
+                        options = seasons.map { season ->
+                            season.toString() to if (season > 0) "第 ${season} 季" else "特别篇"
+                        },
+                        selected = selectedSeason.toString(),
+                        onSelected = { selectedSeason = it.toInt() },
+                    )
                 }
                 MediaHubCard {
                     visibleEpisodes.forEachIndexed { index, episode ->
                         if (index > 0) MediaHubListDivider()
                         val progress = episodeProgressLabel(episode)
                         val playLabel = "${playbackActionLabel(episode.item)} ${episodeLabel(episode, seriesTitle)}"
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 48.dp)
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 48.dp)
-                                    .clickable(role = Role.Button) { onPlay(episode) }
-                                    .semantics { contentDescription = playLabel }
-                                    .padding(horizontal = 6.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    MediaHubText(
-                                        text = episodeLabel(episode, seriesTitle),
-                                        color = MediaHubColors.TextPrimary,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    if (progress.isNotEmpty()) {
-                                        MediaHubText(
-                                            text = progress,
-                                            color = MediaHubColors.Accent,
-                                            fontSize = 12.sp,
-                                            modifier = Modifier.padding(top = 2.dp),
-                                        )
-                                    }
-                                }
-                                MediaHubIcon(
-                                    imageVector = Lucide.Play,
-                                    contentDescription = null,
-                                    tint = MediaHubColors.Accent,
-                                    modifier = Modifier.size(18.dp),
+                        MediaHubPreferenceRow(
+                            title = episodeLabel(episode, seriesTitle),
+                            summary = progress.takeIf { it.isNotEmpty() },
+                            contentDescription = playLabel,
+                            onClick = { onPlay(episode) },
+                            end = {
+                                MediaHubIconButton(
+                                    imageVector = Lucide.Captions,
+                                    contentDescription = "搜中文字幕 ${episodeLabel(episode, seriesTitle)}",
+                                    onClick = { onSearchSubtitles(episode) },
                                 )
-                            }
-                            MediaHubIconButton(
-                                imageVector = Lucide.Captions,
-                                contentDescription = "搜中文字幕 ${episodeLabel(episode, seriesTitle)}",
-                                onClick = { onSearchSubtitles(episode) },
-                            )
-                        }
+                            },
+                        )
                     }
                 }
             }

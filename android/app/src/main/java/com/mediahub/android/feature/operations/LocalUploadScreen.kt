@@ -26,10 +26,13 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Upload
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCard
+import com.mediahub.android.core.designsystem.MediaHubTextButton
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubFilterChip
 import com.mediahub.android.core.designsystem.MediaHubIcon
+import com.mediahub.android.core.designsystem.MediaHubTabRow
 import com.mediahub.android.core.designsystem.MediaHubListDivider
+import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextField
@@ -62,51 +65,48 @@ internal fun LocalUploadScreen(state: LocalUploadState, actions: LocalUploadActi
             )
             return@Column
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            state.roots.forEach { root ->
-                MediaHubFilterChip(
-                    label = root.id,
-                    selected = state.rootId == root.id,
-                    onClick = { actions.rootChanged(root.id) },
-                )
+        if (state.roots.size in 2..4) {
+            MediaHubTabRow(
+                options = state.roots.map { it.id to it.id },
+                selected = state.rootId,
+                onSelected = actions.rootChanged,
+            )
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                state.roots.forEach { root ->
+                    MediaHubFilterChip(
+                        label = root.id,
+                        selected = state.rootId == root.id,
+                        onClick = { actions.rootChanged(root.id) },
+                    )
+                }
             }
         }
         MediaHubTextField(state.path, actions.pathChanged, "相对目录", Modifier.fillMaxWidth())
         if (state.path.isNotEmpty()) {
-            MediaHubButton("返回上级", onClick = { actions.pathChanged(state.path.substringBeforeLast('/', "")) })
+            MediaHubTextButton("返回上级", onClick = { actions.pathChanged(state.path.substringBeforeLast('/', "")) })
         }
         if (state.entries.isNotEmpty()) {
             MediaHubCard {
                 state.entries.take(50).forEachIndexed { index, entry ->
                     if (index > 0) MediaHubListDivider()
                     val isSelected = state.selectedFile == entry.path
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                            .clickable(role = Role.Button) { actions.entrySelected(entry) }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        MediaHubIcon(
-                            imageVector = Lucide.FolderOpen,
-                            contentDescription = null,
-                            tint = if (isSelected || entry.directory) MediaHubColors.Accent else MediaHubColors.TextMuted,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            MediaHubText(entry.name, color = MediaHubColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            MediaHubText(
-                                if (entry.directory) "目录" else formatBytes(entry.size),
-                                color = MediaHubColors.TextMuted,
-                                fontSize = 12.sp,
+                    MediaHubPreferenceRow(
+                        title = entry.name,
+                        summary = if (entry.directory) "目录" else formatBytes(entry.size),
+                        onClick = { actions.entrySelected(entry) },
+                        start = {
+                            MediaHubIcon(
+                                imageVector = Lucide.FolderOpen,
+                                contentDescription = null,
+                                tint = if (isSelected || entry.directory) MediaHubColors.Accent else MediaHubColors.TextMuted,
+                                modifier = Modifier.size(18.dp),
                             )
-                        }
-                    }
+                        },
+                    )
                 }
             }
         }
@@ -133,26 +133,21 @@ internal fun LocalUploadScreen(state: LocalUploadState, actions: LocalUploadActi
             MediaHubCard {
                 state.uploads.take(8).forEachIndexed { index, upload ->
                     if (index > 0) MediaHubListDivider()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            MediaHubText(upload.path, color = MediaHubColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            MediaHubText(
-                                if (upload.bytesTotal > 0) "${upload.bytesDone * 100 / upload.bytesTotal}% · ${formatBytes(upload.bytesTotal)}" else upload.id,
-                                color = MediaHubColors.TextMuted,
-                                fontSize = 12.sp,
-                            )
-                        }
-                        MediaHubText(localUploadState(upload.state), color = commandStateColor(upload.state), fontSize = 12.sp)
-                        if (upload.state == "failed" || upload.state == "needs_attention") {
-                            MediaHubButton("确认重试", onClick = { actions.retry(upload) })
-                        }
-                    }
+                    MediaHubPreferenceRow(
+                        title = upload.path,
+                        summary = buildList {
+                            add(localUploadState(upload.state))
+                            if (upload.bytesTotal > 0) {
+                                add("${upload.bytesDone * 100 / upload.bytesTotal}%")
+                                add(formatBytes(upload.bytesTotal))
+                            }
+                        }.joinToString(" · "),
+                        end = {
+                            if (upload.state == "failed" || upload.state == "needs_attention") {
+                                MediaHubTextButton("重试", onClick = { actions.retry(upload) })
+                            }
+                        },
+                    )
                 }
             }
         }

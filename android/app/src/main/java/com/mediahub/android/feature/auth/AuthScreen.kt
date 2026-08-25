@@ -1,8 +1,6 @@
 package com.mediahub.android.feature.auth
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,7 +24,6 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Server
 import com.mediahub.android.app.LocalTwoPane
 import com.mediahub.android.core.designsystem.MediaHubButton
-import com.mediahub.android.core.designsystem.MediaHubCard
 import com.mediahub.android.core.designsystem.MediaHubCenteredPane
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubPasswordField
@@ -76,64 +73,49 @@ private fun LoginScreen(
     ) {
         MediaHubText(text = "Media Hub", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MediaHubColors.TextMuted)
         MediaHubText(text = "管理员登录", modifier = Modifier.padding(top = 4.dp), fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
+        MediaHubText(
+            text = serverUrl,
+            modifier = Modifier.padding(top = 8.dp),
+            color = MediaHubColors.TextMuted,
+            fontSize = 12.sp,
+        )
 
         Spacer(Modifier.height(28.dp))
 
-        MediaHubCard(insideMargin = PaddingValues(20.dp)) {
+        MediaHubPasswordField(
+            value = uiState.password,
+            onValueChange = onPasswordChanged,
+            visible = uiState.passwordVisible,
+            onVisibilityChanged = onVisibilityChanged,
+            onSubmit = onSubmit,
+            enabled = !uiState.submitting,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        uiState.errorMessage?.let { message ->
             MediaHubText(
-                text = "使用你的 Media Hub 管理员密码。",
-                modifier = Modifier.padding(bottom = 18.dp),
-                color = MediaHubColors.TextSecondary,
-                fontSize = 13.sp,
-            )
-            MediaHubPasswordField(
-                value = uiState.password,
-                onValueChange = onPasswordChanged,
-                visible = uiState.passwordVisible,
-                onVisibilityChanged = onVisibilityChanged,
-                onSubmit = onSubmit,
-                enabled = !uiState.submitting,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            uiState.errorMessage?.let { message ->
-                MediaHubText(
-                    text = message,
-                    modifier = Modifier
-                        .padding(top = 12.dp)
-                        .semantics { liveRegion = LiveRegionMode.Polite },
-                    color = MediaHubColors.Error,
-                    fontSize = 12.sp,
-                )
-            }
-            MediaHubButton(
-                label = if (uiState.submitting) "正在登录…" else "登录",
-                icon = Lucide.LogIn,
-                enabled = uiState.password.isNotEmpty() && !uiState.submitting,
-                onClick = onSubmit,
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-            )
-            MediaHubText(
-                text = serverUrl,
-                modifier = Modifier.padding(top = 16.dp),
-                color = MediaHubColors.TextMuted,
+                text = message,
+                modifier = Modifier
+                    .padding(top = 12.dp)
+                    .semantics { liveRegion = LiveRegionMode.Polite },
+                color = MediaHubColors.Error,
                 fontSize = 12.sp,
             )
-            MediaHubSecondaryButton(
-                label = "更换服务器",
-                icon = Lucide.Server,
-                enabled = !uiState.submitting,
-                onClick = onChangeServer,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            )
         }
+        MediaHubButton(
+            label = if (uiState.submitting) "正在登录…" else "登录",
+            icon = Lucide.LogIn,
+            enabled = uiState.password.isNotEmpty() && !uiState.submitting,
+            onClick = onSubmit,
+            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+        )
+        MediaHubSecondaryButton(
+            label = "更换服务器",
+            icon = Lucide.Server,
+            enabled = !uiState.submitting,
+            onClick = onChangeServer,
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+        )
 
         if (LocalTwoPane.current) Spacer(Modifier.height(24.dp)) else Spacer(Modifier.weight(1f))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            MediaHubText(text = "单用户控制台", color = MediaHubColors.TextFaint, fontSize = 12.sp)
-            MediaHubText(text = "Android 客户端", color = MediaHubColors.TextFaint, fontSize = 12.sp)
-        }
     }
 }

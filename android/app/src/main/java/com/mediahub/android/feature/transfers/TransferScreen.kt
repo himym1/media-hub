@@ -1,7 +1,6 @@
 package com.mediahub.android.feature.transfers
 import androidx.activity.compose.BackHandler
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,12 +8,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -22,7 +19,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,10 +46,13 @@ import com.mediahub.android.core.designsystem.MediaHubListDivider
 import com.mediahub.android.core.designsystem.MediaHubPipelineStepper
 import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
-import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
+import com.mediahub.android.core.designsystem.MediaHubTabRow
+import com.mediahub.android.core.designsystem.MediaHubTopAppBar
 import com.mediahub.android.core.designsystem.PipelineStepItem
 import com.mediahub.android.core.designsystem.MediaHubText
+import com.mediahub.android.core.designsystem.MediaHubTextButton
+import com.mediahub.android.app.LocalTwoPane
 import com.mediahub.android.core.network.TransferJob
 import com.mediahub.android.core.network.TransferNotification
 import androidx.compose.runtime.mutableStateOf
@@ -193,11 +192,11 @@ private fun TransferListPage(
                 enabled = !uiState.refreshing,
             )
         }
-        MediaHubSegmentedControl(
+        MediaHubTabRow(
             options = listOf("current" to "当前", "archived" to "已归档"),
             selected = if (uiState.archived) "archived" else "current",
             onSelected = { actions.showArchived(it == "archived") },
-            modifier = Modifier.padding(bottom = 12.dp),
+            modifier = Modifier.padding(bottom = 8.dp),
         )
 
         uiState.errorMessage?.let { message ->
@@ -250,23 +249,20 @@ private fun TransferDetailPage(
     uiState: TransferUiState,
     actions: TransferActions,
 ) {
+    val twoPane = LocalTwoPane.current
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+        modifier = Modifier.fillMaxSize(),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MediaHubIconButton(Lucide.ArrowLeft, "返回任务列表", actions.back)
-            Column(Modifier.weight(1f)) {
-                MediaHubText("任务详情", fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
-                MediaHubText(
-                    uiState.selected?.let(::transferTitle) ?: "正在读取任务",
-                    color = MediaHubColors.TextMuted,
-                    fontSize = 12.sp,
-                )
-            }
-        }
+        MediaHubTopAppBar(
+            title = "任务详情",
+            subtitle = uiState.selected?.let(::transferTitle) ?: "正在读取任务",
+            navigationIcon = {
+                if (!twoPane) {
+                    MediaHubIconButton(Lucide.ArrowLeft, "返回任务列表", actions.back)
+                }
+            },
+        )
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         uiState.errorMessage?.let { MediaHubText(it, color = MediaHubColors.Error, fontSize = 12.sp) }
         LazyColumn(
             modifier = Modifier.weight(1f),
@@ -290,56 +286,29 @@ private fun TransferDetailPage(
                 }
             }
         }
+        }
     }
 }
 
 @Composable
 private fun TransferRow(job: TransferJob, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 52.dp)
-            .background(if (selected) MediaHubColors.SurfaceSelected else androidx.compose.ui.graphics.Color.Transparent)
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                MediaHubText(
-                    text = transferTitle(job),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MediaHubColors.TextStrong,
-                )
-                MediaHubBadge(
-                    text = job.source.uppercase(),
-                    variant = BadgeVariant.Source,
-                )
-            }
-            MediaHubText(
-                text = formatTime(job.updatedAt),
-                modifier = Modifier.padding(top = 4.dp),
-                color = MediaHubColors.TextMuted,
-                fontSize = 12.sp,
+    val summary = buildList {
+        add(job.source.uppercase())
+        add(formatTime(job.updatedAt))
+        job.errorMessage?.takeIf { it.isNotBlank() }?.let(::add)
+    }.joinToString(" · ")
+    MediaHubPreferenceRow(
+        title = transferTitle(job),
+        summary = summary,
+        selected = selected,
+        onClick = onClick,
+        end = {
+            MediaHubBadge(
+                text = stateLabel(job.state),
+                variant = stateBadgeVariant(job.state),
             )
-            job.errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
-                MediaHubText(
-                    text = message,
-                    modifier = Modifier.padding(top = 4.dp),
-                    color = MediaHubColors.Error,
-                    fontSize = 12.sp,
-                )
-            }
-        }
-        MediaHubBadge(
-            text = stateLabel(job.state),
-            variant = stateBadgeVariant(job.state),
-        )
-    }
+        },
+    )
 }
 
 @Composable
@@ -407,28 +376,36 @@ private fun TransferDetail(
                 )
             }
         }
-        if (job.retryable) {
-            MediaHubButton(
-                label = if (retrying) "正在重试" else "重试任务",
-                icon = Lucide.RotateCcw,
-                enabled = !retrying && !deleting,
-                onClick = onRetry,
+        if (job.retryable || canArchiveTransfer(job)) {
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        if (canArchiveTransfer(job)) {
-            MediaHubSecondaryButton(
-                label = if (archiving) "正在处理" else if (archived) "恢复到任务列表" else "归档任务",
-                icon = if (archived) Lucide.ArchiveRestore else Lucide.Archive,
-                enabled = !archiving && !deleting,
-                onClick = onSetArchived,
-                modifier = Modifier.fillMaxWidth(),
-            )
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (job.retryable) {
+                    MediaHubButton(
+                        label = if (retrying) "正在重试" else "重试任务",
+                        icon = Lucide.RotateCcw,
+                        enabled = !retrying && !deleting,
+                        onClick = onRetry,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (canArchiveTransfer(job)) {
+                    MediaHubSecondaryButton(
+                        label = if (archiving) "正在处理" else if (archived) "恢复到任务列表" else "归档任务",
+                        icon = if (archived) Lucide.ArchiveRestore else Lucide.Archive,
+                        enabled = !archiving && !deleting,
+                        onClick = onSetArchived,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
         if (canDeleteTransfer(job)) {
-            MediaHubSecondaryButton(
+            MediaHubTextButton(
                 label = if (deleting) "正在删除" else "删除任务",
                 icon = Lucide.Trash2,
+                destructive = true,
                 enabled = !deleting && !archiving && !retrying,
                 onClick = { confirmingDelete = true },
                 modifier = Modifier.fillMaxWidth(),
