@@ -34,7 +34,7 @@ class AppContainer(context: Context) {
             generation = ++generationCounter,
             serverIdentity = serverIdentity(transport.baseUrl),
             repository = MediaHubRepository(MediaHubApi(transport), sessionStore, discoveryCache),
-            playbackRepository = NetworkPlaybackRepository(transport, sessionStore),
+            playbackRepository = NetworkPlaybackRepository(transport, sessionStore, appContext.cacheDir),
             posterLoader = EmbyPosterLoader(appContext, transport, sessionStore),
         ).also { configured = it }
     }

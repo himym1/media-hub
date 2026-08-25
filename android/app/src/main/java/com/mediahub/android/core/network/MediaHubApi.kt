@@ -419,6 +419,19 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         )
     }
 
+    suspend fun fetchLocalSubtitle(token: String, itemId: String): DownloadedFile? =
+        try {
+            http.requestFile(
+                path = "/api/v1/integrations/emby/items/${encode(itemId)}/local-subtitle",
+                token = token,
+                accept = "application/x-subrip, text/x-ssa, text/plain",
+                maxBytes = 8 * 1024 * 1024,
+                readTimeoutMs = MediaHubHttpClient.SUBTITLE_READ_TIMEOUT_MS,
+            )
+        } catch (error: ApiException) {
+            if (error.status == 404) null else throw error
+        }
+
 
     suspend fun search(token: String, query: String): SearchResponse {
         val encodedQuery = URLEncoder.encode(query, Charsets.UTF_8.name())

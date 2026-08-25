@@ -398,6 +398,12 @@ class ApiException(
     message: String,
 ) : Exception(message)
 
+data class DownloadedFile(
+    val bytes: ByteArray,
+    val contentType: String,
+    val fileName: String,
+)
+
 data class ArchiveSuggestion(val fileId: String, val currentName: String, val suggestedName: String, val kind: String, val confidence: String)
 data class ArchiveStep(val operation: String, val fileId: String, val name: String = "", val targetParentId: String = "")
 data class ArchivePlan(val id: String, val state: String, val stepIndex: Int, val stepTotal: Int, val errorMessage: String, val createdAt: String)

@@ -10,6 +10,7 @@ class PlaybackSessionReporterTest {
         val events = mutableListOf<PlaybackSessionEvent>()
         val repository = object : PlaybackRepository {
             override suspend fun createDescriptor(request: PlaybackRequest): PlaybackDescriptor = error("not used")
+            override suspend fun fetchLocalSubtitle(itemId: String) = null
             override suspend fun reportSession(sessionId: String, event: PlaybackSessionEvent, positionMs: Long, paused: Boolean) {
                 synchronized(events) { events += event }
             }
@@ -32,6 +33,7 @@ class PlaybackSessionReporterTest {
         val reports = mutableListOf<Pair<String, PlaybackSessionEvent>>()
         val repository = object : PlaybackRepository {
             override suspend fun createDescriptor(request: PlaybackRequest): PlaybackDescriptor = error("not used")
+            override suspend fun fetchLocalSubtitle(itemId: String) = null
             override suspend fun reportSession(sessionId: String, event: PlaybackSessionEvent, positionMs: Long, paused: Boolean) {
                 synchronized(reports) { reports += sessionId to event }
             }

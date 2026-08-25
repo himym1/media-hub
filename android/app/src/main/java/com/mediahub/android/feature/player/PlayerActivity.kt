@@ -85,7 +85,13 @@ class PlayerActivity : ComponentActivity() {
                                 subtitleViewModel.search(itemId = id, label = request.title)
                             }
                         },
-                        onDownload = subtitleViewModel::download,
+                        onDownload = { subtitleId ->
+                            subtitleViewModel.download(subtitleId) {
+                                embyItemId?.let { id ->
+                                    startService(MediaHubPlaybackService.attachLocalSubtitleIntent(this@PlayerActivity, id))
+                                }
+                            }
+                        },
                         onClear = subtitleViewModel::clear,
                     ),
                     playerActions = PlayerActions(

@@ -46,6 +46,25 @@ func (s *Service) Search(ctx context.Context, itemID, language string) ([]emby.R
 	return s.emby.SearchRemoteSubtitles(ctx, itemID, language)
 }
 
+func (s *Service) Local(ctx context.Context, itemID string) (strm.Sidecar, error) {
+	if s.emby == nil {
+		return strm.Sidecar{}, emby.ErrNotConfigured
+	}
+	target, err := s.emby.SubtitleTarget(ctx, itemID)
+	if err != nil {
+		return strm.Sidecar{}, err
+	}
+	mount := ""
+	if s.mount != nil {
+		mount = s.mount()
+	}
+	mediaPath, err := strm.ResolveLibraryFile(mount, target.Path)
+	if err != nil {
+		return strm.Sidecar{}, strm.ErrSidecarNotFound
+	}
+	return strm.ReadSidecar(mediaPath, "chi")
+}
+
 func (s *Service) Download(ctx context.Context, itemID, subtitleID string) error {
 	if strings.HasPrefix(subtitleID, assrtIDPrefix) {
 		return s.downloadAssrt(ctx, itemID, strings.TrimPrefix(subtitleID, assrtIDPrefix))

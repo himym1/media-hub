@@ -15,6 +15,7 @@ import (
 	"media-hub/backend/internal/assrt"
 	"media-hub/backend/internal/drive115"
 	"media-hub/backend/internal/emby"
+	"media-hub/backend/internal/strm"
 )
 
 var embyIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
@@ -350,6 +351,30 @@ func (h *handler) downloadEmbyRemoteSubtitle(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
 }
 
+func (h *handler) getLocalSubtitle(w http.ResponseWriter, r *http.Request) {
+	itemID := r.PathValue("id")
+	if !embyIDPattern.MatchString(itemID) {
+		writeInvalidEmbyID(w)
+		return
+	}
+	if h.dependencies.RemoteSubtitles == nil {
+		writeIntegrationProblem(w, strm.ErrSidecarNotFound)
+		return
+	}
+	sidecar, err := h.dependencies.RemoteSubtitles.Local(r.Context(), itemID)
+	if err != nil {
+		writeIntegrationProblem(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", sidecar.ContentType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(sidecar.Body)))
+	w.Header().Set("Content-Disposition", `attachment; filename="`+sidecar.Name+`"`)
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(sidecar.Body)
+}
+
 func readEmbyPage(w http.ResponseWriter, r *http.Request) (int, int, bool) {
 	offset := 0
 	limit := 50
@@ -412,6 +437,11 @@ func writeIntegrationProblem(w http.ResponseWriter, err error) {
 		writeProblem(w, problem{
 			Type:  "https://media-hub.local/problems/emby-item-not-found",
 			Title: "Emby 媒体不存在", Status: http.StatusNotFound, Code: "emby_item_not_found",
+		})
+	case errors.Is(err, strm.ErrSidecarNotFound):
+		writeProblem(w, problem{
+			Type:  "https://media-hub.local/problems/local-subtitle-not-found",
+			Title: "还没有可挂载的中文字幕", Status: http.StatusNotFound, Code: "local_subtitle_not_found",
 		})
 	case isIntegrationTimeout(err):
 		writeProblem(w, problem{

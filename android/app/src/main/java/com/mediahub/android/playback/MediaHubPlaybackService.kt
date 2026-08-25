@@ -22,6 +22,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val SeekStepMs = 10_000L
 
@@ -128,6 +130,7 @@ class MediaHubPlaybackService : MediaSessionService() {
             ACTION_PLAY -> PlaybackRequestIntentCodec.read(intent)?.let { request ->
                 commandCoordinator.submitPlay(request, intent.getBooleanExtra(EXTRA_FORCE, false))
             }
+            ACTION_ATTACH_LOCAL_SUBTITLE -> intent.getStringExtra(EXTRA_ITEM_ID)?.let(::attachLocalSubtitle)
         }
         return super.onStartCommand(intent, flags, startId)
     }
@@ -147,17 +150,51 @@ class MediaHubPlaybackService : MediaSessionService() {
     private fun play(request: PlaybackRequest, descriptor: PlaybackDescriptor, positionMs: Long, autoPlay: Boolean) {
         sessionTracker.attach(descriptor.sessionId)
         httpFactory.setUserAgent(descriptor.userAgent)
-        val item = MediaItem.Builder()
+        var item = MediaItem.Builder()
             .setMediaId(request.mediaId)
             .setUri(descriptor.streamUrl.toUri())
             .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder().setTitle(descriptor.title).build())
             .build()
+        descriptor.subtitle?.let {
+            item = item.withLocalSubtitle(it)
+            preferChineseSubtitle()
+        }
         val startPositionMs = positionMs.takeIf { it > 0L } ?: descriptor.startPositionMs
         player.stop()
         player.clearMediaItems()
         player.setMediaItem(item, startPositionMs)
         player.prepare()
         player.playWhenReady = autoPlay
+    }
+
+    private fun attachLocalSubtitle(itemId: String) {
+        if (!itemId.matches(Regex("^[A-Za-z0-9_-]{1,128}$"))) return
+        val mediaId = player.currentMediaItem?.mediaId.orEmpty()
+        if (!mediaId.endsWith(":emby:$itemId")) return
+        scope.launch {
+            val downloaded = runCatching {
+                (application as MediaHubApplication).container.requireConfigured()
+                    .playbackRepository.fetchLocalSubtitle(itemId)
+            }.getOrNull() ?: return@launch
+            val cached = withContext(Dispatchers.IO) {
+                writeLocalSubtitleCache(cacheDir, itemId, downloaded.bytes, downloaded.contentType, downloaded.fileName)
+            } ?: return@launch
+            val current = player.currentMediaItem ?: return@launch
+            if (current.mediaId != mediaId) return@launch
+            val positionMs = player.currentPosition.coerceAtLeast(0L)
+            val autoPlay = player.playWhenReady
+            preferChineseSubtitle()
+            player.setMediaItem(current.withLocalSubtitle(cached), positionMs)
+            player.prepare()
+            player.playWhenReady = autoPlay
+        }
+    }
+
+    private fun preferChineseSubtitle() {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setPreferredTextLanguage("zh")
+            .build()
     }
 
 
@@ -182,7 +219,9 @@ class MediaHubPlaybackService : MediaSessionService() {
 
         private const val ACTION_PLAY = "com.mediahub.android.action.PLAY_115"
         private const val ACTION_INVALIDATE = "com.mediahub.android.action.INVALIDATE_PLAYBACK"
+        private const val ACTION_ATTACH_LOCAL_SUBTITLE = "com.mediahub.android.action.ATTACH_LOCAL_SUBTITLE"
         private const val EXTRA_FORCE = "force"
+        private const val EXTRA_ITEM_ID = "itemId"
 
         fun invalidateIntent(context: Context): Intent =
             Intent(context, MediaHubPlaybackService::class.java).setAction(ACTION_INVALIDATE)
@@ -192,7 +231,26 @@ class MediaHubPlaybackService : MediaSessionService() {
                 Intent(context, MediaHubPlaybackService::class.java).setAction(ACTION_PLAY),
                 request,
             ).putExtra(EXTRA_FORCE, force)
+
+        fun attachLocalSubtitleIntent(context: Context, itemId: String): Intent =
+            Intent(context, MediaHubPlaybackService::class.java)
+                .setAction(ACTION_ATTACH_LOCAL_SUBTITLE)
+                .putExtra(EXTRA_ITEM_ID, itemId)
     }
 }
+
+private fun MediaItem.withLocalSubtitle(subtitle: LocalSubtitleFile): MediaItem =
+    buildUpon()
+        .setSubtitleConfigurations(
+            listOf(
+                MediaItem.SubtitleConfiguration.Builder(subtitle.file.toUri())
+                    .setMimeType(subtitle.mimeType)
+                    .setLanguage("zh")
+                    .setLabel("中文")
+                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                    .build(),
+            ),
+        )
+        .build()
 
 

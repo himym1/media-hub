@@ -158,6 +158,27 @@ func TestDownloadWritesAssrtSidecarAndRefreshes(t *testing.T) {
 	}
 }
 
+func TestLocalReadsWrittenSidecar(t *testing.T) {
+	mount := t.TempDir()
+	mediaDir := filepath.Join(mount, "电视剧", "信号")
+	if err := os.MkdirAll(mediaDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	media := filepath.Join(mediaDir, "S01E01.strm")
+	if err := os.WriteFile(media, []byte("https://example/115/url/x"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mediaDir, "S01E01.chi.srt"), []byte("1\n00:00:01,000 --> 00:00:02,000\n你好\n"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	stub := &embyStub{target: emby.SubtitleTarget{ID: "ep-1", Path: "/media3/115-strm/电视剧/信号/S01E01.strm"}}
+	service := New(stub, nil, func() string { return mount })
+	sidecar, err := service.Local(context.Background(), "ep-1")
+	if err != nil || sidecar.Name != "chi.srt" || sidecar.ContentType != "application/x-subrip" || !strings.Contains(string(sidecar.Body), "你好") {
+		t.Fatalf("sidecar=%#v err=%v", sidecar, err)
+	}
+}
+
 func TestDownloadRoutesEmbyIDs(t *testing.T) {
 	stub := &embyStub{}
 	service := New(stub, nil, nil)

@@ -1,11 +1,22 @@
 package strm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+var ErrSidecarNotFound = errors.New("local subtitle sidecar not found")
+
+const maxSidecarBytes = 8 << 20
+
+type Sidecar struct {
+	Name        string
+	ContentType string
+	Body        []byte
+}
 
 func ResolveLibraryFile(mount, embyPath string) (string, error) {
 	mount = filepath.Clean(strings.TrimSpace(mount))
@@ -58,6 +69,60 @@ func WriteSidecar(mediaPath, language, sourceName string, body []byte) (string, 
 		return "", err
 	}
 	return dest, nil
+}
+
+func ReadSidecar(mediaPath, language string) (Sidecar, error) {
+	mediaPath = filepath.Clean(mediaPath)
+	if mediaPath == "" || !filepath.IsAbs(mediaPath) {
+		return Sidecar{}, fmt.Errorf("library file path is invalid")
+	}
+	dir := filepath.Dir(mediaPath)
+	stem := strings.TrimSuffix(mediaPath, filepath.Ext(mediaPath))
+	languages := sidecarLanguages(language)
+	for _, lang := range languages {
+		for _, ext := range []string{".ass", ".ssa", ".srt"} {
+			dest := stem + "." + lang + ext
+			if !strings.HasPrefix(dest, dir+string(os.PathSeparator)) {
+				continue
+			}
+			body, err := os.ReadFile(dest)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return Sidecar{}, err
+			}
+			if len(body) == 0 || len(body) > maxSidecarBytes {
+				continue
+			}
+			return Sidecar{
+				Name:        lang + ext,
+				ContentType: sidecarContentType(ext),
+				Body:        body,
+			}, nil
+		}
+	}
+	return Sidecar{}, ErrSidecarNotFound
+}
+
+func sidecarLanguages(language string) []string {
+	lang := sanitizeLanguage(language)
+	if lang == "" {
+		lang = "chi"
+	}
+	if lang == "chi" {
+		return []string{"chi", "zh", "chs"}
+	}
+	return []string{lang}
+}
+
+func sidecarContentType(ext string) string {
+	switch ext {
+	case ".ass", ".ssa":
+		return "text/x-ssa"
+	default:
+		return "application/x-subrip"
+	}
 }
 
 func sidecarExtension(name string) string {

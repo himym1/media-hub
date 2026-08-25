@@ -1,6 +1,7 @@
 package strm
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -43,5 +44,20 @@ func TestWriteSidecarNextToSTRM(t *testing.T) {
 	body, err := os.ReadFile(dest)
 	if err != nil || string(body) != "[Script Info]\n" {
 		t.Fatalf("sidecar = %q err=%v", body, err)
+	}
+	sidecar, err := ReadSidecar(media, "chi")
+	if err != nil || sidecar.Name != "chi.ass" || sidecar.ContentType != "text/x-ssa" || string(sidecar.Body) != "[Script Info]\n" {
+		t.Fatalf("sidecar=%#v err=%v", sidecar, err)
+	}
+}
+
+func TestReadSidecarMissing(t *testing.T) {
+	dir := t.TempDir()
+	media := filepath.Join(dir, "S01E01.strm")
+	if err := os.WriteFile(media, []byte("https://example/115/url/x"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadSidecar(media, "chi"); !errors.Is(err, ErrSidecarNotFound) {
+		t.Fatalf("err=%v", err)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"media-hub/backend/internal/integration"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/settings"
+	"media-hub/backend/internal/strm"
 	"media-hub/backend/internal/workflow"
 )
 
@@ -157,6 +158,19 @@ func (*embyStub) SearchRemoteSubtitles(context.Context, string, string) ([]emby.
 func (stub *embyStub) DownloadRemoteSubtitle(_ context.Context, itemID, subtitleID string) error {
 	stub.downloadedSubtitle = itemID + ":" + subtitleID
 	return nil
+}
+
+type localSubtitleStub struct {
+	sidecar strm.Sidecar
+	err     error
+}
+
+func (stub localSubtitleStub) Search(context.Context, string, string) ([]emby.RemoteSubtitle, error) {
+	return nil, nil
+}
+func (stub localSubtitleStub) Download(context.Context, string, string) error { return nil }
+func (stub localSubtitleStub) Local(context.Context, string) (strm.Sidecar, error) {
+	return stub.sidecar, stub.err
 }
 
 type settingsStub struct {
@@ -549,5 +563,33 @@ func TestCreateTransferAcceptsAndroidBearerAndIdempotencyKey(t *testing.T) {
 	}
 	if provider.idempotencyKey != "request_one" {
 		t.Fatalf("idempotency key = %q", provider.idempotencyKey)
+	}
+}
+
+func TestLocalSubtitleRouteServesSidecar(t *testing.T) {
+	router := NewRouter("test-version", Dependencies{
+		Auth: authStub{},
+		RemoteSubtitles: localSubtitleStub{sidecar: strm.Sidecar{
+			Name: "chi.srt", ContentType: "application/x-subrip", Body: []byte("1\n00:00:01,000 --> 00:00:02,000\n你好\n"),
+		}},
+	})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, authenticatedRequest(http.MethodGet, "/api/v1/integrations/emby/items/item-1/local-subtitle"))
+	if recorder.Code != http.StatusOK || recorder.Header().Get("Content-Type") != "application/x-subrip" ||
+		!strings.Contains(recorder.Body.String(), "你好") ||
+		!strings.Contains(recorder.Header().Get("Content-Disposition"), "chi.srt") {
+		t.Fatalf("status=%d type=%q disp=%q body=%q", recorder.Code, recorder.Header().Get("Content-Type"), recorder.Header().Get("Content-Disposition"), recorder.Body.String())
+	}
+}
+
+func TestLocalSubtitleRouteNotFound(t *testing.T) {
+	router := NewRouter("test-version", Dependencies{
+		Auth:            authStub{},
+		RemoteSubtitles: localSubtitleStub{err: strm.ErrSidecarNotFound},
+	})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, authenticatedRequest(http.MethodGet, "/api/v1/integrations/emby/items/item-1/local-subtitle"))
+	if recorder.Code != http.StatusNotFound || !strings.Contains(recorder.Body.String(), "local_subtitle_not_found") {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }

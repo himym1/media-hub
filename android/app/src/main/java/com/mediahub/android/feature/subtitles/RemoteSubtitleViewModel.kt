@@ -81,7 +81,7 @@ class RemoteSubtitleViewModel(
                 if (_uiState.value.targetId == itemId) {
                     _uiState.value = _uiState.value.copy(
                         downloadingId = null,
-                        message = "下载成功，重新打开音轨/字幕可选中文字幕",
+                        message = "已挂上中文字幕，可在字幕列表里选择",
                     )
                     onSuccess?.invoke()
                 }

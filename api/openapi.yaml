@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.20.8
+  version: 0.20.9
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -682,6 +682,24 @@ paths:
         '502': { $ref: '#/components/responses/ProblemResponse' }
         '503': { $ref: '#/components/responses/ProblemResponse' }
         '504': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/emby/items/{id}/local-subtitle:
+    get:
+      operationId: getEmbyLocalSubtitle
+      summary: Read the Chinese sidecar written next to the STRM so the player can attach it
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
+      responses:
+        '200':
+          description: Local Chinese subtitle sidecar
+          content:
+            application/x-subrip: { schema: { type: string, format: binary } }
+            text/x-ssa: { schema: { type: string, format: binary } }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
   /integrations/emby/items/{id}/delete-preview:
     get:
       operationId: previewEmbyItemDelete

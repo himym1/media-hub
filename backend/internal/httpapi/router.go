@@ -74,6 +74,7 @@ type EmbyReader interface {
 type RemoteSubtitles interface {
 	Search(context.Context, string, string) ([]emby.RemoteSubtitle, error)
 	Download(context.Context, string, string) error
+	Local(context.Context, string) (strm.Sidecar, error)
 }
 
 type EmbyPosterCache interface {
@@ -243,6 +244,7 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("POST /api/v1/integrations/emby/items/{id}/refresh", h.protected(h.refreshEmbyItem))
 	mux.Handle("GET /api/v1/integrations/emby/items/{id}/remote-subtitles", h.protected(h.searchEmbyRemoteSubtitles))
 	mux.Handle("POST /api/v1/integrations/emby/items/{id}/remote-subtitles", h.protected(h.downloadEmbyRemoteSubtitle))
+	mux.Handle("GET /api/v1/integrations/emby/items/{id}/local-subtitle", h.protected(h.getLocalSubtitle))
 	mux.Handle("GET /api/v1/integrations/emby/items/{id}/delete-preview", h.protected(h.previewEmbyItemDelete))
 	mux.Handle("POST /api/v1/integrations/emby/items/{id}/delete", h.protected(h.deleteEmbyItem))
 	mux.Handle("POST /api/v1/integrations/wecom/test", h.protected(h.testWeComNotification))

@@ -81,6 +81,38 @@ class MediaHubHttpClient(baseUrl: String) {
         }
     }
 
+    suspend fun requestFile(
+        path: String,
+        token: String,
+        accept: String,
+        maxBytes: Int,
+        readTimeoutMs: Int = READ_TIMEOUT_MS,
+    ): DownloadedFile = withContext(Dispatchers.IO) {
+        require(path.startsWith('/')) { "Media Hub API path must be absolute" }
+        val connection = URL(baseUrl + path).openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            connection.readTimeout = readTimeoutMs
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Accept", accept)
+            connection.setRequestProperty("Authorization", "Bearer $token")
+            connection.setRequestProperty("User-Agent", "Media-Hub-Android/${BuildConfig.VERSION_NAME}")
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                val problem = connection.errorStream.readLimited(MAX_RESPONSE_BYTES)
+                throw parseError(status, problem)
+            }
+            DownloadedFile(
+                bytes = connection.inputStream.readBytesLimited(maxBytes),
+                contentType = connection.contentType.orEmpty(),
+                fileName = contentDispositionFileName(connection.getHeaderField("Content-Disposition")),
+            )
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     private fun parseError(status: Int, body: String): ApiException {
         val payload = runCatching { JSONObject(body) }.getOrNull()
         return ApiException(
@@ -127,4 +159,11 @@ class MediaHubHttpClient(baseUrl: String) {
         private const val CONNECT_TIMEOUT_MS = 5_000
         private const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
     }
+}
+
+internal fun contentDispositionFileName(header: String?): String {
+    val raw = header.orEmpty()
+    val match = Regex("filename\\*?=(?:UTF-8''|\"?)([^\";]+)", RegexOption.IGNORE_CASE).find(raw)
+    val value = match?.groupValues?.getOrNull(1)?.trim()?.trim('"').orEmpty()
+    return value.takeIf { it.matches(Regex("^[A-Za-z0-9._-]{1,64}$")) }.orEmpty()
 }

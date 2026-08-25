@@ -222,6 +222,9 @@ class MediaHubRepository(
     suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String) =
         authenticated { token -> api.downloadRemoteSubtitle(token, itemId, subtitleId) }
 
+    suspend fun fetchLocalSubtitle(itemId: String) =
+        authenticated { token -> api.fetchLocalSubtitle(token, itemId) }
+
     suspend fun providerSettings(): ProviderSettings = authenticated(api::providerSettings)
     suspend fun updateProviderSettings(input: ProviderSettingsUpdate): ProviderSettings = authenticated { api.updateProviderSettings(it, input) }
     suspend fun testWeComNotification() = authenticated(api::testWeComNotification)
