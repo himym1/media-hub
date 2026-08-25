@@ -76,7 +76,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
 import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
@@ -162,6 +162,25 @@ private enum class DragGestureMode {
     HORIZONTAL_SEEK,
     VERTICAL_BRIGHTNESS,
     VERTICAL_VOLUME,
+}
+
+@Composable
+private fun rememberPlayerTracks(player: Player): Tracks {
+    var tracks by remember(player) { mutableStateOf(player.currentTracks) }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onTracksChanged(current: Tracks) {
+                tracks = current
+            }
+
+            override fun onTrackSelectionParametersChanged(parameters: TrackSelectionParameters) {
+                tracks = player.currentTracks
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+    return tracks
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -358,7 +377,7 @@ internal fun PlayerScreen(
                             lockIndicatorVisible = false
                         }
                     },
-                    modifier = Modifier.size(46.dp),
+                    modifier = Modifier.size(48.dp),
                     iconSize = 20.dp,
                 )
             }
@@ -435,22 +454,21 @@ internal fun PlayerScreen(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(Color(0xE6111827))
-                            .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
-                            .padding(horizontal = 32.dp, vertical = 24.dp),
+                            .padding(horizontal = 18.dp, vertical = 14.dp),
                     ) {
                         CircularProgressIndicator(
                             color = Color(0xFF38BDF8),
-                            modifier = Modifier.size(38.dp),
-                            strokeWidth = 3.5.dp,
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.5.dp,
                         )
                         MediaHubText(
                             text = "正在准备视频…",
                             color = Color.White,
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                         )
                     }
@@ -461,21 +479,19 @@ internal fun PlayerScreen(
                 Column(
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .fillMaxWidth()
                         .padding(horizontal = 24.dp)
-                        .widthIn(max = 440.dp)
-                        .clip(RoundedCornerShape(24.dp))
+                        .widthIn(max = 300.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(Color(0xF20F172A))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(24.dp))
-                        .padding(28.dp),
+                        .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     MediaHubIcon(
                         imageVector = Lucide.CircleAlert,
                         contentDescription = null,
                         tint = MediaHubColors.Error,
-                        modifier = Modifier.size(44.dp),
+                        modifier = Modifier.size(28.dp),
                     )
                     MediaHubText(
                         text = state.message,
@@ -577,7 +593,7 @@ private fun PlayerTopBar(
                 imageVector = Lucide.ArrowLeft,
                 contentDescription = "返回",
                 onClick = actions.onBack,
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(48.dp),
                 iconSize = 20.dp,
             )
 
@@ -590,41 +606,11 @@ private fun PlayerTopBar(
                 MediaHubText(
                     text = title,
                     color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0x2638BDF8))
-                            .border(0.5.dp, Color(0x5538BDF8), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 5.dp, vertical = 1.dp),
-                    ) {
-                        MediaHubText(
-                            text = "115 极速直链",
-                            color = Color(0xFF7DD3FC),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    MediaHubText(
-                        text = "·",
-                        color = Color.White.copy(alpha = 0.4f),
-                        fontSize = 11.sp,
-                    )
-                    MediaHubText(
-                        text = "4K 原画 · 杜比音效",
-                        color = Color.White.copy(alpha = 0.60f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Normal,
-                    )
-                }
             }
 
             // Aspect Ratio Liquid Pill Button
@@ -638,16 +624,15 @@ private fun PlayerTopBar(
                 imageVector = Lucide.Maximize,
                 contentDescription = "旋转屏幕",
                 onClick = actions.onToggleOrientation,
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(48.dp),
                 iconSize = 18.dp,
             )
 
-            // Picture in Picture Button
             PlayerFrostedCircleButton(
                 imageVector = Lucide.PictureInPicture2,
                 contentDescription = "进入画中画",
                 onClick = actions.onEnterPictureInPicture,
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(48.dp),
                 iconSize = 18.dp,
             )
         }
@@ -678,10 +663,9 @@ private fun PlayerCenterControls(
 
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(40.dp),
+        horizontalArrangement = Arrangement.spacedBy(28.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Rewind 10s Button
         PlayerFrostedCircleButton(
             imageVector = Lucide.RotateCcw,
             contentDescription = "后退 10 秒",
@@ -690,18 +674,16 @@ private fun PlayerCenterControls(
                 onUserInteraction()
                 controller.seekBack()
             },
-            modifier = Modifier.size(54.dp),
-            iconSize = 24.dp,
+            modifier = Modifier.size(48.dp),
+            iconSize = 22.dp,
         )
 
-        // Main Play / Pause Luminous Core
         Box(
             modifier = Modifier
-                .size(76.dp)
-                .shadow(24.dp, CircleShape, spotColor = Color(0x9038BDF8))
+                .size(58.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.20f))
-                .border(1.5.dp, Color.White.copy(alpha = 0.45f), CircleShape)
+                .background(Color.White.copy(alpha = 0.16f))
+                .border(1.dp, Color.White.copy(alpha = 0.28f), CircleShape)
                 .clickable(
                     role = Role.Button,
                     onClick = {
@@ -716,11 +698,10 @@ private fun PlayerCenterControls(
                 imageVector = if (isPlaying) Lucide.Pause else Lucide.Play,
                 contentDescription = if (isPlaying) "暂停" else "播放",
                 tint = Color.White,
-                modifier = Modifier.size(36.dp),
+                modifier = Modifier.size(28.dp),
             )
         }
 
-        // Forward 10s Button
         PlayerFrostedCircleButton(
             imageVector = Lucide.RotateCw,
             contentDescription = "前进 10 秒",
@@ -729,8 +710,8 @@ private fun PlayerCenterControls(
                 onUserInteraction()
                 controller.seekForward()
             },
-            modifier = Modifier.size(54.dp),
-            iconSize = 24.dp,
+            modifier = Modifier.size(48.dp),
+            iconSize = 22.dp,
         )
     }
 }
@@ -982,31 +963,11 @@ private fun PlayerBottomControls(
         // Row 2: Secondary Quick Actions Row (Streamlined, No duplicate buttons)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Left Status Pill
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF34D399)),
-                )
-                MediaHubText(
-                    text = "硬件解码 · 极速缓冲",
-                    color = Color.White.copy(alpha = 0.45f),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-
-            // Right Utilities: Speed Capsule & Audio/Subtitle Drawer Trigger
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 PlayerLiquidPillButton(
@@ -1496,9 +1457,6 @@ private fun PlayerCenterSeekHud(
     }
 }
 
-/**
- * Modern Frosted Glass Side Drawer for Audio & Subtitle Track Selection.
- */
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 private fun PlayerTrackSelectionDrawer(
@@ -1511,15 +1469,17 @@ private fun PlayerTrackSelectionDrawer(
     var selectedTab by remember { mutableIntStateOf(0) }
     val haptic = LocalHapticFeedback.current
     val canSearchRemoteSubtitles = !embyItemId.isNullOrBlank()
-
-    val currentTracks = player.currentTracks
-    val subtitleGroups = currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
-    val audioGroups = currentTracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+    val currentTracks = rememberPlayerTracks(player)
+    val subtitleOptions = playerTrackOptions(currentTracks, C.TRACK_TYPE_TEXT)
+    val audioOptions = playerTrackOptions(currentTracks, C.TRACK_TYPE_AUDIO)
+    val canSelectTracks = player.isCommandAvailable(Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS)
+    val isSubtitlesDisabled = player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT) ||
+        subtitleOptions.none { it.selected }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.60f))
+            .background(Color.Black.copy(alpha = 0.35f))
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
@@ -1529,19 +1489,19 @@ private fun PlayerTrackSelectionDrawer(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxHeight()
-                .widthIn(min = 300.dp, max = 350.dp)
+                .padding(end = 12.dp, top = 16.dp, bottom = 16.dp)
+                .width(248.dp)
+                .heightIn(max = 320.dp)
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
                     onClick = {},
                 )
+                .clip(RoundedCornerShape(12.dp))
                 .background(Color(0xF20B101B))
-                .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp))
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Header: Title & Close Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1550,77 +1510,59 @@ private fun PlayerTrackSelectionDrawer(
                 MediaHubText(
                     text = "音轨与字幕",
                     color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
                 )
                 PlayerFrostedCircleButton(
                     imageVector = Lucide.X,
                     contentDescription = "关闭",
                     onClick = onDismiss,
-                    modifier = Modifier.size(36.dp),
-                    iconSize = 18.dp,
+                    modifier = Modifier.size(48.dp),
+                    iconSize = 16.dp,
                 )
             }
 
-            // Tab Switcher (Subtitles vs Audio)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(Color.White.copy(alpha = 0.08f))
-                    .padding(3.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    .padding(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (selectedTab == 0) Color(0xFF2563EB) else Color.Transparent)
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            selectedTab = 0
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    MediaHubText(
-                        text = "字幕 (${subtitleGroups.size})",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Medium,
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (selectedTab == 1) Color(0xFF2563EB) else Color.Transparent)
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            selectedTab = 1
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    MediaHubText(
-                        text = "音轨 (${audioGroups.size})",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Medium,
-                    )
-                }
+                PlayerTrackTab(
+                    label = "字幕 (${subtitleOptions.size})",
+                    selected = selectedTab == 0,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        selectedTab = 0
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                PlayerTrackTab(
+                    label = "音轨 (${audioOptions.size})",
+                    selected = selectedTab == 1,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        selectedTab = 1
+                    },
+                    modifier = Modifier.weight(1f),
+                )
             }
 
-            // Track List
+            if (!canSelectTracks) {
+                MediaHubText(
+                    text = "当前无法切换音轨或字幕",
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 12.sp,
+                )
+            }
+
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 if (selectedTab == 0) {
-                    val isSubtitlesDisabled = player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT) ||
-                        subtitleGroups.none { it.isSelected }
-
                     if (canSearchRemoteSubtitles) {
                         item {
                             PlayerRemoteSubtitleSection(
@@ -1638,81 +1580,76 @@ private fun PlayerTrackSelectionDrawer(
                     item {
                         PlayerTrackItem(
                             title = "关闭字幕",
-                            subtitle = "不显示任何字幕",
+                            subtitle = "不显示字幕",
                             isSelected = isSubtitlesDisabled,
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                player.trackSelectionParameters = player.trackSelectionParameters
-                                    .buildUpon()
-                                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                                    .build()
+                                player.disableTrackType(C.TRACK_TYPE_TEXT)
                             },
                         )
                     }
 
-                    items(subtitleGroups) { group ->
-                        val format = group.getTrackFormat(0)
-                        val title = format.label ?: format.language ?: "字幕"
-                        val subtitle = format.sampleMimeType?.substringAfterLast('/')?.uppercase() ?: "内嵌"
-                        val isSelected = group.isSelected && !isSubtitlesDisabled
-
+                    items(subtitleOptions) { option ->
                         PlayerTrackItem(
-                            title = title,
-                            subtitle = subtitle,
-                            isSelected = isSelected,
+                            title = option.title,
+                            subtitle = option.detail,
+                            isSelected = option.selected && !isSubtitlesDisabled,
+                            enabled = option.supported && canSelectTracks,
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                val override = TrackSelectionOverride(group.mediaTrackGroup, 0)
-                                player.trackSelectionParameters = player.trackSelectionParameters
-                                    .buildUpon()
-                                    .setOverrideForType(override)
-                                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                                    .build()
+                                player.applyTrackOption(option)
                             },
+                        )
+                    }
+                } else if (audioOptions.isEmpty()) {
+                    item {
+                        MediaHubText(
+                            text = "暂无多音轨可选",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(12.dp),
                         )
                     }
                 } else {
-                    if (audioGroups.isEmpty()) {
-                        item {
-                            MediaHubText(
-                                text = "暂无多音轨可选",
-                                color = Color.White.copy(alpha = 0.5f),
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(16.dp),
-                            )
-                        }
-                    } else {
-                        items(audioGroups) { group ->
-                            val format = group.getTrackFormat(0)
-                            val title = format.label ?: format.language ?: "默认音轨"
-                            val channels = when (format.channelCount) {
-                                6 -> "5.1 环绕声"
-                                8 -> "7.1 全景声"
-                                2 -> "立体声 2.0"
-                                else -> "${format.channelCount} 声道"
-                            }
-                            val codec = format.sampleMimeType?.substringAfterLast('/')?.uppercase() ?: ""
-                            val isSelected = group.isSelected
-
-                            PlayerTrackItem(
-                                title = title,
-                                subtitle = "$channels · $codec",
-                                isSelected = isSelected,
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    val override = TrackSelectionOverride(group.mediaTrackGroup, 0)
-                                    player.trackSelectionParameters = player.trackSelectionParameters
-                                        .buildUpon()
-                                        .setOverrideForType(override)
-                                        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
-                                        .build()
-                                },
-                            )
-                        }
+                    items(audioOptions) { option ->
+                        PlayerTrackItem(
+                            title = option.title,
+                            subtitle = option.detail,
+                            isSelected = option.selected,
+                            enabled = option.supported && canSelectTracks,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                player.applyTrackOption(option)
+                            },
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PlayerTrackTab(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (selected) Color(0xFF2563EB) else Color.Transparent)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        MediaHubText(
+            text = label,
+            color = Color.White,
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+        )
     }
 }
 
@@ -1747,16 +1684,16 @@ private fun PlayerRemoteSubtitleSection(
                     imageVector = Lucide.X,
                     contentDescription = "关闭字幕结果",
                     onClick = onClear,
-                    modifier = Modifier.size(28.dp),
-                    iconSize = 14.dp,
+                    modifier = Modifier.size(48.dp),
+                    iconSize = 16.dp,
                 )
             }
         }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 40.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFF2563EB).copy(alpha = 0.35f))
                 .clickable(enabled = !subtitleState.searching, onClick = onSearch)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -1784,7 +1721,7 @@ private fun PlayerRemoteSubtitleSection(
             MediaHubText(
                 text = message,
                 color = Color.White.copy(alpha = 0.65f),
-                fontSize = 11.sp,
+                fontSize = 12.sp,
             )
         }
         subtitleState.remoteSubtitles.forEach { subtitle ->
@@ -1831,21 +1768,23 @@ private fun PlayerRemoteSubtitleRow(
                 MediaHubText(
                     text = meta,
                     color = Color.White.copy(alpha = 0.50f),
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                 )
             }
         }
         Box(
             modifier = Modifier
+                .heightIn(min = 48.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(if (enabled) Color(0xFF2563EB) else Color.White.copy(alpha = 0.12f))
                 .clickable(enabled = enabled, onClick = onDownload)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center,
         ) {
             MediaHubText(
                 text = if (downloading) "下载中…" else "下载",
                 color = Color.White,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
             )
         }
@@ -1861,19 +1800,16 @@ private fun PlayerTrackItem(
     subtitle: String,
     isSelected: Boolean,
     onClick: () -> Unit,
+    enabled: Boolean = true,
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(8.dp))
             .background(if (isSelected) Color(0xFF2563EB).copy(alpha = 0.30f) else Color.White.copy(alpha = 0.05f))
-            .border(
-                0.5.dp,
-                if (isSelected) Color(0xFF60A5FA) else Color.Transparent,
-                RoundedCornerShape(12.dp),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1890,7 +1826,7 @@ private fun PlayerTrackItem(
                 MediaHubText(
                     text = subtitle,
                     color = Color.White.copy(alpha = 0.50f),
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                 )
             }
             if (isSelected) {
@@ -1905,9 +1841,6 @@ private fun PlayerTrackItem(
     }
 }
 
-/**
- * Frosted Glass Aspect Ratio Selection Dialog.
- */
 @Composable
 private fun PlayerAspectRatioDialog(
     current: PlayerAspectRatio,
@@ -1917,86 +1850,59 @@ private fun PlayerAspectRatioDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.60f))
+            .background(Color.Black.copy(alpha = 0.28f))
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
                 onClick = onDismiss,
             ),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.TopEnd,
     ) {
         Column(
             modifier = Modifier
-                .widthIn(min = 320.dp, max = 380.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .padding(top = 64.dp, end = 16.dp)
+                .width(168.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xF20B101B))
-                .border(0.5.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(20.dp))
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
                     onClick = {},
                 )
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             MediaHubText(
                 text = "画面比例",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             )
             PlayerAspectRatio.options.forEach { mode ->
                 val isSelected = mode == current
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelected) Color(0xFF2563EB).copy(alpha = 0.30f) else Color.White.copy(alpha = 0.07f))
-                        .border(
-                            0.5.dp,
-                            if (isSelected) Color(0xFF60A5FA) else Color.Transparent,
-                            RoundedCornerShape(12.dp),
-                        )
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) Color(0xFF2563EB) else Color.Transparent)
                         .clickable { onSelect(mode) }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                        .semantics { contentDescription = mode.description }
+                        .padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.CenterStart,
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            MediaHubText(
-                                text = mode.label,
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            )
-                            MediaHubText(
-                                text = mode.description,
-                                color = Color.White.copy(alpha = 0.55f),
-                                fontSize = 11.sp,
-                            )
-                        }
-                        if (isSelected) {
-                            MediaHubIcon(
-                                imageVector = Lucide.Check,
-                                contentDescription = null,
-                                tint = Color(0xFF7DD3FC),
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
+                    MediaHubText(
+                        text = mode.label,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                    )
                 }
             }
         }
     }
 }
 
-/**
- * Frosted Glass Speed Selection Dialog.
- */
 @Composable
 private fun PlayerSpeedDialog(
     currentSpeed: Float,
@@ -2006,68 +1912,41 @@ private fun PlayerSpeedDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.60f))
+            .background(Color.Black.copy(alpha = 0.28f))
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
                 onClick = onDismiss,
             ),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.BottomEnd,
     ) {
-        Column(
+        Row(
             modifier = Modifier
-                .widthIn(min = 320.dp, max = 380.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .padding(end = 16.dp, bottom = 72.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xF20B101B))
-                .border(0.5.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(20.dp))
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            MediaHubText(
-                text = "播放速度",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-            )
-
-            val chunkedSpeeds = PlaybackSpeeds.chunked(3)
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                chunkedSpeeds.forEach { rowSpeeds ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        rowSpeeds.forEach { speed ->
-                            val isSelected = abs(speed - currentSpeed) < 0.05f
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (isSelected) Color(0xFF2563EB) else Color.White.copy(alpha = 0.07f),
-                                    )
-                                    .border(
-                                        0.5.dp,
-                                        if (isSelected) Color(0xFF60A5FA) else Color.Transparent,
-                                        RoundedCornerShape(12.dp),
-                                    )
-                                    .clickable { onSelectSpeed(speed) },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                MediaHubText(
-                                    text = "${speed}x",
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                )
-                            }
-                        }
-                    }
+            PlaybackSpeeds.forEach { speed ->
+                val isSelected = abs(speed - currentSpeed) < 0.05f
+                Box(
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .widthIn(min = 48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) Color(0xFF2563EB) else Color.Transparent)
+                        .clickable { onSelectSpeed(speed) }
+                        .padding(horizontal = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    MediaHubText(
+                        text = "${speed}x",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                    )
                 }
             }
         }

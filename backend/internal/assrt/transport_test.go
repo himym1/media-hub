@@ -9,6 +9,15 @@ import (
 	"testing"
 )
 
+func TestAssrtFileHostDetection(t *testing.T) {
+	if !isAssrtFileHost("file1.assrt.net") || !isAssrtFileHost("file0.makedie.me") {
+		t.Fatal("expected Assrt file hosts")
+	}
+	if isAssrtFileHost("api.assrt.net") || isAssrtFileHost("example.com") {
+		t.Fatal("API hosts are not file CDNs")
+	}
+}
+
 func TestAssrtMirrorHostMapping(t *testing.T) {
 	if got := makedieHost("api.assrt.net"); got != "api.makedie.me" {
 		t.Fatalf("makedieHost = %q", got)
@@ -55,6 +64,40 @@ func TestAssrtTransportFallsBackOnBadGateway(t *testing.T) {
 	}
 }
 
+func TestAssrtTransportSendsFilesThroughDedicatedTripper(t *testing.T) {
+	var fileHosts, apiHosts []string
+	files := recordingTripper{hosts: &fileHosts, next: rewriteHost(httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).URL)}
+	api := recordingTripper{hosts: &apiHosts, next: rewriteHost(httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).URL)}
+	transport := &assrtTransport{primary: api, mirror: api, files: files, filesMirror: files}
+
+	fileRequest, err := http.NewRequest(http.MethodGet, "http://file1.assrt.net/x.ass", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := transport.RoundTrip(fileRequest)
+	if err != nil || response.StatusCode != http.StatusOK {
+		t.Fatalf("file status=%v err=%v", response, err)
+	}
+	response.Body.Close()
+
+	apiRequest, err := http.NewRequest(http.MethodGet, "https://api.assrt.net/v1/sub/search?q=assrt", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err = transport.RoundTrip(apiRequest)
+	if err != nil || response.StatusCode != http.StatusOK {
+		t.Fatalf("api status=%v err=%v", response, err)
+	}
+	response.Body.Close()
+	if len(fileHosts) == 0 || len(apiHosts) == 0 {
+		t.Fatalf("fileHosts=%v apiHosts=%v", fileHosts, apiHosts)
+	}
+}
+
 func TestAssrtTransportFallsBackOnPrimaryError(t *testing.T) {
 	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -73,6 +116,18 @@ func TestAssrtTransportFallsBackOnPrimaryError(t *testing.T) {
 		t.Fatalf("status=%v err=%v", response, err)
 	}
 	response.Body.Close()
+}
+
+type recordingTripper struct {
+	hosts *[]string
+	next  http.RoundTripper
+}
+
+func (t recordingTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	if request.URL != nil {
+		*t.hosts = append(*t.hosts, request.URL.Hostname())
+	}
+	return t.next.RoundTrip(request)
 }
 
 type failingRoundTripper struct{}

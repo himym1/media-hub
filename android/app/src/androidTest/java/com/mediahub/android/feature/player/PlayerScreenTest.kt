@@ -115,7 +115,7 @@ class PlayerScreenTest {
         composeRule.setContent {
             MediaHubTheme {
                 PlayerScreen(
-                    state = PlayerUiState.Error("暂时无法获取直链，请稍后重试", retryable = true),
+                    state = PlayerUiState.Error("暂时无法获取直链，请稍后重试", retryable = false),
                     title = "演示影片",
                     controller = null,
                     isPictureInPicture = false,

@@ -11,16 +11,39 @@ import (
 )
 
 func newAssrtHTTPClient(timeout time.Duration, proxyURL *url.URL) *http.Client {
-	primary := http.DefaultTransport.(*http.Transport).Clone()
-	if proxyURL != nil {
-		primary.Proxy = http.ProxyURL(proxyURL)
-	}
-	mirror := primary.Clone()
+	direct := assrtBaseTransport(nil)
+	mirror := direct.Clone()
 	mirror.TLSClientConfig = makedieTLS()
+	files := direct
+	filesMirror := mirror
+	if proxyURL != nil {
+		files = assrtBaseTransport(proxyURL)
+		filesMirror = files.Clone()
+		filesMirror.TLSClientConfig = makedieTLS()
+	}
 	return &http.Client{
-		Timeout: timeout, Transport: &assrtTransport{primary: primary, mirror: mirror},
+		Timeout: timeout,
+		Transport: &assrtTransport{
+			primary:     direct,
+			mirror:      mirror,
+			files:       files,
+			filesMirror: filesMirror,
+		},
 		CheckRedirect: rejectFailedAssrtDownload,
 	}
+}
+
+func assrtBaseTransport(proxyURL *url.URL) *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if proxyURL != nil {
+		transport.Proxy = http.ProxyURL(proxyURL)
+	} else {
+		transport.Proxy = nil
+	}
+	transport.DialContext = (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	transport.TLSHandshakeTimeout = 5 * time.Second
+	transport.ResponseHeaderTimeout = 8 * time.Second
+	return transport
 }
 
 func rejectFailedAssrtDownload(request *http.Request, via []*http.Request) error {
@@ -34,16 +57,25 @@ func rejectFailedAssrtDownload(request *http.Request, via []*http.Request) error
 }
 
 type assrtTransport struct {
-	primary http.RoundTripper
-	mirror  http.RoundTripper
+	primary     http.RoundTripper
+	mirror      http.RoundTripper
+	files       http.RoundTripper
+	filesMirror http.RoundTripper
 }
 
 func (t *assrtTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	if isMakedieHost(request.URL.Hostname()) {
-		return t.mirror.RoundTrip(request)
+	if request.URL != nil && (isAssrtFileHost(request.URL.Hostname()) || isAssrtFileHost(assrtHost(request.URL.Hostname()))) {
+		return t.roundTripWithFallback(request, firstTripper(t.files, t.primary), firstTripper(t.filesMirror, t.mirror))
 	}
-	response, err := t.primary.RoundTrip(request)
-	if !shouldMirrorAssrt(request, response, err) {
+	if request.URL != nil && isMakedieHost(request.URL.Hostname()) {
+		return firstTripper(t.mirror, t.primary).RoundTrip(request)
+	}
+	return t.roundTripWithFallback(request, t.primary, t.mirror)
+}
+
+func (t *assrtTransport) roundTripWithFallback(request *http.Request, first, second http.RoundTripper) (*http.Response, error) {
+	response, err := first.RoundTrip(request)
+	if second == nil || second == first || !shouldMirrorAssrt(request, response, err) {
 		return response, err
 	}
 	if response != nil {
@@ -52,11 +84,18 @@ func (t *assrtTransport) RoundTrip(request *http.Request) (*http.Response, error
 	clone := request.Clone(request.Context())
 	rewriteAssrtURLToMakedie(clone.URL)
 	clone.Host = clone.URL.Host
-	return t.mirror.RoundTrip(clone)
+	return second.RoundTrip(clone)
+}
+
+func firstTripper(preferred, fallback http.RoundTripper) http.RoundTripper {
+	if preferred != nil {
+		return preferred
+	}
+	return fallback
 }
 
 func shouldMirrorAssrt(request *http.Request, response *http.Response, err error) bool {
-	if !isAssrtHost(request.URL.Hostname()) {
+	if request.URL == nil || !isAssrtHost(request.URL.Hostname()) {
 		return false
 	}
 	if err != nil {
@@ -109,6 +148,11 @@ func isAssrtHost(host string) bool {
 func isMakedieHost(host string) bool {
 	host = strings.ToLower(host)
 	return host == "makedie.me" || strings.HasSuffix(host, ".makedie.me")
+}
+
+func isAssrtFileHost(host string) bool {
+	host = strings.ToLower(host)
+	return strings.HasPrefix(host, "file") && (isAssrtHost(host) || isMakedieHost(host))
 }
 
 func makedieHost(host string) string {
