@@ -1,6 +1,6 @@
 # ADR 0003: Native Android with Compose and Miuix
 
-- Status: Accepted
+- Status: Superseded by [ADR 0004](0004-material3-expressive.md)
 - Date: 2026-08-11
 
 ## Context

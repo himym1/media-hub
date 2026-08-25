@@ -1,7 +1,6 @@
 package com.mediahub.android.core.designsystem
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,27 +14,30 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
-import top.yukonga.miuix.kmp.basic.HorizontalDivider
-import top.yukonga.miuix.kmp.basic.NavigationBar
-import top.yukonga.miuix.kmp.basic.NavigationBarItem
-import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Lucide
 
 data class MediaHubNavItem(
     val key: String,
@@ -55,6 +57,8 @@ fun MediaHubScaffold(
         modifier = modifier,
         topBar = topBar,
         bottomBar = bottomBar,
+        containerColor = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         contentWindowInsets = if (consumeWindowInsets) {
             WindowInsets.systemBars.union(WindowInsets.displayCutout)
         } else {
@@ -64,6 +68,7 @@ fun MediaHubScaffold(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MediaHubTopAppBar(
     title: String,
@@ -72,10 +77,30 @@ fun MediaHubTopAppBar(
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     TopAppBar(
-        title = title,
-        subtitle = subtitle,
+        title = {
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
         navigationIcon = navigationIcon,
         actions = actions,
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            actionIconContentColor = MaterialTheme.colorScheme.onSurface,
+            navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+        ),
     )
 }
 
@@ -86,13 +111,35 @@ fun MediaHubNavigationBar(
     onSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    NavigationBar(modifier = modifier) {
+    NavigationBar(
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
         items.forEach { item ->
+            val selected = item.key == selectedKey
             NavigationBarItem(
-                selected = item.key == selectedKey,
+                selected = selected,
                 onClick = { onSelected(item.key) },
-                icon = item.icon,
-                label = item.label,
+                icon = {
+                    MediaHubIcon(
+                        imageVector = item.icon,
+                        contentDescription = item.label,
+                        modifier = Modifier.size(22.dp),
+                        tint = if (selected) {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                },
+                label = {
+                    Text(
+                        text = item.label,
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    )
+                },
             )
         }
     }
@@ -105,43 +152,37 @@ fun MediaHubNavigationRail(
     onSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    NavigationRail(
         modifier = modifier
-            .width(80.dp)
-            .fillMaxHeight()
-            .background(MiuixTheme.colorScheme.background)
-            .selectableGroup()
-            .padding(vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .width(88.dp)
+            .fillMaxHeight(),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         items.forEach { item ->
             val selected = item.key == selectedKey
-            Column(
-                modifier = Modifier
-                    .width(72.dp)
-                    .heightIn(min = 48.dp)
-                    .selectable(
-                        selected = selected,
-                        role = Role.Tab,
-                        onClick = { onSelected(item.key) },
+            NavigationRailItem(
+                selected = selected,
+                onClick = { onSelected(item.key) },
+                icon = {
+                    MediaHubIcon(
+                        imageVector = item.icon,
+                        contentDescription = item.label,
+                        modifier = Modifier.size(22.dp),
+                        tint = if (selected) {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
-                    .padding(vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                MediaHubIcon(
-                    imageVector = item.icon,
-                    contentDescription = item.label,
-                    modifier = Modifier.size(22.dp),
-                    tint = if (selected) MiuixTheme.colorScheme.primary else MediaHubColors.TextMuted,
-                )
-                MediaHubText(
-                    text = item.label,
-                    color = if (selected) MiuixTheme.colorScheme.primary else MediaHubColors.TextMuted,
-                    fontSize = 12.sp,
-                )
-            }
+                },
+                label = {
+                    Text(
+                        text = item.label,
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    )
+                },
+            )
         }
     }
 }
@@ -152,24 +193,35 @@ fun MediaHubCard(
     insideMargin: PaddingValues = PaddingValues(0.dp),
     onClick: (() -> Unit)? = null,
     color: Color = Color.Unspecified,
+    elevated: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val colors = if (color == Color.Unspecified) {
-        CardDefaults.defaultColors()
-    } else {
-        CardDefaults.defaultColors(color = color)
-    }
+    val colors = CardDefaults.cardColors(
+        containerColor = if (color == Color.Unspecified) {
+            if (elevated) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer
+        } else {
+            color
+        },
+    )
     if (onClick == null) {
-        Card(modifier = modifier, insideMargin = insideMargin, colors = colors, content = content)
-    } else {
         Card(
             modifier = modifier,
-            insideMargin = insideMargin,
+            shape = MaterialTheme.shapes.large,
             colors = colors,
-            pressFeedbackType = PressFeedbackType.Sink,
+            elevation = CardDefaults.cardElevation(defaultElevation = if (elevated) 1.dp else 0.dp),
+        ) {
+            Column(modifier = Modifier.padding(insideMargin), content = content)
+        }
+    } else {
+        Card(
             onClick = onClick,
-            content = content,
-        )
+            modifier = modifier,
+            shape = MaterialTheme.shapes.large,
+            colors = colors,
+            elevation = CardDefaults.cardElevation(defaultElevation = if (elevated) 1.dp else 0.dp),
+        ) {
+            Column(modifier = Modifier.padding(insideMargin), content = content)
+        }
     }
 }
 
@@ -178,7 +230,12 @@ fun MediaHubSmallTitle(
     text: String,
     modifier: Modifier = Modifier,
 ) {
-    SmallTitle(text = text, modifier = modifier)
+    Text(
+        text = text,
+        modifier = modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
@@ -191,18 +248,53 @@ fun MediaHubPreferenceRow(
     start: (@Composable () -> Unit)? = null,
     end: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    ArrowPreference(
-        title = title,
-        modifier = modifier.heightIn(min = 48.dp),
-        summary = summary,
-        startAction = start,
-        endActions = end ?: {},
-        onClick = onClick,
-        enabled = enabled,
+    ListItem(
+        headlineContent = {
+            Text(
+                text = title,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else MediaHubColors.TextMuted,
+                fontSize = 15.sp,
+            )
+        },
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .then(
+                if (onClick == null) {
+                    Modifier
+                } else {
+                    Modifier.clickable(enabled = enabled, onClick = onClick)
+                },
+            ),
+        supportingContent = summary?.let {
+            {
+                Text(
+                    text = it,
+                    color = MediaHubColors.TextMuted,
+                    fontSize = 12.sp,
+                )
+            }
+        },
+        leadingContent = start,
+        trailingContent = {
+            if (end != null) {
+                androidx.compose.foundation.layout.Row { end() }
+            } else if (onClick != null) {
+                MediaHubIcon(
+                    imageVector = Lucide.ChevronRight,
+                    contentDescription = null,
+                    tint = MediaHubColors.TextMuted,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
 }
 
 @Composable
 fun MediaHubListDivider(modifier: Modifier = Modifier) {
-    HorizontalDivider(modifier = modifier)
+    HorizontalDivider(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
 }

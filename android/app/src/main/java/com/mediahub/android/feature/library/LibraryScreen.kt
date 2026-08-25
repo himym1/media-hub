@@ -279,7 +279,7 @@ private fun EmbyPosterCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(8.dp)),
+                    .clip(RoundedCornerShape(14.dp)),
             ) {
                 EmbyPoster(
                     itemId = item.id,

@@ -4,7 +4,7 @@ Native Android client for Media Hub.
 
 - Kotlin 2.4.10
 - Jetpack Compose
-- Miuix 0.9.3 for HyperOS chrome (Scaffold, cards, preference rows), isolated behind project-owned UI wrappers
+- Material 3 for chrome (Scaffold, cards, preference rows, search), isolated behind project-owned UI wrappers
 - Lucide Compose icons
 - Navigation 3 stable
 

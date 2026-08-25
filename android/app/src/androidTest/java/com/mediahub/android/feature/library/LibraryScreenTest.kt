@@ -24,7 +24,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.core.graphics.writeToTestStorage
@@ -135,7 +134,7 @@ class LibraryScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("第 1 季").assertDoesNotExist()
+        composeRule.onAllNodesWithText("第 1 季").assertCountEquals(0)
         composeRule.onNodeWithText("继续 1:05").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("继续播放 第 2 集").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
         composeRule.runOnIdle {
@@ -184,8 +183,8 @@ class LibraryScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("第 2016 季").assertDoesNotExist()
-        composeRule.onNodeWithText("UHDTV", substring = true).assertDoesNotExist()
+        composeRule.onAllNodesWithText("第 2016 季").assertCountEquals(0)
+        composeRule.onAllNodesWithText("UHDTV", substring = true).assertCountEquals(0)
         composeRule.onNodeWithText("第 1 集 · 连接").assertIsDisplayed()
         composeRule.onNodeWithText("第 2 集").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("播放 第 2 集").assertHasClickAction()

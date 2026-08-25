@@ -3,7 +3,6 @@ package com.mediahub.android.core.designsystem
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,23 +50,21 @@ fun MediaHubListDetail(
             tertiary = PaneAdaptedValue.Hidden,
         )
     }
-    MaterialTheme {
-        ListDetailPaneScaffold(
-            modifier = modifier.fillMaxSize(),
-            directive = directive,
-            value = value,
-            listPane = { AnimatedPane { list() } },
-            detailPane = {
-                AnimatedPane {
-                    if (detailOpen) {
-                        detail()
-                    } else {
-                        Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                            MediaHubEmptyState(title = emptyTitle, message = emptyMessage, icon = emptyIcon)
-                        }
+    ListDetailPaneScaffold(
+        modifier = modifier.fillMaxSize(),
+        directive = directive,
+        value = value,
+        listPane = { AnimatedPane { list() } },
+        detailPane = {
+            AnimatedPane {
+                if (detailOpen) {
+                    detail()
+                } else {
+                    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                        MediaHubEmptyState(title = emptyTitle, message = emptyMessage, icon = emptyIcon)
                     }
                 }
-            },
-        )
-    }
+            }
+        },
+    )
 }

@@ -20,7 +20,7 @@
 
 - Android only. Do not add iOS, desktop, Flutter, or Kotlin Multiplatform source sets.
 - Use Kotlin, Jetpack Compose, and pinned stable dependencies.
-- Miuix is an experimental presentation dependency. Business screens use project-owned `MediaHub*` wrappers instead of importing Miuix components directly.
+- Material 3 is the presentation system. Business screens use project-owned `MediaHub*` wrappers instead of importing Material 3 components directly.
 - Use unidirectional data flow, ViewModel, StateFlow, repositories, and explicit UI states.
 
 ## Web

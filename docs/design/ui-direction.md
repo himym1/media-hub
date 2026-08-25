@@ -19,10 +19,10 @@ Visual density: 6 / 10
 ## Visual Language
 
 - Web base: neutral graphite, not blue-black.
-- Android base: HyperOS through Miuix defaults. Page background, raised white `surfaceContainer` cards, and the official SearchBar sit on the system gray canvas. Android primary follows the Miuix default HyperOS blue. No per-row stroke.
+- Android base: Material 3 dark surfaces. Large radii, tonal containers, and the official SearchBar / NavigationBar sit on a cool graphite canvas. Android primary is luminous blue (`#8AB4FF`) for contrast on dark surfaces.
 - Primary text: paper white.
 - Secondary text: cool neutral gray with WCAG AA contrast.
-- Signal accent: citrus mint on Web; Android primary follows Miuix HyperOS blue.
+- Signal accent: citrus mint on Web; Android primary is Material 3 blue on dark.
 - Success, warning, and error keep semantic colors and do not reuse the accent.
 - Poster artwork supplies most chromatic variation.
 - No decorative gradients, glow orbs, nested cards, or glass on every surface.
@@ -39,9 +39,9 @@ Visual density: 6 / 10
 
 ### Android
 
-- Visual language follows HyperOS through Miuix defaults: theme background, grouped cards, hairline dividers inside a card, large titles, SearchBar, labeled NavigationBar, and settings rows. Screens do not override Miuix surface colors and do not draw a bordered box around every row.
+- Visual language follows Material 3: theme background, tonal cards, hairline dividers, large titles, SearchBar, labeled NavigationBar, and settings rows as ListItem. Screens do not draw a bordered box around every row.
 - Search remains the first screen. Idle discovery uses a compact card strip; result rows sit in one grouped card and selected state carries the emphasis.
-- The workspace uses Miuix Scaffold, TopAppBar, and NavigationBar. Main destinations show global top/bottom navigation; system and detail routes replace the bottom bar instead of stacking another toolbar.
+- The workspace uses Material 3 Scaffold, TopAppBar, and NavigationBar. Main destinations show global top/bottom navigation; system and detail routes replace the bottom bar instead of stacking another toolbar.
 - Services and Operations form one system layer with explicit back navigation. Settings use SmallTitle plus grouped preference rows. Operations shows one of 115 files, local upload, or archive organization at a time.
 - Library rows use stable 2:3 posters; movie details expose Media3 as the primary action, and series details require an episode selection.
 - Transfer status and subscription editing are independent detail routes with one toolbar and no bottom navigation.
@@ -85,7 +85,7 @@ Visual density: 6 / 10
 - Inline error
 - Confirmation sheet
 
-### Android Miuix Boundary
+### Android Material 3 Boundary
 
 Feature screens may import only project-owned wrappers such as:
 
@@ -108,7 +108,7 @@ MediaHubEmptyState
 MediaHubSmallTitle
 ```
 
-Direct Miuix imports are restricted to `core/designsystem`.
+Direct Material 3 imports are restricted to `core/designsystem`, except the player overlay which already owns its own Material Slider.
 
 ## Interaction States
 
