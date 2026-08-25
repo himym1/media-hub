@@ -24,6 +24,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.core.graphics.writeToTestStorage
@@ -134,15 +135,60 @@ class LibraryScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("第 1 季").assertHasClickAction().assertHeightIsAtLeast(48.dp)
+        composeRule.onNodeWithText("第 1 季").assertDoesNotExist()
         composeRule.onNodeWithText("继续 1:05").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("继续播放 第 2 集 · 第二集").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
+        composeRule.onNodeWithContentDescription("继续播放 第 2 集").assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
         composeRule.runOnIdle {
             assertEquals("episode-2", played?.first?.id)
             assertEquals("emby://items/server-1/episode-2", played?.second?.appUrl)
             assertEquals("https://emby.example/episode-2", played?.second?.webUrl)
         }
         saveScreenshot("mediahub-library-episodes-large")
+    }
+
+    @Test
+    fun episodePickerMergesYearSeasonAndHidesReleaseFilename() {
+        composeRule.setContent {
+            MediaHubTheme {
+                LibraryDetailScreen(
+                    state = LibraryDetailState(
+                        itemId = "series-1",
+                        item = movieDetail(type = "Series", id = "series-1").copy(
+                            item = movieDetail(type = "Series", id = "series-1").item.copy(name = "验收剧集"),
+                        ),
+                        episodes = listOf(
+                            EmbyEpisode(
+                                item = EmbyItem(id = "episode-1", name = "连接", type = "Episode", year = 2016, tmdbId = null, season = 1, episode = 1),
+                                externalUrl = "https://emby.example/episode-1",
+                                appUrl = "emby://items/server-1/episode-1",
+                            ),
+                            EmbyEpisode(
+                                item = EmbyItem(
+                                    id = "episode-2",
+                                    name = "Show 2016 E02 UHDTV HEVC 10bit 60fps DD2.0-Group",
+                                    type = "Episode",
+                                    year = 2016,
+                                    tmdbId = null,
+                                    season = 2016,
+                                    episode = 2,
+                                ),
+                                externalUrl = "https://emby.example/episode-2",
+                                appUrl = "emby://items/server-1/episode-2",
+                            ),
+                        ),
+                    ),
+                    subtitleState = RemoteSubtitleUiState(),
+                    actions = detailActions { _, _ -> },
+                    posterLoader = posterLoader,
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("第 2016 季").assertDoesNotExist()
+        composeRule.onNodeWithText("UHDTV", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithText("第 1 集 · 连接").assertIsDisplayed()
+        composeRule.onNodeWithText("第 2 集").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("播放 第 2 集").assertHasClickAction()
     }
 
     private fun browseActions(onSelectItem: (String) -> Unit) = LibraryBrowseActions(

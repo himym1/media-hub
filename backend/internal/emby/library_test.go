@@ -43,6 +43,42 @@ func TestEpisodesExposeUserPlaybackStateWithoutCredentials(t *testing.T) {
 	}
 }
 
+func TestEpisodesMergeYearSeasonAndHideReleaseNames(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("X-Emby-Token") != "emby-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch request.URL.Path {
+		case "/Shows/series-1/Episodes":
+			_, _ = w.Write([]byte(`{"Items":[
+				{"Id":"episode-2","Name":"Show 2016 E02 UHDTV HEVC 10bit 60fps DD2.0-Group","Type":"Episode","ParentIndexNumber":2016,"IndexNumber":2,"SeriesName":"验收剧集","Path":"/library/Show 2016 E02 UHDTV HEVC 10bit.strm","MediaSources":[{"Id":"source-2","Path":"/library/Show 2016 E02 UHDTV HEVC 10bit.strm"}]},
+				{"Id":"episode-1","Name":"连接","Type":"Episode","ParentIndexNumber":1,"IndexNumber":1,"SeriesName":"验收剧集","Path":"/library/Show S01E01.strm","MediaSources":[{"Id":"source-1","Path":"/library/Show S01E01.strm"}]}
+			]}`))
+		case "/System/Info":
+			_, _ = w.Write([]byte(`{"Id":"server-1","ServerName":"Emby","Version":"4.9"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "emby-key", time.Second, "user-1")
+	episodes, err := client.Episodes(context.Background(), "series-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(episodes) != 2 {
+		t.Fatalf("episodes = %#v", episodes)
+	}
+	if episodes[0].ID != "episode-1" || episodes[0].Season != 1 || episodes[0].Episode != 1 || episodes[0].Name != "连接" {
+		t.Fatalf("first = %#v", episodes[0])
+	}
+	if episodes[1].ID != "episode-2" || episodes[1].Season != 1 || episodes[1].Episode != 2 || episodes[1].Name != "" {
+		t.Fatalf("second = %#v", episodes[1])
+	}
+}
+
 func TestPrimaryImagePrefersJPEGAccept(t *testing.T) {
 	var accept string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {

@@ -110,6 +110,7 @@ internal fun LibraryDetailScreen(
                         episodes = state.episodes,
                         loading = state.loadingEpisodes,
                         errorMessage = state.episodesError,
+                        seriesTitle = detail.item.name,
                         onPlay = { episode ->
                             actions.onPlayItem(
                                 episode.item,
@@ -117,7 +118,7 @@ internal fun LibraryDetailScreen(
                             )
                         },
                         onSearchSubtitles = { episode ->
-                            actions.onSearchSubtitles(episode.item.id, episode.item.name)
+                            actions.onSearchSubtitles(episode.item.id, episodeLabel(episode, detail.item.name))
                         },
                     )
                 }

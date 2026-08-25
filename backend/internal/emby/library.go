@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -32,7 +33,7 @@ func (c *Client) Episodes(ctx context.Context, seriesID string) ([]Episode, erro
 		return nil, ErrItemNotFound
 	}
 	query := url.Values{
-		"Fields":    {"ProviderIds,MediaSources,UserData,Path"},
+		"Fields":    {"ProviderIds,MediaSources,UserData,Path,SeriesName"},
 		"IsMissing": {"false"},
 		"SortBy":    {"ParentIndexNumber,IndexNumber"},
 		"SortOrder": {"Ascending"},
@@ -54,6 +55,7 @@ func (c *Client) Episodes(ctx context.Context, seriesID string) ([]Episode, erro
 		if item.ID == "" || item.Type != "Episode" || !is115Item(item) {
 			continue
 		}
+		item = presentEpisodeItem(item)
 		externalURL, err := itemWebURL(configuration.baseURL, item.ID)
 		if err != nil {
 			return nil, err
@@ -62,6 +64,12 @@ func (c *Client) Episodes(ctx context.Context, seriesID string) ([]Episode, erro
 			Item: publicItem(item), ExternalURL: externalURL, AppURL: itemAppURL(server.ID, item.ID),
 		})
 	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Season != items[j].Season {
+			return items[i].Season < items[j].Season
+		}
+		return items[i].Episode < items[j].Episode
+	})
 	return items, nil
 }
 
