@@ -20,6 +20,11 @@ internal data class PlayerTrackOption(
     val supported: Boolean,
 )
 
+internal fun defaultAudioChoice(options: List<PlayerTrackOption>): PlayerTrackOption? {
+    if (options.isEmpty() || options.any { it.selected }) return null
+    return options.firstOrNull { it.supported } ?: options.first()
+}
+
 internal fun playerTrackOptions(tracks: Tracks, type: Int): List<PlayerTrackOption> {
     val options = buildList {
         tracks.groups.forEachIndexed { groupIndex, group ->

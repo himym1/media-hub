@@ -106,6 +106,7 @@ import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.network.EmbyRemoteSubtitle
 import com.mediahub.android.feature.library.formatPlaybackPosition
 import com.mediahub.android.feature.subtitles.RemoteSubtitleUiState
+import com.mediahub.android.playback.ensureDefaultAudioTrack
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.abs
@@ -243,6 +244,12 @@ internal fun PlayerScreen(
 
     val showPreparingOverlay = state is PlayerUiState.Loading &&
         (controller == null || controller.currentMediaItem == null)
+
+    LaunchedEffect(controller, state) {
+        if (state is PlayerUiState.Ready && controller != null) {
+            controller.ensureDefaultAudioTrack()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -1472,6 +1479,11 @@ private fun PlayerTrackSelectionDrawer(
     val currentTracks = rememberPlayerTracks(player)
     val subtitleOptions = playerTrackOptions(currentTracks, C.TRACK_TYPE_TEXT)
     val audioOptions = playerTrackOptions(currentTracks, C.TRACK_TYPE_AUDIO)
+    LaunchedEffect(currentTracks) {
+        if (audioOptions.isNotEmpty() && audioOptions.none { it.selected }) {
+            player.ensureDefaultAudioTrack()
+        }
+    }
     val canSelectTracks = player.isCommandAvailable(Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS)
     val isSubtitlesDisabled = player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT) ||
         subtitleOptions.none { it.selected }

@@ -47,6 +47,7 @@ class MediaHubPlaybackService : MediaSessionService() {
             .setConnectTimeoutMs(30_000)
             .setReadTimeoutMs(60_000)
         player = ExoPlayer.Builder(this, MediaHubRenderersFactory(this))
+            .setTrackSelector(mediaHubTrackSelector(this))
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, httpFactory)))
             .setAudioAttributes(AudioAttributes.DEFAULT, true)
             .setHandleAudioBecomingNoisy(true)
@@ -98,6 +99,7 @@ class MediaHubPlaybackService : MediaSessionService() {
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) {
+                    player.ensureDefaultAudioTrack()
                     commandCoordinator.onReady()
                     publishState(STATE_READY, null)
                     sessionTracker.onReady()

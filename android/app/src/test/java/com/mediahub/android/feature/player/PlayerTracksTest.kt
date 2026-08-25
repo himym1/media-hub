@@ -39,4 +39,12 @@ class PlayerTracksTest {
         assertEquals("韩语", displayTrackTitle("[UXN] Show.E02.160123.UHDTV", "kor", C.TRACK_TYPE_AUDIO, 0))
         assertEquals("评论音轨", displayTrackTitle("评论音轨", "kor", C.TRACK_TYPE_AUDIO, 1))
     }
+
+    @Test
+    fun defaultAudioChoiceSelectsFirstUnselectedTrack() {
+        val first = PlayerTrackOption(C.TRACK_TYPE_AUDIO, 0, 0, "音轨 1", "立体声 · AC3", selected = false, supported = true)
+        assertEquals(first, defaultAudioChoice(listOf(first)))
+        assertEquals(null, defaultAudioChoice(listOf(first.copy(selected = true))))
+        assertEquals(null, defaultAudioChoice(emptyList()))
+    }
 }
