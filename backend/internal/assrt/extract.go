@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func extractSubtitle(name string, body []byte) (string, []byte, error) {
+func extractSubtitle(name string, body []byte, hint FileHint) (string, []byte, error) {
 	lower := strings.ToLower(name)
 	switch {
 	case strings.HasSuffix(lower, ".ass"), strings.HasSuffix(lower, ".ssa"), strings.HasSuffix(lower, ".srt"):
@@ -16,16 +16,16 @@ func extractSubtitle(name string, body []byte) (string, []byte, error) {
 			return path.Base(name), body, nil
 		}
 		if looksLikeZip(body) {
-			return extractZip(body)
+			return extractZip(body, hint)
 		}
 		return path.Base(name), body, nil
 	case strings.HasSuffix(lower, ".zip") || looksLikeZip(body):
-		return extractZip(body)
+		return extractZip(body, hint)
 	case strings.HasSuffix(lower, ".rar"), strings.HasSuffix(lower, ".7z"):
 		return "", nil, ErrUnsupportedFile
 	default:
 		if looksLikeZip(body) {
-			return extractZip(body)
+			return extractZip(body, hint)
 		}
 		if looksLikeSubtitle(body) {
 			if ext := subtitleExtension(name); ext != "" {
@@ -37,7 +37,7 @@ func extractSubtitle(name string, body []byte) (string, []byte, error) {
 	}
 }
 
-func extractZip(body []byte) (string, []byte, error) {
+func extractZip(body []byte, hint FileHint) (string, []byte, error) {
 	reader, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
 	if err != nil {
 		return "", nil, ErrUnsupportedFile
@@ -52,7 +52,7 @@ func extractZip(body []byte) (string, []byte, error) {
 		if strings.Contains(name, "__MACOSX") {
 			continue
 		}
-		score := subtitleFileScore(name)
+		score := subtitleFileScore(name, hint)
 		if score > bestScore {
 			bestScore = score
 			bestName = name

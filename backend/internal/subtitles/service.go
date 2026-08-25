@@ -120,7 +120,7 @@ func (s *Service) downloadAssrt(ctx context.Context, itemID, rawID string) error
 	if err != nil {
 		return err
 	}
-	name, body, err := s.assrt.DownloadFile(ctx, subtitleID)
+	name, body, err := s.assrt.DownloadFile(ctx, subtitleID, assrt.FileHint{Season: target.Season, Episode: target.Episode})
 	if err != nil {
 		return err
 	}

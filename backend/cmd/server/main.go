@@ -121,11 +121,11 @@ func run(logger *slog.Logger) error {
 		configuration.TMDB.AccessToken,
 		configuration.ProbeTimeout,
 	)
-	assrtTimeout := 12 * time.Second
+	assrtTimeout := 28 * time.Second
 	if configuration.SearchTimeout > assrtTimeout {
 		assrtTimeout = configuration.SearchTimeout
 	}
-	assrtClient := assrt.NewClient(configuration.Assrt.BaseURL, configuration.Assrt.Token, assrtTimeout)
+	assrtClient := assrt.NewClientWithProxy(configuration.Assrt.BaseURL, configuration.Assrt.Token, assrtTimeout, configuration.SourceProxyURL)
 	wecomTimeout := configuration.ProbeTimeout
 	if wecomTimeout < 10*time.Second {
 		wecomTimeout = 10 * time.Second

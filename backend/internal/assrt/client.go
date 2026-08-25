@@ -8,6 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,11 +56,25 @@ type ClientConfig struct {
 	Token   string
 }
 
+type FileHint struct {
+	Season  int
+	Episode int
+}
+
+type fileCandidate struct {
+	URL  string
+	Name string
+}
+
 func NewClient(baseURL, token string, timeout time.Duration) *Client {
+	return NewClientWithProxy(baseURL, token, timeout, nil)
+}
+
+func NewClientWithProxy(baseURL, token string, timeout time.Duration, proxyURL *url.URL) *Client {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	client := &Client{client: newAssrtHTTPClient(timeout)}
+	client := &Client{client: newAssrtHTTPClient(timeout, proxyURL)}
 	client.Configure(baseURL, token)
 	return client
 }
@@ -147,7 +164,7 @@ func (c *Client) Search(ctx context.Context, query string, fileName bool) ([]Hit
 	return hits, nil
 }
 
-func (c *Client) DownloadFile(ctx context.Context, subtitleID int) (string, []byte, error) {
+func (c *Client) DownloadFile(ctx context.Context, subtitleID int, hint FileHint) (string, []byte, error) {
 	configuration := c.configuration()
 	if configuration.baseURL == "" || configuration.token == "" {
 		return "", nil, ErrNotConfigured
@@ -162,20 +179,24 @@ func (c *Client) DownloadFile(ctx context.Context, subtitleID int) (string, []by
 	if len(payload.Sub.Subs) == 0 {
 		return "", nil, ErrUpstreamResponse
 	}
-	item := payload.Sub.Subs[0]
-	fileURL, fileName := pickSubtitleFile(item)
-	if fileURL == "" {
-		return "", nil, ErrUnsupportedFile
+	var last error
+	for _, candidate := range subtitleCandidates(payload.Sub.Subs[0], hint) {
+		body, err := c.getBytes(ctx, candidate.URL)
+		if err != nil {
+			last = err
+			continue
+		}
+		name, data, err := extractSubtitle(candidate.Name, body, hint)
+		if err != nil {
+			last = err
+			continue
+		}
+		return name, data, nil
 	}
-	body, err := c.getBytes(ctx, fileURL)
-	if err != nil {
-		return "", nil, err
+	if last != nil {
+		return "", nil, last
 	}
-	name, data, err := extractSubtitle(fileName, body)
-	if err != nil {
-		return "", nil, err
-	}
-	return name, data, nil
+	return "", nil, ErrUnsupportedFile
 }
 
 type searchResponse struct {
@@ -281,26 +302,41 @@ func formatName(subtype string) string {
 	}
 }
 
-func pickSubtitleFile(item subtitleDetail) (string, string) {
-	bestURL, bestName, bestScore := "", "", -1
-	for _, file := range item.FileList {
-		score := subtitleFileScore(file.Name)
-		if score > bestScore {
-			bestScore = score
-			bestURL = strings.TrimSpace(file.URL)
-			bestName = strings.TrimSpace(file.Name)
+func subtitleCandidates(item subtitleDetail, hint FileHint) []fileCandidate {
+	files := append([]struct {
+		URL  string `json:"url"`
+		Name string `json:"f"`
+	}{}, item.FileList...)
+	sort.SliceStable(files, func(i, j int) bool {
+		return subtitleFileScore(files[i].Name, hint) > subtitleFileScore(files[j].Name, hint)
+	})
+	seen := make(map[string]struct{})
+	candidates := make([]fileCandidate, 0, len(files)+1)
+	add := func(rawURL, name string) {
+		rawURL = strings.TrimSpace(rawURL)
+		name = strings.TrimSpace(name)
+		if rawURL == "" {
+			return
+		}
+		if _, exists := seen[rawURL]; exists {
+			return
+		}
+		seen[rawURL] = struct{}{}
+		if name == "" {
+			name = path.Base(rawURL)
+		}
+		candidates = append(candidates, fileCandidate{URL: rawURL, Name: name})
+	}
+	for _, file := range files {
+		if subtitleFileScore(file.Name, hint) >= 50 {
+			add(file.URL, file.Name)
 		}
 	}
-	if bestScore >= 50 && bestURL != "" {
-		return bestURL, bestName
+	add(item.URL, fallbackName(item))
+	for _, file := range files {
+		add(file.URL, file.Name)
 	}
-	if url := strings.TrimSpace(item.URL); url != "" && subtitleFileScore(item.NativeName+item.VideoName) >= 0 {
-		return url, fallbackName(item)
-	}
-	if bestURL != "" {
-		return bestURL, bestName
-	}
-	return strings.TrimSpace(item.URL), fallbackName(item)
+	return candidates
 }
 
 func fallbackName(item subtitleDetail) string {
@@ -310,7 +346,7 @@ func fallbackName(item subtitleDetail) string {
 	return strings.TrimSpace(item.NativeName)
 }
 
-func subtitleFileScore(name string) int {
+func subtitleFileScore(name string, hint FileHint) int {
 	lower := strings.ToLower(name)
 	ext := ""
 	if index := strings.LastIndex(lower, "."); index >= 0 {
@@ -336,7 +372,18 @@ func subtitleFileScore(name string) int {
 	if strings.Contains(lower, "cht") || strings.Contains(name, "繁") {
 		score += 6
 	}
+	if matchesEpisode(lower, hint.Episode) {
+		score += 15
+	}
 	return score
+}
+
+func matchesEpisode(name string, episode int) bool {
+	if episode < 1 {
+		return false
+	}
+	pattern := regexp.MustCompile(fmt.Sprintf(`(?i)(?:^|[^0-9])e0?%d(?:[^0-9]|$)`, episode))
+	return pattern.MatchString(name)
 }
 
 func (c *Client) getJSON(ctx context.Context, configuration clientConfig, endpointPath string, query url.Values, target any) error {

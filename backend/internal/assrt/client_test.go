@@ -1,6 +1,8 @@
 package assrt
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -48,12 +50,46 @@ func TestDownloadFilePrefersAssFromFileList(t *testing.T) {
 	}))
 	defer server.Close()
 
-	name, body, err := NewClient(server.URL, "assrt-token", time.Second).DownloadFile(context.Background(), 42)
+	name, body, err := NewClient(server.URL, "assrt-token", time.Second).DownloadFile(context.Background(), 42, FileHint{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if name != "signal.chi.ass" || !looksLikeSubtitle(body) {
 		t.Fatalf("name=%q body=%q", name, body)
+	}
+}
+
+func TestDownloadFileFallsBackToZipAfterRejectedFile(t *testing.T) {
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	entry, err := writer.Create("signal.e01.srt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write([]byte("1\n00:00:01,000 --> 00:00:02,000\n你好\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	archive := buffer.Bytes()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/v1/sub/detail":
+			_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[{"id":42,"native_name":"信号","url":"http://` + request.Host + `/pack.zip","filelist":[{"f":"e01.srt","url":"http://` + request.Host + `/onthefly.srt"}]}]}}`))
+		case "/onthefly.srt":
+			w.WriteHeader(493)
+			_, _ = w.Write([]byte(`<?xml version="1.0"?><error/>`))
+		case "/pack.zip":
+			_, _ = w.Write(archive)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	name, body, err := NewClient(server.URL, "token", time.Second).DownloadFile(context.Background(), 42, FileHint{Episode: 1})
+	if err != nil || name != "signal.e01.srt" || !looksLikeSubtitle(body) {
+		t.Fatalf("name=%q err=%v", name, err)
 	}
 }
 

@@ -10,11 +10,27 @@ import (
 	"time"
 )
 
-func newAssrtHTTPClient(timeout time.Duration) *http.Client {
+func newAssrtHTTPClient(timeout time.Duration, proxyURL *url.URL) *http.Client {
 	primary := http.DefaultTransport.(*http.Transport).Clone()
+	if proxyURL != nil {
+		primary.Proxy = http.ProxyURL(proxyURL)
+	}
 	mirror := primary.Clone()
 	mirror.TLSClientConfig = makedieTLS()
-	return &http.Client{Timeout: timeout, Transport: &assrtTransport{primary: primary, mirror: mirror}}
+	return &http.Client{
+		Timeout: timeout, Transport: &assrtTransport{primary: primary, mirror: mirror},
+		CheckRedirect: rejectFailedAssrtDownload,
+	}
+}
+
+func rejectFailedAssrtDownload(request *http.Request, via []*http.Request) error {
+	if request.URL != nil && strings.Contains(request.URL.Path, "/download/failed/") {
+		return ErrUpstreamResponse
+	}
+	if len(via) >= 8 {
+		return ErrUpstreamResponse
+	}
+	return nil
 }
 
 type assrtTransport struct {
