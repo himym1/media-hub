@@ -64,8 +64,8 @@ func TestSearchSkipsUnrelatedAssrtHitsAndUsesFilename(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		query := request.URL.Query().Get("q")
 		switch {
-		case strings.Contains(query, "Signal 2016 E01"):
-			_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[{"id":9,"native_name":"信号/Signal/시그널","videoname":"Signal.2016","subtype":"Srt","lang":{"desc":"简体","langlist":{"langchs":true}}}]}}`))
+		case strings.Contains(query, "信号") && strings.Contains(query, "Signal"):
+			_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[{"id":9,"native_name":"信号/Signal/시그널","videoname":"시그널","subtype":"Srt","lang":{"desc":"简体","langlist":{"langchs":true}}}]}}`))
 		default:
 			_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[{"id":8,"native_name":"【王冠 The.Crown】S01E01","subtype":"Ass","lang":{"desc":"简体","langlist":{"langchs":true}}}]}}`))
 		}

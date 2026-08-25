@@ -181,15 +181,40 @@ func (c *Client) DownloadFile(ctx context.Context, subtitleID int) (string, []by
 type searchResponse struct {
 	Status int `json:"status"`
 	Sub    struct {
-		Subs []subtitleInfo `json:"subs"`
+		Subs subtitleList[subtitleInfo] `json:"subs"`
 	} `json:"sub"`
 }
 
 type detailResponse struct {
 	Status int `json:"status"`
 	Sub    struct {
-		Subs []subtitleDetail `json:"subs"`
+		Subs subtitleList[subtitleDetail] `json:"subs"`
 	} `json:"sub"`
+}
+
+// Assrt encodes an empty result as {} instead of [].
+type subtitleList[T any] []T
+
+func (list *subtitleList[T]) UnmarshalJSON(data []byte) error {
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" || trimmed == "null" || trimmed == "{}" {
+		*list = nil
+		return nil
+	}
+	if strings.HasPrefix(trimmed, "[") {
+		var items []T
+		if err := json.Unmarshal(data, &items); err != nil {
+			return err
+		}
+		*list = items
+		return nil
+	}
+	var item T
+	if err := json.Unmarshal(data, &item); err != nil {
+		return err
+	}
+	*list = []T{item}
+	return nil
 }
 
 type subtitleInfo struct {

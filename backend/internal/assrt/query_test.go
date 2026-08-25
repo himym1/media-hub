@@ -2,26 +2,34 @@ package assrt
 
 import "testing"
 
-func TestQueriesPrefersSeriesYearWhenFilenameIsGeneric(t *testing.T) {
+func TestQueriesPrefersCombinedTitleForShortCJK(t *testing.T) {
 	queries := Queries(SearchTarget{
 		Title: "第一集", SeriesName: "信号", OriginalTitle: "Signal",
 		FileName: "/media3/115-strm/电视剧/信号/S01E01.strm", Year: 2016, Season: 1, Episode: 1, Type: "Episode",
 	})
-	if len(queries) != 2 || queries[0].Text != "信号 2016 S01E01" || queries[1].Text != "信号 S01E01" {
+	if len(queries) != 2 || queries[0].Text != "信号 Signal" || queries[1].Text != "信号 2016" {
 		t.Fatalf("queries = %#v", queries)
 	}
 }
 
-func TestQueriesPrefersReleaseFilename(t *testing.T) {
+func TestQueriesUsesFilenameTitleWhenOriginalMissing(t *testing.T) {
+	queries := Queries(SearchTarget{
+		Title: "第一集", SeriesName: "信号",
+		FileName: "Signal 2016 E01 UHDTV HEVC 10bit 60fps DD2.0-HThoreau.strm",
+		Year:     2016, Season: 1, Episode: 1, Type: "Episode",
+	})
+	if len(queries) == 0 || queries[0].Text != "信号 Signal" {
+		t.Fatalf("queries = %#v", queries)
+	}
+}
+
+func TestQueriesPutsCombinedTitleBeforeReleaseFilename(t *testing.T) {
 	queries := Queries(SearchTarget{
 		Title: "第一集", SeriesName: "信号", OriginalTitle: "Signal",
 		FileName: "/media/电视剧/信号 (2016)/Signal 2016 E01 UHDTV HEVC 10bit 60fps DD2.0-HThoreau.strm",
 		Year:     2016, Season: 1, Episode: 1, Type: "Episode",
 	})
-	if len(queries) != 2 || queries[0].Text != "Signal 2016 E01 UHDTV HEVC 10bit 60fps DD2.0-HThoreau" || !queries[0].FileName {
-		t.Fatalf("queries = %#v", queries)
-	}
-	if queries[1].Text != "信号 2016 S01E01" || queries[1].FileName {
+	if len(queries) != 2 || queries[0].Text != "信号 Signal" || queries[1].Text != "Signal 2016 E01 UHDTV HEVC 10bit 60fps DD2.0-HThoreau" || !queries[1].FileName {
 		t.Fatalf("queries = %#v", queries)
 	}
 }
@@ -50,5 +58,8 @@ func TestRelevantKeepsSignalDropsCrown(t *testing.T) {
 	}
 	if !Relevant(Hit{Name: "信号/Signal/信号 시그널 简体修正乱码", VideoName: "시그널"}, target) {
 		t.Fatal("Signal 2016 pack should match")
+	}
+	if Relevant(Hit{Name: "信号/诡·异·讯", VideoName: "The Signal 2014"}, target) {
+		t.Fatal("2014 movie should not match 2016 series")
 	}
 }

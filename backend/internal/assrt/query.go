@@ -48,16 +48,31 @@ func Queries(target SearchTarget) []Query {
 
 	episode := seasonEpisode(target.Season, target.Episode)
 	isEpisode := strings.EqualFold(target.Type, "Episode") || target.Episode > 0
+	series := firstNonEmpty(target.SeriesName, target.Title)
+	original := strings.TrimSpace(target.OriginalTitle)
 	stem := fileStem(target.FileName)
+	if series != "" && original != "" && !titlesEqual(original, series) && !titlesEqual(original, target.Title) {
+		add(series+" "+original, false)
+	} else if shortCJKTitle(series) {
+		if partner := firstDistinctiveFileToken(stem); partner != "" && !titlesEqual(partner, series) {
+			add(series+" "+partner, false)
+		}
+	}
 	if isEpisode && episode != "" && richFileStem(stem) {
 		add(stem, true)
 	}
 	if isEpisode && episode != "" {
-		if series := firstNonEmpty(target.SeriesName, target.Title); series != "" {
-			if target.Year > 0 {
-				add(fmt.Sprintf("%s %d %s", series, target.Year, episode), false)
+		if series != "" {
+			if shortCJKTitle(series) {
+				if target.Year > 0 {
+					add(fmt.Sprintf("%s %d", series, target.Year), false)
+				}
+			} else {
+				if target.Year > 0 {
+					add(fmt.Sprintf("%s %d %s", series, target.Year, episode), false)
+				}
+				add(series+" "+episode, false)
 			}
-			add(series+" "+episode, false)
 		}
 	} else {
 		title := firstNonEmpty(target.Title, target.SeriesName)
@@ -71,7 +86,7 @@ func Queries(target SearchTarget) []Query {
 		add(stem, true)
 	}
 	if isEpisode && episode != "" {
-		if original := strings.TrimSpace(target.OriginalTitle); original != "" && !titlesEqual(original, target.SeriesName) && !titlesEqual(original, target.Title) {
+		if original != "" && !titlesEqual(original, target.SeriesName) && !titlesEqual(original, target.Title) {
 			if target.Year > 0 {
 				add(fmt.Sprintf("%s %d %s", original, target.Year, episode), false)
 			} else {
@@ -80,13 +95,16 @@ func Queries(target SearchTarget) []Query {
 		}
 	} else {
 		title := firstNonEmpty(target.Title, target.SeriesName)
-		if original := strings.TrimSpace(target.OriginalTitle); original != "" && !titlesEqual(original, title) {
+		if original != "" && !titlesEqual(original, title) {
 			if target.Year > 0 {
 				add(fmt.Sprintf("%s %d", original, target.Year), false)
 			} else {
 				add(original, false)
 			}
 		}
+	}
+	if isEpisode && episode != "" && len(queries) == 0 && series != "" {
+		add(series+" "+episode, false)
 	}
 	if len(queries) > 2 {
 		return queries[:2]
@@ -103,12 +121,42 @@ func Relevant(hit Hit, target SearchTarget) bool {
 	if haystack == "" {
 		return false
 	}
+	matched := false
 	for _, token := range tokens {
 		if strings.Contains(haystack, token) {
+			matched = true
+			break
+		}
+	}
+	return matched && !conflictsYear(haystack, target.Year)
+}
+
+var foreignYear = regexp.MustCompile(`(?:19|20)\d{2}`)
+
+func conflictsYear(haystack string, year int) bool {
+	if year < 1 {
+		return false
+	}
+	want := fmt.Sprintf("%d", year)
+	for _, found := range foreignYear.FindAllString(haystack, -1) {
+		if found != want {
 			return true
 		}
 	}
 	return false
+}
+
+func shortCJKTitle(title string) bool {
+	runes := []rune(strings.TrimSpace(title))
+	if len(runes) == 0 || len(runes) > 2 {
+		return false
+	}
+	for _, r := range runes {
+		if !unicode.Is(unicode.Han, r) && !unicode.In(r, unicode.Hangul, unicode.Hiragana, unicode.Katakana) {
+			return false
+		}
+	}
+	return true
 }
 
 func matchTokens(target SearchTarget) []string {
@@ -139,6 +187,15 @@ func matchTokens(target SearchTarget) []string {
 		add(token)
 	}
 	return tokens
+}
+
+func firstDistinctiveFileToken(stem string) string {
+	for _, token := range strings.FieldsFunc(stem, splitFileToken) {
+		if distinctiveToken(token) {
+			return token
+		}
+	}
+	return ""
 }
 
 func fileTitleTokens(name string) []string {

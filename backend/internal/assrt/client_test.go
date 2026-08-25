@@ -85,6 +85,17 @@ func TestSearchMapsHTTP400InvalidToken(t *testing.T) {
 	}
 }
 
+func TestSearchTreatsEmptyObjectSubsAsNoHits(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"status":0,"sub":{"keyword":"Signal 2016","action":"search","subs":{},"result":"succeed"}}`))
+	}))
+	defer server.Close()
+	hits, err := NewClient(server.URL, "token", time.Second).Search(context.Background(), "Signal 2016", true)
+	if err != nil || len(hits) != 0 {
+		t.Fatalf("hits=%#v err=%v", hits, err)
+	}
+}
+
 func TestCheckReportsUnconfigured(t *testing.T) {
 	health := NewClient("", "", time.Second).Check(context.Background())
 	if health.Status != "unconfigured" || health.ID != "assrt" {
