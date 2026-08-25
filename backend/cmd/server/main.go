@@ -16,6 +16,7 @@ import (
 	"media-hub/backend/internal/adapter"
 	"media-hub/backend/internal/androidrelease"
 	"media-hub/backend/internal/archive"
+	"media-hub/backend/internal/assrt"
 	"media-hub/backend/internal/auth"
 	"media-hub/backend/internal/checkin"
 	"media-hub/backend/internal/config"
@@ -35,6 +36,7 @@ import (
 	"media-hub/backend/internal/strm"
 	"media-hub/backend/internal/strm/builtin"
 	"media-hub/backend/internal/subscription"
+	"media-hub/backend/internal/subtitles"
 	"media-hub/backend/internal/tmdb"
 	"media-hub/backend/internal/webui"
 	"media-hub/backend/internal/wecom"
@@ -119,6 +121,11 @@ func run(logger *slog.Logger) error {
 		configuration.TMDB.AccessToken,
 		configuration.ProbeTimeout,
 	)
+	assrtTimeout := 12 * time.Second
+	if configuration.SearchTimeout > assrtTimeout {
+		assrtTimeout = configuration.SearchTimeout
+	}
+	assrtClient := assrt.NewClient(configuration.Assrt.BaseURL, configuration.Assrt.Token, assrtTimeout)
 	wecomTimeout := configuration.ProbeTimeout
 	if wecomTimeout < 10*time.Second {
 		wecomTimeout = 10 * time.Second
@@ -175,6 +182,7 @@ func run(logger *slog.Logger) error {
 				SeriesLibraryID: value.Workflow.Series.EmbyLibraryID,
 			})
 			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
+			assrtClient.Configure(value.Assrt.BaseURL, value.Assrt.Token)
 			wecomClient.ConfigureDelivery(value.WeCom)
 			workflowService.Configure(value.Workflow)
 			runtimeSources := searchSourcesFromSettings(value, configuration.SearchTimeout, configuration.FixtureMode, drive115AuthService, configuration.SourceProxyURL)
@@ -199,10 +207,14 @@ func run(logger *slog.Logger) error {
 		}
 	}
 	subscriptionService := subscription.NewService(dataStore, searchService, workflowService, embyClient)
+	subtitleService := subtitles.New(embyClient, assrtClient, func() string {
+		return settingsService.Values().Workflow.StrmRootMount
+	})
 	overview := integration.NewOverviewService(
 		searchService,
 		drive115AuthService,
 		tmdbClient,
+		assrtClient,
 		wecomClient,
 		embyClient,
 		emby.NewPlaybackChecker(embyClient),
@@ -255,7 +267,7 @@ func run(logger *slog.Logger) error {
 		Addr: configuration.Address,
 		Handler: httpapi.NewRouter(version, httpapi.Dependencies{
 			Auth: authService, Overview: overview, Search: searchService, Discovery: tmdbClient,
-			Emby: embyClient, EmbyPosterCache: posterCache, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
+			Emby: embyClient, RemoteSubtitles: subtitleService, EmbyPosterCache: posterCache, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
 			Playback: playback.NewService(drive115AuthService, embyClient),
 			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService, SourceCheckIns: checkinService,
 			Settings: settingsService, WeComTester: wecomClient, STRM: strmCoordinator,

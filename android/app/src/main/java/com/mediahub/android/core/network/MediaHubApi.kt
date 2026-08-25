@@ -815,6 +815,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         val emby = item.getJSONObject("emby")
         val drive = item.getJSONObject("drive115")
         val tmdb = item.getJSONObject("tmdb")
+        val assrt = item.optJSONObject("assrt") ?: JSONObject()
         val wecom = item.getJSONObject("wecom")
         val workflow = item.getJSONObject("workflow")
         return ProviderSettings(
@@ -827,6 +828,8 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
             drive115ClientId = drive.getString("clientId"),
             tmdbBaseUrl = tmdb.getString("baseUrl"),
             tmdbAccessToken = SecretStatus(tmdb.getJSONObject("accessToken").getBoolean("configured")),
+            assrtBaseUrl = assrt.optString("baseUrl"),
+            assrtToken = SecretStatus(assrt.optJSONObject("token")?.optBoolean("configured") == true),
             wecom = WeComSettings(
                 baseUrl = wecom.getString("baseUrl"),
                 corpId = wecom.getString("corpId"),
@@ -881,6 +884,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         .put("emby", JSONObject().put("baseUrl", input.embyBaseUrl).put("apiKey", secretBody(input.embyApiKey)).put("userId", input.embyUserId).put("password", secretBody(input.embyPassword)))
         .put("drive115", JSONObject().put("clientId", input.drive115ClientId))
         .put("tmdb", JSONObject().put("baseUrl", input.tmdbBaseUrl).put("accessToken", secretBody(input.tmdbAccessToken)))
+        .put("assrt", JSONObject().put("baseUrl", input.assrtBaseUrl).put("token", secretBody(input.assrtToken)))
         .put("wecom", JSONObject()
             .put("baseUrl", input.wecom.baseUrl)
             .put("corpId", input.wecom.corpId)

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.20.2
+  version: 0.20.3
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -636,14 +636,14 @@ paths:
   /integrations/emby/items/{id}/remote-subtitles:
     get:
       operationId: searchEmbyRemoteSubtitles
-      summary: Search Emby remote subtitle providers for one item
+      summary: Search remote subtitles; Chinese uses Assrt first when configured
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
         - name: language
           in: query
           schema: { type: string, minLength: 2, maxLength: 16, default: chi }
-          description: ISO language code; Chinese defaults try chi then zh
+          description: ISO language code; Chinese searches Assrt first when configured
       responses:
         '200':
           description: Remote subtitle candidates
@@ -658,7 +658,7 @@ paths:
         '504': { $ref: '#/components/responses/ProblemResponse' }
     post:
       operationId: downloadEmbyRemoteSubtitle
-      summary: Download one Emby remote subtitle onto the item
+      summary: Download one remote subtitle next to the STRM or via Emby
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
@@ -678,6 +678,7 @@ paths:
         '401': { $ref: '#/components/responses/ProblemResponse' }
         '403': { $ref: '#/components/responses/ProblemResponse' }
         '404': { $ref: '#/components/responses/ProblemResponse' }
+        '422': { $ref: '#/components/responses/ProblemResponse' }
         '502': { $ref: '#/components/responses/ProblemResponse' }
         '503': { $ref: '#/components/responses/ProblemResponse' }
         '504': { $ref: '#/components/responses/ProblemResponse' }
@@ -1786,7 +1787,7 @@ components:
         token: { $ref: '#/components/schemas/SecretUpdate' }
     ProviderSettings:
       type: object
-      required: [qmediaSync, emby, drive115, tmdb, wecom, workflow, checkIn, sources]
+      required: [qmediaSync, emby, drive115, tmdb, assrt, wecom, workflow, checkIn, sources]
       properties:
         qmediaSync:
           type: object
@@ -1813,6 +1814,12 @@ components:
           properties:
             baseUrl: { type: string }
             accessToken: { $ref: '#/components/schemas/SecretStatus' }
+        assrt:
+          type: object
+          required: [baseUrl, token]
+          properties:
+            baseUrl: { type: string }
+            token: { $ref: '#/components/schemas/SecretStatus' }
         wecom:
           type: object
           required: [baseUrl, corpId, secret, sendMode, agentId, toUser, chatId]
@@ -1860,6 +1867,12 @@ components:
           properties:
             baseUrl: { type: string, maxLength: 2048 }
             accessToken: { $ref: '#/components/schemas/SecretUpdate' }
+        assrt:
+          type: object
+          required: [baseUrl, token]
+          properties:
+            baseUrl: { type: string, maxLength: 2048 }
+            token: { $ref: '#/components/schemas/SecretUpdate' }
         wecom:
           type: object
           required: [baseUrl, corpId, secret, chatId]

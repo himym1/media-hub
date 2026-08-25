@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"media-hub/backend/internal/assrt"
 	"media-hub/backend/internal/drive115"
 	"media-hub/backend/internal/emby"
 )
@@ -304,7 +305,7 @@ func (h *handler) searchEmbyRemoteSubtitles(w http.ResponseWriter, r *http.Reque
 		})
 		return
 	}
-	items, err := h.dependencies.Emby.SearchRemoteSubtitles(r.Context(), itemID, language)
+	items, err := h.searchRemoteSubtitles(r.Context(), itemID, language)
 	if err != nil {
 		writeIntegrationProblem(w, err)
 		return
@@ -342,7 +343,7 @@ func (h *handler) downloadEmbyRemoteSubtitle(w http.ResponseWriter, r *http.Requ
 		})
 		return
 	}
-	if err := h.dependencies.Emby.DownloadRemoteSubtitle(r.Context(), itemID, subtitleID); err != nil {
+	if err := h.downloadRemoteSubtitle(r.Context(), itemID, subtitleID); err != nil {
 		writeIntegrationProblem(w, err)
 		return
 	}
@@ -391,6 +392,20 @@ func (h *handler) getDrive115Status(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, status)
 }
 
+func (h *handler) searchRemoteSubtitles(ctx context.Context, itemID, language string) ([]emby.RemoteSubtitle, error) {
+	if h.dependencies.RemoteSubtitles != nil {
+		return h.dependencies.RemoteSubtitles.Search(ctx, itemID, language)
+	}
+	return h.dependencies.Emby.SearchRemoteSubtitles(ctx, itemID, language)
+}
+
+func (h *handler) downloadRemoteSubtitle(ctx context.Context, itemID, subtitleID string) error {
+	if h.dependencies.RemoteSubtitles != nil {
+		return h.dependencies.RemoteSubtitles.Download(ctx, itemID, subtitleID)
+	}
+	return h.dependencies.Emby.DownloadRemoteSubtitle(ctx, itemID, subtitleID)
+}
+
 func writeIntegrationProblem(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, emby.ErrItemNotFound):
@@ -406,14 +421,22 @@ func writeIntegrationProblem(w http.ResponseWriter, err error) {
 		})
 	case errors.Is(err, emby.ErrNotConfigured),
 		errors.Is(err, emby.ErrMissingAPIKey),
-		errors.Is(err, drive115.ErrNotConfigured):
+		errors.Is(err, drive115.ErrNotConfigured),
+		errors.Is(err, assrt.ErrNotConfigured):
 		writeProblem(w, problem{
 			Type:  "https://media-hub.local/problems/integration-incomplete",
 			Title: "集成配置不完整", Status: http.StatusServiceUnavailable,
 			Code: "integration_incomplete",
 		})
+	case errors.Is(err, assrt.ErrUnsupportedFile):
+		writeProblem(w, problem{
+			Type:  "https://media-hub.local/problems/unsupported-subtitle-archive",
+			Title: "该字幕压缩包格式暂不支持", Status: http.StatusUnprocessableEntity,
+			Code: "unsupported_subtitle_archive",
+		})
 	case errors.Is(err, emby.ErrUnauthorized),
-		errors.Is(err, drive115.ErrUnauthorized):
+		errors.Is(err, drive115.ErrUnauthorized),
+		errors.Is(err, assrt.ErrUnauthorized):
 		writeProblem(w, problem{
 			Type:  "https://media-hub.local/problems/integration-unauthorized",
 			Title: "外部服务鉴权失败", Status: http.StatusBadGateway,

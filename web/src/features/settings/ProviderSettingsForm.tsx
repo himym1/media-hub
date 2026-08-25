@@ -40,6 +40,7 @@ function createDraft(settings: ProviderSettings): Draft {
     emby: { baseUrl: settings.emby.baseUrl, apiKey: secret(), userId: settings.emby.userId, password: secret() },
     drive115: { clientId: settings.drive115.clientId },
     tmdb: { baseUrl: settings.tmdb.baseUrl, accessToken: secret() },
+    assrt: { baseUrl: settings.assrt?.baseUrl ?? '', token: secret() },
     wecom: {
       baseUrl: settings.wecom.baseUrl,
       corpId: settings.wecom.corpId,
@@ -74,7 +75,7 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
   const [draft, setDraft] = useState<Draft>(() => createDraft(settings))
   useEffect(() => setDraft(createDraft(settings)), [settings])
 
-  const updateSecret = (provider: 'emby' | 'tmdb', field: 'apiKey' | 'accessToken', value: SecretUpdate) => {
+  const updateSecret = (provider: 'emby' | 'tmdb' | 'assrt', field: 'apiKey' | 'accessToken' | 'token', value: SecretUpdate) => {
     setDraft((current) => ({ ...current, [provider]: { ...current[provider], [field]: value } } as Draft))
   }
 
@@ -93,6 +94,15 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
             <label><span>API 地址</span><input {...machineFieldProps} name="tmdb-base-url" onChange={(event) => setDraft((current) => ({ ...current, tmdb: { ...current.tmdb, baseUrl: event.target.value } }))} placeholder="https://api.themoviedb.org/3" type="url" value={draft.tmdb.baseUrl} /></label>
             <label><span>Read Access Token · {secretHint(settings.tmdb.accessToken.configured)}</span><input {...machineFieldProps} autoComplete="new-password" name="tmdb-access-token" onChange={(event) => updateSecret('tmdb', 'accessToken', { ...draft.tmdb.accessToken, value: event.target.value })} type="password" value={draft.tmdb.accessToken.value} /></label>
             {settings.tmdb.accessToken.configured ? <label className="inline-check"><input checked={draft.tmdb.accessToken.clear} name="tmdb-clear-token" onChange={(event) => updateSecret('tmdb', 'accessToken', { value: '', clear: event.target.checked })} type="checkbox" />清除已保存 Token</label> : null}
+          </fieldset>
+
+          <fieldset>
+            <legend>Assrt</legend>
+            <label><span>API 地址</span><input {...machineFieldProps} name="assrt-base-url" onChange={(event) => setDraft((current) => ({ ...current, assrt: { ...current.assrt, baseUrl: event.target.value } }))} placeholder="https://api.assrt.net" type="url" value={draft.assrt.baseUrl} /></label>
+            <label><span>Token · {secretHint(settings.assrt?.token.configured ?? false)}</span><input {...machineFieldProps} autoComplete="new-password" name="assrt-token" onChange={(event) => updateSecret('assrt', 'token', { ...draft.assrt.token, value: event.target.value })} type="password" value={draft.assrt.token.value} /></label>
+            {settings.assrt?.token.configured ? <label className="inline-check"><input checked={draft.assrt.token.clear} name="assrt-clear-token" onChange={(event) => updateSecret('assrt', 'token', { value: '', clear: event.target.checked })} type="checkbox" />清除已保存 Token</label> : null}
+            <p className="settings-note">在 assrt.net 用户面板申请 32 位 Token。中文搜索优先走 Assrt，字幕写到 STRM 旁，不经 Media Hub 转发视频。</p>
+            <p className="settings-note">字幕服务由 assrt.net 提供</p>
           </fieldset>
 
           <fieldset>

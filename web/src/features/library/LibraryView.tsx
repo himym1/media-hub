@@ -280,7 +280,7 @@ function LibraryItemDetail({ item, onDeleted, onRefresh, refreshing }: { item: E
         </div>
         {downloadSubtitle.isSuccess ? <p className="library-subtitle-status" role="status">已下载字幕，Emby 正在刷新；重新打开播放可选中文字幕。</p> : null}
         {subtitleError ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{subtitleError.message}</span></div> : null}
-        {subtitleResults.length === 0 ? <p className="library-subtitle-status">未找到可用中文字幕（需 Emby 已配置字幕插件）。</p> : (
+        {subtitleResults.length === 0 ? <p className="library-subtitle-status">未找到可用中文字幕。可在设置中填写 Assrt Token；未配置时会回退到 Emby 字幕插件。</p> : (
           <ul className="library-subtitle-list">
             {subtitleResults.map((subtitle) => {
               const meta = [

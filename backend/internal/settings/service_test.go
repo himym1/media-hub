@@ -202,6 +202,30 @@ func TestMergeCheckInReplacesSchedule(t *testing.T) {
 	}
 }
 
+func TestMergePreservesAssrtForOlderClients(t *testing.T) {
+	current := Values{Assrt: config.Assrt{BaseURL: "https://api.assrt.net", Token: "saved-token"}}
+	merged := merge(current, Update{Sources: sourceUpdates("", "")})
+	if merged.Assrt != current.Assrt {
+		t.Fatalf("Assrt settings changed without an explicit update: %+v", merged.Assrt)
+	}
+	preserved := merge(current, Update{Assrt: &AssrtUpdate{BaseURL: "https://api.makedie.me"}})
+	if preserved.Assrt.Token != "saved-token" || preserved.Assrt.BaseURL != "https://api.makedie.me" {
+		t.Fatalf("empty Assrt token was not preserved: %+v", preserved.Assrt)
+	}
+	cleared := merge(current, Update{Assrt: &AssrtUpdate{Token: SecretUpdate{Clear: true}}})
+	if cleared.Assrt.Token != "" {
+		t.Fatalf("Assrt token was not cleared: %+v", cleared.Assrt)
+	}
+	defaulted := merge(Values{}, Update{Assrt: &AssrtUpdate{Token: SecretUpdate{Value: "new-token"}}})
+	if defaulted.Assrt.BaseURL != "https://api.assrt.net" || defaulted.Assrt.Token != "new-token" {
+		t.Fatalf("default Assrt URL = %+v", defaulted.Assrt)
+	}
+	view := publicView(Values{Assrt: config.Assrt{Token: "saved-token"}})
+	if !view.Assrt.Token.Configured {
+		t.Fatal("saved Assrt token was not marked configured")
+	}
+}
+
 func TestMergePreservesWeComForOlderClients(t *testing.T) {
 	current := Values{WeCom: config.WeCom{BaseURL: "https://qyapi.weixin.qq.com", CorpID: "corp", Secret: "secret", ChatID: "chat"}}
 	merged := merge(current, Update{Sources: sourceUpdates("", "")})

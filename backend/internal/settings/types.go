@@ -13,6 +13,7 @@ type Values struct {
 	Emby       config.Emby           `json:"emby"`
 	Drive115   config.Drive115       `json:"drive115"`
 	TMDB       config.TMDB           `json:"tmdb"`
+	Assrt      config.Assrt          `json:"assrt"`
 	WeCom      config.WeCom          `json:"wecom"`
 	Workflow   config.Workflow       `json:"workflow"`
 	CheckIn    *CheckInSettings      `json:"checkIn,omitempty"`
@@ -89,6 +90,11 @@ type TMDBUpdate struct {
 	AccessToken SecretUpdate `json:"accessToken"`
 }
 
+type AssrtUpdate struct {
+	BaseURL string       `json:"baseUrl"`
+	Token   SecretUpdate `json:"token"`
+}
+
 type SourceUpdate struct {
 	ID       string       `json:"id"`
 	BaseURL  string       `json:"baseUrl"`
@@ -112,6 +118,7 @@ type Update struct {
 	Emby       EmbyUpdate       `json:"emby"`
 	Drive115   Drive115Update   `json:"drive115"`
 	TMDB       TMDBUpdate       `json:"tmdb"`
+	Assrt      *AssrtUpdate     `json:"assrt"`
 	WeCom      *WeComUpdate     `json:"wecom"`
 	Workflow   Workflow         `json:"workflow"`
 	CheckIn    *CheckInSettings `json:"checkIn,omitempty"`
@@ -143,6 +150,11 @@ type TMDBView struct {
 	AccessToken SecretStatus `json:"accessToken"`
 }
 
+type AssrtView struct {
+	BaseURL string       `json:"baseUrl"`
+	Token   SecretStatus `json:"token"`
+}
+
 type SourceView struct {
 	ID       string       `json:"id"`
 	Label    string       `json:"label"`
@@ -163,14 +175,15 @@ type WeComView struct {
 }
 
 type View struct {
-	QMediaSync QMediaSyncView   `json:"qmediaSync"`
-	Emby       EmbyView         `json:"emby"`
-	Drive115   Drive115View     `json:"drive115"`
-	TMDB       TMDBView         `json:"tmdb"`
-	WeCom      WeComView        `json:"wecom"`
-	Workflow   Workflow         `json:"workflow"`
-	CheckIn    CheckInSettings  `json:"checkIn"`
-	Sources    []SourceView     `json:"sources"`
+	QMediaSync QMediaSyncView  `json:"qmediaSync"`
+	Emby       EmbyView        `json:"emby"`
+	Drive115   Drive115View    `json:"drive115"`
+	TMDB       TMDBView        `json:"tmdb"`
+	Assrt      AssrtView       `json:"assrt"`
+	WeCom      WeComView       `json:"wecom"`
+	Workflow   Workflow        `json:"workflow"`
+	CheckIn    CheckInSettings `json:"checkIn"`
+	Sources    []SourceView    `json:"sources"`
 }
 
 var sourceLabels = map[string]string{
@@ -218,6 +231,7 @@ func FromConfig(value config.Config) Values {
 		Emby:       value.Emby,
 		Drive115:   value.Drive115,
 		TMDB:       value.TMDB,
+		Assrt:      value.Assrt,
 		WeCom:      value.WeCom,
 		Workflow:   value.Workflow,
 		Sources:    append([]config.SearchSource(nil), value.Sources...),

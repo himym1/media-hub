@@ -22,6 +22,7 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 		"MEDIA_HUB_EMBY_PASSWORD":            "emby-password-value",
 		"MEDIA_HUB_115_ACCESS_TOKEN":         "115-test-value",
 		"MEDIA_HUB_TMDB_ACCESS_TOKEN":        "tmdb-token",
+		"MEDIA_HUB_ASSRT_TOKEN":              "assrt-token",
 		"MEDIA_HUB_SOURCE_FRAME_URL":         "https://frame.local/api",
 		"MEDIA_HUB_DATA_ENCRYPTION_KEY":      "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
 		"MEDIA_HUB_QMS_ACCOUNT_ID":           "7",
@@ -63,6 +64,9 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 	}
 	if loaded.TMDB.BaseURL != "https://api.themoviedb.org/3" || loaded.TMDB.AccessToken == "" {
 		t.Fatal("unexpected TMDB configuration")
+	}
+	if loaded.Assrt.BaseURL != "https://api.assrt.net" || loaded.Assrt.Token == "" {
+		t.Fatal("unexpected Assrt configuration")
 	}
 	if loaded.Sources[0].ID != "framehdr" || loaded.Sources[0].BaseURL != "https://frame.local/api" {
 		t.Fatal("unexpected source configuration")

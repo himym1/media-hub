@@ -149,6 +149,13 @@ func merge(current Values, input Update) Values {
 	if current.TMDB.BaseURL == "" && current.TMDB.AccessToken != "" {
 		current.TMDB.BaseURL = "https://api.themoviedb.org/3"
 	}
+	if input.Assrt != nil {
+		current.Assrt.BaseURL = strings.TrimSpace(input.Assrt.BaseURL)
+		current.Assrt.Token = mergeSecret(current.Assrt.Token, input.Assrt.Token)
+		if current.Assrt.BaseURL == "" && current.Assrt.Token != "" {
+			current.Assrt.BaseURL = "https://api.assrt.net"
+		}
+	}
 	if input.WeCom != nil {
 		current.WeCom.BaseURL = strings.TrimSpace(input.WeCom.BaseURL)
 		current.WeCom.CorpID = strings.TrimSpace(input.WeCom.CorpID)
@@ -260,6 +267,9 @@ func validate(value Values) error {
 	if err := validateURL("TMDB URL", value.TMDB.BaseURL); err != nil {
 		return err
 	}
+	if err := validateURL("Assrt URL", value.Assrt.BaseURL); err != nil {
+		return err
+	}
 	if err := validateURL("WeCom URL", value.WeCom.BaseURL); err != nil {
 		return err
 	}
@@ -286,6 +296,7 @@ func validate(value Values) error {
 	if len(value.QMediaSync.BaseURL) > 2048 || len(value.QMediaSync.APIKey) > 4096 ||
 		len(value.Emby.BaseURL) > 2048 || len(value.Emby.APIKey) > 4096 || len(value.Emby.UserID) > 200 || len(value.Emby.Password) > 4096 ||
 		len(value.Drive115.ClientID) > 200 || len(value.TMDB.BaseURL) > 2048 || len(value.TMDB.AccessToken) > 4096 ||
+		len(value.Assrt.BaseURL) > 2048 || len(value.Assrt.Token) > 4096 ||
 		len(value.WeCom.BaseURL) > 2048 || len(value.WeCom.CorpID) > 200 || len(value.WeCom.Secret) > 4096 || len(value.WeCom.SendMode) > 20 || len(value.WeCom.ToUser) > 200 || len(value.WeCom.ChatID) > 200 {
 		return fmt.Errorf("%w: provider setting is too long", ErrInvalid)
 	}
@@ -446,6 +457,7 @@ func publicView(value Values) View {
 		},
 		Drive115: Drive115View{ClientID: value.Drive115.ClientID},
 		TMDB:     TMDBView{BaseURL: value.TMDB.BaseURL, AccessToken: SecretStatus{Configured: value.TMDB.AccessToken != ""}},
+		Assrt:    AssrtView{BaseURL: value.Assrt.BaseURL, Token: SecretStatus{Configured: value.Assrt.Token != ""}},
 		WeCom: WeComView{
 			BaseURL: value.WeCom.BaseURL, CorpID: value.WeCom.CorpID, Secret: SecretStatus{Configured: value.WeCom.Secret != ""},
 			SendMode: value.WeCom.DeliveryMode(), AgentID: value.WeCom.AgentID, ToUser: value.WeCom.ToUser, ChatID: value.WeCom.ChatID,

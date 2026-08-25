@@ -81,6 +81,12 @@ internal fun ProviderSettingsPanel(
             SecretField("TMDB Read Access Token", settings.tmdbAccessToken, draft.tmdbAccessToken) {
                 onDraftChange(draft.copy(tmdbAccessToken = it))
             }
+            LabeledField("Assrt API 地址", draft.assrtBaseUrl) { onDraftChange(draft.copy(assrtBaseUrl = it)) }
+            SecretField("Assrt Token", settings.assrtToken, draft.assrtToken) {
+                onDraftChange(draft.copy(assrtToken = it))
+            }
+            MediaHubText("在 assrt.net 用户面板申请 32 位 Token。中文搜索优先走 Assrt。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+            MediaHubText("字幕服务由 assrt.net 提供", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             LabeledField("Emby 地址", draft.embyBaseUrl) { onDraftChange(draft.copy(embyBaseUrl = it)) }
             SecretField("Emby API Key", settings.embyApiKey, draft.embyApiKey) {
                 onDraftChange(draft.copy(embyApiKey = it))

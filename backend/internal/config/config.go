@@ -32,6 +32,7 @@ type Config struct {
 	EmbyPlaybackBaseURL    string
 	Drive115               Drive115
 	TMDB                   TMDB
+	Assrt                  Assrt
 	WeCom                  WeCom
 	Workflow               Workflow
 	Sources                []SearchSource
@@ -60,6 +61,11 @@ type Drive115 struct {
 type TMDB struct {
 	BaseURL     string
 	AccessToken string
+}
+
+type Assrt struct {
+	BaseURL string
+	Token   string
 }
 
 type WeCom struct {
@@ -259,6 +265,15 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		tmdbURL = "https://api.themoviedb.org/3"
 	}
 	tmdbConfig := TMDB{BaseURL: tmdbURL, AccessToken: tmdbToken}
+	assrtURL, err := baseURLValue(lookup, "MEDIA_HUB_ASSRT_URL")
+	if err != nil {
+		return Config{}, err
+	}
+	assrtToken := secretValue(lookup, "MEDIA_HUB_ASSRT_TOKEN")
+	if assrtURL == "" && assrtToken != "" {
+		assrtURL = "https://api.assrt.net"
+	}
+	assrtConfig := Assrt{BaseURL: assrtURL, Token: assrtToken}
 	wecomConfig := WeCom{
 		BaseURL:  wecomURL,
 		CorpID:   strings.TrimSpace(stringValue(lookup, "MEDIA_HUB_WECOM_CORP_ID", "")),
@@ -302,6 +317,7 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		EmbyPlaybackBaseURL:    embyPlaybackURL,
 		Drive115:               drive115,
 		TMDB:                   tmdbConfig,
+		Assrt:                  assrtConfig,
 		WeCom:                  wecomConfig,
 		Workflow: Workflow{
 			SyncMode:            syncMode,
@@ -326,6 +342,7 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 			{ID: "sources", Label: "资源源"},
 			{ID: "115", Label: "115", BaseURL: drive115URL},
 			{ID: "tmdb", Label: "TMDB", BaseURL: tmdbConfig.BaseURL},
+			{ID: "assrt", Label: "Assrt", BaseURL: assrtConfig.BaseURL},
 			{ID: "wecom", Label: "企业微信", BaseURL: wecomConfig.BaseURL},
 			{ID: "emby", Label: "Emby", BaseURL: emby.BaseURL},
 		},

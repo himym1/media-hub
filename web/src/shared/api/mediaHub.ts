@@ -19,6 +19,7 @@ export type ProviderSettings = {
   emby: { baseUrl: string; apiKey: SecretStatus; userId: string; password: SecretStatus }
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretStatus }
+  assrt: { baseUrl: string; token: SecretStatus }
   wecom: { baseUrl: string; corpId: string; secret: SecretStatus; sendMode: 'app' | 'appchat'; agentId: number; toUser: string; chatId: string }
   workflow: { syncMode: WorkflowSyncMode; strmBaseUrl: string; strmRootMount: string; qMediaSyncAccountId: number; movie: WorkflowTargetSettings; series: WorkflowTargetSettings }
   checkIn: CheckInSettings
@@ -29,6 +30,7 @@ export type ProviderSettingsUpdate = {
   emby: { baseUrl: string; apiKey: SecretUpdate; userId: string; password: SecretUpdate }
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretUpdate }
+  assrt: { baseUrl: string; token: SecretUpdate }
   wecom: { baseUrl: string; corpId: string; secret: SecretUpdate; sendMode: 'app' | 'appchat'; agentId: number; toUser: string; chatId: string }
   workflow: ProviderSettings['workflow']
   checkIn: CheckInSettings

@@ -50,7 +50,7 @@ class RemoteSubtitleViewModel(
                     _uiState.value = _uiState.value.copy(
                         searching = false,
                         remoteSubtitles = items,
-                        message = if (items.isEmpty()) "未找到可用中文字幕（需 Emby 已配置字幕插件）" else null,
+                        message = if (items.isEmpty()) "未找到可用中文字幕。可在设置中填写 Assrt Token；未配置时会回退到 Emby 字幕插件。" else null,
                     )
                 }
             } catch (error: ApiException) {

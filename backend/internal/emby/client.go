@@ -131,7 +131,20 @@ type baseItem struct {
 	MediaSources      []mediaSource     `json:"MediaSources"`
 	Path              string            `json:"Path"`
 	SeriesID          string            `json:"SeriesId"`
+	SeriesName        string            `json:"SeriesName"`
 	UserData          userData          `json:"UserData"`
+}
+
+type SubtitleTarget struct {
+	ID            string
+	Type          string
+	Name          string
+	SeriesName    string
+	OriginalTitle string
+	Year          int
+	Season        int
+	Episode       int
+	Path          string
 }
 
 type userData struct {
@@ -457,7 +470,7 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 		return ItemDetail{}, ErrUpstreamResponse
 	}
 	query := url.Values{
-		"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,Path,ProviderIds,RunTimeTicks,UserData"},
+		"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,Path,ProviderIds,RunTimeTicks,SeriesName,UserData"},
 	}
 	endpointPath := path.Join("Items", itemID)
 	if configuration.userID != "" {
@@ -490,6 +503,44 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 		Overview: boundedText(item.Overview, 4000), CommunityRating: item.CommunityRating,
 		RuntimeMinutes: int(item.RunTimeTicks / 600_000_000), Genres: boundedStrings(item.Genres, 32, 100),
 		MediaSourceCount: len(item.MediaSources), ExternalURL: externalURL, AppURL: appURL,
+	}, nil
+}
+
+func (c *Client) SubtitleTarget(ctx context.Context, itemID string) (SubtitleTarget, error) {
+	configuration := c.configuration()
+	if err := validateAuthenticated(configuration); err != nil {
+		return SubtitleTarget{}, err
+	}
+	itemID = strings.TrimSpace(itemID)
+	if itemID == "" || !validEmbyIdentifier(itemID) {
+		return SubtitleTarget{}, ErrUpstreamResponse
+	}
+	query := url.Values{"Fields": {"MediaSources,OriginalTitle,ParentIndexNumber,IndexNumber,Path,ProductionYear,SeriesName"}}
+	endpointPath := path.Join("Items", itemID)
+	if configuration.userID != "" {
+		endpointPath = path.Join("Users", configuration.userID, "Items", itemID)
+	}
+	var item baseItem
+	if err := c.getJSONWithNotFound(ctx, configuration, endpointPath, query, true, &item); err != nil {
+		return SubtitleTarget{}, err
+	}
+	if !strings.EqualFold(item.ID, itemID) {
+		return SubtitleTarget{}, ErrItemNotFound
+	}
+	mediaPath := strings.TrimSpace(item.Path)
+	if mediaPath == "" && len(item.MediaSources) > 0 {
+		mediaPath = strings.TrimSpace(item.MediaSources[0].Path)
+	}
+	return SubtitleTarget{
+		ID:            item.ID,
+		Type:          item.Type,
+		Name:          item.Name,
+		SeriesName:    item.SeriesName,
+		OriginalTitle: item.OriginalTitle,
+		Year:          item.ProductionYear,
+		Season:        item.ParentIndexNumber,
+		Episode:       item.IndexNumber,
+		Path:          mediaPath,
 	}, nil
 }
 

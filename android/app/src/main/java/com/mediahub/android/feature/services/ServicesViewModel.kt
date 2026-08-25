@@ -314,6 +314,8 @@ private fun ProviderSettings.toUpdate() = ProviderSettingsUpdate(
     drive115ClientId = drive115ClientId,
     tmdbBaseUrl = tmdbBaseUrl,
     tmdbAccessToken = SecretUpdate(),
+    assrtBaseUrl = assrtBaseUrl,
+    assrtToken = SecretUpdate(),
     wecom = wecom.toUpdate(),
     workflow = workflow.copy(syncMode = "builtin"),
     checkIn = checkIn,

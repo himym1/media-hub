@@ -190,7 +190,7 @@ private fun RemoteSubtitlePanel(
             MediaHubText(text = it, color = MediaHubColors.TextMuted, fontSize = 12.sp)
         }
         if (state.searching) {
-            MediaHubText(text = "正在通过 Emby 搜索…", color = MediaHubColors.TextMuted, fontSize = 13.sp)
+            MediaHubText(text = "正在搜索中文字幕…", color = MediaHubColors.TextMuted, fontSize = 13.sp)
         }
         if (state.remoteSubtitles.isNotEmpty()) {
             MediaHubCard {

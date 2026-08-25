@@ -54,14 +54,14 @@ test('discovery preserves search state through browser history', async ({ page }
   await page.getByLabel('搜索电影或电视剧').fill('验收影片')
   await page.getByRole('button', { name: '搜索', exact: true }).click()
   await expect(page).toHaveURL(/view=discover.*q=%E9%AA%8C%E6%94%B6%E5%BD%B1%E7%89%87/)
-  await expect(page.getByText('2160p', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /验收影片.*2160p/ })).toBeVisible()
   expect(page.url()).not.toContain('fixture-token')
 
   await page.getByRole('link', { name: '任务', exact: true }).first().click()
   await expect(page).toHaveURL(/view=transfers.*task=task-1/)
   await page.goBack()
   await expect(page.getByLabel('搜索电影或电视剧')).toHaveValue('验收影片')
-  await expect(page.getByText('2160p', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /验收影片.*2160p/ })).toBeVisible()
 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
   await expectNoSeriousAccessibilityViolations(page)

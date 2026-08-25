@@ -71,6 +71,11 @@ type EmbyReader interface {
 	DownloadRemoteSubtitle(context.Context, string, string) error
 }
 
+type RemoteSubtitles interface {
+	Search(context.Context, string, string) ([]emby.RemoteSubtitle, error)
+	Download(context.Context, string, string) error
+}
+
 type EmbyPosterCache interface {
 	Get(itemID string, maxWidth int) (emby.PrimaryImage, bool)
 	Put(itemID string, maxWidth int, image emby.PrimaryImage) error
@@ -167,6 +172,7 @@ type Dependencies struct {
 	Discovery        DiscoveryProvider
 	Statistics       StatisticsProvider
 	Emby             EmbyReader
+	RemoteSubtitles  RemoteSubtitles
 	EmbyPosterCache  EmbyPosterCache
 	Drive115         Drive115Reader
 	Drive115Auth     Drive115Authorizer
