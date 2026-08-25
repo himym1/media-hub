@@ -68,6 +68,23 @@ func TestSearchRejectsUnauthorizedToken(t *testing.T) {
 	}
 }
 
+func TestSearchMapsHTTP400InvalidToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"status":20001,"errmsg":"invalid token"}`))
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "bad-token", time.Second)
+	_, err := client.Search(context.Background(), "信号 S01E01", false)
+	if err != ErrUnauthorized {
+		t.Fatalf("err = %v", err)
+	}
+	health := client.Check(context.Background())
+	if health.Status != "degraded" || health.Detail != "服务可达，但 Token 无效" {
+		t.Fatalf("health = %#v", health)
+	}
+}
+
 func TestCheckReportsUnconfigured(t *testing.T) {
 	health := NewClient("", "", time.Second).Check(context.Background())
 	if health.Status != "unconfigured" || health.ID != "assrt" {

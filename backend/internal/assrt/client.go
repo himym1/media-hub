@@ -56,7 +56,7 @@ func NewClient(baseURL, token string, timeout time.Duration) *Client {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	client := &Client{client: &http.Client{Timeout: timeout}}
+	client := &Client{client: newAssrtHTTPClient(timeout)}
 	client.Configure(baseURL, token)
 	return client
 }
@@ -335,26 +335,26 @@ func (c *Client) getJSON(ctx context.Context, configuration clientConfig, endpoi
 		return fmt.Errorf("request Assrt: %w", err)
 	}
 	defer response.Body.Close()
-	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-		return ErrUnauthorized
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return ErrUpstreamResponse
-	}
-	var envelope struct {
-		Status int `json:"status"`
-	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
 	if err != nil {
 		return fmt.Errorf("read Assrt response: %w", err)
 	}
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		return fmt.Errorf("decode Assrt response: %w", err)
-	}
-	if envelope.Status == 1 {
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 		return ErrUnauthorized
 	}
-	if envelope.Status != 0 {
+	var envelope struct {
+		Status int `json:"status"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			return ErrUpstreamResponse
+		}
+		return fmt.Errorf("decode Assrt response: %w", err)
+	}
+	if envelope.Status == 1 || envelope.Status == 20001 {
+		return ErrUnauthorized
+	}
+	if envelope.Status != 0 || response.StatusCode < 200 || response.StatusCode >= 300 {
 		return ErrUpstreamResponse
 	}
 	if err := json.Unmarshal(body, target); err != nil {
