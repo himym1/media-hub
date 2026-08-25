@@ -46,7 +46,7 @@ class MediaHubPlaybackService : MediaSessionService() {
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(30_000)
             .setReadTimeoutMs(60_000)
-        player = ExoPlayer.Builder(this)
+        player = ExoPlayer.Builder(this, MediaHubRenderersFactory(this))
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, httpFactory)))
             .setAudioAttributes(AudioAttributes.DEFAULT, true)
             .setHandleAudioBecomingNoisy(true)

@@ -1,5 +1,6 @@
 package com.mediahub.android.feature.player
 
+import androidx.media3.common.C
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -29,5 +30,13 @@ class PlayerTracksTest {
         assertEquals("5.1", audioChannelLabel(6))
         assertEquals("7.1", audioChannelLabel(8))
         assertEquals("", audioChannelLabel(0))
+    }
+
+    @Test
+    fun hidesReleaseFilenameAsAudioTitle() {
+        assertTrue(isReleaseStyleTrackLabel("[UXN] Show.E02.160123.UHDTV"))
+        assertEquals("音轨 1", displayTrackTitle("[UXN] Show.E02.160123.UHDTV", "und", C.TRACK_TYPE_AUDIO, 0))
+        assertEquals("韩语", displayTrackTitle("[UXN] Show.E02.160123.UHDTV", "kor", C.TRACK_TYPE_AUDIO, 0))
+        assertEquals("评论音轨", displayTrackTitle("评论音轨", "kor", C.TRACK_TYPE_AUDIO, 1))
     }
 }

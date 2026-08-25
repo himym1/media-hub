@@ -1604,19 +1604,29 @@ private fun PlayerTrackSelectionDrawer(
                 } else if (audioOptions.isEmpty()) {
                     item {
                         MediaHubText(
-                            text = "暂无多音轨可选",
+                            text = "当前片源没有可识别的音轨",
                             color = Color.White.copy(alpha = 0.5f),
                             fontSize = 12.sp,
                             modifier = Modifier.padding(12.dp),
                         )
                     }
                 } else {
+                    if (audioOptions.size == 1) {
+                        item {
+                            MediaHubText(
+                                text = "当前片源只有 1 条音轨",
+                                color = Color.White.copy(alpha = 0.55f),
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
                     items(audioOptions) { option ->
                         PlayerTrackItem(
                             title = option.title,
                             subtitle = option.detail,
                             isSelected = option.selected,
-                            enabled = option.supported && canSelectTracks,
+                            enabled = canSelectTracks,
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 player.applyTrackOption(option)
