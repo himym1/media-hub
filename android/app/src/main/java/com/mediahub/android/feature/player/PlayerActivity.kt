@@ -229,6 +229,7 @@ private fun PlayerRoute(
         controller = controller,
         isPictureInPicture = isPictureInPicture,
         embyItemId = embyItemId,
+        mediaId = request.mediaId,
         subtitleState = subtitleState,
         subtitleActions = subtitleActions,
         actions = playerActions.copy(onRetry = {

@@ -151,6 +151,8 @@ class MediaHubPlaybackService : MediaSessionService() {
 
     private fun play(request: PlaybackRequest, descriptor: PlaybackDescriptor, positionMs: Long, autoPlay: Boolean) {
         SubtitleTiming.reset()
+        SubtitleTiming.set(subtitleOffsetStore(this).get(request.mediaId))
+        SubtitleRuntime.inspect(descriptor.subtitle)
         sessionTracker.attach(descriptor.sessionId)
         httpFactory.setUserAgent(descriptor.userAgent)
         var item = MediaItem.Builder()
@@ -182,6 +184,7 @@ class MediaHubPlaybackService : MediaSessionService() {
             val cached = withContext(Dispatchers.IO) {
                 writeLocalSubtitleCache(cacheDir, itemId, downloaded.bytes, downloaded.contentType, downloaded.fileName)
             } ?: return@launch
+            SubtitleRuntime.inspect(cached)
             val current = player.currentMediaItem ?: return@launch
             if (current.mediaId != mediaId) return@launch
             val positionMs = player.currentPosition.coerceAtLeast(0L)

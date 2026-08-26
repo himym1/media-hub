@@ -18,6 +18,7 @@ import com.mediahub.android.feature.transfers.TransferViewModel
 class MediaHubViewModelFactory(
     private val repository: MediaHubRepository,
     private val updateNotifier: AndroidUpdateNotifier = AndroidUpdateNotifier.None,
+    private val evictItemCaches: (String) -> Unit = {},
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T = when {
@@ -26,7 +27,7 @@ class MediaHubViewModelFactory(
         modelClass.isAssignableFrom(SearchViewModel::class.java) -> SearchViewModel(repository) as T
         modelClass.isAssignableFrom(TransferViewModel::class.java) -> TransferViewModel(repository) as T
         modelClass.isAssignableFrom(LibraryViewModel::class.java) -> LibraryViewModel(repository) as T
-        modelClass.isAssignableFrom(LibraryDetailViewModel::class.java) -> LibraryDetailViewModel(repository) as T
+        modelClass.isAssignableFrom(LibraryDetailViewModel::class.java) -> LibraryDetailViewModel(repository, evictItemCaches) as T
         modelClass.isAssignableFrom(ServicesViewModel::class.java) -> ServicesViewModel(repository, updateNotifier) as T
         modelClass.isAssignableFrom(Drive115ViewModel::class.java) -> Drive115ViewModel(repository) as T
         modelClass.isAssignableFrom(LocalUploadViewModel::class.java) -> LocalUploadViewModel(repository) as T

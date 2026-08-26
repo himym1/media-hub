@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -101,6 +102,7 @@ func (s *Service) searchAssrt(ctx context.Context, itemID string) ([]emby.Remote
 	}
 	seen := make(map[int]struct{})
 	results := make([]emby.RemoteSubtitle, 0, 16)
+	scores := make(map[string]int, 16)
 	for _, query := range assrt.Queries(search) {
 		hits, err := s.assrt.Search(searchCtx, query.Text, query.FileName)
 		if err != nil {
@@ -123,7 +125,9 @@ func (s *Service) searchAssrt(ctx context.Context, itemID string) ([]emby.Remote
 				Author:       hit.Site,
 				Comment:      hit.Comment,
 			})
+			scores[assrtIDPrefix+strconv.Itoa(hit.ID)] = assrt.ScoreHit(hit, search)
 			if len(results) >= 20 {
+				sortRemoteSubtitles(results, scores)
 				return results, nil
 			}
 		}
@@ -131,6 +135,7 @@ func (s *Service) searchAssrt(ctx context.Context, itemID string) ([]emby.Remote
 			break
 		}
 	}
+	sortRemoteSubtitles(results, scores)
 	return results, nil
 }
 
@@ -154,7 +159,9 @@ func (s *Service) downloadAssrt(ctx context.Context, itemID, rawID string) error
 	if err != nil {
 		return err
 	}
-	name, body, err := s.assrt.DownloadFile(ctx, subtitleID, assrt.FileHint{Season: target.Season, Episode: target.Episode})
+	name, body, err := s.assrt.DownloadFile(ctx, subtitleID, assrt.FileHint{
+		Season: target.Season, Episode: target.Episode, FileName: target.Path,
+	})
 	if err != nil {
 		return err
 	}
@@ -162,6 +169,34 @@ func (s *Service) downloadAssrt(ctx context.Context, itemID, rawID string) error
 		return err
 	}
 	return s.emby.RefreshItem(ctx, itemID)
+}
+
+func (s *Service) RemoveLocal(ctx context.Context, itemID string) error {
+	if s.emby == nil {
+		return nil
+	}
+	target, err := s.emby.SubtitleTarget(ctx, itemID)
+	if err != nil {
+		return nil
+	}
+	if !strings.EqualFold(target.Type, "Episode") && !strings.EqualFold(target.Type, "Movie") {
+		return nil
+	}
+	mount := ""
+	if s.mount != nil {
+		mount = s.mount()
+	}
+	mediaPath, err := strm.ResolveLibraryFile(mount, target.Path)
+	if err != nil {
+		return nil
+	}
+	return strm.RemoveSidecars(mediaPath)
+}
+
+func sortRemoteSubtitles(items []emby.RemoteSubtitle, scores map[string]int) {
+	sort.SliceStable(items, func(i, j int) bool {
+		return scores[items[i].ID] > scores[items[j].ID]
+	})
 }
 
 func chineseLanguage(language string) bool {

@@ -31,6 +31,12 @@ class EmbyPosterLoader(
 
     override fun cached(itemId: String): ImageBitmap? = cache.get(itemId)
 
+    fun evict(itemId: String) {
+        if (!idPattern.matches(itemId)) return
+        cache.remove(itemId)
+        diskFile(itemId).delete()
+    }
+
     override suspend fun load(itemId: String): ImageBitmap? {
         if (!idPattern.matches(itemId)) return null
         cache.get(itemId)?.let { return it }

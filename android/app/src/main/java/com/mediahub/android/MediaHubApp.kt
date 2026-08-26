@@ -146,7 +146,11 @@ fun MediaHubApp() {
         }
         ServerViewModelScope(serverViewModelStoreOwner) {
             val factory = remember(repository) {
-                MediaHubViewModelFactory(repository, AndroidUpdateNotifier(applicationContext))
+                MediaHubViewModelFactory(
+                    repository,
+                    AndroidUpdateNotifier(applicationContext),
+                    evictItemCaches = container::evictItemCaches,
+                )
             }
             val appViewModel = viewModel<AppViewModel>(key = "app-$serverGeneration", factory = factory)
             val state by appViewModel.state.collectAsState()

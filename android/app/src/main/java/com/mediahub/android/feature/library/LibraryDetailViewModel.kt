@@ -31,6 +31,7 @@ data class LibraryDetailState(
 
 class LibraryDetailViewModel(
     private val repository: MediaHubRepository,
+    private val evictItemCaches: (String) -> Unit = {},
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(LibraryDetailState())
     val uiState: StateFlow<LibraryDetailState> = _uiState.asStateFlow()
@@ -130,6 +131,8 @@ class LibraryDetailViewModel(
             _uiState.value = _uiState.value.copy(deleting = true, errorMessage = null)
             try {
                 repository.deleteItem(itemId)
+                evictItemCaches(itemId)
+                _uiState.value.episodes.forEach { episode -> evictItemCaches(episode.item.id) }
                 if (_uiState.value.itemId == itemId && generation == requestGeneration) {
                     _uiState.value = _uiState.value.copy(deleting = false, deleted = true, deletePreview = null)
                 }

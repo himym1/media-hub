@@ -39,3 +39,11 @@ internal fun writeLocalSubtitleCache(
     file.writeBytes(bytes)
     return LocalSubtitleFile(file, mimeType)
 }
+
+internal fun clearLocalSubtitleCache(cacheDir: File, itemId: String) {
+    if (!itemId.matches(Regex("^[A-Za-z0-9_-]{1,128}$"))) return
+    val directory = File(cacheDir, "local-subtitles")
+    listOf(".ass", ".ssa", ".srt").forEach { ext ->
+        File(directory, itemId + ext).delete()
+    }
+}

@@ -11,6 +11,8 @@ import com.mediahub.android.data.DiscoveryCache
 import com.mediahub.android.data.MediaHubRepository
 import com.mediahub.android.playback.NetworkPlaybackRepository
 import com.mediahub.android.playback.PlaybackRepository
+import com.mediahub.android.playback.clearLocalSubtitleCache
+import com.mediahub.android.playback.subtitleOffsetStore
 import java.security.MessageDigest
 
 class AppContainer(context: Context) {
@@ -41,6 +43,12 @@ class AppContainer(context: Context) {
 
     fun requireConfigured(): ConfiguredDependencies = configured
         ?: configureServer(initialServerUrl())
+
+    fun evictItemCaches(itemId: String) {
+        clearLocalSubtitleCache(appContext.cacheDir, itemId)
+        configured?.posterLoader?.evict(itemId)
+        subtitleOffsetStore(appContext).clearItem(itemId)
+    }
 
     @Synchronized
     fun clearConfiguration() {

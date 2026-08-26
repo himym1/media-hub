@@ -141,7 +141,7 @@ test('library previews and confirms Emby delete without touching 115 files', asy
   await page.goto('/?view=library')
   await page.getByRole('button', { name: /验收影片/ }).click()
   await page.getByRole('button', { name: '从 Emby 删除' }).click()
-  await expect(page.getByText('将从 Emby 删除「验收影片」。NAS 上约 1 个库文件可能被删掉，115 网盘文件不会删除。')).toBeVisible()
+  await expect(page.getByText('将从 Emby 删除「验收影片」。NAS 上约 1 个 STRM 和同名字幕会被清掉，115 网盘文件不会删除。')).toBeVisible()
   await expectNoSeriousAccessibilityViolations(page)
   await attachScreenshot(page, testInfo, 'library-delete-preview')
   await page.getByRole('button', { name: '取消' }).click()

@@ -327,7 +327,7 @@ function LibraryItemDetail({ item, onDeleted, onRefresh, refreshing }: { item: E
 function deletePreviewCopy(preview: EmbyDeletePreview) {
   const series = preview.type === 'Series' ? '及全部分集' : ''
   const versions = preview.versionCount > 1 ? `的 ${preview.versionCount} 个版本` : ''
-  return `将从 Emby 删除「${preview.name}」${versions}${series}。NAS 上约 ${preview.fileCount} 个库文件可能被删掉，115 网盘文件不会删除。`
+  return `将从 Emby 删除「${preview.name}」${versions}${series}。NAS 上约 ${preview.fileCount} 个 STRM 和同名字幕会被清掉，115 网盘文件不会删除。`
 }
 
 function LibraryItemButton({ item, selected, onSelect }: { item: EmbyItem; selected: boolean; onSelect: (id: string) => void }) {

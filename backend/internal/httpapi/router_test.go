@@ -97,10 +97,10 @@ func (*workflowStub) RetryNotification(context.Context, int64, string, string, s
 }
 
 type embyStub struct {
-	refreshedLibrary string
-	refreshedItem    string
-	deletedItem      string
-	deleteErr        error
+	refreshedLibrary   string
+	refreshedItem      string
+	deletedItem        string
+	deleteErr          error
 	downloadedSubtitle string
 }
 
@@ -172,6 +172,7 @@ func (stub localSubtitleStub) Download(context.Context, string, string) error { 
 func (stub localSubtitleStub) Local(context.Context, string) (strm.Sidecar, error) {
 	return stub.sidecar, stub.err
 }
+func (stub localSubtitleStub) RemoveLocal(context.Context, string) error { return nil }
 
 type settingsStub struct {
 	input settings.Update

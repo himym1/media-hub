@@ -51,6 +51,31 @@ func TestWriteSidecarNextToSTRM(t *testing.T) {
 	}
 }
 
+func TestRemoveSidecarsDeletesLanguageFiles(t *testing.T) {
+	dir := t.TempDir()
+	media := filepath.Join(dir, "S01E01.strm")
+	if err := os.WriteFile(media, []byte("https://example/115/url/x"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	sidecar := filepath.Join(dir, "S01E01.chi.ass")
+	other := filepath.Join(dir, "S01E02.chi.ass")
+	if err := os.WriteFile(sidecar, []byte("[Script Info]\n"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(other, []byte("[Script Info]\n"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveSidecars(media); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
+		t.Fatalf("sidecar still exists: %v", err)
+	}
+	if _, err := os.Stat(other); err != nil {
+		t.Fatalf("neighbor sidecar was removed: %v", err)
+	}
+}
+
 func TestReadSidecarMissing(t *testing.T) {
 	dir := t.TempDir()
 	media := filepath.Join(dir, "S01E01.strm")

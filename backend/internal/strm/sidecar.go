@@ -105,6 +105,27 @@ func ReadSidecar(mediaPath, language string) (Sidecar, error) {
 	return Sidecar{}, ErrSidecarNotFound
 }
 
+func RemoveSidecars(mediaPath string) error {
+	mediaPath = filepath.Clean(mediaPath)
+	if mediaPath == "" || !filepath.IsAbs(mediaPath) {
+		return fmt.Errorf("library file path is invalid")
+	}
+	dir := filepath.Dir(mediaPath)
+	stem := strings.TrimSuffix(mediaPath, filepath.Ext(mediaPath))
+	for _, lang := range []string{"chi", "zh", "chs"} {
+		for _, ext := range []string{".ass", ".ssa", ".srt"} {
+			dest := stem + "." + lang + ext
+			if !strings.HasPrefix(dest, dir+string(os.PathSeparator)) {
+				continue
+			}
+			if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func sidecarLanguages(language string) []string {
 	lang := sanitizeLanguage(language)
 	if lang == "" {

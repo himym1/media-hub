@@ -61,3 +61,32 @@ func TestExtractZipPrefersMatchingEpisode(t *testing.T) {
 		t.Fatalf("name=%q body=%q err=%v", name, body, err)
 	}
 }
+
+func TestExtractZipPrefersMatchingRelease(t *testing.T) {
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	for _, item := range []struct {
+		name string
+		body string
+	}{
+		{"Signal.S01E01.BluRay.srt", "1\n00:00:01,000 --> 00:00:02,000\nBD\n"},
+		{"Signal.S01E01.WEB-DL.srt", "1\n00:00:01,000 --> 00:00:02,000\nWEB\n"},
+	} {
+		entry, err := writer.Create(item.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := entry.Write([]byte(item.body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	name, body, err := extractSubtitle("pack.zip", buffer.Bytes(), FileHint{
+		Season: 1, Episode: 1, FileName: "Signal.S01E01.WEB-DL.1080p.strm",
+	})
+	if err != nil || name != "Signal.S01E01.WEB-DL.srt" || !bytes.Contains(body, []byte("WEB")) {
+		t.Fatalf("name=%q body=%q err=%v", name, body, err)
+	}
+}

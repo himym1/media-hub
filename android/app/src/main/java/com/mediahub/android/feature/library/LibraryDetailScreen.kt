@@ -316,7 +316,7 @@ private fun DeleteActions(state: LibraryDetailState, actions: LibraryDetailActio
             message = if (preview != null) {
                 val versions = if (preview.versionCount > 1) "的 ${preview.versionCount} 个版本" else ""
                 val series = if (preview.type == "Series") "及全部分集" else ""
-                "将从 Emby 移除「${preview.name}」$versions$series。\n\nNAS 上约 ${preview.fileCount} 个 STRM 库文件将被清理，115 网盘上的原始文件不会被删除。"
+                "将从 Emby 移除「${preview.name}」$versions$series。\n\nNAS 上约 ${preview.fileCount} 个 STRM 和同名字幕会被清掉，115 网盘上的原始文件不会被删除。本机字幕缓存也会一并删除。"
             } else "",
             confirmLabel = if (state.deleting) "正在删除…" else "确认删除",
             cancelLabel = "取消",

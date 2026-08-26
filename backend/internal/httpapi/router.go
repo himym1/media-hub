@@ -75,6 +75,7 @@ type RemoteSubtitles interface {
 	Search(context.Context, string, string) ([]emby.RemoteSubtitle, error)
 	Download(context.Context, string, string) error
 	Local(context.Context, string) (strm.Sidecar, error)
+	RemoveLocal(context.Context, string) error
 }
 
 type EmbyPosterCache interface {

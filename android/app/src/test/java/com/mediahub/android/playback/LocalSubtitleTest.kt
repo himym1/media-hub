@@ -34,6 +34,22 @@ class LocalSubtitleTest {
     }
 
     @Test
+    fun clearsCachedSidecar() {
+        val cache = File(requireNotNull(System.getProperty("java.io.tmpdir")), "media-hub-sub-${System.nanoTime()}")
+        val written = writeLocalSubtitleCache(
+            cache,
+            "item-2",
+            "1\n00:00:01,000 --> 00:00:02,000\n你好\n".toByteArray(),
+            "application/x-subrip",
+            "chi.srt",
+        )
+        clearLocalSubtitleCache(cache, "item-2")
+        assertEquals(false, written?.file?.exists())
+        cache.resolve("local-subtitles").delete()
+        cache.delete()
+    }
+
+    @Test
     fun rejectsUnsafeItemId() {
         val cache = File(requireNotNull(System.getProperty("java.io.tmpdir")))
         assertNull(writeLocalSubtitleCache(cache, "../x", byteArrayOf(1), "application/x-subrip", "chi.srt"))

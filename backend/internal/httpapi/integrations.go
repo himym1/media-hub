@@ -224,6 +224,9 @@ func (h *handler) deleteEmbyItem(w http.ResponseWriter, r *http.Request) {
 		writeIntegrationProblem(w, err)
 		return
 	}
+	if h.dependencies.RemoteSubtitles != nil {
+		_ = h.dependencies.RemoteSubtitles.RemoveLocal(r.Context(), id)
+	}
 	h.notifyLibraryDelete(r.Context(), preview)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

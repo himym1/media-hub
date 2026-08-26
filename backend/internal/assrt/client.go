@@ -57,8 +57,9 @@ type ClientConfig struct {
 }
 
 type FileHint struct {
-	Season  int
-	Episode int
+	Season   int
+	Episode  int
+	FileName string
 }
 
 type fileCandidate struct {
@@ -374,6 +375,9 @@ func subtitleFileScore(name string, hint FileHint) int {
 	}
 	if matchesEpisode(lower, hint.Episode) {
 		score += 15
+	}
+	if hint.FileName != "" {
+		score += ScoreReleases(ParseRelease(hint.FileName), ParseRelease(name))
 	}
 	return score
 }

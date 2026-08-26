@@ -60,6 +60,30 @@ func TestSearchUsesAssrtForChineseAndSkipsEmptyEmby(t *testing.T) {
 	}
 }
 
+func TestSearchRanksMatchingReleaseFirst(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/v1/sub/search" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[` +
+			`{"id":1,"native_name":"信号 Signal BluRay","videoname":"Signal.S01E01.BluRay.1080p","subtype":"Ass","lang":{"desc":"简体","langlist":{"langchs":true}}},` +
+			`{"id":2,"native_name":"信号 Signal WEB-DL","videoname":"Signal.S01E01.WEB-DL.1080p","subtype":"Ass","lang":{"desc":"简体","langlist":{"langchs":true}}}` +
+			`]}}`))
+	}))
+	defer server.Close()
+	stub := &embyStub{target: emby.SubtitleTarget{
+		ID: "ep-1", Type: "Episode", Name: "第一集", SeriesName: "信号", OriginalTitle: "Signal",
+		Year: 2016, Season: 1, Episode: 1,
+		Path: "/media3/115-strm/电视剧/信号/Signal.S01E01.WEB-DL.1080p-Nekomoe.strm",
+	}}
+	service := New(stub, assrt.NewClient(server.URL, "token", time.Second), nil)
+	hits, err := service.Search(context.Background(), "ep-1", "chi")
+	if err != nil || len(hits) != 2 || hits[0].ID != "assrt:2" || hits[1].ID != "assrt:1" {
+		t.Fatalf("hits=%#v err=%v", hits, err)
+	}
+}
+
 func TestSearchSkipsUnrelatedAssrtHitsAndUsesFilename(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		query := request.URL.Query().Get("q")
@@ -193,6 +217,30 @@ func TestLocalReadsWrittenSidecar(t *testing.T) {
 	sidecar, err := service.Local(context.Background(), "ep-1")
 	if err != nil || sidecar.Name != "chi.srt" || sidecar.ContentType != "application/x-subrip" || !strings.Contains(string(sidecar.Body), "你好") {
 		t.Fatalf("sidecar=%#v err=%v", sidecar, err)
+	}
+}
+
+func TestRemoveLocalDeletesSidecar(t *testing.T) {
+	mount := t.TempDir()
+	mediaDir := filepath.Join(mount, "电视剧", "信号")
+	if err := os.MkdirAll(mediaDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	media := filepath.Join(mediaDir, "S01E01.strm")
+	sidecar := filepath.Join(mediaDir, "S01E01.chi.srt")
+	if err := os.WriteFile(media, []byte("https://example/115/url/x"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sidecar, []byte("1\n00:00:01,000 --> 00:00:02,000\n你好\n"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	stub := &embyStub{target: emby.SubtitleTarget{ID: "ep-1", Type: "Episode", Path: "/media3/115-strm/电视剧/信号/S01E01.strm"}}
+	service := New(stub, nil, func() string { return mount })
+	if err := service.RemoveLocal(context.Background(), "ep-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
+		t.Fatalf("sidecar still exists: %v", err)
 	}
 }
 

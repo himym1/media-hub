@@ -48,6 +48,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -108,9 +109,12 @@ import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.network.EmbyRemoteSubtitle
 import com.mediahub.android.feature.library.formatPlaybackPosition
 import com.mediahub.android.feature.subtitles.RemoteSubtitleUiState
+import com.mediahub.android.playback.SubtitleRuntime
 import com.mediahub.android.playback.SubtitleTiming
 import com.mediahub.android.playback.ensureDefaultAudioTrack
 import com.mediahub.android.playback.formatSubtitleOffset
+import com.mediahub.android.playback.subtitleOffsetStore
+import com.mediahub.android.playback.subtitleRuntimeWarning
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.abs
@@ -197,6 +201,7 @@ internal fun PlayerScreen(
     isPictureInPicture: Boolean,
     actions: PlayerActions,
     embyItemId: String? = null,
+    mediaId: String? = null,
     subtitleState: RemoteSubtitleUiState = RemoteSubtitleUiState(),
     subtitleActions: PlayerSubtitleActions = PlayerSubtitleActions(),
 ) {
@@ -536,6 +541,7 @@ internal fun PlayerScreen(
             PlayerTrackSelectionDrawer(
                 player = controller,
                 embyItemId = embyItemId,
+                mediaId = mediaId,
                 subtitleState = subtitleState,
                 subtitleActions = subtitleActions,
                 onDismiss = { trackPanelVisible = false },
@@ -1440,6 +1446,7 @@ private fun PlayerCenterSeekHud(
 private fun PlayerTrackSelectionDrawer(
     player: Player,
     embyItemId: String?,
+    mediaId: String?,
     subtitleState: RemoteSubtitleUiState,
     subtitleActions: PlayerSubtitleActions,
     onDismiss: () -> Unit,
@@ -1526,7 +1533,15 @@ private fun PlayerTrackSelectionDrawer(
             }
 
             if (selectedTab == 0) {
-                PlayerSubtitleOffsetRow()
+                val lastCueMs by SubtitleRuntime.lastCueMs.collectAsState()
+                var durationMs by remember(player) { mutableLongStateOf(player.duration) }
+                LaunchedEffect(player.playbackState, lastCueMs) {
+                    durationMs = player.duration
+                }
+                PlayerSubtitleOffsetRow(
+                    mediaId = mediaId,
+                    runtimeWarning = subtitleRuntimeWarning(durationMs, lastCueMs),
+                )
             }
 
             LazyColumn(
@@ -1611,9 +1626,18 @@ private fun PlayerTrackSelectionDrawer(
 }
 
 @Composable
-private fun PlayerSubtitleOffsetRow() {
+private fun PlayerSubtitleOffsetRow(
+    mediaId: String?,
+    runtimeWarning: String?,
+) {
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val store = remember(context) { subtitleOffsetStore(context) }
     var offsetMs by remember { mutableLongStateOf(SubtitleTiming.offsetMs) }
+    fun persist() {
+        mediaId?.let { store.put(it, SubtitleTiming.offsetMs) }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1628,6 +1652,7 @@ private fun PlayerSubtitleOffsetRow() {
                 .clickable {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     SubtitleTiming.shift(-SubtitleTiming.StepMs)
+                    persist()
                     offsetMs = SubtitleTiming.offsetMs
                 }
                 .semantics { contentDescription = "字幕提前 0.1 秒" },
@@ -1647,6 +1672,7 @@ private fun PlayerSubtitleOffsetRow() {
                 .clickable {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     SubtitleTiming.reset()
+                    persist()
                     offsetMs = 0L
                 }
                 .semantics { contentDescription = "重置字幕轴" },
@@ -1665,6 +1691,7 @@ private fun PlayerSubtitleOffsetRow() {
                 .clickable {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     SubtitleTiming.shift(SubtitleTiming.StepMs)
+                    persist()
                     offsetMs = SubtitleTiming.offsetMs
                 }
                 .semantics { contentDescription = "字幕延后 0.1 秒" },
@@ -1677,6 +1704,14 @@ private fun PlayerSubtitleOffsetRow() {
                 modifier = Modifier.size(16.dp),
             )
         }
+    }
+    if (!runtimeWarning.isNullOrBlank()) {
+        MediaHubText(
+            text = runtimeWarning,
+            color = MediaHubColors.TextMuted,
+            fontSize = 12.sp,
+        )
+    }
     }
 }
 
