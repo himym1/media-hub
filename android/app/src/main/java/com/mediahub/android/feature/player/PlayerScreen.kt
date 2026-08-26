@@ -16,7 +16,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -59,7 +58,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -90,7 +88,9 @@ import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.LockOpen
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Maximize
+import com.composables.icons.lucide.Minus
 import com.composables.icons.lucide.Pause
+import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.PictureInPicture2
 import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.RotateCcw
@@ -102,11 +102,15 @@ import com.composables.icons.lucide.VolumeX
 import com.composables.icons.lucide.X
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
+import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
+import com.mediahub.android.core.designsystem.MediaHubShapes
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.network.EmbyRemoteSubtitle
 import com.mediahub.android.feature.library.formatPlaybackPosition
 import com.mediahub.android.feature.subtitles.RemoteSubtitleUiState
+import com.mediahub.android.playback.SubtitleTiming
 import com.mediahub.android.playback.ensureDefaultAudioTrack
+import com.mediahub.android.playback.formatSubtitleOffset
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.abs
@@ -370,7 +374,7 @@ internal fun PlayerScreen(
                     .align(Alignment.CenterStart)
                     .padding(start = 28.dp),
             ) {
-                PlayerFrostedCircleButton(
+                PlayerIconButton(
                     imageVector = if (isLocked) Lucide.Lock else Lucide.LockOpen,
                     contentDescription = if (isLocked) "解锁屏幕" else "锁定屏幕",
                     onClick = {
@@ -410,7 +414,7 @@ internal fun PlayerScreen(
             )
         }
 
-        // 8. Center Playback Controls (The Cinematic Liquid Core)
+        // 8. Center Playback Controls
         AnimatedVisibility(
             visible = !isPictureInPicture && controlsVisible && !isLocked && state is PlayerUiState.Ready && controller != null,
             enter = scaleIn(initialScale = 0.85f, animationSpec = tween(200)) + fadeIn(tween(200)),
@@ -463,18 +467,18 @@ internal fun PlayerScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xE6111827))
+                            .clip(MediaHubShapes.Card)
+                            .background(MediaHubColors.Surface.copy(alpha = 0.94f))
                             .padding(horizontal = 18.dp, vertical = 14.dp),
                     ) {
                         CircularProgressIndicator(
-                            color = Color(0xFF38BDF8),
+                            color = MediaHubColors.Accent,
                             modifier = Modifier.size(22.dp),
                             strokeWidth = 2.5.dp,
                         )
                         MediaHubText(
                             text = "正在准备视频…",
-                            color = Color.White,
+                            color = MediaHubColors.TextPrimary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                         )
@@ -483,13 +487,13 @@ internal fun PlayerScreen(
             }
 
             state is PlayerUiState.Error -> {
-                Column(
+                    Column(
                     modifier = Modifier
                         .align(Alignment.Center)
                         .padding(horizontal = 24.dp)
                         .widthIn(max = 300.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xF20F172A))
+                        .clip(MediaHubShapes.Card)
+                        .background(MediaHubColors.Surface.copy(alpha = 0.96f))
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -502,19 +506,20 @@ internal fun PlayerScreen(
                     )
                     MediaHubText(
                         text = state.message,
-                        color = Color.White,
+                        color = MediaHubColors.TextPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                     )
                     if (state.retryable) {
-                        PlayerLiquidPillButton(
+                        PlayerChipButton(
                             label = "重试",
                             onClick = actions.onRetry,
                             modifier = Modifier.height(48.dp),
+                            emphasized = true,
                         )
                     }
                     actions.onOpenFallback?.let { openFallback ->
-                        PlayerLiquidPillButton(
+                        PlayerChipButton(
                             label = "用 Emby 打开",
                             onClick = openFallback,
                             modifier = Modifier.height(48.dp),
@@ -526,7 +531,7 @@ internal fun PlayerScreen(
             else -> Unit
         }
 
-        // 11. Modern Frosted Audio & Subtitle Side Drawer
+        // 11. Audio and subtitle drawer
         if (trackPanelVisible && controller != null) {
             PlayerTrackSelectionDrawer(
                 player = controller,
@@ -596,7 +601,7 @@ private fun PlayerTopBar(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PlayerFrostedCircleButton(
+            PlayerIconButton(
                 imageVector = Lucide.ArrowLeft,
                 contentDescription = "返回",
                 onClick = actions.onBack,
@@ -612,7 +617,7 @@ private fun PlayerTopBar(
             ) {
                 MediaHubText(
                     text = title,
-                    color = Color.White,
+                    color = MediaHubColors.TextPrimary,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -620,14 +625,12 @@ private fun PlayerTopBar(
                 )
             }
 
-            // Aspect Ratio Liquid Pill Button
-            PlayerLiquidPillButton(
+            PlayerChipButton(
                 label = aspectRatio.label,
                 onClick = onOpenAspectRatio,
             )
 
-            // Screen Rotation Button
-            PlayerFrostedCircleButton(
+            PlayerIconButton(
                 imageVector = Lucide.Maximize,
                 contentDescription = "旋转屏幕",
                 onClick = actions.onToggleOrientation,
@@ -635,7 +638,7 @@ private fun PlayerTopBar(
                 iconSize = 18.dp,
             )
 
-            PlayerFrostedCircleButton(
+            PlayerIconButton(
                 imageVector = Lucide.PictureInPicture2,
                 contentDescription = "进入画中画",
                 onClick = actions.onEnterPictureInPicture,
@@ -647,7 +650,7 @@ private fun PlayerTopBar(
 }
 
 /**
- * Center screen playback controls (The Cinematic Liquid Core).
+ * Center playback controls.
  */
 @Composable
 private fun PlayerCenterControls(
@@ -673,7 +676,7 @@ private fun PlayerCenterControls(
         horizontalArrangement = Arrangement.spacedBy(28.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PlayerFrostedCircleButton(
+        PlayerIconButton(
             imageVector = Lucide.RotateCcw,
             contentDescription = "后退 10 秒",
             onClick = {
@@ -689,8 +692,7 @@ private fun PlayerCenterControls(
             modifier = Modifier
                 .size(58.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.16f))
-                .border(1.dp, Color.White.copy(alpha = 0.28f), CircleShape)
+                .background(MediaHubColors.Accent)
                 .clickable(
                     role = Role.Button,
                     onClick = {
@@ -698,18 +700,19 @@ private fun PlayerCenterControls(
                         onUserInteraction()
                         controller.playWhenReady = !controller.playWhenReady
                     },
-                ),
+                )
+                .semantics { contentDescription = if (isPlaying) "暂停" else "播放" },
             contentAlignment = Alignment.Center,
         ) {
             MediaHubIcon(
                 imageVector = if (isPlaying) Lucide.Pause else Lucide.Play,
                 contentDescription = if (isPlaying) "暂停" else "播放",
-                tint = Color.White,
+                tint = MediaHubColors.OnAccent,
                 modifier = Modifier.size(28.dp),
             )
         }
 
-        PlayerFrostedCircleButton(
+        PlayerIconButton(
             imageVector = Lucide.RotateCw,
             contentDescription = "前进 10 秒",
             onClick = {
@@ -827,9 +830,8 @@ private fun PlayerBottomControls(
             ) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xF00B101B))
-                        .border(0.5.dp, Color(0xFF38BDF8).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .clip(MediaHubShapes.Control)
+                        .background(MediaHubColors.Surface.copy(alpha = 0.94f))
                         .padding(horizontal = 16.dp, vertical = 6.dp),
                 ) {
                     Row(
@@ -838,18 +840,18 @@ private fun PlayerBottomControls(
                     ) {
                         MediaHubText(
                             text = formatPlaybackPosition(displayPositionMs),
-                            color = Color(0xFF38BDF8),
+                            color = MediaHubColors.Accent,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                         )
                         MediaHubText(
                             text = "/",
-                            color = Color.White.copy(alpha = 0.4f),
+                            color = MediaHubColors.TextMuted,
                             fontSize = 13.sp,
                         )
                         MediaHubText(
                             text = formatPlaybackPosition(durationMs),
-                            color = Color.White.copy(alpha = 0.8f),
+                            color = MediaHubColors.TextSecondary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                         )
@@ -866,13 +868,12 @@ private fun PlayerBottomControls(
         ) {
             MediaHubText(
                 text = formatPlaybackPosition(displayPositionMs),
-                color = Color.White,
+                color = MediaHubColors.TextPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.widthIn(min = 45.dp),
             )
 
-            // Precision Material 3 Slider with Custom Buffered Track & Glowing Thumb
             Slider(
                 value = playbackFraction,
                 onValueChange = { fraction ->
@@ -902,10 +903,8 @@ private fun PlayerBottomControls(
                     Box(
                         modifier = Modifier
                             .size(thumbRadius * 2)
-                            .shadow(6.dp, CircleShape, spotColor = Color(0xFF38BDF8))
                             .clip(CircleShape)
-                            .background(Color.White)
-                            .border(2.dp, Color(0xFF38BDF8), CircleShape),
+                            .background(MediaHubColors.Accent),
                     )
                 },
                 track = { sliderState ->
@@ -920,38 +919,29 @@ private fun PlayerBottomControls(
                             .fillMaxWidth()
                             .height(trackHeight)
                             .clip(RoundedCornerShape(trackHeight / 2))
-                            .background(Color.White.copy(alpha = 0.20f)),
+                            .background(MediaHubColors.NeutralContainer),
                         contentAlignment = Alignment.CenterStart,
                     ) {
-                        // Buffered Track
                         if (bufferedFraction > 0f) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth(bufferedFraction.coerceIn(0f, 1f))
                                     .fillMaxHeight()
-                                    .background(Color.White.copy(alpha = 0.35f)),
+                                    .background(MediaHubColors.TextFaint),
                             )
                         }
-                        // Played Track (Cyan-Blue Glow Gradient)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(fraction.coerceIn(0f, 1f))
                                 .fillMaxHeight()
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color(0xFF38BDF8),
-                                            Color(0xFF2563EB),
-                                        ),
-                                    ),
-                                ),
+                                .background(MediaHubColors.Accent),
                         )
                     }
                 },
                 colors = SliderDefaults.colors(
-                    thumbColor = Color.White,
-                    activeTrackColor = Color(0xFF38BDF8),
-                    inactiveTrackColor = Color.White.copy(alpha = 0.20f),
+                    thumbColor = MediaHubColors.Accent,
+                    activeTrackColor = MediaHubColors.Accent,
+                    inactiveTrackColor = MediaHubColors.NeutralContainer,
                 ),
                 modifier = Modifier
                     .weight(1f)
@@ -960,7 +950,7 @@ private fun PlayerBottomControls(
 
             MediaHubText(
                 text = if (durationMs > 0L) formatPlaybackPosition(durationMs) else "--:--",
-                color = Color.White.copy(alpha = 0.65f),
+                color = MediaHubColors.TextSecondary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Normal,
                 modifier = Modifier.widthIn(min = 45.dp),
@@ -977,7 +967,7 @@ private fun PlayerBottomControls(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                PlayerLiquidPillButton(
+                PlayerChipButton(
                     label = if (currentSpeed == 1.0f) "倍速" else "${currentSpeed}x",
                     onClick = {
                         onUserInteraction()
@@ -985,7 +975,7 @@ private fun PlayerBottomControls(
                     },
                 )
 
-                PlayerLiquidPillButton(
+                PlayerChipButton(
                     label = "音轨/字幕",
                     icon = Lucide.Settings2,
                     onClick = {
@@ -1150,7 +1140,7 @@ private fun PlayerDoubleTapFlashOverlay(flashSide: String?) {
                             .background(
                                 Brush.horizontalGradient(
                                     colors = listOf(
-                                        Color(0x4538BDF8),
+                                        MediaHubColors.Accent.copy(alpha = 0.28f),
                                         Color.Transparent,
                                     ),
                                 ),
@@ -1164,12 +1154,12 @@ private fun PlayerDoubleTapFlashOverlay(flashSide: String?) {
                             MediaHubIcon(
                                 imageVector = Lucide.RotateCcw,
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = MediaHubColors.TextPrimary,
                                 modifier = Modifier.size(34.dp),
                             )
                             MediaHubText(
                                 text = "-10 秒",
-                                color = Color.White,
+                                color = MediaHubColors.TextPrimary,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -1187,7 +1177,7 @@ private fun PlayerDoubleTapFlashOverlay(flashSide: String?) {
                                 Brush.horizontalGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color(0x4538BDF8),
+                                        MediaHubColors.Accent.copy(alpha = 0.28f),
                                     ),
                                 ),
                             ),
@@ -1200,12 +1190,12 @@ private fun PlayerDoubleTapFlashOverlay(flashSide: String?) {
                             MediaHubIcon(
                                 imageVector = Lucide.RotateCw,
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = MediaHubColors.TextPrimary,
                                 modifier = Modifier.size(34.dp),
                             )
                             MediaHubText(
                                 text = "+10 秒",
-                                color = Color.White,
+                                color = MediaHubColors.TextPrimary,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -1219,14 +1209,13 @@ private fun PlayerDoubleTapFlashOverlay(flashSide: String?) {
                             .size(86.dp)
                             .align(Alignment.Center)
                             .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.60f))
-                            .border(0.5.dp, Color.White.copy(alpha = 0.30f), CircleShape),
+                            .background(MediaHubColors.Accent.copy(alpha = 0.92f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         MediaHubIcon(
                             imageVector = Lucide.Play,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = MediaHubColors.OnAccent,
                             modifier = Modifier.size(38.dp),
                         )
                     }
@@ -1259,11 +1248,10 @@ private fun PlayerEdgeHuds(
             if (brightness != null) {
                 Column(
                     modifier = Modifier
-                        .width(38.dp)
+                        .width(48.dp)
                         .height(150.dp)
-                        .clip(RoundedCornerShape(19.dp))
-                        .background(Color(0xE60B101B))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(19.dp))
+                        .clip(MediaHubShapes.Nav)
+                        .background(MediaHubColors.Surface.copy(alpha = 0.92f))
                         .padding(vertical = 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween,
@@ -1271,36 +1259,31 @@ private fun PlayerEdgeHuds(
                     MediaHubIcon(
                         imageVector = Lucide.Sun,
                         contentDescription = null,
-                        tint = Color(0xFFFBBF24),
+                        tint = MediaHubColors.Warning,
                         modifier = Modifier.size(18.dp),
                     )
 
-                    // Vertical filling track
                     Box(
                         modifier = Modifier
-                            .width(4.5.dp)
+                            .width(4.dp)
                             .height(72.dp)
-                            .clip(RoundedCornerShape(2.25.dp))
-                            .background(Color.White.copy(alpha = 0.18f)),
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(MediaHubColors.NeutralContainer),
                         contentAlignment = Alignment.BottomCenter,
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .fillMaxHeight(brightness.coerceIn(0f, 1f))
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color(0xFFFBBF24), Color(0xFFF59E0B)),
-                                    ),
-                                ),
+                                .background(MediaHubColors.Warning),
                         )
                     }
 
                     MediaHubText(
                         text = "${(brightness * 100).roundToInt()}%",
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
+                        color = MediaHubColors.TextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
@@ -1318,11 +1301,10 @@ private fun PlayerEdgeHuds(
             if (volume != null) {
                 Column(
                     modifier = Modifier
-                        .width(38.dp)
+                        .width(48.dp)
                         .height(150.dp)
-                        .clip(RoundedCornerShape(19.dp))
-                        .background(Color(0xE60B101B))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(19.dp))
+                        .clip(MediaHubShapes.Nav)
+                        .background(MediaHubColors.Surface.copy(alpha = 0.92f))
                         .padding(vertical = 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween,
@@ -1330,36 +1312,31 @@ private fun PlayerEdgeHuds(
                     MediaHubIcon(
                         imageVector = if (volume <= 0.01f) Lucide.VolumeX else Lucide.Volume2,
                         contentDescription = null,
-                        tint = Color(0xFF38BDF8),
+                        tint = MediaHubColors.Accent,
                         modifier = Modifier.size(18.dp),
                     )
 
-                    // Vertical filling track
                     Box(
                         modifier = Modifier
-                            .width(4.5.dp)
+                            .width(4.dp)
                             .height(72.dp)
-                            .clip(RoundedCornerShape(2.25.dp))
-                            .background(Color.White.copy(alpha = 0.18f)),
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(MediaHubColors.NeutralContainer),
                         contentAlignment = Alignment.BottomCenter,
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .fillMaxHeight(volume.coerceIn(0f, 1f))
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color(0xFF38BDF8), Color(0xFF2563EB)),
-                                    ),
-                                ),
+                                .background(MediaHubColors.Accent),
                         )
                     }
 
                     MediaHubText(
                         text = "${(volume * 100).roundToInt()}%",
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
+                        color = MediaHubColors.TextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
@@ -1384,9 +1361,8 @@ private fun PlayerCenterSeekHud(
         if (seekState != null) {
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xF00B101B))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(20.dp))
+                    .clip(MediaHubShapes.Card)
+                    .background(MediaHubColors.Surface.copy(alpha = 0.94f))
                     .padding(horizontal = 26.dp, vertical = 16.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1402,12 +1378,12 @@ private fun PlayerCenterSeekHud(
                         MediaHubIcon(
                             imageVector = if (seekState.deltaMs >= 0) Lucide.RotateCw else Lucide.RotateCcw,
                             contentDescription = null,
-                            tint = if (seekState.deltaMs >= 0) Color(0xFF38BDF8) else Color(0xFF60A5FA),
+                            tint = MediaHubColors.Accent,
                             modifier = Modifier.size(20.dp),
                         )
                         MediaHubText(
                             text = formatDeltaTime(seekState.deltaMs),
-                            color = if (seekState.deltaMs >= 0) Color(0xFF38BDF8) else Color(0xFF60A5FA),
+                            color = MediaHubColors.Accent,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                         )
@@ -1419,43 +1395,38 @@ private fun PlayerCenterSeekHud(
                     ) {
                         MediaHubText(
                             text = formatPlaybackPosition(seekState.targetMs),
-                            color = Color.White,
+                            color = MediaHubColors.TextPrimary,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
                         MediaHubText(
                             text = "/",
-                            color = Color.White.copy(alpha = 0.45f),
+                            color = MediaHubColors.TextMuted,
                             fontSize = 13.sp,
                         )
                         MediaHubText(
                             text = formatPlaybackPosition(seekState.durationMs),
-                            color = Color.White.copy(alpha = 0.70f),
+                            color = MediaHubColors.TextSecondary,
                             fontSize = 13.sp,
                         )
                     }
 
-                    // Mini progress bar in Seek HUD
                     val progressFraction = if (seekState.durationMs > 0L) {
                         (seekState.targetMs.toFloat() / seekState.durationMs.toFloat()).coerceIn(0f, 1f)
                     } else 0f
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(3.5.dp)
-                            .clip(RoundedCornerShape(1.75.dp))
-                            .background(Color.White.copy(alpha = 0.20f)),
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(MediaHubColors.NeutralContainer),
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(progressFraction)
                                 .fillMaxHeight()
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(Color(0xFF38BDF8), Color(0xFF2563EB)),
-                                    ),
-                                ),
+                                .background(MediaHubColors.Accent),
                         )
                     }
                 }
@@ -1502,15 +1473,15 @@ private fun PlayerTrackSelectionDrawer(
         Column(
             modifier = Modifier
                 .padding(end = 12.dp, top = 16.dp, bottom = 16.dp)
-                .width(248.dp)
-                .heightIn(max = 320.dp)
+                .width(280.dp)
+                .heightIn(max = 380.dp)
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
                     onClick = {},
                 )
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xF20B101B))
+                .clip(MediaHubShapes.Card)
+                .background(MediaHubColors.Surface)
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -1521,11 +1492,11 @@ private fun PlayerTrackSelectionDrawer(
             ) {
                 MediaHubText(
                     text = "音轨与字幕",
-                    color = Color.White,
+                    color = MediaHubColors.TextPrimary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
-                PlayerFrostedCircleButton(
+                PlayerIconButton(
                     imageVector = Lucide.X,
                     contentDescription = "关闭",
                     onClick = onDismiss,
@@ -1534,40 +1505,28 @@ private fun PlayerTrackSelectionDrawer(
                 )
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.White.copy(alpha = 0.08f))
-                    .padding(2.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                PlayerTrackTab(
-                    label = "字幕 (${subtitleOptions.size})",
-                    selected = selectedTab == 0,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        selectedTab = 0
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                PlayerTrackTab(
-                    label = "音轨 (${audioOptions.size})",
-                    selected = selectedTab == 1,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        selectedTab = 1
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            MediaHubSegmentedControl(
+                options = listOf(
+                    "subtitles" to "字幕 (${subtitleOptions.size})",
+                    "audio" to "音轨 (${audioOptions.size})",
+                ),
+                selected = if (selectedTab == 0) "subtitles" else "audio",
+                onSelected = { value ->
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    selectedTab = if (value == "audio") 1 else 0
+                },
+            )
 
             if (!canSelectTracks) {
                 MediaHubText(
                     text = "当前无法切换音轨或字幕",
-                    color = Color.White.copy(alpha = 0.65f),
+                    color = MediaHubColors.TextMuted,
                     fontSize = 12.sp,
                 )
+            }
+
+            if (selectedTab == 0) {
+                PlayerSubtitleOffsetRow()
             }
 
             LazyColumn(
@@ -1617,7 +1576,7 @@ private fun PlayerTrackSelectionDrawer(
                     item {
                         MediaHubText(
                             text = "当前片源没有可识别的音轨",
-                            color = Color.White.copy(alpha = 0.5f),
+                            color = MediaHubColors.TextMuted,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(12.dp),
                         )
@@ -1627,7 +1586,7 @@ private fun PlayerTrackSelectionDrawer(
                         item {
                             MediaHubText(
                                 text = "当前片源只有 1 条音轨",
-                                color = Color.White.copy(alpha = 0.55f),
+                                color = MediaHubColors.TextMuted,
                                 fontSize = 12.sp,
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                             )
@@ -1652,26 +1611,72 @@ private fun PlayerTrackSelectionDrawer(
 }
 
 @Composable
-private fun PlayerTrackTab(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (selected) Color(0xFF2563EB) else Color.Transparent)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+private fun PlayerSubtitleOffsetRow() {
+    val haptic = LocalHapticFeedback.current
+    var offsetMs by remember { mutableLongStateOf(SubtitleTiming.offsetMs) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MediaHubShapes.Control)
+            .background(MediaHubColors.SurfaceHigh)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaHubText(
-            text = label,
-            color = Color.White,
-            fontSize = 12.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-        )
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clickable {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    SubtitleTiming.shift(-SubtitleTiming.StepMs)
+                    offsetMs = SubtitleTiming.offsetMs
+                }
+                .semantics { contentDescription = "字幕提前 0.1 秒" },
+            contentAlignment = Alignment.Center,
+        ) {
+            MediaHubIcon(
+                imageVector = Lucide.Minus,
+                contentDescription = null,
+                tint = MediaHubColors.TextPrimary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 48.dp)
+                .clickable {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    SubtitleTiming.reset()
+                    offsetMs = 0L
+                }
+                .semantics { contentDescription = "重置字幕轴" },
+            contentAlignment = Alignment.Center,
+        ) {
+            MediaHubText(
+                text = formatSubtitleOffset(offsetMs),
+                color = MediaHubColors.TextPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clickable {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    SubtitleTiming.shift(SubtitleTiming.StepMs)
+                    offsetMs = SubtitleTiming.offsetMs
+                }
+                .semantics { contentDescription = "字幕延后 0.1 秒" },
+            contentAlignment = Alignment.Center,
+        ) {
+            MediaHubIcon(
+                imageVector = Lucide.Plus,
+                contentDescription = null,
+                tint = MediaHubColors.TextPrimary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
     }
 }
 
@@ -1685,8 +1690,8 @@ private fun PlayerRemoteSubtitleSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.White.copy(alpha = 0.06f))
+            .clip(MediaHubShapes.Control)
+            .background(MediaHubColors.SurfaceHigh)
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1697,12 +1702,12 @@ private fun PlayerRemoteSubtitleSection(
         ) {
             MediaHubText(
                 text = "远程字幕",
-                color = Color.White,
+                color = MediaHubColors.TextPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
             )
             if (subtitleState.targetId != null || subtitleState.remoteSubtitles.isNotEmpty()) {
-                PlayerFrostedCircleButton(
+                PlayerIconButton(
                     imageVector = Lucide.X,
                     contentDescription = "关闭字幕结果",
                     onClick = onClear,
@@ -1715,8 +1720,8 @@ private fun PlayerRemoteSubtitleSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF2563EB).copy(alpha = 0.35f))
+                .clip(MediaHubShapes.Control)
+                .background(MediaHubColors.AccentLight)
                 .clickable(enabled = !subtitleState.searching, onClick = onSearch)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             contentAlignment = Alignment.Center,
@@ -1728,12 +1733,12 @@ private fun PlayerRemoteSubtitleSection(
                 MediaHubIcon(
                     imageVector = Lucide.Captions,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = MediaHubColors.Accent,
                     modifier = Modifier.size(16.dp),
                 )
                 MediaHubText(
                     text = if (subtitleState.searching) "正在搜索中文字幕…" else "搜中文字幕",
-                    color = Color.White,
+                    color = MediaHubColors.Accent,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                 )
@@ -1742,7 +1747,7 @@ private fun PlayerRemoteSubtitleSection(
         subtitleState.message?.let { message ->
             MediaHubText(
                 text = message,
-                color = Color.White.copy(alpha = 0.65f),
+                color = MediaHubColors.TextMuted,
                 fontSize = 12.sp,
             )
         }
@@ -1772,15 +1777,15 @@ private fun PlayerRemoteSubtitleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color.White.copy(alpha = 0.05f))
+            .clip(MediaHubShapes.Control)
+            .background(MediaHubColors.Canvas)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             MediaHubText(
                 text = subtitle.name,
-                color = Color.White,
+                color = MediaHubColors.TextPrimary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,
@@ -1789,7 +1794,7 @@ private fun PlayerRemoteSubtitleRow(
             if (meta.isNotBlank()) {
                 MediaHubText(
                     text = meta,
-                    color = Color.White.copy(alpha = 0.50f),
+                    color = MediaHubColors.TextMuted,
                     fontSize = 12.sp,
                 )
             }
@@ -1797,15 +1802,15 @@ private fun PlayerRemoteSubtitleRow(
         Box(
             modifier = Modifier
                 .heightIn(min = 48.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (enabled) Color(0xFF2563EB) else Color.White.copy(alpha = 0.12f))
+                .clip(MediaHubShapes.Control)
+                .background(if (enabled) MediaHubColors.Accent else MediaHubColors.NeutralContainer)
                 .clickable(enabled = enabled, onClick = onDownload)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center,
         ) {
             MediaHubText(
                 text = if (downloading) "下载中…" else "下载",
-                color = Color.White,
+                color = if (enabled) MediaHubColors.OnAccent else MediaHubColors.TextMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
             )
@@ -1813,9 +1818,6 @@ private fun PlayerRemoteSubtitleRow(
     }
 }
 
-/**
- * Individual track item with checkmark and glowing border.
- */
 @Composable
 private fun PlayerTrackItem(
     title: String,
@@ -1828,8 +1830,8 @@ private fun PlayerTrackItem(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (isSelected) Color(0xFF2563EB).copy(alpha = 0.30f) else Color.White.copy(alpha = 0.05f))
+            .clip(MediaHubShapes.Control)
+            .background(if (isSelected) MediaHubColors.SurfaceSelected else Color.Transparent)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
@@ -1841,13 +1843,13 @@ private fun PlayerTrackItem(
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 MediaHubText(
                     text = title,
-                    color = Color.White,
+                    color = if (enabled) MediaHubColors.TextPrimary else MediaHubColors.TextMuted,
                     fontSize = 13.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                 )
                 MediaHubText(
                     text = subtitle,
-                    color = Color.White.copy(alpha = 0.50f),
+                    color = MediaHubColors.TextMuted,
                     fontSize = 12.sp,
                 )
             }
@@ -1855,7 +1857,7 @@ private fun PlayerTrackItem(
                 MediaHubIcon(
                     imageVector = Lucide.Check,
                     contentDescription = "已选择",
-                    tint = Color(0xFF38BDF8),
+                    tint = MediaHubColors.Accent,
                     modifier = Modifier.size(16.dp),
                 )
             }
@@ -1884,8 +1886,8 @@ private fun PlayerAspectRatioDialog(
             modifier = Modifier
                 .padding(top = 64.dp, end = 16.dp)
                 .width(168.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xF20B101B))
+                .clip(MediaHubShapes.Card)
+                .background(MediaHubColors.Surface)
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
@@ -1896,7 +1898,7 @@ private fun PlayerAspectRatioDialog(
         ) {
             MediaHubText(
                 text = "画面比例",
-                color = Color.White.copy(alpha = 0.7f),
+                color = MediaHubColors.TextMuted,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             )
@@ -1906,8 +1908,8 @@ private fun PlayerAspectRatioDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) Color(0xFF2563EB) else Color.Transparent)
+                        .clip(MediaHubShapes.Control)
+                        .background(if (isSelected) MediaHubColors.SurfaceSelected else Color.Transparent)
                         .clickable { onSelect(mode) }
                         .semantics { contentDescription = mode.description }
                         .padding(horizontal = 10.dp),
@@ -1915,7 +1917,7 @@ private fun PlayerAspectRatioDialog(
                 ) {
                     MediaHubText(
                         text = mode.label,
-                        color = Color.White,
+                        color = if (isSelected) MediaHubColors.Accent else MediaHubColors.TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                     )
@@ -1945,8 +1947,8 @@ private fun PlayerSpeedDialog(
         Row(
             modifier = Modifier
                 .padding(end = 16.dp, bottom = 72.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xF20B101B))
+                .clip(MediaHubShapes.Card)
+                .background(MediaHubColors.Surface)
                 .padding(6.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1957,15 +1959,15 @@ private fun PlayerSpeedDialog(
                     modifier = Modifier
                         .heightIn(min = 48.dp)
                         .widthIn(min = 48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) Color(0xFF2563EB) else Color.Transparent)
+                        .clip(MediaHubShapes.Control)
+                        .background(if (isSelected) MediaHubColors.SurfaceSelected else Color.Transparent)
                         .clickable { onSelectSpeed(speed) }
                         .padding(horizontal = 8.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     MediaHubText(
                         text = "${speed}x",
-                        color = Color.White,
+                        color = if (isSelected) MediaHubColors.Accent else MediaHubColors.TextPrimary,
                         fontSize = 12.sp,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                     )
@@ -1975,11 +1977,8 @@ private fun PlayerSpeedDialog(
     }
 }
 
-/**
- * Reusable frosted circular icon button (Liquid Glass style).
- */
 @Composable
-private fun PlayerFrostedCircleButton(
+private fun PlayerIconButton(
     imageVector: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
@@ -1988,10 +1987,8 @@ private fun PlayerFrostedCircleButton(
 ) {
     Box(
         modifier = modifier
-            .shadow(6.dp, CircleShape)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.12f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+            .background(MediaHubColors.SurfaceHigh.copy(alpha = 0.92f))
             .clickable(
                 role = Role.Button,
                 onClick = onClick,
@@ -2002,28 +1999,25 @@ private fun PlayerFrostedCircleButton(
         MediaHubIcon(
             imageVector = imageVector,
             contentDescription = contentDescription,
-            tint = Color.White,
+            tint = MediaHubColors.TextPrimary,
             modifier = Modifier.size(iconSize),
         )
     }
 }
 
-/**
- * Reusable liquid glass capsule pill button.
- */
 @Composable
-private fun PlayerLiquidPillButton(
+private fun PlayerChipButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    emphasized: Boolean = false,
 ) {
     Box(
         modifier = modifier
             .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(100.dp))
-            .background(Color.White.copy(alpha = 0.10f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.20f), RoundedCornerShape(100.dp))
+            .clip(MediaHubShapes.Chip)
+            .background(if (emphasized) MediaHubColors.Accent else MediaHubColors.SurfaceHigh.copy(alpha = 0.92f))
             .clickable(
                 role = Role.Button,
                 onClick = onClick,
@@ -2039,13 +2033,13 @@ private fun PlayerLiquidPillButton(
                 MediaHubIcon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = if (emphasized) MediaHubColors.OnAccent else MediaHubColors.TextPrimary,
                     modifier = Modifier.size(15.dp),
                 )
             }
             MediaHubText(
                 text = label,
-                color = Color.White,
+                color = if (emphasized) MediaHubColors.OnAccent else MediaHubColors.TextPrimary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
             )

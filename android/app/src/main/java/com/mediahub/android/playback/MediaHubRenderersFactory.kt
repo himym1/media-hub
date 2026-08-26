@@ -2,6 +2,7 @@ package com.mediahub.android.playback
 
 import android.content.Context
 import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -9,6 +10,7 @@ import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.audio.AudioRendererEventListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.exoplayer.text.TextOutput
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegAudioRenderer
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegLibrary
 
@@ -43,6 +45,16 @@ internal class MediaHubRenderersFactory(context: Context) : DefaultRenderersFact
         if (FfmpegLibrary.isAvailable()) {
             out.add(0, FfmpegAudioRenderer(eventHandler, eventListener, audioSink))
         }
+    }
+
+    override fun buildTextRenderers(
+        context: Context,
+        output: TextOutput,
+        outputLooper: Looper,
+        extensionRendererMode: Int,
+        out: ArrayList<Renderer>,
+    ) {
+        out.add(OffsetTextRenderer(output, outputLooper))
     }
 
     private companion object {

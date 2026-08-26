@@ -40,9 +40,9 @@ func assrtBaseTransport(proxyURL *url.URL) *http.Transport {
 	} else {
 		transport.Proxy = nil
 	}
-	transport.DialContext = (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext
-	transport.TLSHandshakeTimeout = 5 * time.Second
-	transport.ResponseHeaderTimeout = 8 * time.Second
+	transport.DialContext = (&net.Dialer{Timeout: 4 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	transport.TLSHandshakeTimeout = 4 * time.Second
+	transport.ResponseHeaderTimeout = 4 * time.Second
 	return transport
 }
 
@@ -65,26 +65,53 @@ type assrtTransport struct {
 
 func (t *assrtTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request.URL != nil && (isAssrtFileHost(request.URL.Hostname()) || isAssrtFileHost(assrtHost(request.URL.Hostname()))) {
-		return t.roundTripWithFallback(request, firstTripper(t.files, t.primary), firstTripper(t.filesMirror, t.mirror))
+		return t.roundTripPreferMirror(request, firstTripper(t.filesMirror, t.mirror), firstTripper(t.files, t.primary))
 	}
 	if request.URL != nil && isMakedieHost(request.URL.Hostname()) {
 		return firstTripper(t.mirror, t.primary).RoundTrip(request)
 	}
-	return t.roundTripWithFallback(request, t.primary, t.mirror)
+	return t.roundTripPreferMirror(request, t.mirror, t.primary)
 }
 
-func (t *assrtTransport) roundTripWithFallback(request *http.Request, first, second http.RoundTripper) (*http.Response, error) {
-	response, err := first.RoundTrip(request)
-	if second == nil || second == first || !shouldMirrorAssrt(request, response, err) {
+func (t *assrtTransport) roundTripPreferMirror(request *http.Request, mirror, official http.RoundTripper) (*http.Response, error) {
+	if request.URL == nil || !isAssrtHost(request.URL.Hostname()) || mirror == nil || mirror == official {
+		if official != nil {
+			return official.RoundTrip(request)
+		}
+		if mirror != nil {
+			return mirror.RoundTrip(request)
+		}
+		return nil, ErrUpstreamResponse
+	}
+	clone := request.Clone(request.Context())
+	rewriteAssrtURLToMakedie(clone.URL)
+	clone.Host = clone.URL.Host
+	response, err := mirror.RoundTrip(clone)
+	if !shouldFallbackFromMirror(response, err) {
 		return response, err
 	}
 	if response != nil {
 		response.Body.Close()
 	}
-	clone := request.Clone(request.Context())
-	rewriteAssrtURLToMakedie(clone.URL)
-	clone.Host = clone.URL.Host
-	return second.RoundTrip(clone)
+	if official == nil {
+		return nil, err
+	}
+	return official.RoundTrip(request)
+}
+
+func shouldFallbackFromMirror(response *http.Response, err error) bool {
+	if err != nil {
+		return true
+	}
+	if response == nil {
+		return false
+	}
+	switch response.StatusCode {
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
 }
 
 func firstTripper(preferred, fallback http.RoundTripper) http.RoundTripper {
@@ -92,16 +119,6 @@ func firstTripper(preferred, fallback http.RoundTripper) http.RoundTripper {
 		return preferred
 	}
 	return fallback
-}
-
-func shouldMirrorAssrt(request *http.Request, response *http.Response, err error) bool {
-	if request.URL == nil || !isAssrtHost(request.URL.Hostname()) {
-		return false
-	}
-	if err != nil {
-		return true
-	}
-	return response != nil && response.StatusCode == http.StatusBadGateway
 }
 
 func rewriteAssrtURLToMakedie(endpoint *url.URL) {

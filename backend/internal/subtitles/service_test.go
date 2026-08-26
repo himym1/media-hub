@@ -99,6 +99,23 @@ func TestSearchSkipsEmbyWhenAssrtReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestSearchFallsBackToEmbyWhenAssrtTimesOut(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(400 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[]}}`))
+	}))
+	defer server.Close()
+	stub := &embyStub{
+		target:   emby.SubtitleTarget{ID: "ep-1", Type: "Episode", SeriesName: "信号", Season: 1, Episode: 1},
+		embyHits: []emby.RemoteSubtitle{{ID: "opensubtitles-1", Language: "chi"}},
+	}
+	service := New(stub, assrt.NewClient(server.URL, "token", 80*time.Millisecond), nil)
+	hits, err := service.Search(context.Background(), "ep-1", "chi")
+	if err != nil || len(hits) != 1 || hits[0].ID != "opensubtitles-1" || stub.embyCalls != 1 {
+		t.Fatalf("hits=%#v err=%v embyCalls=%d", hits, err, stub.embyCalls)
+	}
+}
+
 func TestSearchFallsBackToEmbyWhenAssrtErrors(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

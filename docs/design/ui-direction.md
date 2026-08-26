@@ -54,6 +54,7 @@ Visual density: 6 / 10
 - Provider settings open directly on the 服务配置 tab; do not hide them behind an extra expand row.
 - Long-running task state is shown as an unframed vertical timeline with expandable evidence.
 - Touch targets are at least 48 dp.
+- The player overlay uses the same Material 3 tokens as other screens. It still owns the Media3 surface and Slider; chrome, drawers, and dialogs do not use the old cyan glass palette.
 - System back, predictive back, edge-to-edge, dynamic type, and dark mode are supported.
 
 ### Launcher Icon
@@ -119,7 +120,7 @@ MediaHubEmptyState
 MediaHubSmallTitle
 ```
 
-Direct Material 3 imports are restricted to `core/designsystem`, except the player overlay which already owns its own Material Slider.
+Direct Material 3 imports are restricted to `core/designsystem`, except the player overlay which owns the playback surface and Material Slider. Player chrome uses the same graphite surfaces and `#8AB4FF` accent as the rest of the app.
 
 ## Interaction States
 

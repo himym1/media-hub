@@ -3,15 +3,20 @@ package subtitles
 import (
 	"context"
 	"errors"
+	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"media-hub/backend/internal/assrt"
 	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/strm"
 )
 
-const assrtIDPrefix = "assrt:"
+const (
+	assrtIDPrefix     = "assrt:"
+	assrtSearchBudget = 12 * time.Second
+)
 
 type Emby interface {
 	SubtitleTarget(context.Context, string) (emby.SubtitleTarget, error)
@@ -39,11 +44,19 @@ func (s *Service) Search(ctx context.Context, itemID, language string) ([]emby.R
 		if err == nil {
 			return hits, nil
 		}
-		if !errors.Is(err, assrt.ErrUnauthorized) && !errors.Is(err, assrt.ErrUpstreamResponse) && !errors.Is(err, assrt.ErrNotConfigured) {
+		if !fallbackToEmby(err) {
 			return nil, err
 		}
 	}
 	return s.emby.SearchRemoteSubtitles(ctx, itemID, language)
+}
+
+func fallbackToEmby(err error) bool {
+	if errors.Is(err, assrt.ErrUnauthorized) || errors.Is(err, assrt.ErrUpstreamResponse) || errors.Is(err, assrt.ErrNotConfigured) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var timeout net.Error
+	return errors.As(err, &timeout) && timeout.Timeout()
 }
 
 func (s *Service) Local(ctx context.Context, itemID string) (strm.Sidecar, error) {
@@ -76,7 +89,9 @@ func (s *Service) Download(ctx context.Context, itemID, subtitleID string) error
 }
 
 func (s *Service) searchAssrt(ctx context.Context, itemID string) ([]emby.RemoteSubtitle, error) {
-	target, err := s.emby.SubtitleTarget(ctx, itemID)
+	searchCtx, cancel := context.WithTimeout(ctx, assrtSearchBudget)
+	defer cancel()
+	target, err := s.emby.SubtitleTarget(searchCtx, itemID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +102,7 @@ func (s *Service) searchAssrt(ctx context.Context, itemID string) ([]emby.Remote
 	seen := make(map[int]struct{})
 	results := make([]emby.RemoteSubtitle, 0, 16)
 	for _, query := range assrt.Queries(search) {
-		hits, err := s.assrt.Search(ctx, query.Text, query.FileName)
+		hits, err := s.assrt.Search(searchCtx, query.Text, query.FileName)
 		if err != nil {
 			return nil, err
 		}

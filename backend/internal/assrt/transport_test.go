@@ -35,19 +35,15 @@ func TestAssrtMirrorHostMapping(t *testing.T) {
 	}
 }
 
-func TestAssrtTransportFallsBackOnBadGateway(t *testing.T) {
-	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+func TestAssrtTransportPrefersMirror(t *testing.T) {
+	var hosts []string
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[]}}`))
 	}))
-	defer mirror.Close()
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadGateway)
-	}))
-	defer primary.Close()
-
+	defer ok.Close()
 	transport := &assrtTransport{
-		primary: rewriteHost(primary.URL),
-		mirror:  rewriteHost(mirror.URL),
+		primary: recordingTripper{hosts: &hosts, next: failingRoundTripper{}},
+		mirror:  recordingTripper{hosts: &hosts, next: rewriteHost(ok.URL)},
 	}
 	request, err := http.NewRequest(http.MethodGet, "https://api.assrt.net/v1/sub/search?q=assrt", nil)
 	if err != nil {
@@ -61,6 +57,33 @@ func TestAssrtTransportFallsBackOnBadGateway(t *testing.T) {
 	body, err := io.ReadAll(response.Body)
 	if err != nil || response.StatusCode != http.StatusOK || string(body) != `{"status":0,"sub":{"subs":[]}}` {
 		t.Fatalf("status=%d body=%q err=%v", response.StatusCode, body, err)
+	}
+	if len(hosts) != 1 || hosts[0] != "api.makedie.me" {
+		t.Fatalf("hosts=%v", hosts)
+	}
+}
+
+func TestAssrtTransportFallsBackToOfficialWhenMirrorFails(t *testing.T) {
+	var hosts []string
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ok.Close()
+	transport := &assrtTransport{
+		primary: recordingTripper{hosts: &hosts, next: rewriteHost(ok.URL)},
+		mirror:  recordingTripper{hosts: &hosts, next: failingRoundTripper{}},
+	}
+	request, err := http.NewRequest(http.MethodGet, "https://api.assrt.net/v1/sub/search?q=assrt", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := transport.RoundTrip(request)
+	if err != nil || response.StatusCode != http.StatusOK {
+		t.Fatalf("status=%v err=%v", response, err)
+	}
+	response.Body.Close()
+	if len(hosts) < 2 || hosts[0] != "api.makedie.me" || hosts[1] != "api.assrt.net" {
+		t.Fatalf("hosts=%v", hosts)
 	}
 }
 

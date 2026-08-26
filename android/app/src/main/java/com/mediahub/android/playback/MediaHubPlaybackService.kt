@@ -150,6 +150,7 @@ class MediaHubPlaybackService : MediaSessionService() {
 
 
     private fun play(request: PlaybackRequest, descriptor: PlaybackDescriptor, positionMs: Long, autoPlay: Boolean) {
+        SubtitleTiming.reset()
         sessionTracker.attach(descriptor.sessionId)
         httpFactory.setUserAgent(descriptor.userAgent)
         var item = MediaItem.Builder()
