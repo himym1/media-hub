@@ -596,6 +596,8 @@ fun MediaHubConfirmDialog(
     confirmLabel: String = "确认",
     cancelLabel: String = "取消",
     isDestructive: Boolean = false,
+    confirmEnabled: Boolean = true,
+    extra: (@Composable ColumnScope.() -> Unit)? = null,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -609,14 +611,17 @@ fun MediaHubConfirmDialog(
             )
         },
         text = {
-            Text(
-                text = message,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 14.sp,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 14.sp,
+                )
+                extra?.invoke(this)
+            }
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
+            TextButton(onClick = onConfirm, enabled = confirmEnabled) {
                 Text(
                     text = confirmLabel,
                     color = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,

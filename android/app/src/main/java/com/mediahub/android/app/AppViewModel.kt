@@ -91,12 +91,15 @@ sealed interface AppState {
 data class AppUpdatePrompt(
     val release: AndroidRelease,
     val downloading: Boolean = false,
+    val downloadedBytes: Long = 0,
     val downloadedPath: String? = null,
     val errorMessage: String? = null,
+    val hidden: Boolean = false,
 )
 
 class AppViewModel(
     private val repository: MediaHubRepository,
+    private val updateNotifier: AndroidUpdateNotifier = AndroidUpdateNotifier.None,
 ) : ViewModel() {
     private val _state = MutableStateFlow<AppState>(AppState.Loading)
     val state: StateFlow<AppState> = _state.asStateFlow()
@@ -119,6 +122,7 @@ class AppViewModel(
                 _subscriptionDraft.value = null
                 _updatePrompt.value = null
                 dismissedUpdateCode = null
+                updateNotifier.cancel()
                 _state.value = AppState.Unauthenticated
             }
         }
@@ -149,37 +153,64 @@ class AppViewModel(
     }
 
     fun dismissUpdate() {
-        dismissedUpdateCode = _updatePrompt.value?.release?.versionCode
+        val prompt = _updatePrompt.value ?: return
+        if (prompt.downloading) {
+            _updatePrompt.value = prompt.copy(hidden = true)
+            return
+        }
+        dismissedUpdateCode = prompt.release.versionCode
         _updatePrompt.value = null
+        updateNotifier.cancel()
     }
 
     fun downloadUpdate(destination: File) {
         val prompt = _updatePrompt.value ?: return
         if (prompt.downloading) return
         viewModelScope.launch {
-            _updatePrompt.value = prompt.copy(downloading = true, errorMessage = null)
+            _updatePrompt.value = prompt.copy(
+                downloading = true,
+                downloadedBytes = 0,
+                hidden = false,
+                errorMessage = null,
+                downloadedPath = null,
+            )
+            updateNotifier.showProgress(prompt.release.versionName, 0, prompt.release.sizeBytes)
             try {
-                val downloaded = repository.downloadAndroidRelease(prompt.release, destination)
+                val downloaded = repository.downloadAndroidRelease(prompt.release, destination) { bytes ->
+                    val current = _updatePrompt.value ?: return@downloadAndroidRelease
+                    _updatePrompt.value = current.copy(downloadedBytes = bytes)
+                    updateNotifier.showProgress(current.release.versionName, bytes, current.release.sizeBytes)
+                }
                 _updatePrompt.value = _updatePrompt.value?.copy(
                     downloading = false,
+                    downloadedBytes = downloaded.release.sizeBytes,
                     downloadedPath = downloaded.file.absolutePath,
+                    hidden = false,
                 )
+                updateNotifier.showReady(downloaded.release.versionName, downloaded.file)
             } catch (error: ApiException) {
+                val message = error.message ?: "更新下载失败"
                 _updatePrompt.value = _updatePrompt.value?.copy(
                     downloading = false,
-                    errorMessage = error.message ?: "更新下载失败",
+                    errorMessage = message,
+                    hidden = false,
                 )
+                updateNotifier.showFailed(message)
             } catch (_: Exception) {
+                val message = "更新下载或校验失败"
                 _updatePrompt.value = _updatePrompt.value?.copy(
                     downloading = false,
-                    errorMessage = "更新下载或校验失败",
+                    errorMessage = message,
+                    hidden = false,
                 )
+                updateNotifier.showFailed(message)
             }
         }
     }
 
     fun consumeDownloadedUpdate() {
         _updatePrompt.value = _updatePrompt.value?.copy(downloadedPath = null)
+        updateNotifier.cancel()
     }
 
     private fun checkForUpdate() {
@@ -231,6 +262,7 @@ class AppViewModel(
             _subscriptionDraft.value = null
             _updatePrompt.value = null
             dismissedUpdateCode = null
+            updateNotifier.cancel()
             _state.value = AppState.Unauthenticated
         }
     }

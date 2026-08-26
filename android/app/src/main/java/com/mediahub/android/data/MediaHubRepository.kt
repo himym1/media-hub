@@ -78,8 +78,12 @@ class MediaHubRepository(
         authenticated { api.changePassword(it, currentPassword, newPassword) }
 
     suspend fun latestAndroidRelease(): AndroidRelease = authenticated(api::latestAndroidRelease)
-    suspend fun downloadAndroidRelease(release: AndroidRelease, destination: java.io.File): DownloadedAndroidRelease =
-        authenticated { api.downloadAndroidRelease(it, release, destination) }
+    suspend fun downloadAndroidRelease(
+        release: AndroidRelease,
+        destination: java.io.File,
+        onProgress: (Long) -> Unit = {},
+    ): DownloadedAndroidRelease =
+        authenticated { api.downloadAndroidRelease(it, release, destination, onProgress) }
 
     suspend fun overview(): List<IntegrationHealth> = authenticated { token -> api.overview(token) }
 

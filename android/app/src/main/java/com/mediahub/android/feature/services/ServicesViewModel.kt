@@ -1,6 +1,7 @@
 package com.mediahub.android.feature.services
 
 import com.mediahub.android.BuildConfig
+import com.mediahub.android.app.AndroidUpdateNotifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mediahub.android.core.network.AndroidRelease
@@ -41,6 +42,7 @@ data class ServicesUiState(
     val androidRelease: AndroidRelease? = null,
     val checkingUpdate: Boolean = false,
     val downloadingUpdate: Boolean = false,
+    val downloadedUpdateBytes: Long = 0,
     val downloadedUpdatePath: String? = null,
     val loading: Boolean = false,
     val currentPassword: String = "",
@@ -53,6 +55,7 @@ data class ServicesUiState(
 
 class ServicesViewModel(
     private val repository: MediaHubRepository,
+    private val updateNotifier: AndroidUpdateNotifier = AndroidUpdateNotifier.None,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ServicesUiState())
     private var authorizationJob: Job? = null
@@ -84,17 +87,32 @@ class ServicesViewModel(
         val release = _uiState.value.androidRelease ?: return
         if (_uiState.value.downloadingUpdate) return
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(downloadingUpdate = true, errorMessage = null, downloadedUpdatePath = null)
+            _uiState.value = _uiState.value.copy(
+                downloadingUpdate = true,
+                downloadedUpdateBytes = 0,
+                errorMessage = null,
+                downloadedUpdatePath = null,
+            )
+            updateNotifier.showProgress(release.versionName, 0, release.sizeBytes)
             try {
-                val downloaded = repository.downloadAndroidRelease(release, destination)
+                val downloaded = repository.downloadAndroidRelease(release, destination) { bytes ->
+                    _uiState.value = _uiState.value.copy(downloadedUpdateBytes = bytes)
+                    updateNotifier.showProgress(release.versionName, bytes, release.sizeBytes)
+                }
                 _uiState.value = _uiState.value.copy(
                     downloadingUpdate = false,
+                    downloadedUpdateBytes = downloaded.release.sizeBytes,
                     downloadedUpdatePath = downloaded.file.absolutePath,
                 )
+                updateNotifier.showReady(downloaded.release.versionName, downloaded.file)
             } catch (error: ApiException) {
-                _uiState.value = _uiState.value.copy(downloadingUpdate = false, errorMessage = error.message ?: "更新下载失败")
+                val message = error.message ?: "更新下载失败"
+                _uiState.value = _uiState.value.copy(downloadingUpdate = false, errorMessage = message)
+                updateNotifier.showFailed(message)
             } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(downloadingUpdate = false, errorMessage = "更新下载或校验失败")
+                val message = "更新下载或校验失败"
+                _uiState.value = _uiState.value.copy(downloadingUpdate = false, errorMessage = message)
+                updateNotifier.showFailed(message)
             }
         }
     }

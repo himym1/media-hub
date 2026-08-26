@@ -17,16 +17,17 @@ import com.mediahub.android.feature.transfers.TransferViewModel
 
 class MediaHubViewModelFactory(
     private val repository: MediaHubRepository,
+    private val updateNotifier: AndroidUpdateNotifier = AndroidUpdateNotifier.None,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T = when {
-        modelClass.isAssignableFrom(AppViewModel::class.java) -> AppViewModel(repository) as T
+        modelClass.isAssignableFrom(AppViewModel::class.java) -> AppViewModel(repository, updateNotifier) as T
         modelClass.isAssignableFrom(AuthViewModel::class.java) -> AuthViewModel(repository) as T
         modelClass.isAssignableFrom(SearchViewModel::class.java) -> SearchViewModel(repository) as T
         modelClass.isAssignableFrom(TransferViewModel::class.java) -> TransferViewModel(repository) as T
         modelClass.isAssignableFrom(LibraryViewModel::class.java) -> LibraryViewModel(repository) as T
         modelClass.isAssignableFrom(LibraryDetailViewModel::class.java) -> LibraryDetailViewModel(repository) as T
-        modelClass.isAssignableFrom(ServicesViewModel::class.java) -> ServicesViewModel(repository) as T
+        modelClass.isAssignableFrom(ServicesViewModel::class.java) -> ServicesViewModel(repository, updateNotifier) as T
         modelClass.isAssignableFrom(Drive115ViewModel::class.java) -> Drive115ViewModel(repository) as T
         modelClass.isAssignableFrom(LocalUploadViewModel::class.java) -> LocalUploadViewModel(repository) as T
         modelClass.isAssignableFrom(ArchiveViewModel::class.java) -> ArchiveViewModel(repository) as T

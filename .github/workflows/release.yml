@@ -76,54 +76,6 @@ jobs:
           mkdir -p "$ANDROID_SDK_ROOT/licenses"
           printf '%s\n' '24333f8a63b6825ea9c5514f83c2829b004d1fee' > "$ANDROID_SDK_ROOT/licenses/android-sdk-license"
           printf '%s\n' '84831b9409646161cecb50b75fc18d2b' > "$ANDROID_SDK_ROOT/licenses/android-sdk-preview-license"
-      - name: Build amd64 image on NAS
-        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.skip_image != 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("Dockerfile")
-          text = path.read_text()
-          backend_old = (
-              "FROM golang:1.25-bookworm AS backend\n"
-              "ARG VERSION=dev\n"
-              "ARG GOPROXY=https://proxy.golang.org,direct\n"
-              "WORKDIR /src\n"
-              "COPY backend/go.mod backend/go.sum ./backend/\n"
-              'RUN GOPROXY="$GOPROXY" go -C backend mod download\n'
-          )
-          backend_new = (
-              "FROM golang:1.25-bookworm AS backend\n"
-              "ARG VERSION=dev\n"
-              "ARG GOPROXY=https://goproxy.cn\n"
-              "ENV GOPROXY=$GOPROXY\n"
-              "ENV GOSUMDB=off\n"
-              "WORKDIR /src\n"
-              "COPY backend/go.mod backend/go.sum ./backend/\n"
-              "RUN go -C backend mod download\n"
-          )
-          if backend_old not in text:
-              raise SystemExit("expected golang backend stage was not found")
-          text = text.replace(backend_old, backend_new, 1)
-          old = "FROM gcr.io/distroless/static-debian12:nonroot\n"
-          new = (
-              "FROM alpine:3.20\n"
-              "RUN apk add --no-cache ca-certificates tzdata \\\n"
-              " && addgroup -g 65532 -S nonroot \\\n"
-              " && adduser -u 65532 -S -G nonroot -H -D nonroot\n"
-          )
-          if old not in text:
-              raise SystemExit("expected distroless base image was not found")
-          path.write_text(text.replace(old, new, 1))
-          PY
-          image="ghcr.io/${GITHUB_REPOSITORY,,}"
-          # Synology Docker cannot reliably reach module proxies without host networking.
-          timeout 20m docker build --network=host --platform linux/amd64 \
-            --build-arg VERSION="$GITHUB_REF_NAME" \
-            --build-arg GOPROXY=https://goproxy.cn \
-            -t "$image:${{ steps.version.outputs.name }}" \
-            -t "$image:${GITHUB_SHA}" .
       - name: Build signed release APK
         working-directory: android
         run: ./gradlew :app:assembleRelease -PMEDIA_HUB_VERSION_NAME='${{ steps.version.outputs.name }}' -PMEDIA_HUB_VERSION_CODE='${{ steps.version.outputs.code }}'
@@ -149,3 +101,53 @@ jobs:
           chmod 0444 "$manifest_tmp"
           mv -f "$apk_tmp" "$release_dir/$output"
           mv -f "$manifest_tmp" "$release_dir/latest.json"
+      - name: Build amd64 image on NAS
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.skip_image != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("Dockerfile")
+          text = path.read_text()
+          old = "FROM gcr.io/distroless/static-debian12:nonroot\n"
+          new = (
+              "FROM alpine:3.20\n"
+              "RUN apk add --no-cache ca-certificates tzdata \\\n"
+              " && addgroup -g 65532 -S nonroot \\\n"
+              " && adduser -u 65532 -S -G nonroot -H -D nonroot\n"
+          )
+          if old not in text:
+              raise SystemExit("expected distroless base image was not found")
+          path.write_text(text.replace(old, new, 1))
+          PY
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          # Host network reaches goproxy.cn. Do not rewrite the module RUN; that busts cache every tag.
+          timeout 20m docker build --network=host --platform linux/amd64 \
+            --build-arg VERSION="$GITHUB_REF_NAME" \
+            --build-arg GOPROXY=https://goproxy.cn,direct \
+            --build-arg GOSUMDB=off \
+            -t "$image:${{ steps.version.outputs.name }}" \
+            -t "$image:${GITHUB_SHA}" .
+      - name: Switch NAS compose to the new image
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.skip_image != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.name }}"
+          cd /volume1/docker/media-hub
+          ./backup.sh
+          if grep -Eq '^MEDIA_HUB_IMAGE_TAG=' .env; then
+            sed -i.bak -E "s/^MEDIA_HUB_IMAGE_TAG=.*/MEDIA_HUB_IMAGE_TAG=${version}/" .env
+          else
+            printf '\nMEDIA_HUB_IMAGE_TAG=%s\n' "$version" >> .env
+          fi
+          MEDIA_HUB_IMAGE_TAG="$version" docker compose up -d
+          for _ in $(seq 1 10); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/api/v1/health; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "NAS health check did not pass after compose up" >&2
+          exit 1

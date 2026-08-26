@@ -22,4 +22,11 @@ class AndroidUpdateTest {
         assertNull(newerAndroidRelease(20010, latest))
         assertNull(newerAndroidRelease(20011, latest))
     }
+
+    @Test
+    fun formatsDownloadProgress() {
+        assertEquals(0.5f, updateProgressFraction(18L * 1024 * 1024, 36L * 1024 * 1024), 0.0f)
+        assertEquals("18.0 MB / 36.0 MB · 50%", formatUpdateProgress(18L * 1024 * 1024, 36L * 1024 * 1024))
+        assertEquals("正在下载", formatUpdateProgress(0, 0))
+    }
 }

@@ -1,7 +1,11 @@
 package com.mediahub.android.feature.services
 
+import android.Manifest
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +55,7 @@ import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubListDetail
+import com.mediahub.android.core.designsystem.MediaHubLinearProgress
 import com.mediahub.android.core.designsystem.MediaHubListDivider
 import com.mediahub.android.core.designsystem.MediaHubPreferenceRow
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
@@ -75,6 +80,9 @@ internal fun ServicesRoute(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
     LaunchedEffect(viewModel) { viewModel.ensureLoaded() }
     LaunchedEffect(viewModel) { viewModel.checkForUpdate() }
     DisposableEffect(viewModel) { onDispose(viewModel::stopDriveAuthorization) }
@@ -93,6 +101,9 @@ internal fun ServicesRoute(
         onChangeServer = onChangeServer,
         onCheckForUpdate = viewModel::checkForUpdate,
         onDownloadUpdate = { release ->
+            if (Build.VERSION.SDK_INT >= 33) {
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
             viewModel.downloadUpdate(com.mediahub.android.app.androidUpdateFile(context, release.versionCode))
         },
         onInstallUpdate = { path ->
@@ -504,10 +515,26 @@ private fun LazyListScope.servicesSectionItems(
                                     color = MediaHubColors.TextMuted,
                                     fontSize = 12.sp,
                                 )
+                                if (uiState.downloadingUpdate && release != null) {
+                                    MediaHubLinearProgress(
+                                        progress = com.mediahub.android.app.updateProgressFraction(
+                                            uiState.downloadedUpdateBytes,
+                                            release.sizeBytes,
+                                        ),
+                                    )
+                                    MediaHubText(
+                                        text = com.mediahub.android.app.formatUpdateProgress(
+                                            uiState.downloadedUpdateBytes,
+                                            release.sizeBytes,
+                                        ),
+                                        color = MediaHubColors.TextMuted,
+                                        fontSize = 12.sp,
+                                    )
+                                }
                                 MediaHubButton(
                                     label = when {
                                         uiState.downloadedUpdatePath != null -> "安装 ${release?.versionName.orEmpty()}"
-                                        uiState.downloadingUpdate -> "正在下载并校验"
+                                        uiState.downloadingUpdate -> "正在下载"
                                         release != null -> "下载 ${release.versionName}"
                                         uiState.checkingUpdate -> "正在检查"
                                         else -> "检查更新"

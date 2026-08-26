@@ -2,9 +2,10 @@
 name: media-hub-release
 description: >-
   Commit, tag, package, and deploy Media Hub: GitHub release builds the
-  Docker image (Web+API) and signed Android APK, then NAS compose is upgraded.
+  signed Android APK first, then the NAS Docker image, then compose up.
   Use when the user says 提交打包部署, 发版, release Media Hub, deploy media hub,
-  发布 0.x, 更新 NAS, or runs /media-hub-release.
+  发布 0.x, 更新 NAS, or runs /media-hub-release. Do not create a second
+  release skill — the hang is docker layer cache, not missing docs.
 ---
 
 # Media Hub release
@@ -25,6 +26,16 @@ One private release path. Web is baked into the image. Android is the signed APK
 - Do not drop SQLite tables
 - Backup NAS before `compose up`
 - After a user-facing fix is complete, ship the next patch without asking.
+
+## Where releases actually stall
+
+The long wait is the self-hosted NAS job `.github/workflows/release.yml`, not `git push`.
+
+1. CI used to rewrite the backend `RUN go mod download` line on every tag. That cache-busts the module layer even when `go.mod` / `go.sum` did not change.
+2. `proxy.golang.org` and `sum.golang.org` time out from the NAS. `goproxy.cn` works. `gcr.io` distroless cannot be pulled; swap only the final stage to `alpine:3.20` + uid `65532`.
+3. The image step is wrapped in `timeout 20m`. A stalled `go mod download` sits the full 20 minutes, then exits 124, and used to skip the APK as well.
+
+A new skill will not make module downloads faster. Keep one skill (this file). Do not rewrite the module `RUN` in CI or in a manual NAS build. Pass `--build-arg GOPROXY=https://goproxy.cn,direct --build-arg GOSUMDB=off` and `--network=host`. After the first cached module layer, later tags should reuse it.
 
 ## 1. Version
 
@@ -89,19 +100,23 @@ Do not amend a pushed release tag.
 
 ## 4. Package
 
-GitHub Actions workflow `.github/workflows/release.yml` on `v*.*.*`:
+GitHub Actions workflow `.github/workflows/release.yml` on `v*.*.*` (self-hosted `[self-hosted, linux, x64, media-hub]`):
 
-- image job → `ghcr.io/himym1/media-hub:$VERSION` (amd64+arm64)
-- android job → signed APK + `latest.json` attached to the GitHub release
+1. Signed APK + `latest.json` into `/volume1/docker/media-hub/releases` first, so a hung image does not block the app update
+2. `docker build --network=host` with GOPROXY / GOSUMDB build-args; only the final distroless stage is rewritten to alpine
+3. NAS `backup.sh` + `MEDIA_HUB_IMAGE_TAG` compose up + local health on `:18080`
 
 ```bash
 gh run watch --exit-status $(gh run list --workflow=release.yml --branch "v$VERSION" --limit 1 --json databaseId -q '.[0].databaseId')
-gh release view "v$VERSION"
 ```
 
-Wait until both jobs succeed and the release has `media-hub-<code>.apk` and `latest.json`.
+If the job is still in `Build amd64 image on NAS` after a few minutes and `go.mod` did not change, the module layer did not cache. Do not sit the full 20 minutes guessing. Inspect the runner log. Do not rewrite the module `RUN` as a "fix".
+
+`workflow_dispatch` with `skip_image=true` is APK-only. Use that when the image is already on the NAS.
 
 ## 5. Deploy NAS
+
+If the compose step in CI succeeded, skip this section. Only smoke the public origin.
 
 NAS `himym` has no GHCR credentials by default. `docker compose pull` returns `unauthorized` until a `read:packages` token is logged in:
 
@@ -136,7 +151,7 @@ gzip -dc "$art/image.tar.gz" | ssh himym 'docker load'
 ssh himym 'cd /volume1/docker/media-hub && MEDIA_HUB_IMAGE_TAG='"$VERSION"' docker compose up -d && curl --fail http://127.0.0.1:18080/api/v1/health'
 ```
 
-Last resort if Actions export is unavailable: build the tagged source on the NAS (amd64, Docker legacy builder, no `buildx`/`--progress`):
+Last resort if Actions export is unavailable: build the tagged source on the NAS (amd64, Docker legacy builder, no `buildx`/`--progress`). Swap only distroless → alpine. Do not rewrite the Go module `RUN`.
 
 ```bash
 git archive --format=tar "v$VERSION" | ssh himym 'set -euo pipefail
@@ -147,11 +162,6 @@ from pathlib import Path
 p = Path("/tmp/media-hub-src/Dockerfile")
 t = p.read_text()
 t = t.replace(
-    "FROM golang:1.25-bookworm AS backend\n",
-    "FROM golang:1.25-bookworm AS backend\nENV GOPROXY=https://goproxy.cn,direct\nENV GOSUMDB=off\n",
-    1,
-)
-t = t.replace(
     "FROM gcr.io/distroless/static-debian12:nonroot\n",
     "FROM alpine:3.20\nRUN apk add --no-cache ca-certificates tzdata \\\n && addgroup -g 65532 -S nonroot \\\n && adduser -u 65532 -S -G nonroot -H -D nonroot\n",
     1,
@@ -159,7 +169,9 @@ t = t.replace(
 p.write_text(t)
 PY
 cd /tmp/media-hub-src
-docker build --build-arg VERSION=v'"$VERSION"' -t ghcr.io/himym1/media-hub:'"$VERSION"' .
+docker build --network=host --build-arg VERSION=v'"$VERSION"' \
+  --build-arg GOPROXY=https://goproxy.cn,direct --build-arg GOSUMDB=off \
+  -t ghcr.io/himym1/media-hub:'"$VERSION"' .
 cd /volume1/docker/media-hub
 MEDIA_HUB_IMAGE_TAG='"$VERSION"' docker compose up -d
 curl --fail http://127.0.0.1:18080/api/v1/health
@@ -173,6 +185,8 @@ If `.env` already contains `MEDIA_HUB_IMAGE_TAG`, edit that file so the next reb
 
 ## 6. Place Android APK
 
+If CI published the APK, skip this section.
+
 NAS SFTP cannot `mkdir` `/volume1/docker/media-hub/releases/` (the dir exists; `scp` still fails). Pipe files over SSH:
 
 ```bash
@@ -185,6 +199,12 @@ ssh himym 'chmod 444 /volume1/docker/media-hub/releases/media-hub-*.apk /volume1
 ls -l /volume1/docker/media-hub/releases'
 ```
 
+APK-only retry:
+
+```bash
+gh workflow run release.yml -f version="$VERSION" -f skip_image=true
+```
+
 ## 7. Smoke
 
 - `curl --fail https://media.himym.us.ci/api/v1/health`
@@ -193,4 +213,4 @@ ls -l /volume1/docker/media-hub/releases'
 
 ## Report
 
-Version, commit SHA, tag, image digest if available, NAS health, APK path, and anything not deployed.
+Version, commit SHA, tag, image digest if available, NAS health, APK path, and anything not deployed. If the image is NAS alpine, say so — it is not the GHCR distroless image.

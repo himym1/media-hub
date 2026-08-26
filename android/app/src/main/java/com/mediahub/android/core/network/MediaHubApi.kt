@@ -38,7 +38,12 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         return parseAndroidRelease(value)
     }
 
-    suspend fun downloadAndroidRelease(token: String, release: AndroidRelease, destination: File): DownloadedAndroidRelease =
+    suspend fun downloadAndroidRelease(
+        token: String,
+        release: AndroidRelease,
+        destination: File,
+        onProgress: (Long) -> Unit = {},
+    ): DownloadedAndroidRelease =
         withContext(Dispatchers.IO) {
             val path = release.downloadPath
             require(path == "/api/v1/client/android/releases/${release.versionCode}/apk") { "Invalid Android release download path" }
@@ -58,6 +63,17 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
                 destination.parentFile?.mkdirs()
                 val digest = MessageDigest.getInstance("SHA-256")
                 var total = 0L
+                var lastEmitted = -1L
+                var lastEmitAt = 0L
+                val emitProgress = { bytes: Long, force: Boolean ->
+                    val now = System.nanoTime()
+                    if (force || bytes - lastEmitted >= PROGRESS_STEP_BYTES || now - lastEmitAt >= PROGRESS_EMIT_NS) {
+                        lastEmitted = bytes
+                        lastEmitAt = now
+                        onProgress(bytes)
+                    }
+                }
+                emitProgress(0L, true)
                 destination.outputStream().buffered().use { output ->
                     connection.inputStream.use { input ->
                         val buffer = ByteArray(64 * 1024)
@@ -68,9 +84,11 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
                             if (total > release.sizeBytes) throw IOException("Android update exceeded declared size")
                             digest.update(buffer, 0, count)
                             output.write(buffer, 0, count)
+                            emitProgress(total, false)
                         }
                     }
                 }
+                emitProgress(total, true)
                 val checksum = digest.digest().joinToString("") { "%02x".format(it) }
                 if (total != release.sizeBytes || !checksum.equals(release.sha256, ignoreCase = true)) {
                     destination.delete()
@@ -978,6 +996,8 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
 
     private companion object {
         const val DOWNLOAD_CONNECT_TIMEOUT_MS = 5_000
+        private const val PROGRESS_STEP_BYTES = 256 * 1024L
+        private const val PROGRESS_EMIT_NS = 200_000_000L
         const val DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000
         const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
     }

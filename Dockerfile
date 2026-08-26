@@ -9,13 +9,16 @@ RUN pnpm build
 FROM golang:1.25-bookworm AS backend
 ARG VERSION=dev
 ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
+ENV GOPROXY=$GOPROXY
+ENV GOSUMDB=$GOSUMDB
 WORKDIR /src
 COPY backend/go.mod backend/go.sum ./backend/
-RUN GOPROXY="$GOPROXY" go -C backend mod download
+RUN go -C backend mod download
 COPY backend/ ./backend/
 COPY --from=web /src/web/dist ./backend/internal/webui/dist
-RUN GOPROXY="$GOPROXY" CGO_ENABLED=0 go -C backend build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/media-hub ./cmd/server && \
-    GOPROXY="$GOPROXY" CGO_ENABLED=0 go -C backend build -trimpath -ldflags "-s -w" -o /out/media-hub-healthcheck ./cmd/healthcheck
+RUN CGO_ENABLED=0 go -C backend build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/media-hub ./cmd/server && \
+    CGO_ENABLED=0 go -C backend build -trimpath -ldflags "-s -w" -o /out/media-hub-healthcheck ./cmd/healthcheck
 
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /srv/media-hub

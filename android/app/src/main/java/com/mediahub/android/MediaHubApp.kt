@@ -1,6 +1,10 @@
 package com.mediahub.android
 
+import android.Manifest
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,12 +52,17 @@ import com.mediahub.android.app.showsWorkspaceNavigationRail
 import com.mediahub.android.app.showsWorkspaceTopBar
 import com.mediahub.android.app.MediaHubViewModelFactory
 import com.mediahub.android.app.ServerViewModelStoreHolder
+import com.mediahub.android.app.AndroidUpdateNotifier
 import com.mediahub.android.app.androidUpdateFile
+import com.mediahub.android.app.formatUpdateMegabytes
+import com.mediahub.android.app.formatUpdateProgress
 import com.mediahub.android.app.installAndroidUpdate
+import com.mediahub.android.app.updateProgressFraction
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCenteredPane
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubConfirmDialog
+import com.mediahub.android.core.designsystem.MediaHubLinearProgress
 import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubNavItem
@@ -136,7 +145,9 @@ fun MediaHubApp() {
             serverStoreHolder.ownerFor(serverGeneration)
         }
         ServerViewModelScope(serverViewModelStoreOwner) {
-            val factory = remember(repository) { MediaHubViewModelFactory(repository) }
+            val factory = remember(repository) {
+                MediaHubViewModelFactory(repository, AndroidUpdateNotifier(applicationContext))
+            }
             val appViewModel = viewModel<AppViewModel>(key = "app-$serverGeneration", factory = factory)
             val state by appViewModel.state.collectAsState()
             when (val currentState = state) {
@@ -193,6 +204,9 @@ private fun AuthenticatedWorkspace(
     val detail = route.detail
     val subscriptionDraft by appViewModel.subscriptionDraft.collectAsState()
     val updatePrompt by appViewModel.updatePrompt.collectAsState()
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
     val inSystem = destination == MainDestination.Services
     val detailOpen = detail != null
     BackHandler(enabled = inSystem, onBack = appViewModel::closeSystem)
@@ -281,7 +295,7 @@ private fun AuthenticatedWorkspace(
                     onChangeServer = onChangeServer,
                 )
             }
-            updatePrompt?.let { prompt ->
+            updatePrompt?.takeUnless { it.hidden }?.let { prompt ->
                 val release = prompt.release
                 MediaHubConfirmDialog(
                     visible = true,
@@ -290,17 +304,25 @@ private fun AuthenticatedWorkspace(
                         release.notes.takeIf { it.isNotBlank() },
                         prompt.errorMessage,
                         when {
-                            prompt.downloading -> "正在下载并校验"
+                            prompt.downloading -> formatUpdateProgress(prompt.downloadedBytes, release.sizeBytes)
                             prompt.downloadedPath != null -> "下载完成，安装后即可使用"
-                            else -> null
+                            else -> "安装包 ${formatUpdateMegabytes(release.sizeBytes)}。下载时会显示进度，并发送通知。"
                         },
                     ).joinToString("\n"),
                     confirmLabel = when {
-                        prompt.downloading -> "正在下载"
+                        prompt.downloading -> "下载中"
                         prompt.downloadedPath != null -> "安装"
                         else -> "下载"
                     },
-                    cancelLabel = "稍后",
+                    cancelLabel = if (prompt.downloading) "后台下载" else "稍后",
+                    confirmEnabled = !prompt.downloading,
+                    extra = {
+                        if (prompt.downloading) {
+                            MediaHubLinearProgress(
+                                progress = updateProgressFraction(prompt.downloadedBytes, release.sizeBytes),
+                            )
+                        }
+                    },
                     onConfirm = {
                         val path = prompt.downloadedPath
                         if (path != null) {
@@ -308,6 +330,9 @@ private fun AuthenticatedWorkspace(
                                 appViewModel.consumeDownloadedUpdate()
                             }
                         } else if (!prompt.downloading) {
+                            if (Build.VERSION.SDK_INT >= 33) {
+                                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
                             appViewModel.downloadUpdate(androidUpdateFile(context, release.versionCode))
                         }
                     },
