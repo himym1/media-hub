@@ -1002,14 +1002,7 @@ func (c *Client) postJSONBody(
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return ErrUpstreamResponse
 	}
-	if target == nil || response.StatusCode == http.StatusNoContent {
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
-		return nil
-	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, 4<<20)).Decode(target); err != nil {
-		return fmt.Errorf("decode Emby response: %w", err)
-	}
-	return nil
+	return decodeEmbyBody(response, target)
 }
 
 func applyEmbyAuth(request *http.Request, configuration clientConfig) {

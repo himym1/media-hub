@@ -1,0 +1,32 @@
+# Deslop 重复代码分析策略。
+# Android 为 Kotlin，当前 Deslop 不解析，排除以免干扰报告。
+[defaults]
+exclude = [
+  "android/**",
+  "web/node_modules/**",
+  "web/dist/**",
+  "web/.vite/**",
+  "web/playwright-report/**",
+  "web/test-results/**",
+  "backend/bin/**",
+  "backend/data/**",
+  "backend/vendor/**",
+  "backend/internal/webui/dist/**",
+  "data/**",
+]
+report_hide = [
+  "**/*_test.go",
+  "**/testdata/**",
+  "web/e2e/**",
+  "web/src/**/*.test.ts",
+  "web/src/**/*.test.tsx",
+]
+
+[report]
+split_by_language = true
+
+[ranking]
+data_clones = "demote"
+data_clone_weight = 0.15
+structural_only = "demote"
+structural_only_weight = 0.15

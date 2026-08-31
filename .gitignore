@@ -34,3 +34,6 @@ android/app/build/release/
 .idea/
 .vscode/
 /android/top/
+
+# Deslop 扫描产物
+.deslop/

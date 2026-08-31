@@ -76,17 +76,25 @@ func isMikanHost(raw string) bool {
 	return host == "mikanani.me" || host == "www.mikanani.me" || strings.HasSuffix(host, ".mikanani.me")
 }
 
-func isSidhubHost(raw string) bool {
+func parseHTTPSOrigin(raw string) (*url.URL, bool) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Port() != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, false
+	}
+	return parsed, true
+}
+
+func isSidhubHost(raw string) bool {
+	parsed, ok := parseHTTPSOrigin(raw)
+	if !ok {
 		return false
 	}
 	return sidhubAllowedHost(parsed.Hostname())
 }
 
 func isFrameHDRHost(raw string) bool {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Port() != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+	parsed, ok := parseHTTPSOrigin(raw)
+	if !ok {
 		return false
 	}
 	host := strings.ToLower(parsed.Hostname())
@@ -94,8 +102,8 @@ func isFrameHDRHost(raw string) bool {
 }
 
 func isJuyingHost(raw string) bool {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Port() != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+	parsed, ok := parseHTTPSOrigin(raw)
+	if !ok {
 		return false
 	}
 	host := strings.ToLower(parsed.Hostname())

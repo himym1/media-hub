@@ -20,9 +20,28 @@ import (
 
 var embyIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
-func (h *handler) getEmbyLibraries(w http.ResponseWriter, r *http.Request) {
+func (h *handler) requireEmby(w http.ResponseWriter) bool {
 	if h.dependencies.Emby == nil {
 		writeIntegrationUnavailable(w)
+		return false
+	}
+	return true
+}
+
+func (h *handler) requireEmbyID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	if !h.requireEmby(w) {
+		return "", false
+	}
+	id := r.PathValue("id")
+	if !embyIDPattern.MatchString(id) {
+		writeInvalidEmbyID(w)
+		return "", false
+	}
+	return id, true
+}
+
+func (h *handler) getEmbyLibraries(w http.ResponseWriter, r *http.Request) {
+	if !h.requireEmby(w) {
 		return
 	}
 	libraries, err := h.dependencies.Emby.Libraries(r.Context())
@@ -56,8 +75,7 @@ func (h *handler) searchEmbyItems(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = parsed
 	}
-	if h.dependencies.Emby == nil {
-		writeIntegrationUnavailable(w)
+	if !h.requireEmby(w) {
 		return
 	}
 	result, err := h.dependencies.Emby.SearchItems(r.Context(), query, limit)
@@ -69,13 +87,8 @@ func (h *handler) searchEmbyItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) browseEmbyLibraryItems(w http.ResponseWriter, r *http.Request) {
-	if h.dependencies.Emby == nil {
-		writeIntegrationUnavailable(w)
-		return
-	}
-	libraryID := r.PathValue("id")
-	if !embyIDPattern.MatchString(libraryID) {
-		writeInvalidEmbyID(w)
+	libraryID, ok := h.requireEmbyID(w, r)
+	if !ok {
 		return
 	}
 	offset, limit, ok := readEmbyPage(w, r)
@@ -91,13 +104,8 @@ func (h *handler) browseEmbyLibraryItems(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *handler) getEmbyItem(w http.ResponseWriter, r *http.Request) {
-	if h.dependencies.Emby == nil {
-		writeIntegrationUnavailable(w)
-		return
-	}
-	itemID := r.PathValue("id")
-	if !embyIDPattern.MatchString(itemID) {
-		writeInvalidEmbyID(w)
+	itemID, ok := h.requireEmbyID(w, r)
+	if !ok {
 		return
 	}
 	item, err := h.dependencies.Emby.ItemDetails(r.Context(), itemID)
@@ -109,13 +117,8 @@ func (h *handler) getEmbyItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) getEmbyEpisodes(w http.ResponseWriter, r *http.Request) {
-	if h.dependencies.Emby == nil {
-		writeIntegrationUnavailable(w)
-		return
-	}
-	seriesID := r.PathValue("id")
-	if !embyIDPattern.MatchString(seriesID) {
-		writeInvalidEmbyID(w)
+	seriesID, ok := h.requireEmbyID(w, r)
+	if !ok {
 		return
 	}
 	episodes, err := h.dependencies.Emby.Episodes(r.Context(), seriesID)
@@ -127,13 +130,8 @@ func (h *handler) getEmbyEpisodes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) getEmbyPrimaryImage(w http.ResponseWriter, r *http.Request) {
-	if h.dependencies.Emby == nil {
-		writeIntegrationUnavailable(w)
-		return
-	}
-	itemID := r.PathValue("id")
-	if !embyIDPattern.MatchString(itemID) {
-		writeInvalidEmbyID(w)
+	itemID, ok := h.requireEmbyID(w, r)
+	if !ok {
 		return
 	}
 	const maxWidth = 320
@@ -177,13 +175,8 @@ func (h *handler) refreshEmbyItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) previewEmbyItemDelete(w http.ResponseWriter, r *http.Request) {
-	if h.dependencies.Emby == nil {
-		writeIntegrationUnavailable(w)
-		return
-	}
-	id := r.PathValue("id")
-	if !embyIDPattern.MatchString(id) {
-		writeInvalidEmbyID(w)
+	id, ok := h.requireEmbyID(w, r)
+	if !ok {
 		return
 	}
 	preview, err := h.dependencies.Emby.DeletePreview(r.Context(), id)
@@ -195,13 +188,8 @@ func (h *handler) previewEmbyItemDelete(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *handler) deleteEmbyItem(w http.ResponseWriter, r *http.Request) {
-	if h.dependencies.Emby == nil {
-		writeIntegrationUnavailable(w)
-		return
-	}
-	id := r.PathValue("id")
-	if !embyIDPattern.MatchString(id) {
-		writeInvalidEmbyID(w)
+	id, ok := h.requireEmbyID(w, r)
+	if !ok {
 		return
 	}
 	var input struct {
@@ -265,13 +253,8 @@ func libraryDeleteNotification(preview emby.DeletePreview) string {
 }
 
 func (h *handler) refreshEmbyObject(w http.ResponseWriter, r *http.Request, library bool) {
-	if h.dependencies.Emby == nil {
-		writeIntegrationUnavailable(w)
-		return
-	}
-	id := r.PathValue("id")
-	if !embyIDPattern.MatchString(id) {
-		writeInvalidEmbyID(w)
+	id, ok := h.requireEmbyID(w, r)
+	if !ok {
 		return
 	}
 	var err error
@@ -288,13 +271,8 @@ func (h *handler) refreshEmbyObject(w http.ResponseWriter, r *http.Request, libr
 }
 
 func (h *handler) searchEmbyRemoteSubtitles(w http.ResponseWriter, r *http.Request) {
-	if h.dependencies.Emby == nil {
-		writeIntegrationUnavailable(w)
-		return
-	}
-	itemID := r.PathValue("id")
-	if !embyIDPattern.MatchString(itemID) {
-		writeInvalidEmbyID(w)
+	itemID, ok := h.requireEmbyID(w, r)
+	if !ok {
 		return
 	}
 	language := strings.TrimSpace(r.URL.Query().Get("language"))
@@ -318,13 +296,8 @@ func (h *handler) searchEmbyRemoteSubtitles(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *handler) downloadEmbyRemoteSubtitle(w http.ResponseWriter, r *http.Request) {
-	if h.dependencies.Emby == nil {
-		writeIntegrationUnavailable(w)
-		return
-	}
-	itemID := r.PathValue("id")
-	if !embyIDPattern.MatchString(itemID) {
-		writeInvalidEmbyID(w)
+	itemID, ok := h.requireEmbyID(w, r)
+	if !ok {
 		return
 	}
 	var input struct {
