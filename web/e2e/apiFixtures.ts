@@ -124,7 +124,18 @@ async function respond(route: Route, authenticated: boolean, state: FixtureState
     return json(route, { id: 'series-1', name: '验收剧集', type: 'Series', year: 2026, mediaSourceCount: 0, externalUrl: 'https://emby.example/web/index.html#!/item?id=series-1' })
   }
   if (path === '/api/v1/integrations/emby/items/series-1/episodes') {
-    return json(route, { items: [{ id: 'episode-1', name: '连接', type: 'Episode', season: 1, episode: 1, playbackPositionMs: 45_000, externalUrl: 'https://emby.example/web/index.html#!/item?id=episode-1' }], total: 1 })
+    return json(route, { items: [
+      { id: 'episode-1', name: '连接', type: 'Episode', season: 1, episode: 1, playbackPositionMs: 45_000, externalUrl: 'https://emby.example/web/index.html#!/item?id=episode-1' },
+      { id: 'episode-2', name: '协议', type: 'Episode', season: 1, episode: 2, externalUrl: 'https://emby.example/web/index.html#!/item?id=episode-2' },
+    ], total: 2 })
+  }
+  if (path.endsWith('/local-subtitle') && request.method() === 'GET') {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/x-subrip',
+      headers: { 'Content-Disposition': 'attachment; filename="chi.srt"' },
+      body: '1\n00:00:00,000 --> 00:00:04,000\n验收字幕\n',
+    })
   }
   if (path === '/api/v1/playback/descriptors/emby' && request.method() === 'POST') {
     return json(route, { streamUrl: 'https://cdn.example/acceptance.mp4', userAgent: 'test-ua', title: '验收影片' }, 201)

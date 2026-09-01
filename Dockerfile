@@ -10,8 +10,14 @@ FROM golang:1.25-bookworm AS backend
 ARG VERSION=dev
 ARG GOPROXY=https://proxy.golang.org,direct
 ARG GOSUMDB=sum.golang.org
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
 ENV GOPROXY=$GOPROXY
 ENV GOSUMDB=$GOSUMDB
+ENV HTTP_PROXY=$HTTP_PROXY
+ENV HTTPS_PROXY=$HTTPS_PROXY
+ENV NO_PROXY=$NO_PROXY
 WORKDIR /src
 COPY backend/go.mod backend/go.sum ./backend/
 RUN go -C backend mod download

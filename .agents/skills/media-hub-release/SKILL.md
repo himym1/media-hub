@@ -10,4 +10,4 @@ description: >-
 
 Follow `.grok/skills/media-hub-release/SKILL.md` as the source of truth.
 
-The long wait is NAS `docker build` → `go mod download`, not missing process docs. Never rewrite the module `RUN` to "help" the NAS. APK is built before the image so a hung build does not block the app update.
+The long wait is NAS `docker build` → `go mod download`, not missing process docs. Use Aliyun GOPROXY and Clash `HTTP_PROXY` when `:7890` is up. Never rewrite the module `RUN`. APK is built before the image so a hung build does not block the app update.

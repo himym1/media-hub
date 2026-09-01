@@ -179,6 +179,9 @@ test('library plays a movie overlay and keeps the stream url out of the address 
   const payload = await body
   expect(payload.itemId).toBe('item-1')
   expect(payload.playbackUserAgent?.length).toBeGreaterThan(0)
+  await expect(page.getByRole('button', { name: '字幕开' })).toBeVisible()
+  await expect(page.getByRole('slider', { name: '音量' })).toBeVisible()
+  await expect(page.getByRole('combobox', { name: '播放速度' })).toHaveValue('1')
   await page.locator('.library-player-video').evaluate((video) => video.dispatchEvent(new Event('error')))
   const embyLink = page.getByRole('link', { name: '在 Emby 打开' })
   await expect(embyLink).toHaveAttribute('href', 'https://emby.example/web/index.html#!/item?id=item-1')
@@ -201,6 +204,8 @@ test('library series plays an episode and keeps Emby fallback off the detail pag
   await page.getByRole('button', { name: '继续播放 第 1 集 · 连接' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await expect(page).toHaveURL(/play=episode-1/)
+  await page.getByRole('button', { name: '下一集 第 2 集 · 协议' }).click()
+  await expect(page).toHaveURL(/play=episode-2/)
   await page.getByRole('button', { name: '关闭播放器' }).click()
 })
 

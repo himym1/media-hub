@@ -627,6 +627,41 @@ export function downloadEmbyRemoteSubtitle(id: string, subtitleId: string) {
   )
 }
 
+export type LocalSubtitle = {
+  bytes: ArrayBuffer
+  contentType: string
+  fileName: string
+}
+
+export async function fetchLocalSubtitle(id: string): Promise<LocalSubtitle | null> {
+  const response = await fetch(`/api/v1/integrations/emby/items/${encodeURIComponent(id)}/local-subtitle`, {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/x-subrip, text/x-ssa, application/json' },
+  })
+  if (response.status === 404) return null
+  if (!response.ok) {
+    let problem: ApiProblem = {}
+    try {
+      problem = await response.json() as ApiProblem
+    } catch {
+      // Status remains the fallback when the body is not a problem document.
+    }
+    throw new ApiError(response.status, problem.code ?? 'request_failed', problem.title ?? '请求失败')
+  }
+  const disposition = response.headers.get('content-disposition') ?? ''
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  const quoted = disposition.match(/filename="([^"]+)"/i)
+  const plain = disposition.match(/filename=([^;]+)/i)
+  const fileName = encoded?.[1]
+    ? decodeURIComponent(encoded[1].trim())
+    : quoted?.[1] ?? plain?.[1]?.trim() ?? 'subtitle.srt'
+  return {
+    bytes: await response.arrayBuffer(),
+    contentType: response.headers.get('content-type') ?? 'application/x-subrip',
+    fileName,
+  }
+}
+
 export function getDrive115Status() {
   return requestJSON<Drive115Status>('/api/v1/integrations/115/status')
 }

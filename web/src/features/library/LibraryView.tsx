@@ -161,6 +161,9 @@ export function LibraryView() {
     : playEpisode
       ? { id: playEpisode.id, title: episodeLabel(playEpisode, detail.data?.name ?? ''), externalUrl: playEpisode.externalUrl }
       : null
+  const nextEpisode = playEpisode
+    ? episodes.data?.items.find((episode) => episode.season === playEpisode.season && (episode.episode ?? 0) === (playEpisode.episode ?? 0) + 1)
+    : undefined
 
   return (
     <section className="library-page">
@@ -234,7 +237,16 @@ export function LibraryView() {
           {detail.data ? <LibraryItemDetail key={detail.data.id} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} /> : null}
         </aside>
       </div>
-      {playTarget ? <LibraryPlayer externalUrl={playTarget.externalUrl} itemId={playTarget.id} onClose={closePlay} title={playTarget.title} /> : null}
+      {playTarget ? (
+        <LibraryPlayer
+          externalUrl={playTarget.externalUrl}
+          itemId={playTarget.id}
+          nextEpisodeLabel={nextEpisode ? episodeLabel(nextEpisode, detail.data?.name ?? '') : undefined}
+          onClose={closePlay}
+          onNextEpisode={nextEpisode ? () => startPlay(nextEpisode) : undefined}
+          title={playTarget.title}
+        />
+      ) : null}
     </section>
   )
 }
