@@ -9,12 +9,14 @@ import (
 )
 
 type createDrive115PlaybackRequest struct {
-	ParentID string `json:"parentId"`
-	FileID   string `json:"fileId"`
+	ParentID          string `json:"parentId"`
+	FileID            string `json:"fileId"`
+	PlaybackUserAgent string `json:"playbackUserAgent"`
 }
 
 type createEmbyPlaybackRequest struct {
-	ItemID string `json:"itemId"`
+	ItemID            string `json:"itemId"`
+	PlaybackUserAgent string `json:"playbackUserAgent"`
 }
 
 type playbackSessionEventRequest struct {
@@ -35,7 +37,7 @@ func (h *handler) createDrive115Playback(w http.ResponseWriter, r *http.Request)
 	value, err := h.dependencies.Playback.CreateDrive115(r.Context(), playback.Drive115Target{
 		ParentID: input.ParentID,
 		FileID:   input.FileID,
-	})
+	}, input.PlaybackUserAgent)
 	writePlaybackResult(w, value, err)
 }
 
@@ -50,7 +52,7 @@ func (h *handler) createEmbyPlayback(w http.ResponseWriter, r *http.Request) {
 	}
 	principal := principalFromContext(r.Context())
 	value, err := h.dependencies.Playback.CreateEmbyItem(
-		r.Context(), principal.UserID, playback.EmbyItemTarget{ItemID: input.ItemID},
+		r.Context(), principal.UserID, playback.EmbyItemTarget{ItemID: input.ItemID}, input.PlaybackUserAgent,
 	)
 	writePlaybackResult(w, value, err)
 }

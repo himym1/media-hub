@@ -58,6 +58,7 @@ Implementation status: SQLite persistence, scheduler, source/release rules, epis
 - [x] QMediaSync-backed synchronization records, persisted transfer events, Emby refresh, and playback verification replace SubX STRM operations.
 - [ ] Promote Android Emby-managed Media3 playback from experimental after real movie/episode redirect, Range seek, resume, progress, and fallback acceptance.
 - [x] Native user-scoped operational summary and Media Hub-owned structured logs; provider-private logs are not proxied.
+- [x] Web library in-page player for movies and episodes (`<video>` plus optional HLS); decode failures stay on the overlay with the item `externalUrl`. Android Media3 remains the phone player.
 - [x] MoviePilot and Telegram are intentionally rejected by the product boundary; Enterprise WeChat is the supported notification channel.
 - [x] Native administrator password change with Argon2id rehashing and transactional revocation of other sessions.
 - [x] Authenticated Enterprise WeChat delivery-state list and exact-ID-confirmed manual resend for uncertain outcomes.
@@ -93,7 +94,7 @@ Exit gate: fresh deployment needs only Media Hub + Emby + 115; transfer-to-playb
 
 ## Deferred
 
-- Web built-in player.
+- Web 115 diagnostic file player.
 - iOS or desktop app.
 - Multi-user roles.
 - Public registration and billing.

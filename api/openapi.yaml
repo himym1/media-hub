@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.20.18
+  version: 0.20.19
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -2228,12 +2228,14 @@ components:
       properties:
         parentId: { type: string, pattern: '^[0-9]{1,32}$' }
         fileId: { type: string, pattern: '^[0-9]{1,32}$' }
+        playbackUserAgent: { type: string, maxLength: 512, description: Optional player User-Agent used to mint the upstream URL. Omitted values keep the Android Media3 agent. }
     EmbyPlaybackTarget:
       type: object
       additionalProperties: false
       required: [itemId]
       properties:
         itemId: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' }
+        playbackUserAgent: { type: string, maxLength: 512, description: Optional player User-Agent used to mint the upstream URL. Omitted values keep the Android Media3 agent. }
     PlaybackDescriptor:
       type: object
       additionalProperties: false

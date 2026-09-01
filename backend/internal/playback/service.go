@@ -104,34 +104,58 @@ func NewService(drive115 Drive115Resolver, emby EmbyResolver) *Service {
 	return &Service{drive115: drive115, emby: emby, now: time.Now, sessions: make(map[string]*playbackSession)}
 }
 
-func (s *Service) CreateDrive115(ctx context.Context, target Drive115Target) (Descriptor, error) {
+func ResolvePlaybackUserAgent(value string) (string, error) {
+	userAgent := strings.TrimSpace(value)
+	if userAgent == "" {
+		return PlayerUserAgent, nil
+	}
+	if len(userAgent) > 512 {
+		return "", ErrInvalidRequest
+	}
+	for _, character := range userAgent {
+		if character < 32 || character == 127 {
+			return "", ErrInvalidRequest
+		}
+	}
+	return userAgent, nil
+}
+
+func (s *Service) CreateDrive115(ctx context.Context, target Drive115Target, playbackUserAgent string) (Descriptor, error) {
 	target.ParentID = strings.TrimSpace(target.ParentID)
 	target.FileID = strings.TrimSpace(target.FileID)
+	userAgent, err := ResolvePlaybackUserAgent(playbackUserAgent)
+	if err != nil {
+		return Descriptor{}, err
+	}
 	if s == nil || s.drive115 == nil {
 		return Descriptor{}, ErrUnavailable
 	}
 	if !numericID(target.ParentID) || !numericID(target.FileID) {
 		return Descriptor{}, ErrInvalidRequest
 	}
-	media, err := s.drive115.ResolveDrive115(ctx, target, PlayerUserAgent)
+	media, err := s.drive115.ResolveDrive115(ctx, target, userAgent)
 	if err != nil {
 		return Descriptor{}, err
 	}
 	if !isVideoName(media.Name) {
 		return Descriptor{}, ErrNotFound
 	}
-	return descriptor(media)
+	return descriptor(media, userAgent)
 }
 
-func (s *Service) CreateEmbyItem(ctx context.Context, userID int64, target EmbyItemTarget) (Descriptor, error) {
+func (s *Service) CreateEmbyItem(ctx context.Context, userID int64, target EmbyItemTarget, playbackUserAgent string) (Descriptor, error) {
 	target.ItemID = strings.TrimSpace(target.ItemID)
+	userAgent, err := ResolvePlaybackUserAgent(playbackUserAgent)
+	if err != nil {
+		return Descriptor{}, err
+	}
 	if s == nil || s.emby == nil {
 		return Descriptor{}, ErrUnavailable
 	}
 	if userID < 1 || !opaqueID(target.ItemID) {
 		return Descriptor{}, ErrInvalidRequest
 	}
-	media, err := s.emby.ResolveEmbyItem(ctx, target, PlayerUserAgent)
+	media, err := s.emby.ResolveEmbyItem(ctx, target, userAgent)
 	if err != nil {
 		return Descriptor{}, err
 	}
@@ -139,7 +163,7 @@ func (s *Service) CreateEmbyItem(ctx context.Context, userID int64, target EmbyI
 		if s.drive115 == nil {
 			return Descriptor{}, ErrUnavailable
 		}
-		resolved, resolveErr := s.drive115.ResolvePickCode(ctx, code, media.Name, PlayerUserAgent)
+		resolved, resolveErr := s.drive115.ResolvePickCode(ctx, code, media.Name, userAgent)
 		if resolveErr != nil {
 			if strings.TrimSpace(media.URL) == "" {
 				return Descriptor{}, resolveErr
@@ -153,7 +177,7 @@ func (s *Service) CreateEmbyItem(ctx context.Context, userID int64, target EmbyI
 	} else if strings.TrimSpace(media.URL) == "" {
 		return Descriptor{}, ErrUnavailable
 	}
-	value, err := descriptor(media)
+	value, err := descriptor(media, userAgent)
 	if err != nil {
 		return Descriptor{}, err
 	}
@@ -218,7 +242,7 @@ func (s *Service) createSession(userID int64, source SourceSession) (string, err
 	return id, nil
 }
 
-func descriptor(media SourceMedia) (Descriptor, error) {
+func descriptor(media SourceMedia, userAgent string) (Descriptor, error) {
 	parsed, err := url.Parse(strings.TrimSpace(media.URL))
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
 		return Descriptor{}, ErrUnavailable
@@ -228,7 +252,7 @@ func descriptor(media SourceMedia) (Descriptor, error) {
 		return Descriptor{}, ErrNotFound
 	}
 	return Descriptor{
-		StreamURL: parsed.String(), UserAgent: PlayerUserAgent, Title: name, ExpiresAt: media.ExpiresAt,
+		StreamURL: parsed.String(), UserAgent: userAgent, Title: name, ExpiresAt: media.ExpiresAt,
 		StartPositionMS: media.StartPositionMS,
 	}, nil
 }

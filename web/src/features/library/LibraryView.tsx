@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Captions, ChevronLeft, ChevronRight, CircleAlert, Film, FolderOpen, RefreshCw, Search, Trash2, X } from 'lucide-react'
+import { BookOpen, Captions, ChevronLeft, ChevronRight, CircleAlert, Film, FolderOpen, Play, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import {
   deleteEmbyItem,
   downloadEmbyRemoteSubtitle,
+  getEmbyEpisodes,
   getEmbyItem,
   getEmbyLibraries,
   getEmbyLibraryItems,
@@ -13,13 +14,16 @@ import {
   searchEmbyItems,
   searchEmbyRemoteSubtitles,
   type EmbyDeletePreview,
+  type EmbyEpisode,
   type EmbyItem,
   type EmbyItemDetail,
   type EmbyRemoteSubtitle,
 } from '../../shared/api/mediaHub'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
-import { playbackStatus } from './libraryPlayback'
+import { LibraryEpisodes } from './LibraryEpisodes'
+import { LibraryPlayer } from './LibraryPlayer'
+import { episodeLabel, playbackActionLabel, playbackStatus } from './libraryPlayback'
 
 const pageSize = 24
 
@@ -31,6 +35,7 @@ export function LibraryView() {
   const queryClient = useQueryClient()
   const [libraryId, setLibraryId] = useState<string | null>(() => locationValue('library'))
   const [itemId, setItemId] = useState<string | null>(() => locationValue('media'))
+  const [playId, setPlayId] = useState<string | null>(() => locationValue('play'))
   const [page, setPage] = useState(0)
   const [queryText, setQueryText] = useState('')
   const [submittedQuery, setSubmittedQuery] = useState('')
@@ -51,6 +56,11 @@ export function LibraryView() {
     queryFn: () => getEmbyItem(itemId!),
     enabled: Boolean(itemId),
   })
+  const episodes = useQuery({
+    queryKey: ['emby-episodes', itemId],
+    queryFn: () => getEmbyEpisodes(itemId!),
+    enabled: Boolean(itemId) && detail.data?.type === 'Series',
+  })
   const refreshLibrary = useMutation({
     mutationFn: refreshEmbyLibrary,
     onSuccess: async () => {
@@ -70,6 +80,7 @@ export function LibraryView() {
     const restoreLocation = () => {
       setLibraryId(locationValue('library'))
       setItemId(locationValue('media'))
+      setPlayId(locationValue('play'))
       setPage(0)
       setQueryText('')
       setSubmittedQuery('')
@@ -85,43 +96,58 @@ export function LibraryView() {
     const fallback = available[0]?.id ?? null
     setLibraryId(fallback)
     setItemId(null)
+    setPlayId(null)
     setPage(0)
-    commitUrl({ library: fallback, media: null }, 'replace')
+    commitUrl({ library: fallback, media: null, play: null }, 'replace')
   }, [libraries.data, libraryId])
 
   const selectLibrary = (id: string) => {
     setLibraryId(id)
     setItemId(null)
+    setPlayId(null)
     setPage(0)
     setQueryText('')
     setSubmittedQuery('')
-    commitUrl({ library: id, media: null })
+    commitUrl({ library: id, media: null, play: null })
   }
   const selectItem = (id: string) => {
     setItemId(id)
-    commitUrl({ media: id })
+    setPlayId(null)
+    commitUrl({ media: id, play: null })
   }
   const closeItem = () => {
     setItemId(null)
-    commitUrl({ media: null })
+    setPlayId(null)
+    commitUrl({ media: null, play: null })
+  }
+  const startPlay = (target: Pick<EmbyEpisode, 'id' | 'name' | 'externalUrl'>) => {
+    setPlayId(target.id)
+    commitUrl({ play: target.id })
+  }
+  const closePlay = () => {
+    setPlayId(null)
+    commitUrl({ play: null })
   }
   const submitSearch = (event: FormEvent) => {
     event.preventDefault()
     const value = queryText.trim()
     setSubmittedQuery(value)
     setItemId(null)
-    commitUrl({ media: null })
+    setPlayId(null)
+    commitUrl({ media: null, play: null })
   }
   const clearSearch = () => {
     setQueryText('')
     setSubmittedQuery('')
     setItemId(null)
-    commitUrl({ media: null })
+    setPlayId(null)
+    commitUrl({ media: null, play: null })
   }
   const changePage = (nextPage: number) => {
     setPage(nextPage)
     setItemId(null)
-    commitUrl({ media: null })
+    setPlayId(null)
+    commitUrl({ media: null, play: null })
   }
 
   const result = submittedQuery ? search : libraryItems
@@ -129,6 +155,12 @@ export function LibraryView() {
   const total = result.data?.total ?? 0
   const selectedLibrary = libraries.data?.libraries.find((library) => library.id === libraryId)
   const mutationError = refreshLibrary.error ?? refreshItem.error
+  const playEpisode = episodes.data?.items.find((episode) => episode.id === playId)
+  const playTarget = playId && detail.data && detail.data.type !== 'Series' && detail.data.id === playId
+    ? { id: detail.data.id, title: detail.data.name, externalUrl: detail.data.externalUrl }
+    : playEpisode
+      ? { id: playEpisode.id, title: episodeLabel(playEpisode, detail.data?.name ?? ''), externalUrl: playEpisode.externalUrl }
+      : null
 
   return (
     <section className="library-page">
@@ -199,14 +231,21 @@ export function LibraryView() {
           {!itemId ? <div className="library-detail-empty"><Film size={28} /><strong>选择一个媒体</strong><span>查看简介、年份和播放信息。</span></div> : null}
           {detail.isLoading && !detail.data ? <div className="status-loading">正在读取媒体详情…</div> : null}
           {detail.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>详情读取失败</strong><span>{detail.error.message}</span></div><button onClick={() => void detail.refetch()} type="button">重试</button></div> : null}
-          {detail.data ? <LibraryItemDetail key={detail.data.id} item={detail.data} onDeleted={closeItem} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} /> : null}
+          {detail.data ? <LibraryItemDetail key={detail.data.id} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} /> : null}
         </aside>
       </div>
+      {playTarget ? <LibraryPlayer externalUrl={playTarget.externalUrl} itemId={playTarget.id} onClose={closePlay} title={playTarget.title} /> : null}
     </section>
   )
 }
 
-function LibraryItemDetail({ item, onDeleted, onRefresh, refreshing }: { item: EmbyItemDetail; onDeleted: () => void; onRefresh: (id: string) => void; refreshing: boolean }) {
+function LibraryItemDetail({ item, onDeleted, onPlay, onRefresh, refreshing }: {
+  item: EmbyItemDetail
+  onDeleted: () => void
+  onPlay: (target: Pick<EmbyEpisode, 'id' | 'name' | 'externalUrl'>) => void
+  onRefresh: (id: string) => void
+  refreshing: boolean
+}) {
   const queryClient = useQueryClient()
   const originalTitle = visibleOriginalTitle(item)
   const genres = localizedGenres(item.genres ?? [])
@@ -253,6 +292,12 @@ function LibraryItemDetail({ item, onDeleted, onRefresh, refreshing }: { item: E
       </dl>
     </details>
     <div className="library-detail-actions">
+      {item.type === 'Series' ? null : (
+        <button className="primary-action" disabled={busy} onClick={() => onPlay(item)} type="button">
+          <Play size={16} />
+          {playbackActionLabel(item)}
+        </button>
+      )}
       <button className="secondary-command" disabled={busy} onClick={() => onRefresh(item.id)} type="button"><RefreshCw size={16} />{refreshing ? '已提交…' : '刷新元数据'}</button>
       {canSearchSubtitles ? (
         <button
@@ -272,6 +317,7 @@ function LibraryItemDetail({ item, onDeleted, onRefresh, refreshing }: { item: E
       )}
       {preview ? null : <button className="danger-button" disabled={busy} onClick={() => previewDelete.mutate()} type="button"><Trash2 size={16} />{previewDelete.isPending ? '正在读取删除预览…' : '从 Emby 删除'}</button>}
     </div>
+    {item.type === 'Series' ? <LibraryEpisodes onPlay={onPlay} seriesId={item.id} seriesTitle={item.name} /> : null}
     {subtitleResults ? (
       <section className="library-subtitle-panel" aria-label="中文字幕搜索结果">
         <div className="library-subtitle-heading">

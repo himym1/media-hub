@@ -251,8 +251,24 @@ export type EmbyItem = {
   type: string
   year?: number
   providerIds?: Record<string, string>
+  season?: number
+  episode?: number
   playbackPositionMs?: number
   played?: boolean
+}
+
+export type EmbyEpisode = EmbyItem & {
+  externalUrl: string
+  appUrl?: string
+}
+
+export type PlaybackDescriptor = {
+  streamUrl: string
+  userAgent: string
+  title: string
+  startPositionMs?: number
+  expiresAt?: string
+  sessionId?: string
 }
 
 export type EmbyItemSearch = {
@@ -539,6 +555,34 @@ export function getEmbyLibraryItems(libraryId: string, offset = 0, limit = 50) {
 
 export function getEmbyItem(id: string) {
   return requestJSON<EmbyItemDetail>(`/api/v1/integrations/emby/items/${encodeURIComponent(id)}`)
+}
+
+export function getEmbyEpisodes(id: string) {
+  return requestJSON<{ items: EmbyEpisode[]; total: number }>(
+    `/api/v1/integrations/emby/items/${encodeURIComponent(id)}/episodes`,
+  )
+}
+
+export function createEmbyPlaybackDescriptor(itemId: string, playbackUserAgent: string) {
+  const agent = playbackUserAgent.trim()
+  return requestJSON<PlaybackDescriptor>('/api/v1/playback/descriptors/emby', {
+    method: 'POST',
+    headers: writeHeaders(),
+    body: JSON.stringify(agent ? { itemId, playbackUserAgent: agent } : { itemId }),
+  })
+}
+
+export function reportPlaybackSessionEvent(
+  sessionId: string,
+  event: 'started' | 'progress' | 'stopped',
+  positionMs: number,
+  paused: boolean,
+) {
+  return requestJSON<void>(`/api/v1/playback/sessions/${encodeURIComponent(sessionId)}/events`, {
+    method: 'POST',
+    headers: writeHeaders(),
+    body: JSON.stringify({ event, positionMs, paused }),
+  })
 }
 
 export function refreshEmbyLibrary(id: string) {

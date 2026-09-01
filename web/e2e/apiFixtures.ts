@@ -113,12 +113,23 @@ async function respond(route: Route, authenticated: boolean, state: FixtureState
   if (path === '/api/v1/integrations/strm/sync' && request.method() === 'POST') return json(route, { status: 'accepted' }, 202)
   if (path === '/api/v1/integrations/sources/checkins') return json(route, { items: [{ sourceId: 'framehdr', label: '帧影', state: 'completed', message: '今日已签到', retryable: false, updatedAt: '2026-08-21T03:00:00Z' }] })
   if (path === '/api/v1/integrations/115/status') return json(route, { authorized: true, usedBytes: 1_000_000, totalBytes: 2_000_000 })
-  if (path === '/api/v1/integrations/emby/libraries') return json(route, { libraries: [{ id: 'movie', name: '电影', collectionType: 'movies' }] })
+  if (path === '/api/v1/integrations/emby/libraries') return json(route, { libraries: [{ id: 'movie', name: '电影', collectionType: 'movies' }, { id: 'tv', name: '剧集', collectionType: 'tvshows' }] })
   if (path === '/api/v1/integrations/emby/libraries/movie/items') return json(route, { items: state.itemDeleted ? [] : [{ id: 'item-1', name: '验收影片', type: 'Movie', year: 2026, providerIds: { Tmdb: '100' } }], total: state.itemDeleted ? 0 : 1 })
+  if (path === '/api/v1/integrations/emby/libraries/tv/items') return json(route, { items: [{ id: 'series-1', name: '验收剧集', type: 'Series', year: 2026 }], total: 1 })
   if (path === '/api/v1/integrations/emby/items/item-1' && request.method() === 'GET') {
     if (state.itemDeleted) return json(route, { code: 'not_found', title: '媒体不存在' }, 404)
     return json(route, { id: 'item-1', name: '验收影片', originalTitle: 'Acceptance Movie', overview: '用于验证媒体库详情。', type: 'Movie', year: 2026, providerIds: { Tmdb: '100' }, communityRating: 8.2, runtimeMinutes: 118, genres: ['Drama', 'Science Fiction'], mediaSourceCount: 1, externalUrl: 'https://emby.example/web/index.html#!/item?id=item-1', appUrl: 'emby://items/server-1/item-1' })
   }
+  if (path === '/api/v1/integrations/emby/items/series-1' && request.method() === 'GET') {
+    return json(route, { id: 'series-1', name: '验收剧集', type: 'Series', year: 2026, mediaSourceCount: 0, externalUrl: 'https://emby.example/web/index.html#!/item?id=series-1' })
+  }
+  if (path === '/api/v1/integrations/emby/items/series-1/episodes') {
+    return json(route, { items: [{ id: 'episode-1', name: '连接', type: 'Episode', season: 1, episode: 1, playbackPositionMs: 45_000, externalUrl: 'https://emby.example/web/index.html#!/item?id=episode-1' }], total: 1 })
+  }
+  if (path === '/api/v1/playback/descriptors/emby' && request.method() === 'POST') {
+    return json(route, { streamUrl: 'https://cdn.example/acceptance.mp4', userAgent: 'test-ua', title: '验收影片' }, 201)
+  }
+  if (path.startsWith('/api/v1/playback/sessions/') && request.method() === 'POST') return json(route, null, 204)
   if (path === '/api/v1/integrations/emby/items/item-1/delete-preview' && request.method() === 'GET') return json(route, { id: 'item-1', name: '验收影片', type: 'Movie', fileCount: 1, deletesFiles: true, cloudKept: true, versionCount: 1 })
   if (path === '/api/v1/integrations/emby/items/item-1/delete' && request.method() === 'POST') {
     const confirmation = JSON.parse(request.postData() ?? '{}').confirmation

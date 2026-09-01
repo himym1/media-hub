@@ -1,6 +1,15 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
+import { fileURLToPath } from 'node:url'
 import { installApiFixtures } from './apiFixtures'
+
+const acceptanceVideo = fileURLToPath(new URL('./acceptance.mp4', import.meta.url))
+
+async function serveAcceptanceVideo(page: Page) {
+  await page.route('https://cdn.example/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'video/mp4', path: acceptanceVideo })
+  })
+}
 
 const runtimeErrors = new WeakMap<Page, string[]>()
 
@@ -152,6 +161,47 @@ test('library previews and confirms Emby delete without touching 115 files', asy
   await expect(page.getByRole('button', { name: /验收影片/ })).toHaveCount(0)
   await expect(page).not.toHaveURL(/media=item-1/)
   await expect(page.getByText('此媒体库暂无可浏览内容')).toBeVisible()
+})
+
+test('library plays a movie overlay and keeps the stream url out of the address bar', async ({ page }, testInfo) => {
+  await serveAcceptanceVideo(page)
+  await installApiFixtures(page)
+  await page.goto('/?view=library')
+  await page.getByRole('button', { name: /验收影片/ }).click()
+  const descriptor = page.waitForRequest((request) => {
+    return request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/playback/descriptors/emby'
+  })
+  await page.getByRole('button', { name: '播放', exact: true }).click()
+  const body = descriptor.then((request) => request.postDataJSON() as { itemId?: string; playbackUserAgent?: string })
+  await expect(page.getByRole('dialog', { name: '验收影片' })).toBeVisible()
+  await expect(page).toHaveURL(/play=item-1/)
+  await expect(page).not.toHaveURL(/cdn\.example/)
+  const payload = await body
+  expect(payload.itemId).toBe('item-1')
+  expect(payload.playbackUserAgent?.length).toBeGreaterThan(0)
+  await page.locator('.library-player-video').evaluate((video) => video.dispatchEvent(new Event('error')))
+  const embyLink = page.getByRole('link', { name: '在 Emby 打开' })
+  await expect(embyLink).toHaveAttribute('href', 'https://emby.example/web/index.html#!/item?id=item-1')
+  await expect(embyLink).toHaveAttribute('target', '_blank')
+  await page.getByRole('button', { name: '关闭播放器' }).click()
+  await expect(page.getByRole('dialog', { name: '验收影片' })).toHaveCount(0)
+  await expect(page).not.toHaveURL(/play=item-1/)
+  await attachScreenshot(page, testInfo, 'library-player')
+})
+
+test('library series plays an episode and keeps Emby fallback off the detail page', async ({ page }) => {
+  await serveAcceptanceVideo(page)
+  await installApiFixtures(page)
+  await page.goto('/?view=library')
+  await page.getByRole('button', { name: '剧集', exact: true }).click()
+  await page.getByRole('button', { name: /验收剧集/ }).click()
+  await expect(page.getByRole('heading', { name: '验收剧集', level: 2 })).toBeVisible()
+  await expect(page.getByRole('button', { name: '播放', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: '打开 Emby 网页' })).toHaveCount(0)
+  await page.getByRole('button', { name: '继续播放 第 1 集 · 连接' }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page).toHaveURL(/play=episode-1/)
+  await page.getByRole('button', { name: '关闭播放器' }).click()
 })
 
 test('subscription editor keeps advanced rules collapsed behind useful presets', async ({ page }, testInfo) => {

@@ -61,7 +61,7 @@ func (s *sessionReporterStub) ReportPlayback(_ context.Context, reference string
 func TestCreateDrive115ReturnsBoundedHTTPSDescriptor(t *testing.T) {
 	drive := &driveResolverStub{media: SourceMedia{URL: "https://cdn.example/video.mkv?token=short", Name: "Movie.mkv"}}
 	service := NewService(drive, nil)
-	value, err := service.CreateDrive115(context.Background(), Drive115Target{ParentID: "10", FileID: "20"})
+	value, err := service.CreateDrive115(context.Background(), Drive115Target{ParentID: "10", FileID: "20"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestCreateEmbyItemUsesTypedResolver(t *testing.T) {
 	drive := &driveResolverStub{media: SourceMedia{URL: "https://cdn.example/movie.mkv?token=short", Name: "Movie.mkv"}}
 	emby := &embyResolverStub{media: SourceMedia{Name: "Movie", PickCode: "abcd1234"}}
 	service := NewService(drive, emby)
-	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "emby-item_20"})
+	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "emby-item_20"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,19 +93,19 @@ func TestCreateRejectsInvalidTargetsAndUnsafeMedia(t *testing.T) {
 		want error
 	}{
 		{"invalid drive id", func(service *Service) error {
-			_, err := service.CreateDrive115(context.Background(), Drive115Target{ParentID: "../10", FileID: "20"})
+			_, err := service.CreateDrive115(context.Background(), Drive115Target{ParentID: "../10", FileID: "20"}, "")
 			return err
 		}, ErrInvalidRequest},
 		{"invalid emby id", func(service *Service) error {
-			_, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "bad.id"})
+			_, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "bad.id"}, "")
 			return err
 		}, ErrInvalidRequest},
 		{"http url", func(service *Service) error {
-			_, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item"})
+			_, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item"}, "")
 			return err
 		}, ErrUnavailable},
 		{"non video drive file", func(service *Service) error {
-			_, err := service.CreateDrive115(context.Background(), Drive115Target{ParentID: "10", FileID: "20"})
+			_, err := service.CreateDrive115(context.Background(), Drive115Target{ParentID: "10", FileID: "20"}, "")
 			return err
 		}, ErrNotFound},
 	} {
@@ -128,7 +128,7 @@ func TestEmbyPlaybackSessionIsOpaqueUserBoundAndDeletedOnStop(t *testing.T) {
 	}}
 	drive := &driveResolverStub{media: SourceMedia{URL: "https://cdn.example/movie", Name: "Movie"}}
 	service := NewService(drive, emby)
-	descriptor, err := service.CreateEmbyItem(context.Background(), 7, EmbyItemTarget{ItemID: "item-1"})
+	descriptor, err := service.CreateEmbyItem(context.Background(), 7, EmbyItemTarget{ItemID: "item-1"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,12 +159,12 @@ func TestCreatingSessionRemovesExpiredEntries(t *testing.T) {
 	service := NewService(drive, emby)
 	now := time.Date(2026, 8, 18, 0, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
-	first, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"})
+	first, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(sessionTTL + time.Second)
-	if _, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-2"}); err != nil {
+	if _, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-2"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	service.mutex.Lock()
@@ -180,7 +180,7 @@ func TestCreateEmbyItemFallsBackToHTTPSWhenPickCodeResolveFails(t *testing.T) {
 	drive := &driveResolverStub{err: errors.New("115 downurl failed")}
 	emby := &embyResolverStub{media: SourceMedia{Name: "Movie", PickCode: "abcd1234", URL: "https://cdnfhnfile.115.com/video.mkv?t=1"}}
 	service := NewService(drive, emby)
-	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"})
+	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestCreateEmbyItemUsesDirectHTTPSWhenPickCodeMissing(t *testing.T) {
 	drive := &driveResolverStub{err: errors.New("pick code should not be used")}
 	emby := &embyResolverStub{media: SourceMedia{Name: "Movie", URL: "https://cdnfhnfile.115.com/video.mkv?t=1"}}
 	service := NewService(drive, emby)
-	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"})
+	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,11 +206,53 @@ func TestCreateEmbyItemResolves115PickCodeToHTTPS(t *testing.T) {
 	drive := &driveResolverStub{media: SourceMedia{URL: "https://cdn.example/video.mkv?token=short", Name: "Movie.mkv"}}
 	emby := &embyResolverStub{media: SourceMedia{Name: "Movie", PickCode: "abcd1234"}}
 	service := NewService(drive, emby)
-	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"})
+	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if value.StreamURL != drive.media.URL || drive.pickCode != "abcd1234" || value.Title != "Movie" {
 		t.Fatalf("descriptor=%#v pick=%q", value, drive.pickCode)
+	}
+}
+
+func TestPlaybackUserAgentDefaultsAndForwards(t *testing.T) {
+	drive := &driveResolverStub{media: SourceMedia{URL: "https://cdn.example/video.mkv?token=short", Name: "Movie.mkv"}}
+	service := NewService(drive, nil)
+	value, err := service.CreateDrive115(context.Background(), Drive115Target{ParentID: "10", FileID: "20"}, "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.UserAgent != PlayerUserAgent || drive.ua != PlayerUserAgent {
+		t.Fatalf("default ua descriptor=%#v resolver=%q", value, drive.ua)
+	}
+
+	web := "Mozilla/5.0 test"
+	value, err = service.CreateDrive115(context.Background(), Drive115Target{ParentID: "10", FileID: "20"}, web)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.UserAgent != web || drive.ua != web {
+		t.Fatalf("web ua descriptor=%#v resolver=%q", value, drive.ua)
+	}
+
+	emby := &embyResolverStub{media: SourceMedia{Name: "Movie", PickCode: "abcd1234"}}
+	service = NewService(drive, emby)
+	value, err = service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "item-1"}, web)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if emby.ua != web || drive.ua != web || value.UserAgent != web {
+		t.Fatalf("emby ua descriptor=%#v emby=%q drive=%q", value, emby.ua, drive.ua)
+	}
+}
+
+func TestPlaybackUserAgentRejectsInvalidValues(t *testing.T) {
+	drive := &driveResolverStub{media: SourceMedia{URL: "https://cdn.example/video.mkv", Name: "Movie.mkv"}}
+	service := NewService(drive, nil)
+	for _, value := range []string{strings.Repeat("a", 513), "bad\nua"} {
+		_, err := service.CreateDrive115(context.Background(), Drive115Target{ParentID: "10", FileID: "20"}, value)
+		if !errors.Is(err, ErrInvalidRequest) {
+			t.Fatalf("ua %q error = %v", value, err)
+		}
 	}
 }

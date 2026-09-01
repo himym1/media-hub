@@ -20,21 +20,24 @@ type playbackStub struct {
 	embyTarget  playback.EmbyItemTarget
 	embyErr     error
 	userID      int64
+	userAgent   string
 	sessionID   string
 	event       playback.SessionEvent
 }
 
-func (stub *playbackStub) CreateDrive115(_ context.Context, target playback.Drive115Target) (playback.Descriptor, error) {
+func (stub *playbackStub) CreateDrive115(_ context.Context, target playback.Drive115Target, userAgent string) (playback.Descriptor, error) {
 	stub.driveTarget = target
+	stub.userAgent = userAgent
 	return playbackTestDescriptor("Movie.mkv"), nil
 }
 
-func (stub *playbackStub) CreateEmbyItem(_ context.Context, userID int64, target playback.EmbyItemTarget) (playback.Descriptor, error) {
+func (stub *playbackStub) CreateEmbyItem(_ context.Context, userID int64, target playback.EmbyItemTarget, userAgent string) (playback.Descriptor, error) {
 	if stub.embyErr != nil {
 		return playback.Descriptor{}, stub.embyErr
 	}
 	stub.userID = userID
 	stub.embyTarget = target
+	stub.userAgent = userAgent
 	value := playbackTestDescriptor("Movie")
 	value.SessionID = strings.Repeat("a", 48)
 	return value, nil
@@ -89,6 +92,9 @@ func TestCreatePlaybackDescriptorsUseAuthenticatedTypedRoutes(t *testing.T) {
 				t.Fatalf("status = %d body=%s", recorder.Code, recorder.Body.String())
 			}
 			test.assertTarget(t, provider)
+			if provider.userAgent != "" {
+				t.Fatalf("default ua = %q", provider.userAgent)
+			}
 			var value struct {
 				StreamURL string     `json:"streamUrl"`
 				UserAgent string     `json:"userAgent"`
@@ -102,6 +108,23 @@ func TestCreatePlaybackDescriptorsUseAuthenticatedTypedRoutes(t *testing.T) {
 				t.Fatalf("descriptor = %#v", value)
 			}
 		})
+	}
+}
+
+func TestCreatePlaybackDescriptorForwardsPlaybackUserAgent(t *testing.T) {
+	provider := &playbackStub{}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodPost, "/api/v1/playback/descriptors/emby",
+		strings.NewReader(`{"itemId":"emby-item","playbackUserAgent":"Mozilla/5.0 Web"}`),
+	)
+	request.Header.Set("Authorization", "Bearer valid-session")
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Playback: provider}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if provider.embyTarget.ItemID != "emby-item" || provider.userAgent != "Mozilla/5.0 Web" {
+		t.Fatalf("target=%#v ua=%q", provider.embyTarget, provider.userAgent)
 	}
 }
 

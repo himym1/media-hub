@@ -102,8 +102,8 @@ type Drive115CommandService interface {
 }
 
 type PlaybackService interface {
-	CreateDrive115(context.Context, playback.Drive115Target) (playback.Descriptor, error)
-	CreateEmbyItem(context.Context, int64, playback.EmbyItemTarget) (playback.Descriptor, error)
+	CreateDrive115(context.Context, playback.Drive115Target, string) (playback.Descriptor, error)
+	CreateEmbyItem(context.Context, int64, playback.EmbyItemTarget, string) (playback.Descriptor, error)
 	Report(context.Context, int64, string, playback.SessionEvent) error
 }
 
