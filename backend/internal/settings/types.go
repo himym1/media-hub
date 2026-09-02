@@ -11,6 +11,7 @@ const ProviderKey = "media-hub-runtime-settings"
 type Values struct {
 	QMediaSync config.QMediaSync     `json:"qmediaSync"`
 	Emby       config.Emby           `json:"emby"`
+	SharedEmby config.SharedEmby     `json:"sharedEmby"`
 	Drive115   config.Drive115       `json:"drive115"`
 	TMDB       config.TMDB           `json:"tmdb"`
 	Assrt      config.Assrt          `json:"assrt"`
@@ -81,6 +82,13 @@ type EmbyUpdate struct {
 	Password SecretUpdate `json:"password"`
 }
 
+type SharedEmbyUpdate struct {
+	BaseURL  string       `json:"baseUrl"`
+	Username string       `json:"username"`
+	Password SecretUpdate `json:"password"`
+	ProxyURL string       `json:"proxyUrl"`
+}
+
 type Drive115Update struct {
 	ClientID string `json:"clientId"`
 }
@@ -114,15 +122,16 @@ type WeComUpdate struct {
 }
 
 type Update struct {
-	QMediaSync QMediaSyncUpdate `json:"qmediaSync"`
-	Emby       EmbyUpdate       `json:"emby"`
-	Drive115   Drive115Update   `json:"drive115"`
-	TMDB       TMDBUpdate       `json:"tmdb"`
-	Assrt      *AssrtUpdate     `json:"assrt"`
-	WeCom      *WeComUpdate     `json:"wecom"`
-	Workflow   Workflow         `json:"workflow"`
-	CheckIn    *CheckInSettings `json:"checkIn,omitempty"`
-	Sources    []SourceUpdate   `json:"sources"`
+	QMediaSync QMediaSyncUpdate  `json:"qmediaSync"`
+	Emby       EmbyUpdate        `json:"emby"`
+	SharedEmby *SharedEmbyUpdate `json:"sharedEmby,omitempty"`
+	Drive115   Drive115Update    `json:"drive115"`
+	TMDB       TMDBUpdate        `json:"tmdb"`
+	Assrt      *AssrtUpdate      `json:"assrt"`
+	WeCom      *WeComUpdate      `json:"wecom"`
+	Workflow   Workflow          `json:"workflow"`
+	CheckIn    *CheckInSettings  `json:"checkIn,omitempty"`
+	Sources    []SourceUpdate    `json:"sources"`
 }
 
 type SecretStatus struct {
@@ -139,6 +148,13 @@ type EmbyView struct {
 	APIKey   SecretStatus `json:"apiKey"`
 	UserID   string       `json:"userId"`
 	Password SecretStatus `json:"password"`
+}
+
+type SharedEmbyView struct {
+	BaseURL  string       `json:"baseUrl"`
+	Username string       `json:"username"`
+	Password SecretStatus `json:"password"`
+	ProxyURL string       `json:"proxyUrl"`
 }
 
 type Drive115View struct {
@@ -177,6 +193,7 @@ type WeComView struct {
 type View struct {
 	QMediaSync QMediaSyncView  `json:"qmediaSync"`
 	Emby       EmbyView        `json:"emby"`
+	SharedEmby SharedEmbyView  `json:"sharedEmby"`
 	Drive115   Drive115View    `json:"drive115"`
 	TMDB       TMDBView        `json:"tmdb"`
 	Assrt      AssrtView       `json:"assrt"`
@@ -229,6 +246,7 @@ func FromConfig(value config.Config) Values {
 	return Values{
 		QMediaSync: value.QMediaSync,
 		Emby:       value.Emby,
+		SharedEmby: value.SharedEmby,
 		Drive115:   value.Drive115,
 		TMDB:       value.TMDB,
 		Assrt:      value.Assrt,

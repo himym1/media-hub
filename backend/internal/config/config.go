@@ -29,6 +29,7 @@ type Config struct {
 	DataEncryptionKey      string
 	QMediaSync             QMediaSync
 	Emby                   Emby
+	SharedEmby             SharedEmby
 	EmbyPlaybackBaseURL    string
 	Drive115               Drive115
 	TMDB                   TMDB
@@ -51,6 +52,14 @@ type Emby struct {
 	APIKey   string
 	UserID   string
 	Password string
+}
+
+// SharedEmby is an optional remote catalog used for browse/play only.
+type SharedEmby struct {
+	BaseURL  string
+	Username string
+	Password string
+	ProxyURL string
 }
 
 type Drive115 struct {
@@ -256,6 +265,24 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		UserID:   stringValue(lookup, "MEDIA_HUB_EMBY_USER_ID", ""),
 		Password: secretValue(lookup, "MEDIA_HUB_EMBY_PASSWORD"),
 	}
+	sharedEmbyURL, err := baseURLValue(lookup, "MEDIA_HUB_SHARED_EMBY_URL")
+	if err != nil {
+		return Config{}, err
+	}
+	sharedEmbyProxy, err := proxyURLValue(lookup, "MEDIA_HUB_SHARED_EMBY_PROXY_URL")
+	if err != nil {
+		return Config{}, err
+	}
+	sharedEmbyProxyURL := ""
+	if sharedEmbyProxy != nil {
+		sharedEmbyProxyURL = sharedEmbyProxy.String()
+	}
+	sharedEmby := SharedEmby{
+		BaseURL:  sharedEmbyURL,
+		Username: stringValue(lookup, "MEDIA_HUB_SHARED_EMBY_USERNAME", ""),
+		Password: secretValue(lookup, "MEDIA_HUB_SHARED_EMBY_PASSWORD"),
+		ProxyURL: sharedEmbyProxyURL,
+	}
 	drive115 := Drive115{
 		AccessToken: secretValue(lookup, "MEDIA_HUB_115_ACCESS_TOKEN"),
 		ClientID:    stringValue(lookup, "MEDIA_HUB_115_CLIENT_ID", ""),
@@ -314,6 +341,7 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		DataEncryptionKey:      secretValue(lookup, "MEDIA_HUB_DATA_ENCRYPTION_KEY"),
 		QMediaSync:             qms,
 		Emby:                   emby,
+		SharedEmby:             sharedEmby,
 		EmbyPlaybackBaseURL:    embyPlaybackURL,
 		Drive115:               drive115,
 		TMDB:                   tmdbConfig,

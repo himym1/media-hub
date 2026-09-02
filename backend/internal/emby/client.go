@@ -33,20 +33,25 @@ type RuntimeConfig struct {
 	BaseURL         string
 	APIKey          string
 	UserID          string
+	Username        string
 	Password        string
 	PlaybackBaseURL string
 	MovieLibraryID  string
 	SeriesLibraryID string
+	ProxyURL        *url.URL
+	Shared          bool
 }
 
 type clientConfig struct {
 	baseURL         string
 	apiKey          string
 	userID          string
+	username        string
 	password        string
 	playbackBaseURL string
 	movieLibraryID  string
 	seriesLibraryID string
+	shared          bool
 }
 
 type Client struct {
@@ -187,27 +192,49 @@ func NewConfiguredClient(configuration RuntimeConfig, timeout time.Duration) *Cl
 	redirectPolicy := func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
-	return &Client{
+	client := &Client{
 		config: runtimeClientConfig(configuration),
 		client: &http.Client{
 			Timeout:       timeout,
 			CheckRedirect: redirectPolicy,
+			Transport:     embyHTTPTransport(configuration.ProxyURL),
 		},
 		imageClient: &http.Client{
 			Timeout:       imageTimeout,
 			CheckRedirect: redirectPolicy,
+			Transport:     embyHTTPTransport(configuration.ProxyURL),
 		},
 		subtitleClient: &http.Client{
 			Timeout:       subtitleTimeout,
 			CheckRedirect: redirectPolicy,
+			Transport:     embyHTTPTransport(configuration.ProxyURL),
 		},
 	}
+	return client
+}
+
+func embyHTTPTransport(proxyURL *url.URL) http.RoundTripper {
+	if proxyURL == nil {
+		return nil
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = http.ProxyURL(proxyURL)
+	return transport
 }
 
 func (c *Client) Configure(configuration RuntimeConfig) {
 	c.mutex.Lock()
 	c.config = runtimeClientConfig(configuration)
 	c.sessionToken = ""
+	if c.client != nil {
+		c.client.Transport = embyHTTPTransport(configuration.ProxyURL)
+	}
+	if c.imageClient != nil {
+		c.imageClient.Transport = embyHTTPTransport(configuration.ProxyURL)
+	}
+	if c.subtitleClient != nil {
+		c.subtitleClient.Transport = embyHTTPTransport(configuration.ProxyURL)
+	}
 	c.mutex.Unlock()
 }
 
@@ -216,10 +243,12 @@ func runtimeClientConfig(configuration RuntimeConfig) clientConfig {
 		baseURL:         strings.TrimRight(strings.TrimSpace(configuration.BaseURL), "/"),
 		apiKey:          strings.TrimSpace(configuration.APIKey),
 		userID:          strings.TrimSpace(configuration.UserID),
+		username:        strings.TrimSpace(configuration.Username),
 		password:        strings.TrimSpace(configuration.Password),
 		playbackBaseURL: strings.TrimRight(strings.TrimSpace(configuration.PlaybackBaseURL), "/"),
 		movieLibraryID:  strings.TrimSpace(configuration.MovieLibraryID),
 		seriesLibraryID: strings.TrimSpace(configuration.SeriesLibraryID),
+		shared:          configuration.Shared,
 	}
 }
 
@@ -1007,9 +1036,18 @@ func (c *Client) postJSONBody(
 
 func applyEmbyAuth(request *http.Request, configuration clientConfig) {
 	request.Header.Set("X-Emby-Token", configuration.apiKey)
-	authorization := embyAuthorization(configuration)
-	request.Header.Set("X-Emby-Authorization", authorization)
-	request.Header.Set("Authorization", authorization)
+	if configuration.shared {
+		applyNamedEmbyClientAuth(request, sharedClientName, sharedClientDevice, sharedClientVer)
+		if configuration.apiKey != "" {
+			authorization := request.Header.Get("X-Emby-Authorization")
+			request.Header.Set("X-Emby-Authorization", authorization+`, Token="`+configuration.apiKey+`"`)
+			request.Header.Set("Authorization", request.Header.Get("X-Emby-Authorization"))
+		}
+	} else {
+		authorization := embyAuthorization(configuration)
+		request.Header.Set("X-Emby-Authorization", authorization)
+		request.Header.Set("Authorization", authorization)
+	}
 	if configuration.userID != "" {
 		request.Header.Set("X-Emby-UserId", configuration.userID)
 	}

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -100,6 +101,15 @@ func run(logger *slog.Logger) error {
 		MovieLibraryID:  configuration.Workflow.Movie.EmbyLibraryID,
 		SeriesLibraryID: configuration.Workflow.Series.EmbyLibraryID,
 	}, configuration.ProbeTimeout)
+	sharedEmbyProxy, _ := url.Parse(strings.TrimSpace(configuration.SharedEmby.ProxyURL))
+	if sharedEmbyProxy != nil && sharedEmbyProxy.Host == "" {
+		sharedEmbyProxy = nil
+	}
+	sharedEmbyClient := emby.NewConfiguredClient(emby.RuntimeConfig{
+		BaseURL: configuration.SharedEmby.BaseURL, Username: configuration.SharedEmby.Username,
+		Password: configuration.SharedEmby.Password, ProxyURL: sharedEmbyProxy, Shared: true,
+	}, configuration.SearchTimeout)
+	embyHub := emby.NewHub(embyClient, sharedEmbyClient)
 	posterCache, err := emby.OpenPrimaryImageCache(filepath.Join(filepath.Dir(configuration.DatabasePath), "poster-cache"))
 	if err != nil {
 		return fmt.Errorf("open poster cache: %w", err)
@@ -174,12 +184,20 @@ func run(logger *slog.Logger) error {
 	settingsService := settings.NewService(
 		dataStore, securePayloadCodec, settings.FromConfig(configuration),
 		func(value settings.Values) {
-			embyClient.Configure(emby.RuntimeConfig{
+			embyHub.ConfigureLocal(emby.RuntimeConfig{
 				BaseURL: value.Emby.BaseURL, APIKey: value.Emby.APIKey,
 				UserID: value.Emby.UserID, Password: value.Emby.Password,
 				PlaybackBaseURL: configuration.EmbyPlaybackBaseURL,
 				MovieLibraryID:  value.Workflow.Movie.EmbyLibraryID,
 				SeriesLibraryID: value.Workflow.Series.EmbyLibraryID,
+			})
+			proxyURL, _ := url.Parse(strings.TrimSpace(value.SharedEmby.ProxyURL))
+			if proxyURL != nil && proxyURL.Host == "" {
+				proxyURL = nil
+			}
+			embyHub.ConfigureShared(emby.RuntimeConfig{
+				BaseURL: value.SharedEmby.BaseURL, Username: value.SharedEmby.Username,
+				Password: value.SharedEmby.Password, ProxyURL: proxyURL, Shared: true,
 			})
 			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
 			assrtClient.Configure(value.Assrt.BaseURL, value.Assrt.Token)
@@ -216,7 +234,8 @@ func run(logger *slog.Logger) error {
 		tmdbClient,
 		assrtClient,
 		wecomClient,
-		embyClient,
+		embyHub,
+		embyHub.SharedHealthChecker(),
 		emby.NewPlaybackChecker(embyClient),
 		checkinService,
 		strmCoordinator,
@@ -267,8 +286,8 @@ func run(logger *slog.Logger) error {
 		Addr: configuration.Address,
 		Handler: httpapi.NewRouter(version, httpapi.Dependencies{
 			Auth: authService, Overview: overview, Search: searchService, Discovery: tmdbClient,
-			Emby: embyClient, RemoteSubtitles: subtitleService, EmbyPosterCache: posterCache, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
-			Playback: playback.NewService(drive115AuthService, embyClient),
+			Emby: embyHub, RemoteSubtitles: subtitleService, EmbyPosterCache: posterCache, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
+			Playback: playback.NewService(drive115AuthService, embyHub),
 			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService, SourceCheckIns: checkinService,
 			Settings: settingsService, WeComTester: wecomClient, STRM: strmCoordinator,
 			SecureCookies: configuration.SecureCookies,

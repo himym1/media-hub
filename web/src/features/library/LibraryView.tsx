@@ -31,6 +31,10 @@ function locationValue(name: string) {
   return new URLSearchParams(window.location.search).get(name)
 }
 
+function isSharedEmbyId(id: string | null | undefined) {
+  return Boolean(id?.startsWith('r_'))
+}
+
 export function LibraryView() {
   const queryClient = useQueryClient()
   const [libraryId, setLibraryId] = useState<string | null>(() => locationValue('library'))
@@ -212,7 +216,8 @@ export function LibraryView() {
           ) : null}
           <button disabled={!queryText.trim()} type="submit">搜索</button>
         </form>
-        {selectedLibrary && !submittedQuery ? <button className="secondary-command" disabled={refreshLibrary.isPending} onClick={() => refreshLibrary.mutate(selectedLibrary.id)} type="button"><RefreshCw size={16} />{refreshLibrary.isPending ? '已提交…' : '刷新此库'}</button> : null}
+        {selectedLibrary && !submittedQuery && !isSharedEmbyId(selectedLibrary.id) ? <button className="secondary-command" disabled={refreshLibrary.isPending} onClick={() => refreshLibrary.mutate(selectedLibrary.id)} type="button"><RefreshCw size={16} />{refreshLibrary.isPending ? '已提交…' : '刷新此库'}</button> : null}
+        {selectedLibrary && isSharedEmbyId(selectedLibrary.id) ? <span className="library-subtitle-hint">共享库只读，播放设备需能访问该 Emby 域名</span> : null}
       </div>
 
       <div className={itemId ? 'library-browser has-detail' : 'library-browser'}>
@@ -234,7 +239,7 @@ export function LibraryView() {
           {!itemId ? <div className="library-detail-empty"><Film size={28} /><strong>选择一个媒体</strong><span>查看简介、年份和播放信息。</span></div> : null}
           {detail.isLoading && !detail.data ? <div className="status-loading">正在读取媒体详情…</div> : null}
           {detail.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>详情读取失败</strong><span>{detail.error.message}</span></div><button onClick={() => void detail.refetch()} type="button">重试</button></div> : null}
-          {detail.data ? <LibraryItemDetail key={detail.data.id} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} /> : null}
+          {detail.data ? <LibraryItemDetail key={detail.data.id} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} shared={isSharedEmbyId(detail.data.id)} /> : null}
         </aside>
       </div>
       {playTarget ? (
@@ -251,12 +256,13 @@ export function LibraryView() {
   )
 }
 
-function LibraryItemDetail({ item, onDeleted, onPlay, onRefresh, refreshing }: {
+function LibraryItemDetail({ item, onDeleted, onPlay, onRefresh, refreshing, shared }: {
   item: EmbyItemDetail
   onDeleted: () => void
   onPlay: (target: Pick<EmbyEpisode, 'id' | 'name' | 'externalUrl'>) => void
   onRefresh: (id: string) => void
   refreshing: boolean
+  shared: boolean
 }) {
   const queryClient = useQueryClient()
   const originalTitle = visibleOriginalTitle(item)
@@ -310,8 +316,8 @@ function LibraryItemDetail({ item, onDeleted, onPlay, onRefresh, refreshing }: {
           {playbackActionLabel(item)}
         </button>
       )}
-      <button className="secondary-command" disabled={busy} onClick={() => onRefresh(item.id)} type="button"><RefreshCw size={16} />{refreshing ? '已提交…' : '刷新元数据'}</button>
-      {canSearchSubtitles ? (
+      {shared ? null : <button className="secondary-command" disabled={busy} onClick={() => onRefresh(item.id)} type="button"><RefreshCw size={16} />{refreshing ? '已提交…' : '刷新元数据'}</button>}
+      {shared ? null : canSearchSubtitles ? (
         <button
           className="secondary-command"
           disabled={busy}
@@ -327,7 +333,8 @@ function LibraryItemDetail({ item, onDeleted, onPlay, onRefresh, refreshing }: {
       ) : (
         <span className="library-subtitle-hint">剧集请在 Emby 分集条目上搜索字幕</span>
       )}
-      {preview ? null : <button className="danger-button" disabled={busy} onClick={() => previewDelete.mutate()} type="button"><Trash2 size={16} />{previewDelete.isPending ? '正在读取删除预览…' : '从 Emby 删除'}</button>}
+      {shared || preview ? null : <button className="danger-button" disabled={busy} onClick={() => previewDelete.mutate()} type="button"><Trash2 size={16} />{previewDelete.isPending ? '正在读取删除预览…' : '从 Emby 删除'}</button>}
+      {shared ? <span className="library-subtitle-hint">共享库只读；播放会走机场流量</span> : null}
     </div>
     {item.type === 'Series' ? <LibraryEpisodes onPlay={onPlay} seriesId={item.id} seriesTitle={item.name} /> : null}
     {subtitleResults ? (
