@@ -259,6 +259,10 @@ export type EmbyItem = {
   played?: boolean
 }
 
+export function embyPrimaryImageURL(itemId: string) {
+  return `/api/v1/integrations/emby/items/${encodeURIComponent(itemId)}/primary-image`
+}
+
 export type EmbyEpisode = EmbyItem & {
   externalUrl: string
   appUrl?: string

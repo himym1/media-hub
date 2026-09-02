@@ -150,6 +150,13 @@ async function respond(route: Route, authenticated: boolean, state: FixtureState
     return json(route, { status: 'deleted' })
   }
   if ((path === '/api/v1/integrations/emby/libraries/movie/refresh' || path === '/api/v1/integrations/emby/items/item-1/refresh') && request.method() === 'POST') return json(route, { status: 'accepted' }, 202)
+  if (path.includes('/primary-image')) {
+    return route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'),
+    })
+  }
   if (path === '/api/v1/settings/providers') return json(route, providerSettings)
   if (path === '/api/v1/subscriptions') return json(route, { subscriptions: options.withSubscription ? [subscription] : [] })
   if (path === '/api/v1/subscriptions/subscription-1/runs' && request.method() === 'GET') return json(route, { runs: [] })
