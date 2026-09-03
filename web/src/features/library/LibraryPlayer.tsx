@@ -6,6 +6,7 @@ import { isHlsStream } from './isHlsStream'
 import { formatPlaybackClock } from './libraryPlayback'
 import { attachPlaybackSession } from './libraryPlaybackSession'
 import { attachSubtitleTrack, setSubtitleMode, subtitleAttachResult } from './librarySubtitle'
+import { looksLikeSilentDirectPlay } from './silentAudio'
 import './LibraryPlayer.css'
 
 const playbackRates = [0.75, 1, 1.25, 1.5, 2]
@@ -42,6 +43,7 @@ export function LibraryPlayer({
   const [chromeVisible, setChromeVisible] = useState(true)
   const [chromePinned, setChromePinned] = useState(false)
   const [allowAutoHide, setAllowAutoHide] = useState(false)
+  const [silentAudio, setSilentAudio] = useState(false)
 
   const clearIdleTimer = () => {
     if (idleTimer.current != null) {
@@ -122,6 +124,7 @@ export function LibraryPlayer({
 
   useEffect(() => {
     setError(null)
+    setSilentAudio(false)
     setAllowAutoHide(false)
     setChromeVisible(true)
     setChromePinned(false)
@@ -192,6 +195,20 @@ export function LibraryPlayer({
       video.load()
     }
   }, [itemId])
+
+  useEffect(() => {
+    if (error || silentAudio) return
+    const video = videoRef.current
+    if (!video) return
+    const timer = window.setInterval(() => {
+      if (looksLikeSilentDirectPlay(video)) {
+        setSilentAudio(true)
+        setChromeVisible(true)
+        window.clearInterval(timer)
+      }
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [itemId, error, silentAudio, playing])
 
   const toggleCaptions = () => {
     const video = videoRef.current
@@ -266,6 +283,13 @@ export function LibraryPlayer({
         {captions === 'ass' ? (
           <p className="library-player-note" role="status">
             当前是 ASS 字幕，浏览器无法渲染。
+            <a href={externalUrl} rel="noreferrer" target="_blank">在 Emby 打开</a>
+          </p>
+        ) : null}
+
+        {silentAudio && !error ? (
+          <p className="library-player-note" role="status">
+            检测到有画面但浏览器未解码出声音。自己的库是直出原片，DTS / TrueHD / 部分 EAC3 音轨在 Chrome 等浏览器里常会静音。
             <a href={externalUrl} rel="noreferrer" target="_blank">在 Emby 打开</a>
           </p>
         ) : null}
