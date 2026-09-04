@@ -2,6 +2,8 @@
 
 Tauri 2 shell around the existing Web UI. Playback uses **mpv** so DTS / TrueHD can have sound.
 
+The window, installer, and taskbar use `src-tauri/icons/` (dark tile + green film/play mark). Regenerate with `pnpm --dir desktop exec tauri icon src-tauri/icons/app-icon-source.png`.
+
 ## Prerequisites
 
 - Rust (`rustc` 1.77+)
