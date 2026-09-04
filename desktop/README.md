@@ -19,7 +19,7 @@ pnpm --dir desktop install
 pnpm --dir desktop tauri dev
 ```
 
-The window loads `https://media.himym.us.ci`. Native play requires the Web hook shipped in **v0.20.25+**.
+`devUrl`, `frontendDist`, and the window `url` all point at `https://media.himym.us.ci` so `tauri dev` and the packaged app load the live Web UI, not a local `index.html`. Native play requires the Web hook shipped in **v0.20.25+**.
 
 ## Windows installer
 

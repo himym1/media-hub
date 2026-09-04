@@ -128,6 +128,18 @@ mod tests {
     }
 
     #[test]
+    fn desktop_window_loads_production_origin() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+        assert_eq!(config["build"]["devUrl"], "https://media.himym.us.ci");
+        assert_eq!(config["build"]["frontendDist"], "https://media.himym.us.ci");
+        assert_eq!(
+            config["app"]["windows"][0]["url"],
+            "https://media.himym.us.ci"
+        );
+    }
+
+    #[test]
     fn resolve_mpv_returns_a_real_file_when_installed() {
         if let Some(found) = resolve_mpv() {
             assert!(found.is_file());
