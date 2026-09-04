@@ -90,6 +90,24 @@ async function respond(route: Route, authenticated: boolean, state: FixtureState
   if (path === '/api/v1/transfers/task-1') return json(route, { ...transfer, events: [{ id: 1, state: 'completed', message: '播放验证通过', createdAt: transfer.updatedAt }] })
   if (path === '/api/v1/notifications') return json(route, { notifications: [] })
   if (path === '/api/v1/discovery/trending') return json(route, { items: [{ tmdbId: '100', title: '验收影片', year: 2026, mediaType: 'movie' }] })
+  if (path === '/api/v1/discovery/genres') {
+    return json(route, {
+      genres: ['动作', '冒险', '动画', '喜剧', '犯罪', '纪录', '剧情', '家庭', '奇幻', '历史', '恐怖', '音乐', '悬疑', '爱情', '科幻', '惊悚', '战争', '西部'].map((name, index) => ({
+        id: index + 1,
+        name,
+      })),
+    })
+  }
+  if (path === '/api/v1/discovery/catalog') {
+    return json(route, {
+      items: Array.from({ length: 12 }, (_, index) => ({
+        tmdbId: String(200 + index),
+        title: `高分电影 ${index + 1}`,
+        year: 2024,
+        mediaType: 'movie',
+      })),
+    })
+  }
   if (path === '/api/v1/search') return json(route, {
     query: url.searchParams.get('query') ?? '',
     partial: false,

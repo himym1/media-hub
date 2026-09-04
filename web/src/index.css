@@ -29,8 +29,8 @@
 }
 
 * { box-sizing: border-box; }
-html { background: var(--canvas); }
-body { margin: 0; min-width: 320px; min-height: 100dvh; background: var(--canvas); }
+html { background: var(--canvas); overflow-x: clip; }
+body { margin: 0; min-width: 320px; min-height: 100dvh; max-width: 100%; background: var(--canvas); overflow-x: clip; }
 button, input, select, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { min-height: 44px; cursor: pointer; }

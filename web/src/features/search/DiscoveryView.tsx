@@ -254,12 +254,11 @@ export function DiscoveryView({
         <div className="discovery-idle">
           {movieGenres.data?.genres?.length ? (
             <section className="genre-chip-band" aria-label="电影类型">
-              <div className="genre-chip-row" role="list">
+              <div className="genre-chip-row" role="group" aria-label="筛选类型">
                 <button
                   aria-pressed={!selectedGenre}
                   className={!selectedGenre ? 'genre-chip selected' : 'genre-chip'}
                   onClick={() => setSelectedGenre(null)}
-                  role="listitem"
                   type="button"
                 >
                   全部类型
@@ -272,7 +271,6 @@ export function DiscoveryView({
                       className={selected ? 'genre-chip selected' : 'genre-chip'}
                       key={genre.id}
                       onClick={() => setSelectedGenre(selected ? null : genre)}
-                      role="listitem"
                       type="button"
                     >
                       {genre.name}

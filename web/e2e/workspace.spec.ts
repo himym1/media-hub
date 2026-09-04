@@ -37,6 +37,16 @@ async function attachScreenshot(page: Page, testInfo: TestInfo, name: string) {
   await testInfo.attach(name, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' })
 }
 
+async function expectNoHorizontalOverflow(page: Page) {
+  expect(await page.evaluate(() => {
+    const main = document.getElementById('main-content')
+    return {
+      root: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      main: !main || main.scrollWidth <= main.clientWidth,
+    }
+  })).toEqual({ root: true, main: true })
+}
+
 test('login is keyboard-ready and accessible', async ({ page }, testInfo) => {
   await installApiFixtures(page, { authenticated: false })
   await page.goto('/')
@@ -54,6 +64,11 @@ test('discovery preserves search state through browser history', async ({ page }
   await installApiFixtures(page)
   await page.goto('/?view=discover')
   await expect(page.getByRole('heading', { name: '发现', level: 1 })).toBeVisible()
+  if (testInfo.project.name === 'desktop') {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await expect(page.getByRole('button', { name: '全部类型' })).toBeVisible()
+    await expectNoHorizontalOverflow(page)
+  }
 
   await page.keyboard.press('Tab')
   await expect(page.getByRole('link', { name: '跳到主要内容' })).toBeFocused()
@@ -72,7 +87,7 @@ test('discovery preserves search state through browser history', async ({ page }
   await expect(page.getByLabel('搜索电影或电视剧')).toHaveValue('验收影片')
   await expect(page.getByRole('button', { name: /验收影片.*2160p/ })).toBeVisible()
 
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await expectNoHorizontalOverflow(page)
   await expectNoSeriousAccessibilityViolations(page)
   await attachScreenshot(page, testInfo, 'discovery')
 })
@@ -118,8 +133,8 @@ test('library supports browsing item details and safe Emby actions', async ({ pa
   await libraryItem.click()
   await expect(page.getByRole('heading', { name: '验收影片', level: 2 })).toBeVisible()
   await expect(page.getByText('用于验证媒体库详情。')).toBeVisible()
-  await expect(page.getByText('剧情', { exact: true })).toBeVisible()
-  await expect(page.getByText('科幻', { exact: true })).toBeVisible()
+  await expect(page.locator('.library-detail').getByText('剧情', { exact: true })).toBeVisible()
+  await expect(page.locator('.library-detail').getByText('科幻', { exact: true })).toBeVisible()
   await expect(page.getByText('Acceptance Movie', { exact: true })).toBeHidden()
   await expect(page.getByText('TMDB 编号', { exact: true })).toBeHidden()
   await expect(page.getByText('EMBY', { exact: true })).toHaveCount(0)
@@ -308,6 +323,7 @@ test('mobile keeps four primary destinations and usable touch targets', async ({
     .filter((button) => button.width < 43.5 || button.height < 43.5))
   expect(undersizedButtons).toEqual([])
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await expectNoHorizontalOverflow(page)
 
   await expectNoSeriousAccessibilityViolations(page)
   await attachScreenshot(page, testInfo, 'mobile-discovery')
@@ -332,7 +348,7 @@ test('all workspace destinations meet the accessibility gate', async ({ page }, 
         .map((button) => ({ label: button.getAttribute('aria-label') || button.textContent?.trim(), width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height }))
         .filter((button) => button.width < 43.5 || button.height < 43.5))
       expect(undersizedButtons, `${heading} contains undersized controls`).toEqual([])
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+      await expectNoHorizontalOverflow(page)
     }
   }
 })
