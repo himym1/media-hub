@@ -9,6 +9,7 @@ import {
   getEmbyItem,
   getEmbyLibraries,
   getEmbyLibraryItems,
+  getSystemOverview,
   previewEmbyItemDelete,
   refreshEmbyItem,
   refreshEmbyLibrary,
@@ -53,6 +54,7 @@ export function LibraryView() {
   const [scope, setScope] = useState<LibraryScope>(() => (isSharedEmbyId(locationValue('library')) ? 'shared' : 'mine'))
 
   const libraries = useQuery({ queryKey: ['emby-libraries'], queryFn: getEmbyLibraries })
+  const overview = useQuery({ queryKey: ['system-overview'], queryFn: getSystemOverview, retry: false })
   const mineLibraries = useMemo(
     () => (libraries.data?.libraries ?? []).filter((library) => !isSharedEmbyId(library.id)),
     [libraries.data?.libraries],
@@ -64,7 +66,13 @@ export function LibraryView() {
   const allLibraries = libraries.data?.libraries ?? []
   const scopeLibraries = scope === 'shared' ? sharedLibraries : mineLibraries
   const hasShared = sharedLibraries.length > 0
-
+  const sharedHealth = overview.data?.integrations.find((integration) => integration.id === 'shared-emby')
+  const sharedUnavailable = Boolean(
+    sharedHealth
+    && sharedHealth.status !== 'unconfigured'
+    && sharedHealth.status !== 'healthy'
+    && !hasShared,
+  )
   const libraryItems = useQuery({
     queryKey: ['emby-library-items', libraryId, page],
     queryFn: () => getEmbyLibraryItems(libraryId!, page * pageSize, pageSize),
@@ -219,6 +227,12 @@ export function LibraryView() {
       </header>
 
       {libraries.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>媒体库读取失败</strong><span>{libraries.error.message}</span></div><button onClick={() => void libraries.refetch()} type="button">重试</button></div> : null}
+      {sharedUnavailable ? (
+        <div className="source-warning error" role="alert">
+          <CircleAlert size={16} />
+          <span>共享 Emby 暂时不可用：{sharedHealth?.detail || '无法读取共享库'}。我的库仍可正常使用。</span>
+        </div>
+      ) : null}
       {mutationError ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{mutationError.message}</span></div> : null}
 
       {hasShared ? (

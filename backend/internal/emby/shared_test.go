@@ -23,6 +23,10 @@ func TestSharedLibrariesBrowseAndPlayback(t *testing.T) {
 				http.Error(w, "请使用群公告中允许的客户端进行访问", http.StatusForbidden)
 				return
 			}
+			if !strings.HasPrefix(r.Header.Get("User-Agent"), "Emby Web/") {
+				http.Error(w, "请使用群公告中允许的客户端进行访问", http.StatusForbidden)
+				return
+			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"AccessToken": "shared-token",
 				"User":        map[string]any{"Id": "user-1", "Name": "himym"},
@@ -32,10 +36,22 @@ func TestSharedLibrariesBrowseAndPlayback(t *testing.T) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
+			if !strings.Contains(r.Header.Get("X-Emby-Authorization"), `Client="Emby Web"`) {
+				http.Error(w, "请使用群公告中允许的客户端进行访问", http.StatusForbidden)
+				return
+			}
+			if !strings.HasPrefix(r.Header.Get("User-Agent"), "Emby Web/") {
+				http.Error(w, "请使用群公告中允许的客户端进行访问", http.StatusForbidden)
+				return
+			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"Items": []map[string]any{{"Id": "lib-movies", "Name": "电影", "CollectionType": "movies"}},
 			})
 		case r.URL.Path == "/Items" && r.URL.Query().Get("ParentId") == "lib-movies":
+			if !strings.HasPrefix(r.Header.Get("User-Agent"), "Emby Web/") {
+				http.Error(w, "请使用群公告中允许的客户端进行访问", http.StatusForbidden)
+				return
+			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"Items": []map[string]any{{
 					"Id": "movie-1", "Name": "新片", "Type": "Movie", "ProductionYear": 2026,
