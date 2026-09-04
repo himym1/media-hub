@@ -96,6 +96,40 @@ fn wait_child_started(child: &mut Child, linger: Duration) -> Result<(), String>
     }
 }
 
+fn mpv_args(title: &str, start_position_ms: u64, user_agent: Option<&str>) -> Vec<String> {
+    let mut args = vec![
+        "--force-window=yes".to_string(),
+        "--keep-open=no".to_string(),
+        "--ytdl=no".to_string(),
+        "--focus-on=open".to_string(),
+        format!("--title={}", title.replace(['\n', '\r'], " ")),
+        "--no-terminal".to_string(),
+    ];
+    if let Some(agent) = user_agent.and_then(sanitized_user_agent) {
+        // Only --user-agent. --http-header-fields is a comma list and would
+        // split a normal Mozilla UA into bogus headers, so 115 rejects the URL.
+        args.push(format!("--user-agent={agent}"));
+    }
+    if start_position_ms > 0 {
+        args.push(format!("--start={:.3}", start_position_ms as f64 / 1000.0));
+    }
+    args
+}
+
+fn raise_mpv_window() {
+    if cfg!(target_os = "macos") {
+        let _ = Command::new("osascript")
+            .args([
+                "-e",
+                "tell application \"System Events\" to set frontmost of first process whose name is \"mpv\" to true",
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
+
 fn spawn_mpv(
     mpv: &Path,
     url: &str,
@@ -104,35 +138,25 @@ fn spawn_mpv(
     user_agent: Option<&str>,
 ) -> Result<(), String> {
     let mut cmd = Command::new(mpv);
-    cmd.arg("--force-window=yes")
-        .arg("--keep-open=no")
-        .arg("--ytdl=no")
-        .arg(format!("--title={}", title.replace(['\n', '\r'], " ")))
-        .arg("--no-terminal")
+    cmd.args(mpv_args(title, start_position_ms, user_agent))
+        .arg(url)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     if let Some(path) = command_path_with_extras() {
         cmd.env("PATH", path);
     }
-    if let Some(agent) = user_agent.and_then(sanitized_user_agent) {
-        cmd.arg(format!("--user-agent={agent}"));
-        cmd.arg(format!("--http-header-fields=User-Agent: {agent}"));
-    }
-    if start_position_ms > 0 {
-        cmd.arg(format!("--start={:.3}", start_position_ms as f64 / 1000.0));
-    }
-    cmd.arg(url);
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
     }
     let mut child = cmd.spawn().map_err(|_| "无法启动 mpv。".to_string())?;
-    wait_child_started(&mut child, Duration::from_millis(500))?;
+    wait_child_started(&mut child, Duration::from_millis(1200))?;
     std::thread::spawn(move || {
         let _ = child.wait();
     });
+    raise_mpv_window();
     Ok(())
 }
 
@@ -223,6 +247,14 @@ mod tests {
         assert!(sanitized_user_agent("Mozilla/5.0\n--script=/tmp/x").is_none());
         assert!(sanitized_user_agent("").is_none());
         assert!(sanitized_user_agent("   ").is_none());
+    }
+
+    #[test]
+    fn mpv_args_keep_comma_user_agent_out_of_header_lists() {
+        let agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+        let args = mpv_args("范海辛", 0, Some(agent));
+        assert!(args.iter().any(|arg| arg == &format!("--user-agent={agent}")));
+        assert!(args.iter().all(|arg| !arg.starts_with("--http-header-fields")));
     }
 
     #[test]

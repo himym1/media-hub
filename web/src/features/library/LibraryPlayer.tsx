@@ -32,6 +32,8 @@ export function LibraryPlayer({
 }: LibraryPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const idleTimer = useRef<number | null>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
   const [error, setError] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
   const [muted, setMuted] = useState(false)
@@ -156,7 +158,10 @@ export function LibraryPlayer({
               startPositionMs: descriptor.startPositionMs,
               userAgent: descriptor.userAgent,
             })
-            if (!cancelled) setNativeHanded(true)
+            if (!cancelled) {
+              setNativeHanded(true)
+              onCloseRef.current()
+            }
           } catch (cause) {
             if (!cancelled) {
               setError(cause instanceof Error ? cause.message : '系统播放器未能打开这路流。')
