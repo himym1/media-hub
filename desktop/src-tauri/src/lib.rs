@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::time::Duration;
 
+mod browser;
 mod player;
 
 pub(crate) fn is_supported_playback_url(url: &str) -> bool {
@@ -145,6 +146,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            browser::open_in_app,
             player::play_native,
             player::layout_native,
             player::stop_native,
@@ -194,6 +196,9 @@ mod tests {
             config["app"]["windows"][0]["url"],
             "https://media.himym.us.ci"
         );
+        let capabilities: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).expect("capabilities");
+        assert_eq!(capabilities["windows"], serde_json::json!(["main", "browser"]));
     }
 
     #[test]
