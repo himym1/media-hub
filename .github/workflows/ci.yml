@@ -92,6 +92,20 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: cargo test --manifest-path desktop/src-tauri/Cargo.toml
+
   openapi:
     runs-on: ubuntu-latest
     steps:

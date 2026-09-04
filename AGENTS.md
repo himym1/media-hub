@@ -49,3 +49,4 @@
 - Web changes require `pnpm build` and relevant tests.
 - Android changes require `./gradlew :app:assembleDebug` and focused unit/UI tests.
 - API contract changes require both client models to remain buildable.
+- Desktop Rust changes require `cargo test --manifest-path desktop/src-tauri/Cargo.toml`.

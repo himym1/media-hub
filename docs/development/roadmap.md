@@ -96,7 +96,7 @@ Exit gate: fresh deployment needs only Media Hub + Emby + 115; transfer-to-playb
 
 - Web 115 diagnostic file player.
 - iOS app.
-- Windows Tauri installer CI (dev shell exists under `desktop/`).
+- Windows Tauri installer CI (`.github/workflows/desktop-windows.yml`; mpv remains an external decode dependency).
 - Multi-user roles.
 - Public registration and billing.
 - PT/MoviePilot workflows.

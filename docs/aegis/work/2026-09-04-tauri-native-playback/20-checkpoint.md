@@ -1,5 +1,5 @@
 # Checkpoint
 
-- completed: Task 1–4 (hook, scaffold, play_native, README)
-- next: install mpv; `pnpm --dir desktop tauri dev` after v0.20.25 is live
-- drift: none vs plan; Windows MSI deferred as planned
+- completed: Task 1–4 plus mpv install, PATH fallbacks, Windows NSIS/MSI CI
+- next: download Actions artifact on a Windows PC; install mpv; play a previously silent title
+- drift: installer CI was deferred in the original slice and is now landed
