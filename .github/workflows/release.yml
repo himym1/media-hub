@@ -122,20 +122,12 @@ jobs:
           path.write_text(text.replace(old, new, 1))
           PY
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
-          # Aliyun GOPROXY; Clash mixed port if listening. Do not rewrite the module RUN.
-          proxy_args=()
-          if bash -c 'echo >/dev/tcp/127.0.0.1/7890' >/dev/null 2>&1; then
-            proxy_args=(
-              --build-arg HTTP_PROXY=http://127.0.0.1:7890
-              --build-arg HTTPS_PROXY=http://127.0.0.1:7890
-              --build-arg NO_PROXY=localhost,127.0.0.1
-            )
-          fi
+          # Aliyun GOPROXY only. Clash on :7890 corrupts those module zips.
+          # Do not rewrite the module RUN. VERSION is declared after download.
           timeout 20m docker build --network=host --platform linux/amd64 \
             --build-arg VERSION="$GITHUB_REF_NAME" \
             --build-arg GOPROXY=https://mirrors.aliyun.com/goproxy/,direct \
             --build-arg GOSUMDB=off \
-            "${proxy_args[@]}" \
             -t "$image:${{ steps.version.outputs.name }}" \
             -t "$image:${GITHUB_SHA}" .
       - name: Switch NAS compose to the new image

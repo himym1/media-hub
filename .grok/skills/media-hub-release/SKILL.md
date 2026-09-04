@@ -32,10 +32,10 @@ One private release path. Web is baked into the image. Android is the signed APK
 The long wait is the self-hosted NAS job `.github/workflows/release.yml`, not `git push`.
 
 1. CI used to rewrite the backend `RUN go mod download` line on every tag. That cache-busts the module layer even when `go.mod` / `go.sum` did not change.
-2. `proxy.golang.org` and `sum.golang.org` time out from the NAS. `goproxy.cn` IPv4 resolves to an overseas CDN and crawls when the build container does not use Clash. Use `https://mirrors.aliyun.com/goproxy/,direct`. Clash mixed port `:7890` is an HTTP proxy, not a GOPROXY; pass it as backend `HTTP_PROXY` when it is listening. `gcr.io` distroless cannot be pulled; swap only the final stage to `alpine:3.20` + uid `65532`.
+2. `proxy.golang.org` and `sum.golang.org` time out from the NAS. Use `https://mirrors.aliyun.com/goproxy/,direct`. Do not send that GOPROXY through Clash `:7890` — the mixed port returns a corrupt module zip (`go: zip: not a valid zip file`). `gcr.io` distroless cannot be pulled; swap only the final stage to `alpine:3.20` + uid `65532`. Declare `ARG VERSION` after `go mod download` so a new tag does not bust the module layer.
 3. The image step is wrapped in `timeout 20m`. A stalled `go mod download` sits the full 20 minutes, then exits 124, and used to skip the APK as well.
 
-A new skill will not make module downloads faster. Keep one skill (this file). Do not rewrite the module `RUN` in CI or in a manual NAS build. Pass `--build-arg GOPROXY=https://mirrors.aliyun.com/goproxy/,direct --build-arg GOSUMDB=off` and `--network=host`. If `:7890` is up, also pass `HTTP_PROXY` / `HTTPS_PROXY` so Go uses Clash. After the first cached module layer, later tags should reuse it.
+A new skill will not make module downloads faster. Keep one skill (this file). Do not rewrite the module `RUN` in CI or in a manual NAS build. Pass `--build-arg GOPROXY=https://mirrors.aliyun.com/goproxy/,direct --build-arg GOSUMDB=off` and `--network=host`. Do not pass Clash as `HTTP_PROXY` for that GOPROXY. After the first cached module layer, later tags should reuse it.
 
 ## 1. Version
 
@@ -103,7 +103,7 @@ Do not amend a pushed release tag.
 GitHub Actions workflow `.github/workflows/release.yml` on `v*.*.*` (self-hosted `[self-hosted, linux, x64, media-hub]`):
 
 1. Signed APK + `latest.json` into `/volume1/docker/media-hub/releases` first, so a hung image does not block the app update
-2. `docker build --network=host` with Aliyun GOPROXY / GOSUMDB build-args and Clash `HTTP_PROXY` when `:7890` is up; only the final distroless stage is rewritten to alpine
+2. `docker build --network=host` with Aliyun GOPROXY / GOSUMDB build-args and no Clash `HTTP_PROXY`; only the final distroless stage is rewritten to alpine
 3. NAS `backup.sh` + `MEDIA_HUB_IMAGE_TAG` compose up + local health on `:18080`
 
 ```bash
@@ -171,9 +171,6 @@ PY
 cd /tmp/media-hub-src
 docker build --network=host --build-arg VERSION=v'"$VERSION"' \
   --build-arg GOPROXY=https://mirrors.aliyun.com/goproxy/,direct --build-arg GOSUMDB=off \
-  --build-arg HTTP_PROXY=http://127.0.0.1:7890 \
-  --build-arg HTTPS_PROXY=http://127.0.0.1:7890 \
-  --build-arg NO_PROXY=localhost,127.0.0.1 \
   -t ghcr.io/himym1/media-hub:'"$VERSION"' .
 cd /volume1/docker/media-hub
 MEDIA_HUB_IMAGE_TAG='"$VERSION"' docker compose up -d

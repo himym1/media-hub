@@ -7,7 +7,6 @@ COPY web/ ./
 RUN pnpm build
 
 FROM golang:1.25-bookworm AS backend
-ARG VERSION=dev
 ARG GOPROXY=https://proxy.golang.org,direct
 ARG GOSUMDB=sum.golang.org
 ARG HTTP_PROXY
@@ -21,6 +20,7 @@ ENV NO_PROXY=$NO_PROXY
 WORKDIR /src
 COPY backend/go.mod backend/go.sum ./backend/
 RUN go -C backend mod download
+ARG VERSION=dev
 COPY backend/ ./backend/
 COPY --from=web /src/web/dist ./backend/internal/webui/dist
 RUN CGO_ENABLED=0 go -C backend build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/media-hub ./cmd/server && \
