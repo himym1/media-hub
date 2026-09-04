@@ -115,11 +115,6 @@
   transform: translateY(10px);
 }
 
-.library-player.is-native-handed .library-player-video,
-.library-player.is-native-handed .library-player-center-play {
-  display: none;
-}
-
 .library-player-seek {
   --seek-progress: 0%;
   display: grid;

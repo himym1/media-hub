@@ -7,7 +7,6 @@ import { formatPlaybackClock } from './libraryPlayback'
 import { attachPlaybackSession } from './libraryPlaybackSession'
 import { attachSubtitleTrack, setSubtitleMode, subtitleAttachResult } from './librarySubtitle'
 import { looksLikeSilentDirectPlay } from './silentAudio'
-import { canPlayNatively, playNatively } from '../../shared/desktop/nativePlayback'
 import './LibraryPlayer.css'
 
 const playbackRates = [0.75, 1, 1.25, 1.5, 2]
@@ -32,8 +31,6 @@ export function LibraryPlayer({
 }: LibraryPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const idleTimer = useRef<number | null>(null)
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
   const [error, setError] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
   const [muted, setMuted] = useState(false)
@@ -47,7 +44,6 @@ export function LibraryPlayer({
   const [chromePinned, setChromePinned] = useState(false)
   const [allowAutoHide, setAllowAutoHide] = useState(false)
   const [silentAudio, setSilentAudio] = useState(false)
-  const [nativeHanded, setNativeHanded] = useState(false)
 
   const clearIdleTimer = () => {
     if (idleTimer.current != null) {
@@ -129,7 +125,6 @@ export function LibraryPlayer({
   useEffect(() => {
     setError(null)
     setSilentAudio(false)
-    setNativeHanded(false)
     setAllowAutoHide(false)
     setChromeVisible(true)
     setChromePinned(false)
@@ -151,24 +146,6 @@ export function LibraryPlayer({
           fetchLocalSubtitle(itemId).catch(() => null),
         ])
         if (cancelled) return
-        if (canPlayNatively()) {
-          try {
-            await playNatively(descriptor.streamUrl, {
-              title,
-              startPositionMs: descriptor.startPositionMs,
-              userAgent: descriptor.userAgent,
-            })
-            if (!cancelled) {
-              setNativeHanded(true)
-              onCloseRef.current()
-            }
-          } catch (cause) {
-            if (!cancelled) {
-              setError(cause instanceof Error ? cause.message : '系统播放器未能打开这路流。')
-            }
-          }
-          return
-        }
         const attached = subtitleAttachResult(subtitle)
         if (attached.kind === 'track') {
           subtitleUrl = attached.url
@@ -217,7 +194,7 @@ export function LibraryPlayer({
       video.removeAttribute('src')
       video.load()
     }
-  }, [itemId, title])
+  }, [itemId])
 
   useEffect(() => {
     if (error || silentAudio) return
@@ -251,10 +228,9 @@ export function LibraryPlayer({
   const seekProgress = durationSeconds > 0 ? Math.min(1, currentSeconds / durationSeconds) : 0
   const shellClass = [
     'library-player',
-    nativeHanded ? 'is-native-handed' : '',
-    chromeVisible || !playing || Boolean(error) || nativeHanded ? 'chrome-visible' : 'chrome-hidden',
+    chromeVisible || !playing || Boolean(error) ? 'chrome-visible' : 'chrome-hidden',
     playing ? 'is-playing' : 'is-paused',
-  ].filter(Boolean).join(' ')
+  ].join(' ')
 
   return (
     <div
@@ -286,7 +262,7 @@ export function LibraryPlayer({
           playsInline
         />
 
-        {!playing && !error && !nativeHanded ? (
+        {!playing && !error ? (
           <button aria-label="继续播放" className="library-player-center-play" onClick={togglePlayback} type="button">
             <Play size={28} />
           </button>
@@ -318,13 +294,6 @@ export function LibraryPlayer({
           </p>
         ) : null}
 
-        {nativeHanded && !error ? (
-          <p className="library-player-note" role="status">
-            已在独立的 mpv 窗口播放。关闭本层不会停止播放。
-          </p>
-        ) : null}
-
-        {nativeHanded ? null : (
         <div
           className="library-player-chrome"
           onFocusCapture={() => revealChrome(true)}
@@ -468,7 +437,6 @@ export function LibraryPlayer({
             ) : null}
           </div>
         </div>
-        )}
       </div>
     </div>
   )
