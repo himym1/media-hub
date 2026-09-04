@@ -141,10 +141,6 @@ pub(crate) fn mpv_args(
 pub fn run() {
     tauri::Builder::default()
         .manage(player::PlayerState::default())
-        .setup(|app| {
-            player::create_surface(app)?;
-            Ok(())
-        })
         .invoke_handler(tauri::generate_handler![
             browser::open_in_app,
             player::play_native,

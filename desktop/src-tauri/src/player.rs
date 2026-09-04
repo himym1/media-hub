@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{App, AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, Window};
+use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, Window};
 
 use crate::{
     command_path_with_extras, is_supported_playback_url, mpv_args, resolve_mpv, sanitized_user_agent,
@@ -38,9 +38,27 @@ pub struct NativeStatus {
     pub speed: f64,
 }
 
-pub fn create_surface(app: &App) -> Result<(), Box<dyn std::error::Error>> {
+fn parked_origin() -> PhysicalPosition<i32> {
+    PhysicalPosition::new(-20_000, -20_000)
+}
+
+fn park_surface(surface: &Window) -> Result<(), String> {
+    let _ = surface.hide();
+    surface
+        .set_position(parked_origin())
+        .map_err(|_| "无法收起播放画面。".to_string())?;
+    surface
+        .set_size(PhysicalSize::new(8, 8))
+        .map_err(|_| "无法收起播放画面。".to_string())?;
+    Ok(())
+}
+
+fn ensure_surface(app: &AppHandle) -> Result<Window, String> {
+    if let Some(existing) = app.get_window(SURFACE_LABEL) {
+        return Ok(existing);
+    }
     let Some(main) = app.get_window("main") else {
-        return Err("main window missing".into());
+        return Err("找不到应用窗口。".into());
     };
     tauri::window::WindowBuilder::new(app, SURFACE_LABEL)
         .title(" ")
@@ -48,10 +66,17 @@ pub fn create_surface(app: &App) -> Result<(), Box<dyn std::error::Error>> {
         .resizable(false)
         .skip_taskbar(true)
         .visible(false)
-        .inner_size(320.0, 180.0)
-        .parent(&main)?
-        .build()?;
-    Ok(())
+        .inner_size(8.0, 8.0)
+        .position(-20_000.0, -20_000.0)
+        .parent(&main)
+        .map_err(|_| "无法准备播放画面。".to_string())?
+        .build()
+        .map_err(|_| "无法准备播放画面。".to_string())?;
+    let surface = app
+        .get_window(SURFACE_LABEL)
+        .ok_or_else(|| "找不到内嵌播放窗口。".to_string())?;
+    park_surface(&surface)?;
+    Ok(surface)
 }
 
 fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {
@@ -249,7 +274,7 @@ pub fn play_native(
         return Err("未找到 mpv。请先安装 mpv 并确保在 PATH 中。".into());
     };
     let main = main_window(&app)?;
-    let surface = surface_window(&app)?;
+    let surface = ensure_surface(&app)?;
     apply_bounds(&main, &surface, &bounds)?;
     surface.show().map_err(|_| "无法打开播放画面。".to_string())?;
     let wid = surface_wid(&surface)?;
@@ -268,14 +293,17 @@ pub fn play_native(
 
 #[tauri::command]
 pub fn layout_native(app: AppHandle, bounds: EmbedBounds) -> Result<(), String> {
-    apply_bounds(&main_window(&app)?, &surface_window(&app)?, &bounds)
+    let Ok(surface) = surface_window(&app) else {
+        return Ok(());
+    };
+    apply_bounds(&main_window(&app)?, &surface, &bounds)
 }
 
 #[tauri::command]
 pub fn stop_native(app: AppHandle, state: tauri::State<PlayerState>) -> Result<(), String> {
     stop_child(&state);
     if let Ok(surface) = surface_window(&app) {
-        let _ = surface.hide();
+        let _ = park_surface(&surface);
     }
     Ok(())
 }
@@ -324,4 +352,16 @@ pub fn native_status() -> Result<NativeStatus, String> {
         volume: ipc_number("volume") / 100.0,
         speed: ipc_number("speed").max(0.1),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parked_surface_stays_offscreen() {
+        let origin = parked_origin();
+        assert!(origin.x <= -10_000);
+        assert!(origin.y <= -10_000);
+    }
 }
