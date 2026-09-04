@@ -1,0 +1,327 @@
+use std::io::{BufRead, BufReader, Read, Write};
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+use std::sync::Mutex;
+use std::time::Duration;
+
+use serde::{Deserialize, Serialize};
+use tauri::{App, AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, Window};
+
+use crate::{
+    command_path_with_extras, is_supported_playback_url, mpv_args, resolve_mpv, sanitized_user_agent,
+    wait_child_started,
+};
+
+pub const SURFACE_LABEL: &str = "mpv-surface";
+
+#[derive(Default)]
+pub struct PlayerState {
+    child: Mutex<Option<Child>>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbedBounds {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeStatus {
+    pub paused: bool,
+    pub time: f64,
+    pub duration: f64,
+    pub volume: f64,
+    pub speed: f64,
+}
+
+pub fn create_surface(app: &App) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(main) = app.get_window("main") else {
+        return Err("main window missing".into());
+    };
+    tauri::window::WindowBuilder::new(app, SURFACE_LABEL)
+        .title(" ")
+        .decorations(false)
+        .resizable(false)
+        .skip_taskbar(true)
+        .visible(false)
+        .inner_size(320.0, 180.0)
+        .parent(&main)?
+        .build()?;
+    Ok(())
+}
+
+fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {
+    app.get_webview_window("main")
+        .ok_or_else(|| "找不到应用窗口。".into())
+}
+
+fn surface_window(app: &AppHandle) -> Result<Window, String> {
+    app.get_window(SURFACE_LABEL)
+        .ok_or_else(|| "找不到内嵌播放窗口。".into())
+}
+
+fn apply_bounds(main: &WebviewWindow, surface: &Window, bounds: &EmbedBounds) -> Result<(), String> {
+    if bounds.width < 8.0 || bounds.height < 8.0 {
+        return Err("播放区域太小。".into());
+    }
+    let scale = main.scale_factor().map_err(|_| "无法读取窗口。".to_string())?;
+    let inner = main
+        .inner_position()
+        .map_err(|_| "无法读取窗口。".to_string())?;
+    let x = inner.x as f64 + bounds.x * scale;
+    let y = inner.y as f64 + bounds.y * scale;
+    let width = (bounds.width * scale).max(8.0);
+    let height = (bounds.height * scale).max(8.0);
+    surface
+        .set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32))
+        .map_err(|_| "无法放置播放画面。".to_string())?;
+    surface
+        .set_size(PhysicalSize::new(width.round() as u32, height.round() as u32))
+        .map_err(|_| "无法放置播放画面。".to_string())?;
+    Ok(())
+}
+
+fn surface_wid(surface: &Window) -> Result<i64, String> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(surface.ns_view().map_err(|_| "无法嵌入播放器。".to_string())? as i64)
+    }
+    #[cfg(windows)]
+    {
+        Ok(surface.hwnd().map_err(|_| "无法嵌入播放器。".to_string())?.0 as i64)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        let _ = surface;
+        Err("此系统暂不支持应用内播放。".into())
+    }
+}
+
+fn ipc_path() -> PathBuf {
+    if cfg!(windows) {
+        PathBuf::from(r"\\.\pipe\media-hub-mpv")
+    } else {
+        std::env::temp_dir().join("media-hub-mpv.sock")
+    }
+}
+
+fn input_conf_path() -> PathBuf {
+    std::env::temp_dir().join("media-hub-mpv-input.conf")
+}
+
+fn write_input_conf() -> Result<PathBuf, String> {
+    let path = input_conf_path();
+    std::fs::write(&path, "MBTN_LEFT cycle pause\n").map_err(|_| "无法准备播放器。".to_string())?;
+    Ok(path)
+}
+
+fn stop_child(state: &PlayerState) {
+    let _ = ipc_command(&[serde_json::json!("quit")]);
+    if let Some(mut child) = state.child.lock().ok().and_then(|mut guard| guard.take()) {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    if !cfg!(windows) {
+        let _ = std::fs::remove_file(ipc_path());
+    }
+}
+
+fn spawn_embedded(
+    mpv: &Path,
+    url: &str,
+    title: &str,
+    start_position_ms: u64,
+    user_agent: Option<&str>,
+    wid: i64,
+    state: &PlayerState,
+) -> Result<(), String> {
+    stop_child(state);
+    if !cfg!(windows) {
+        let _ = std::fs::remove_file(ipc_path());
+    }
+    let ipc = ipc_path();
+    let input = write_input_conf()?;
+    let mut cmd = Command::new(mpv);
+    cmd.args(mpv_args(
+        title,
+        start_position_ms,
+        user_agent,
+        Some(wid),
+        Some(&ipc),
+        Some(&input),
+    ))
+    .arg(url)
+    .stdin(Stdio::null())
+    .stdout(Stdio::null())
+    .stderr(Stdio::null());
+    if let Some(path) = command_path_with_extras() {
+        cmd.env("PATH", path);
+    }
+    let mut child = cmd.spawn().map_err(|_| "无法启动播放器。".to_string())?;
+    wait_child_started(&mut child, Duration::from_millis(1200))?;
+    *state.child.lock().map_err(|_| "无法记录播放器。".to_string())? = Some(child);
+    Ok(())
+}
+
+fn write_and_read_ipc(mut stream: impl ReadWrite, body: &str) -> Result<serde_json::Value, String> {
+    stream
+        .write_all(body.as_bytes())
+        .map_err(|_| "无法控制播放器。".to_string())?;
+    let mut reader = BufReader::new(stream);
+    let mut line = String::new();
+    reader
+        .read_line(&mut line)
+        .map_err(|_| "无法控制播放器。".to_string())?;
+    parse_ipc_line(&line)
+}
+
+trait ReadWrite: Read + Write {}
+impl<T: Read + Write> ReadWrite for T {}
+
+fn ipc_command(command: &[serde_json::Value]) -> Result<serde_json::Value, String> {
+    let path = ipc_path();
+    let payload = serde_json::json!({ "command": command });
+    let body = format!("{payload}\n");
+    #[cfg(windows)]
+    {
+        let stream = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .map_err(|_| "播放器尚未就绪。".to_string())?;
+        return write_and_read_ipc(stream, &body);
+    }
+    #[cfg(unix)]
+    {
+        let stream = std::os::unix::net::UnixStream::connect(&path)
+            .map_err(|_| "播放器尚未就绪。".to_string())?;
+        return write_and_read_ipc(stream, &body);
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        let _ = (path, body);
+        Err("此系统暂不支持应用内播放。".into())
+    }
+}
+
+fn parse_ipc_line(line: &str) -> Result<serde_json::Value, String> {
+    let value: serde_json::Value =
+        serde_json::from_str(line.trim()).map_err(|_| "无法读取播放状态。".to_string())?;
+    if value.get("error").and_then(|error| error.as_str()) == Some("success") {
+        Ok(value.get("data").cloned().unwrap_or(serde_json::Value::Null))
+    } else {
+        Err("无法控制播放器。".into())
+    }
+}
+
+fn ipc_number(property: &str) -> f64 {
+    ipc_command(&[serde_json::json!("get_property"), serde_json::json!(property)])
+        .ok()
+        .and_then(|value| value.as_f64())
+        .unwrap_or(0.0)
+}
+
+fn ipc_bool(property: &str) -> bool {
+    ipc_command(&[serde_json::json!("get_property"), serde_json::json!(property)])
+        .ok()
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+pub fn play_native(
+    app: AppHandle,
+    state: tauri::State<PlayerState>,
+    url: String,
+    title: String,
+    start_position_ms: u64,
+    user_agent: Option<String>,
+    bounds: EmbedBounds,
+) -> Result<(), String> {
+    if !is_supported_playback_url(&url) {
+        return Err("unsupported playback url".into());
+    }
+    let Some(mpv) = resolve_mpv() else {
+        return Err("未找到 mpv。请先安装 mpv 并确保在 PATH 中。".into());
+    };
+    let main = main_window(&app)?;
+    let surface = surface_window(&app)?;
+    apply_bounds(&main, &surface, &bounds)?;
+    surface.show().map_err(|_| "无法打开播放画面。".to_string())?;
+    let wid = surface_wid(&surface)?;
+    spawn_embedded(
+        &mpv,
+        &url,
+        &title,
+        start_position_ms,
+        user_agent.as_deref().and_then(sanitized_user_agent),
+        wid,
+        &state,
+    )?;
+    let _ = main.set_focus();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn layout_native(app: AppHandle, bounds: EmbedBounds) -> Result<(), String> {
+    apply_bounds(&main_window(&app)?, &surface_window(&app)?, &bounds)
+}
+
+#[tauri::command]
+pub fn stop_native(app: AppHandle, state: tauri::State<PlayerState>) -> Result<(), String> {
+    stop_child(&state);
+    if let Ok(surface) = surface_window(&app) {
+        let _ = surface.hide();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn native_control(action: String, value: Option<f64>) -> Result<(), String> {
+    match action.as_str() {
+        "cycle-pause" => {
+            ipc_command(&[serde_json::json!("cycle"), serde_json::json!("pause")])?;
+        }
+        "seek" => {
+            ipc_command(&[
+                serde_json::json!("seek"),
+                serde_json::json!(value.unwrap_or(0.0)),
+                serde_json::json!("absolute"),
+            ])?;
+        }
+        "volume" => {
+            ipc_command(&[
+                serde_json::json!("set_property"),
+                serde_json::json!("volume"),
+                serde_json::json!((value.unwrap_or(1.0) * 100.0).clamp(0.0, 100.0)),
+            ])?;
+        }
+        "speed" => {
+            ipc_command(&[
+                serde_json::json!("set_property"),
+                serde_json::json!("speed"),
+                serde_json::json!(value.unwrap_or(1.0)),
+            ])?;
+        }
+        "mute" => {
+            ipc_command(&[serde_json::json!("cycle"), serde_json::json!("mute")])?;
+        }
+        _ => return Err("不支持的播放操作。".into()),
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn native_status() -> Result<NativeStatus, String> {
+    Ok(NativeStatus {
+        paused: ipc_bool("pause"),
+        time: ipc_number("time-pos"),
+        duration: ipc_number("duration"),
+        volume: ipc_number("volume") / 100.0,
+        speed: ipc_number("speed").max(0.1),
+    })
+}

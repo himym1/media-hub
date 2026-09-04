@@ -1,15 +1,17 @@
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::Child;
 use std::time::Duration;
 
-fn is_supported_playback_url(url: &str) -> bool {
+mod player;
+
+pub(crate) fn is_supported_playback_url(url: &str) -> bool {
     if url.contains('\n') || url.contains('\r') || url.contains('\0') {
         return false;
     }
     url.starts_with("https://") || url.starts_with("http://")
 }
 
-fn sanitized_user_agent(value: &str) -> Option<&str> {
+pub(crate) fn sanitized_user_agent(value: &str) -> Option<&str> {
     let trimmed = value.trim();
     if trimmed.is_empty() || trimmed.len() > 512 {
         return None;
@@ -55,7 +57,7 @@ fn extra_mpv_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-fn resolve_mpv() -> Option<PathBuf> {
+pub(crate) fn resolve_mpv() -> Option<PathBuf> {
     let name = mpv_binary_name();
     if let Some(found) = find_on_path(name) {
         return Some(found);
@@ -77,7 +79,7 @@ fn find_on_path(name: &str) -> Option<PathBuf> {
     None
 }
 
-fn command_path_with_extras() -> Option<std::ffi::OsString> {
+pub(crate) fn command_path_with_extras() -> Option<std::ffi::OsString> {
     let mut dirs = extra_mpv_dirs();
     if let Ok(path) = std::env::var("PATH") {
         for dir in std::env::split_paths(&path) {
@@ -87,7 +89,7 @@ fn command_path_with_extras() -> Option<std::ffi::OsString> {
     std::env::join_paths(dirs).ok()
 }
 
-fn wait_child_started(child: &mut Child, linger: Duration) -> Result<(), String> {
+pub(crate) fn wait_child_started(child: &mut Child, linger: Duration) -> Result<(), String> {
     std::thread::sleep(linger);
     match child.try_wait() {
         Ok(Some(_)) => Err("mpv 未能打开这路流。".into()),
@@ -96,12 +98,21 @@ fn wait_child_started(child: &mut Child, linger: Duration) -> Result<(), String>
     }
 }
 
-fn mpv_args(title: &str, start_position_ms: u64, user_agent: Option<&str>) -> Vec<String> {
+pub(crate) fn mpv_args(
+    title: &str,
+    start_position_ms: u64,
+    user_agent: Option<&str>,
+    wid: Option<i64>,
+    ipc: Option<&Path>,
+    input_conf: Option<&Path>,
+) -> Vec<String> {
     let mut args = vec![
         "--force-window=yes".to_string(),
         "--keep-open=no".to_string(),
         "--ytdl=no".to_string(),
-        "--focus-on=open".to_string(),
+        "--osc=no".to_string(),
+        "--no-border".to_string(),
+        "--focus-on=never".to_string(),
         format!("--title={}", title.replace(['\n', '\r'], " ")),
         "--no-terminal".to_string(),
     ];
@@ -110,82 +121,36 @@ fn mpv_args(title: &str, start_position_ms: u64, user_agent: Option<&str>) -> Ve
         // split a normal Mozilla UA into bogus headers, so 115 rejects the URL.
         args.push(format!("--user-agent={agent}"));
     }
+    if let Some(wid) = wid {
+        args.push(format!("--wid={wid}"));
+    }
+    if let Some(ipc) = ipc {
+        args.push(format!("--input-ipc-server={}", ipc.display()));
+    }
+    if let Some(input_conf) = input_conf {
+        args.push(format!("--input-conf={}", input_conf.display()));
+    }
     if start_position_ms > 0 {
         args.push(format!("--start={:.3}", start_position_ms as f64 / 1000.0));
     }
     args
 }
 
-fn raise_mpv_window() {
-    if cfg!(target_os = "macos") {
-        let _ = Command::new("osascript")
-            .args([
-                "-e",
-                "tell application \"System Events\" to set frontmost of first process whose name is \"mpv\" to true",
-            ])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-    }
-}
-
-fn spawn_mpv(
-    mpv: &Path,
-    url: &str,
-    title: &str,
-    start_position_ms: u64,
-    user_agent: Option<&str>,
-) -> Result<(), String> {
-    let mut cmd = Command::new(mpv);
-    cmd.args(mpv_args(title, start_position_ms, user_agent))
-        .arg(url)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    if let Some(path) = command_path_with_extras() {
-        cmd.env("PATH", path);
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
-    let mut child = cmd.spawn().map_err(|_| "无法启动 mpv。".to_string())?;
-    wait_child_started(&mut child, Duration::from_millis(1200))?;
-    std::thread::spawn(move || {
-        let _ = child.wait();
-    });
-    raise_mpv_window();
-    Ok(())
-}
-
-#[tauri::command]
-fn play_native(
-    url: String,
-    title: String,
-    start_position_ms: u64,
-    user_agent: Option<String>,
-) -> Result<(), String> {
-    if !is_supported_playback_url(&url) {
-        return Err("unsupported playback url".into());
-    }
-    let Some(mpv) = resolve_mpv() else {
-        return Err("未找到 mpv。请先安装 mpv 并确保在 PATH 中。".into());
-    };
-    spawn_mpv(
-        &mpv,
-        &url,
-        &title,
-        start_position_ms,
-        user_agent.as_deref(),
-    )
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![play_native])
+        .manage(player::PlayerState::default())
+        .setup(|app| {
+            player::create_surface(app)?;
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            player::play_native,
+            player::layout_native,
+            player::stop_native,
+            player::native_control,
+            player::native_status,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -193,6 +158,7 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::{Command, Stdio};
 
     #[test]
     fn accepts_http_playback_urls() {
@@ -252,8 +218,9 @@ mod tests {
     #[test]
     fn mpv_args_keep_comma_user_agent_out_of_header_lists() {
         let agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
-        let args = mpv_args("范海辛", 0, Some(agent));
+        let args = mpv_args("范海辛", 0, Some(agent), Some(42), None, None);
         assert!(args.iter().any(|arg| arg == &format!("--user-agent={agent}")));
+        assert!(args.iter().any(|arg| arg == "--wid=42"));
         assert!(args.iter().all(|arg| !arg.starts_with("--http-header-fields")));
     }
 

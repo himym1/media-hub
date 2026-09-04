@@ -100,6 +100,42 @@
   background: linear-gradient(0deg, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.42) 62%, transparent 100%);
 }
 
+.library-player.is-native .library-player-stage {
+  display: flex;
+  flex-direction: column;
+}
+
+.library-player.is-native .library-player-toolbar,
+.library-player.is-native .library-player-chrome {
+  position: relative;
+  z-index: 5;
+  background: #050607;
+}
+
+.library-player.is-native .library-player-toolbar {
+  padding: 10px 16px;
+}
+
+.library-player.is-native .library-player-chrome {
+  padding: 12px 16px 16px;
+}
+
+.library-player.is-native .library-player-video,
+.library-player.is-native .library-player-center-play {
+  display: none;
+}
+
+.library-player-native-hole {
+  flex: 1;
+  min-height: 160px;
+  background: #000;
+}
+
+.library-player.is-native.chrome-hidden .library-player-toolbar,
+.library-player.is-native.chrome-hidden .library-player-chrome {
+  display: none;
+}
+
 .library-player.chrome-hidden .library-player-toolbar,
 .library-player.chrome-hidden .library-player-chrome,
 .library-player.chrome-hidden .library-player-center-play {

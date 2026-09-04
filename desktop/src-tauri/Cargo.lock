@@ -1767,7 +1767,7 @@ dependencies = [
 
 [[package]]
 name = "media-hub-desktop"
-version = "0.20.28"
+version = "0.20.30"
 dependencies = [
  "serde",
  "serde_json",
