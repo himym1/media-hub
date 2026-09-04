@@ -11,6 +11,11 @@ backend/data/
 backend/vendor/
 /data/
 
+# Desktop
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+
 # Web
 web/node_modules/
 web/dist/

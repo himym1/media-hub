@@ -41,14 +41,14 @@ Discovered
 - Emby library refresh, duplicate checks, and indexing verification.
 - Playback readiness probe without proxying the media body.
 - Enterprise WeChat application notifications.
-- Responsive Web interface and native Android app.
+- Responsive Web interface, native Android app, and a Windows desktop client when the browser cannot decode the stream.
 
 ## Non-goals
 
 - No PT downloads or MoviePilot integration.
 - No local NAS instant-upload scanner.
 - No built-in video player in the MVP.
-- No iOS, desktop, Flutter, or public app-store release.
+- No iOS, Flutter, or public app-store release. Windows via Tauri is in scope when native decode is required.
 - No multi-tenant accounts, payments, or public registration.
 - No replacement for QMediaSync or Emby.
 - No credential extraction from browser sessions.

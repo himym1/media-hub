@@ -3,7 +3,7 @@
 ## Product Boundary
 
 - Media Hub is a single-user, single-NAS media automation control plane.
-- The repository contains one backend, one Web client, and one Android client.
+- The repository contains one backend, one Web client, one Android client, and may add a Windows desktop client when native decode is required.
 - Media payloads must never be proxied through Media Hub. Playback remains 115 CDN to player.
 - Media Hub owns STRM generation and `/115/url/` 302 playback. Emby owns library management and playback APIs.
 - MoviePilot and local NAS upload workflows are outside the MVP.
@@ -18,10 +18,17 @@
 
 ## Android
 
-- Android only. Do not add iOS, desktop, Flutter, or Kotlin Multiplatform source sets.
+- Phone client is Android. Do not add iOS, Flutter, or Kotlin Multiplatform source sets.
 - Use Kotlin, Jetpack Compose, and pinned stable dependencies.
 - Material 3 is the presentation system. Business screens use project-owned `MediaHub*` wrappers instead of importing Material 3 components directly.
 - Use unidirectional data flow, ViewModel, StateFlow, repositories, and explicit UI states.
+
+## Desktop
+
+- Windows desktop is allowed when the browser cannot decode the library stream (DTS / TrueHD / similar).
+- Prefer Tauri wrapping the existing Web UI. Use native playback (mpv / FFmpeg or OS decoders) only for the player surface.
+- Do not add Electron, or a second desktop UI stack, unless Tauri is proven insufficient.
+- Desktop still consumes the same OpenAPI contract. Do not proxy media bytes through Media Hub.
 
 ## Web
 

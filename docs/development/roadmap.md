@@ -95,7 +95,8 @@ Exit gate: fresh deployment needs only Media Hub + Emby + 115; transfer-to-playb
 ## Deferred
 
 - Web 115 diagnostic file player.
-- iOS or desktop app.
+- iOS app.
+- Windows Tauri installer CI (dev shell exists under `desktop/`).
 - Multi-user roles.
 - Public registration and billing.
 - PT/MoviePilot workflows.

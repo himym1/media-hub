@@ -27,7 +27,7 @@ Give later Aegis alignment checks a dual baseline: product non-goals versus runt
 ### 4.1 Current Truth
 
 - Single-user NAS control plane: search, transfer, STRM, Emby index, WeCom
-- Web is the desktop client; Android is the phone client
+- Web is the default desktop surface; Android is the phone client; Windows Tauri is allowed when the browser cannot decode the stream
 - Playback readiness is verified without proxying media bytes
 
 ### 4.2 Non-negotiables
@@ -35,11 +35,11 @@ Give later Aegis alignment checks a dual baseline: product non-goals versus runt
 1. Media payloads never transit Media Hub; playback is 115 CDN to the player.
 2. Web and Android share OpenAPI semantics, not UI code.
 3. Provider secrets stay server-side and encrypted at rest.
-4. Android only for native apps: no iOS, desktop, Flutter, or KMP source sets.
+4. Phone native is Android only: no iOS, Flutter, or KMP. Windows Tauri is allowed for native playback.
 
 ### 4.3 Product Non-goals
 
-- Windows / Tauri / Electron client
+- Electron or a second desktop UI stack (Tauri wrapping Web is allowed)
 - Web built-in player was deferred until this workstream
 - PT / MoviePilot, public registration, multi-tenant accounts
 

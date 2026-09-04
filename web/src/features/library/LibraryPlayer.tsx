@@ -7,6 +7,7 @@ import { formatPlaybackClock } from './libraryPlayback'
 import { attachPlaybackSession } from './libraryPlaybackSession'
 import { attachSubtitleTrack, setSubtitleMode, subtitleAttachResult } from './librarySubtitle'
 import { looksLikeSilentDirectPlay } from './silentAudio'
+import { canPlayNatively, playNatively } from '../../shared/desktop/nativePlayback'
 import './LibraryPlayer.css'
 
 const playbackRates = [0.75, 1, 1.25, 1.5, 2]
@@ -44,6 +45,7 @@ export function LibraryPlayer({
   const [chromePinned, setChromePinned] = useState(false)
   const [allowAutoHide, setAllowAutoHide] = useState(false)
   const [silentAudio, setSilentAudio] = useState(false)
+  const [nativeHanded, setNativeHanded] = useState(false)
 
   const clearIdleTimer = () => {
     if (idleTimer.current != null) {
@@ -125,6 +127,7 @@ export function LibraryPlayer({
   useEffect(() => {
     setError(null)
     setSilentAudio(false)
+    setNativeHanded(false)
     setAllowAutoHide(false)
     setChromeVisible(true)
     setChromePinned(false)
@@ -146,6 +149,11 @@ export function LibraryPlayer({
           fetchLocalSubtitle(itemId).catch(() => null),
         ])
         if (cancelled) return
+        if (canPlayNatively()) {
+          await playNatively(descriptor.streamUrl, { title, startPositionMs: descriptor.startPositionMs })
+          if (!cancelled) setNativeHanded(true)
+          return
+        }
         const attached = subtitleAttachResult(subtitle)
         if (attached.kind === 'track') {
           subtitleUrl = attached.url
@@ -194,7 +202,7 @@ export function LibraryPlayer({
       video.removeAttribute('src')
       video.load()
     }
-  }, [itemId])
+  }, [itemId, title])
 
   useEffect(() => {
     if (error || silentAudio) return
@@ -291,6 +299,12 @@ export function LibraryPlayer({
           <p className="library-player-note" role="status">
             检测到有画面但浏览器未解码出声音。自己的库是直出原片，DTS / TrueHD / 部分 EAC3 音轨在 Chrome 等浏览器里常会静音。
             <a href={externalUrl} rel="noreferrer" target="_blank">在 Emby 打开</a>
+          </p>
+        ) : null}
+
+        {nativeHanded && !error ? (
+          <p className="library-player-note" role="status">
+            已交给系统播放器。关闭本层不会停止 mpv。
           </p>
         ) : null}
 
