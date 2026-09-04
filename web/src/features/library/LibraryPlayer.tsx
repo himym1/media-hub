@@ -150,8 +150,18 @@ export function LibraryPlayer({
         ])
         if (cancelled) return
         if (canPlayNatively()) {
-          await playNatively(descriptor.streamUrl, { title, startPositionMs: descriptor.startPositionMs })
-          if (!cancelled) setNativeHanded(true)
+          try {
+            await playNatively(descriptor.streamUrl, {
+              title,
+              startPositionMs: descriptor.startPositionMs,
+              userAgent: descriptor.userAgent,
+            })
+            if (!cancelled) setNativeHanded(true)
+          } catch (cause) {
+            if (!cancelled) {
+              setError(cause instanceof Error ? cause.message : '系统播放器未能打开这路流。')
+            }
+          }
           return
         }
         const attached = subtitleAttachResult(subtitle)
@@ -236,9 +246,10 @@ export function LibraryPlayer({
   const seekProgress = durationSeconds > 0 ? Math.min(1, currentSeconds / durationSeconds) : 0
   const shellClass = [
     'library-player',
-    chromeVisible || !playing || Boolean(error) ? 'chrome-visible' : 'chrome-hidden',
+    nativeHanded ? 'is-native-handed' : '',
+    chromeVisible || !playing || Boolean(error) || nativeHanded ? 'chrome-visible' : 'chrome-hidden',
     playing ? 'is-playing' : 'is-paused',
-  ].join(' ')
+  ].filter(Boolean).join(' ')
 
   return (
     <div
@@ -270,7 +281,7 @@ export function LibraryPlayer({
           playsInline
         />
 
-        {!playing && !error ? (
+        {!playing && !error && !nativeHanded ? (
           <button aria-label="继续播放" className="library-player-center-play" onClick={togglePlayback} type="button">
             <Play size={28} />
           </button>
@@ -304,10 +315,11 @@ export function LibraryPlayer({
 
         {nativeHanded && !error ? (
           <p className="library-player-note" role="status">
-            已交给系统播放器。关闭本层不会停止 mpv。
+            已在独立的 mpv 窗口播放。关闭本层不会停止播放。
           </p>
         ) : null}
 
+        {nativeHanded ? null : (
         <div
           className="library-player-chrome"
           onFocusCapture={() => revealChrome(true)}
@@ -451,6 +463,7 @@ export function LibraryPlayer({
             ) : null}
           </div>
         </div>
+        )}
       </div>
     </div>
   )

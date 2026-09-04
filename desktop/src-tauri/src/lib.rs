@@ -1,11 +1,23 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
+use std::time::Duration;
 
 fn is_supported_playback_url(url: &str) -> bool {
     if url.contains('\n') || url.contains('\r') || url.contains('\0') {
         return false;
     }
     url.starts_with("https://") || url.starts_with("http://")
+}
+
+fn sanitized_user_agent(value: &str) -> Option<&str> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.len() > 512 {
+        return None;
+    }
+    if trimmed.bytes().any(|byte| byte < 32 || byte == 127) {
+        return None;
+    }
+    Some(trimmed)
 }
 
 fn mpv_binary_name() -> &'static str {
@@ -65,30 +77,85 @@ fn find_on_path(name: &str) -> Option<PathBuf> {
     None
 }
 
-fn spawn_mpv(mpv: &Path, url: &str, title: &str, start_position_ms: u64) -> Result<(), String> {
+fn command_path_with_extras() -> Option<std::ffi::OsString> {
+    let mut dirs = extra_mpv_dirs();
+    if let Ok(path) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path) {
+            dirs.push(dir);
+        }
+    }
+    std::env::join_paths(dirs).ok()
+}
+
+fn wait_child_started(child: &mut Child, linger: Duration) -> Result<(), String> {
+    std::thread::sleep(linger);
+    match child.try_wait() {
+        Ok(Some(_)) => Err("mpv 未能打开这路流。".into()),
+        Ok(None) => Ok(()),
+        Err(_) => Err("无法确认 mpv 是否已启动。".into()),
+    }
+}
+
+fn spawn_mpv(
+    mpv: &Path,
+    url: &str,
+    title: &str,
+    start_position_ms: u64,
+    user_agent: Option<&str>,
+) -> Result<(), String> {
     let mut cmd = Command::new(mpv);
     cmd.arg("--force-window=yes")
         .arg("--keep-open=no")
+        .arg("--ytdl=no")
         .arg(format!("--title={}", title.replace(['\n', '\r'], " ")))
-        .arg("--no-terminal");
+        .arg("--no-terminal")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    if let Some(path) = command_path_with_extras() {
+        cmd.env("PATH", path);
+    }
+    if let Some(agent) = user_agent.and_then(sanitized_user_agent) {
+        cmd.arg(format!("--user-agent={agent}"));
+        cmd.arg(format!("--http-header-fields=User-Agent: {agent}"));
+    }
     if start_position_ms > 0 {
         cmd.arg(format!("--start={:.3}", start_position_ms as f64 / 1000.0));
     }
     cmd.arg(url);
-    cmd.spawn()
-        .map(|_| ())
-        .map_err(|_| "无法启动 mpv。".to_string())
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    let mut child = cmd.spawn().map_err(|_| "无法启动 mpv。".to_string())?;
+    wait_child_started(&mut child, Duration::from_millis(500))?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
 }
 
 #[tauri::command]
-fn play_native(url: String, title: String, start_position_ms: u64) -> Result<(), String> {
+fn play_native(
+    url: String,
+    title: String,
+    start_position_ms: u64,
+    user_agent: Option<String>,
+) -> Result<(), String> {
     if !is_supported_playback_url(&url) {
         return Err("unsupported playback url".into());
     }
     let Some(mpv) = resolve_mpv() else {
         return Err("未找到 mpv。请先安装 mpv 并确保在 PATH 中。".into());
     };
-    spawn_mpv(&mpv, &url, &title, start_position_ms)
+    spawn_mpv(
+        &mpv,
+        &url,
+        &title,
+        start_position_ms,
+        user_agent.as_deref(),
+    )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -148,5 +215,38 @@ mod tests {
                 .and_then(|name| name.to_str())
                 .is_some_and(|name| name.starts_with("mpv")));
         }
+    }
+
+    #[test]
+    fn user_agent_rejects_control_characters() {
+        assert!(sanitized_user_agent("Mozilla/5.0 MediaHub").is_some());
+        assert!(sanitized_user_agent("Mozilla/5.0\n--script=/tmp/x").is_none());
+        assert!(sanitized_user_agent("").is_none());
+        assert!(sanitized_user_agent("   ").is_none());
+    }
+
+    #[test]
+    fn wait_child_started_rejects_immediate_exit() {
+        let mut child = Command::new("false")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn false");
+        let result = wait_child_started(&mut child, Duration::from_millis(30));
+        assert_eq!(result, Err("mpv 未能打开这路流。".into()));
+    }
+
+    #[test]
+    fn wait_child_started_accepts_still_running() {
+        let mut child = Command::new("sleep")
+            .arg("2")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn sleep");
+        let result = wait_child_started(&mut child, Duration::from_millis(30));
+        let _ = child.kill();
+        let _ = child.wait();
+        assert_eq!(result, Ok(()));
     }
 }
