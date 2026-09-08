@@ -45,8 +45,12 @@
 
 ## Verification
 
-- Backend logic requires focused Go tests from `backend/`.
-- Web changes require `pnpm build` and relevant tests from `web/`.
-- Android changes require `./gradlew :app:assembleDebug` and focused unit/UI tests from `android/`.
-- API contract changes require both client models to remain buildable.
-- Desktop Rust changes require `cargo test --manifest-path desktop/src-tauri/Cargo.toml` from the repository root.
+- Coding tasks authorize necessary test maintenance, focused low-risk local tests and analysis, and needed local builds. Inspect script/configuration side effects first; documentation, prompt, and comment-only changes normally need only readback and diff review.
+- Database/container integration tests or setup, NAS/115/Emby access, real accounts/data, device installation, deployment, and full or substantially costly checks require explicit authorization. Ordinary checks use synthetic/mock data and must not contact live services.
+- Choose the smallest relevant checks for the affected area:
+  - Backend: run focused Go tests from `backend/`.
+  - Web: run `pnpm build` and relevant tests from `web/`.
+  - Android: run `./gradlew :app:assembleDebug` and focused unit/UI tests from `android/`.
+  - Desktop Rust: run `cargo test --manifest-path desktop/src-tauri/Cargo.toml` from the repository root.
+- API contract changes must keep client models consistent and buildable; run the smallest relevant local checks within the limits above.
+- Report checks actually run and checks not run. Do not broaden or repeat successful checks without new changes, failures, or unresolved concerns.
