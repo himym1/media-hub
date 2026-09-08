@@ -1,8 +1,0 @@
----
-description: Ship the next patch after a user-facing fix without asking.
-alwaysApply: true
----
-
-# Ship after fix
-
-When a user-facing Media Hub fix is complete, release the next patch immediately. Do not ask whether to commit, tag, or deploy.
