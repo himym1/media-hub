@@ -7,8 +7,10 @@ import {
   controlNatively,
   layoutNatively,
   nativeStatus,
+  nativeSubtitleFromBytes,
   playNatively,
   stopNatively,
+  type NativeSubtitle,
 } from '../../shared/desktop/nativePlayback'
 import { IconButton } from '../../shared/ui/IconButton'
 import { isHlsStream } from './isHlsStream'
@@ -35,6 +37,7 @@ type NativeRequest = {
   title: string
   startPositionMs?: number
   userAgent?: string
+  subtitle?: NativeSubtitle | null
 }
 
 export function LibraryPlayer({
@@ -134,11 +137,12 @@ export function LibraryPlayer({
           video.muted = !video.muted
           setMuted(video.muted)
         }
-      } else if (event.key === 'c' && video) {
+      } else if (event.key === 'c') {
         event.preventDefault()
         if (captions === 'on' || captions === 'off') {
           const next = captions === 'on' ? 'off' : 'on'
-          setSubtitleMode(video, next === 'on')
+          if (nativeActive) void controlNatively('subtitles').catch(() => undefined)
+          else if (video) setSubtitleMode(video, next === 'on')
           setCaptions(next)
         }
       }
@@ -174,12 +178,17 @@ export function LibraryPlayer({
         ])
         if (cancelled) return
         if (canPlayNatively()) {
+          const nativeSubtitle = subtitle
+            ? nativeSubtitleFromBytes(subtitle.bytes, subtitle.fileName)
+            : null
           nativeRequest.current = {
             url: descriptor.streamUrl,
             title,
             startPositionMs: descriptor.startPositionMs,
             userAgent: descriptor.userAgent,
+            subtitle: nativeSubtitle,
           }
+          setCaptions(nativeSubtitle ? 'on' : 'missing')
           setNativeActive(true)
           return
         }
@@ -246,6 +255,7 @@ export function LibraryPlayer({
           startPositionMs: request.startPositionMs,
           userAgent: request.userAgent,
           bounds: boundsFromElement(hole),
+          subtitle: request.subtitle,
         })
         if (!cancelled) setPlaying(true)
       } catch (cause) {
@@ -294,9 +304,15 @@ export function LibraryPlayer({
   }, [itemId, error, silentAudio, playing, nativeActive])
 
   const toggleCaptions = () => {
-    const video = videoRef.current
-    if (!video || (captions !== 'on' && captions !== 'off')) return
+    if (captions !== 'on' && captions !== 'off') return
     const next = captions === 'on' ? 'off' : 'on'
+    if (nativeActive) {
+      void controlNatively('subtitles').catch(() => undefined)
+      setCaptions(next)
+      return
+    }
+    const video = videoRef.current
+    if (!video) return
     setSubtitleMode(video, next === 'on')
     setCaptions(next)
   }
@@ -492,17 +508,27 @@ export function LibraryPlayer({
               </select>
             </label>
 
-            {!nativeActive ? (
+            {(captions === 'on' || captions === 'off') ? (
               <button
-                aria-label={captions === 'on' ? '字幕开' : captions === 'off' ? '字幕关' : '无字幕'}
+                aria-label={captions === 'on' ? '字幕开' : '字幕关'}
                 aria-pressed={captions === 'on'}
                 className={captions === 'on' ? 'library-player-icon-action active' : 'library-player-icon-action'}
-                disabled={captions === 'missing' || captions === 'ass'}
                 onClick={toggleCaptions}
                 type="button"
               >
                 <Captions size={18} />
-                <span aria-hidden="true">{captions === 'on' ? '字幕开' : captions === 'off' ? '字幕关' : '无字幕'}</span>
+                <span aria-hidden="true">{captions === 'on' ? '字幕开' : '字幕关'}</span>
+              </button>
+            ) : !nativeActive ? (
+              <button
+                aria-label="无字幕"
+                aria-pressed={false}
+                className="library-player-icon-action"
+                disabled
+                type="button"
+              >
+                <Captions size={18} />
+                <span aria-hidden="true">无字幕</span>
               </button>
             ) : null}
 

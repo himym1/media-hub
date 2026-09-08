@@ -961,7 +961,11 @@ func (c *Client) getJSONResponse(
 		return fmt.Errorf("create Emby request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("User-Agent", "Media-Hub/emby")
+	if configuration.shared {
+		request.Header.Set("User-Agent", sharedClientName+"/"+sharedClientVer)
+	} else {
+		request.Header.Set("User-Agent", "Media-Hub/emby")
+	}
 	if authenticated {
 		applyEmbyAuth(request, configuration)
 	}
@@ -1015,7 +1019,11 @@ func (c *Client) postJSONBody(
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("User-Agent", "Media-Hub/emby")
+	if configuration.shared {
+		request.Header.Set("User-Agent", sharedClientName+"/"+sharedClientVer)
+	} else {
+		request.Header.Set("User-Agent", "Media-Hub/emby")
+	}
 	applyEmbyAuth(request, configuration)
 	response, err := c.client.Do(request)
 	if err != nil {

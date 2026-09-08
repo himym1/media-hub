@@ -42,9 +42,11 @@ fn extra_mpv_dirs() -> Vec<PathBuf> {
             dirs.push(PathBuf::from(home).join(r"scoop\apps\mpv\current"));
         }
         if let Ok(program_files) = std::env::var("ProgramFiles") {
-            dirs.push(PathBuf::from(program_files).join("mpv"));
+            dirs.push(PathBuf::from(&program_files).join("mpv"));
+            dirs.push(PathBuf::from(&program_files).join("MPV Player"));
         }
         dirs.push(PathBuf::from(r"C:\Program Files\mpv"));
+        dirs.push(PathBuf::from(r"C:\Program Files\MPV Player"));
         dirs.push(PathBuf::from(r"C:\Program Files (x86)\mpv"));
         dirs.push(PathBuf::from(r"C:\ProgramData\chocolatey\bin"));
     } else {
@@ -99,6 +101,40 @@ pub(crate) fn wait_child_started(child: &mut Child, linger: Duration) -> Result<
     }
 }
 
+pub(crate) fn subtitle_extension(file_name: &str) -> &'static str {
+    let lower = file_name.to_ascii_lowercase();
+    if lower.ends_with(".ass") || lower.ends_with(".ssa") {
+        "ass"
+    } else if lower.ends_with(".vtt") {
+        "vtt"
+    } else {
+        "srt"
+    }
+}
+
+pub(crate) fn subtitle_temp_path(file_name: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("media-hub-sub.{}", subtitle_extension(file_name)))
+}
+
+pub(crate) fn write_subtitle_temp(bytes: &[u8], file_name: &str) -> Result<PathBuf, String> {
+    if bytes.is_empty() {
+        return Err("字幕文件为空。".into());
+    }
+    if bytes.len() > 8 * 1024 * 1024 {
+        return Err("字幕文件过大。".into());
+    }
+    let path = subtitle_temp_path(file_name);
+    std::fs::write(&path, bytes).map_err(|_| "无法准备字幕。".to_string())?;
+    Ok(path)
+}
+
+pub(crate) fn decode_subtitle_base64(value: &str) -> Result<Vec<u8>, String> {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(value.trim())
+        .map_err(|_| "字幕内容无效。".to_string())
+}
+
 pub(crate) fn mpv_args(
     title: &str,
     start_position_ms: u64,
@@ -106,6 +142,7 @@ pub(crate) fn mpv_args(
     wid: Option<i64>,
     ipc: Option<&Path>,
     input_conf: Option<&Path>,
+    sub_file: Option<&Path>,
 ) -> Vec<String> {
     let mut args = vec![
         "--force-window=yes".to_string(),
@@ -116,6 +153,7 @@ pub(crate) fn mpv_args(
         "--focus-on=never".to_string(),
         format!("--title={}", title.replace(['\n', '\r'], " ")),
         "--no-terminal".to_string(),
+        "--slang=zh,chi,zh-Hans,zh-CN,zh-TW,zh-HK".to_string(),
     ];
     if let Some(agent) = user_agent.and_then(sanitized_user_agent) {
         // Only --user-agent. --http-header-fields is a comma list and would
@@ -130,6 +168,10 @@ pub(crate) fn mpv_args(
     }
     if let Some(input_conf) = input_conf {
         args.push(format!("--input-conf={}", input_conf.display()));
+    }
+    if let Some(sub_file) = sub_file {
+        args.push(format!("--sub-file={}", sub_file.display()));
+        args.push("--sub-visibility=yes".to_string());
     }
     if start_position_ms > 0 {
         args.push(format!("--start={:.3}", start_position_ms as f64 / 1000.0));
@@ -219,31 +261,74 @@ mod tests {
     #[test]
     fn mpv_args_keep_comma_user_agent_out_of_header_lists() {
         let agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
-        let args = mpv_args("范海辛", 0, Some(agent), Some(42), None, None);
+        let args = mpv_args("范海辛", 0, Some(agent), Some(42), None, None, None);
+        assert!(args.iter().any(|arg| arg == "--slang=zh,chi,zh-Hans,zh-CN,zh-TW,zh-HK"));
         assert!(args.iter().any(|arg| arg == &format!("--user-agent={agent}")));
         assert!(args.iter().any(|arg| arg == "--wid=42"));
         assert!(args.iter().all(|arg| !arg.starts_with("--http-header-fields")));
     }
 
     #[test]
+    fn mpv_args_attach_external_subtitle() {
+        let path = PathBuf::from(r"C:\Temp\media-hub-sub.ass");
+        let args = mpv_args("片", 0, None, None, None, None, Some(&path));
+        assert!(args.iter().any(|arg| arg == &format!("--sub-file={}", path.display())));
+        assert!(args.iter().any(|arg| arg == "--sub-visibility=yes"));
+    }
+
+    #[test]
+    fn subtitle_extension_from_name() {
+        assert_eq!(subtitle_extension("chi.ass"), "ass");
+        assert_eq!(subtitle_extension("CHI.SSA"), "ass");
+        assert_eq!(subtitle_extension("a.vtt"), "vtt");
+        assert_eq!(subtitle_extension("chi.srt"), "srt");
+    }
+
+    #[test]
+    fn write_subtitle_temp_round_trips() {
+        let path = write_subtitle_temp(b"1\n00:00:01,000 --> 00:00:02,000\nok\n", "chi.srt").expect("write");
+        assert!(path.ends_with("media-hub-sub.srt"));
+        assert_eq!(std::fs::read(&path).expect("read"), b"1\n00:00:01,000 --> 00:00:02,000\nok\n");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn wait_child_started_rejects_immediate_exit() {
-        let mut child = Command::new("false")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("spawn false");
+        let mut child = if cfg!(windows) {
+            Command::new("cmd")
+                .args(["/C", "exit", "1"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("spawn cmd exit")
+        } else {
+            Command::new("false")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("spawn false")
+        };
         let result = wait_child_started(&mut child, Duration::from_millis(30));
         assert_eq!(result, Err("mpv 未能打开这路流。".into()));
     }
 
     #[test]
     fn wait_child_started_accepts_still_running() {
-        let mut child = Command::new("sleep")
-            .arg("2")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("spawn sleep");
+        let mut child = if cfg!(windows) {
+            Command::new("ping")
+                .args(["-n", "3", "127.0.0.1"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("spawn ping")
+        } else {
+            Command::new("sleep")
+                .arg("2")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("spawn sleep")
+        };
         let result = wait_child_started(&mut child, Duration::from_millis(30));
         let _ = child.kill();
         let _ = child.wait();

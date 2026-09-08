@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, Window};
 
 use crate::{
-    command_path_with_extras, is_supported_playback_url, mpv_args, resolve_mpv, sanitized_user_agent,
-    wait_child_started,
+    command_path_with_extras, decode_subtitle_base64, is_supported_playback_url, mpv_args,
+    resolve_mpv, sanitized_user_agent, wait_child_started, write_subtitle_temp,
 };
 
 pub const SURFACE_LABEL: &str = "mpv-surface";
@@ -153,6 +153,9 @@ fn stop_child(state: &PlayerState) {
     if !cfg!(windows) {
         let _ = std::fs::remove_file(ipc_path());
     }
+    for name in ["media-hub-sub.srt", "media-hub-sub.ass", "media-hub-sub.vtt"] {
+        let _ = std::fs::remove_file(std::env::temp_dir().join(name));
+    }
 }
 
 fn spawn_embedded(
@@ -162,6 +165,7 @@ fn spawn_embedded(
     start_position_ms: u64,
     user_agent: Option<&str>,
     wid: i64,
+    sub_file: Option<&Path>,
     state: &PlayerState,
 ) -> Result<(), String> {
     stop_child(state);
@@ -178,6 +182,7 @@ fn spawn_embedded(
         Some(wid),
         Some(&ipc),
         Some(&input),
+        sub_file,
     ))
     .arg(url)
     .stdin(Stdio::null())
@@ -266,12 +271,25 @@ pub fn play_native(
     start_position_ms: u64,
     user_agent: Option<String>,
     bounds: EmbedBounds,
+    subtitle_base64: Option<String>,
+    subtitle_file_name: Option<String>,
 ) -> Result<(), String> {
     if !is_supported_playback_url(&url) {
         return Err("unsupported playback url".into());
     }
     let Some(mpv) = resolve_mpv() else {
         return Err("未找到 mpv。请先安装 mpv 并确保在 PATH 中。".into());
+    };
+    let sub_path = match subtitle_base64.as_deref().filter(|value| !value.trim().is_empty()) {
+        Some(encoded) => {
+            let bytes = decode_subtitle_base64(encoded)?;
+            let name = subtitle_file_name
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or("chi.srt");
+            Some(write_subtitle_temp(&bytes, name)?)
+        }
+        None => None,
     };
     let main = main_window(&app)?;
     let surface = ensure_surface(&app)?;
@@ -285,6 +303,7 @@ pub fn play_native(
         start_position_ms,
         user_agent.as_deref().and_then(sanitized_user_agent),
         wid,
+        sub_path.as_deref(),
         &state,
     )?;
     let _ = main.set_focus();
@@ -337,6 +356,9 @@ pub fn native_control(action: String, value: Option<f64>) -> Result<(), String> 
         }
         "mute" => {
             ipc_command(&[serde_json::json!("cycle"), serde_json::json!("mute")])?;
+        }
+        "subtitles" => {
+            ipc_command(&[serde_json::json!("cycle"), serde_json::json!("sub-visibility")])?;
         }
         _ => return Err("不支持的播放操作。".into()),
     }

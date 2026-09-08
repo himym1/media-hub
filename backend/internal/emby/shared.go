@@ -164,33 +164,60 @@ func (c *Client) loginShared(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) sharedLibraries(ctx context.Context) ([]Library, error) {
+func (c *Client) clearSharedAuth() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if !c.config.shared {
+		return
+	}
+	c.config.apiKey = ""
+	c.config.userID = ""
+	c.sessionToken = ""
+}
+
+func (c *Client) withSharedAuth(ctx context.Context, run func(clientConfig) error) error {
 	if err := c.ensureSharedSession(ctx); err != nil {
-		return nil, err
+		return err
 	}
-	configuration := c.configuration()
-	var response itemResponse
-	if err := c.getJSON(ctx, configuration, path.Join("Users", configuration.userID, "Views"), nil, true, &response); err != nil {
-		return nil, err
+	err := run(c.configuration())
+	if !errors.Is(err, ErrUnauthorized) {
+		return err
 	}
-	libraries := make([]Library, 0, len(response.Items))
-	for _, item := range response.Items {
-		if item.ID == "" || item.Name == "" {
-			continue
+	c.clearSharedAuth()
+	if err := c.ensureSharedSession(ctx); err != nil {
+		return err
+	}
+	return run(c.configuration())
+}
+
+func (c *Client) sharedLibraries(ctx context.Context) ([]Library, error) {
+	var libraries []Library
+	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
+		var response itemResponse
+		if err := c.getJSON(ctx, configuration, path.Join("Users", configuration.userID, "Views"), nil, true, &response); err != nil {
+			return err
 		}
-		collectionType := strings.TrimSpace(item.CollectionType)
-		switch collectionType {
-		case "movies", "tvshows", "boxsets", "":
-		default:
-			continue
+		next := make([]Library, 0, len(response.Items))
+		for _, item := range response.Items {
+			if item.ID == "" || item.Name == "" {
+				continue
+			}
+			collectionType := strings.TrimSpace(item.CollectionType)
+			switch collectionType {
+			case "movies", "tvshows", "boxsets", "":
+			default:
+				continue
+			}
+			next = append(next, Library{
+				ID:             sharedPublicID(item.ID),
+				Name:           "共享/" + item.Name,
+				CollectionType: collectionType,
+			})
 		}
-		libraries = append(libraries, Library{
-			ID:             sharedPublicID(item.ID),
-			Name:           "共享/" + item.Name,
-			CollectionType: collectionType,
-		})
-	}
-	return libraries, nil
+		libraries = next
+		return nil
+	})
+	return libraries, err
 }
 
 func (c *Client) sharedBrowseItems(ctx context.Context, libraryID string, offset, limit int) (SearchResult, error) {
@@ -198,38 +225,36 @@ func (c *Client) sharedBrowseItems(ctx context.Context, libraryID string, offset
 	if !ok {
 		return SearchResult{}, ErrItemNotFound
 	}
-	if err := c.ensureSharedSession(ctx); err != nil {
-		return SearchResult{}, err
-	}
 	if offset < 0 {
 		offset = 0
 	}
 	if limit < 1 || limit > 100 {
 		limit = 50
 	}
-	configuration := c.configuration()
-	query := url.Values{
-		"Fields":           {"ProviderIds,UserData,MediaSources,Path"},
-		"IncludeItemTypes": {"Movie,Series"},
-		"Limit":            {strconv.Itoa(limit)},
-		"ParentId":         {nativeID},
-		"Recursive":        {"true"},
-		"SortBy":           {"SortName"},
-		"SortOrder":        {"Ascending"},
-		"StartIndex":       {strconv.Itoa(offset)},
-		"UserId":           {configuration.userID},
-	}
-	var response itemResponse
-	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
-		return SearchResult{}, err
-	}
-	return prefixSharedSearch(publicItems(response)), nil
+	var result SearchResult
+	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
+		query := url.Values{
+			"Fields":           {"ProviderIds,UserData,MediaSources,Path"},
+			"IncludeItemTypes": {"Movie,Series"},
+			"Limit":            {strconv.Itoa(limit)},
+			"ParentId":         {nativeID},
+			"Recursive":        {"true"},
+			"SortBy":           {"SortName"},
+			"SortOrder":        {"Ascending"},
+			"StartIndex":       {strconv.Itoa(offset)},
+			"UserId":           {configuration.userID},
+		}
+		var response itemResponse
+		if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
+			return err
+		}
+		result = prefixSharedSearch(publicItems(response))
+		return nil
+	})
+	return result, err
 }
 
 func (c *Client) sharedSearchItems(ctx context.Context, queryText string, limit int) (SearchResult, error) {
-	if err := c.ensureSharedSession(ctx); err != nil {
-		return SearchResult{}, err
-	}
 	queryText = strings.TrimSpace(queryText)
 	if queryText == "" {
 		return SearchResult{}, fmt.Errorf("search term is required")
@@ -237,20 +262,24 @@ func (c *Client) sharedSearchItems(ctx context.Context, queryText string, limit 
 	if limit < 1 || limit > 100 {
 		limit = 20
 	}
-	configuration := c.configuration()
-	query := url.Values{
-		"Fields":           {"ProviderIds,MediaSources,Path"},
-		"IncludeItemTypes": {"Movie,Series"},
-		"Limit":            {strconv.Itoa(limit)},
-		"Recursive":        {"true"},
-		"SearchTerm":       {queryText},
-		"UserId":           {configuration.userID},
-	}
-	var response itemResponse
-	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
-		return SearchResult{}, err
-	}
-	return prefixSharedSearch(publicItems(response)), nil
+	var result SearchResult
+	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
+		query := url.Values{
+			"Fields":           {"ProviderIds,MediaSources,Path"},
+			"IncludeItemTypes": {"Movie,Series"},
+			"Limit":            {strconv.Itoa(limit)},
+			"Recursive":        {"true"},
+			"SearchTerm":       {queryText},
+			"UserId":           {configuration.userID},
+		}
+		var response itemResponse
+		if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
+			return err
+		}
+		result = prefixSharedSearch(publicItems(response))
+		return nil
+	})
+	return result, err
 }
 
 func (c *Client) sharedItemDetails(ctx context.Context, itemID string) (ItemDetail, error) {
@@ -258,31 +287,31 @@ func (c *Client) sharedItemDetails(ctx context.Context, itemID string) (ItemDeta
 	if !ok {
 		return ItemDetail{}, ErrItemNotFound
 	}
-	if err := c.ensureSharedSession(ctx); err != nil {
-		return ItemDetail{}, err
-	}
-	configuration := c.configuration()
-	query := url.Values{
-		"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,Path,ProviderIds,RunTimeTicks,SeriesName,UserData"},
-	}
-	var item baseItem
-	if err := c.getJSONWithNotFound(ctx, configuration, path.Join("Users", configuration.userID, "Items", nativeID), query, true, &item); err != nil {
-		return ItemDetail{}, err
-	}
-	if item.ID != nativeID || item.Name == "" {
-		return ItemDetail{}, ErrItemNotFound
-	}
-	detail := ItemDetail{
-		Item:             publicItem(item),
-		OriginalTitle:    boundedText(item.OriginalTitle, 300),
-		Overview:         boundedText(item.Overview, 4000),
-		CommunityRating:  item.CommunityRating,
-		RuntimeMinutes:   int(item.RunTimeTicks / 600_000_000),
-		Genres:           boundedStrings(item.Genres, 32, 100),
-		MediaSourceCount: len(item.MediaSources),
-	}
-	detail.ID = sharedPublicID(detail.ID)
-	return detail, nil
+	var detail ItemDetail
+	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
+		query := url.Values{
+			"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,Path,ProviderIds,RunTimeTicks,SeriesName,UserData"},
+		}
+		var item baseItem
+		if err := c.getJSONWithNotFound(ctx, configuration, path.Join("Users", configuration.userID, "Items", nativeID), query, true, &item); err != nil {
+			return err
+		}
+		if item.ID != nativeID || item.Name == "" {
+			return ErrItemNotFound
+		}
+		detail = ItemDetail{
+			Item:             publicItem(item),
+			OriginalTitle:    boundedText(item.OriginalTitle, 300),
+			Overview:         boundedText(item.Overview, 4000),
+			CommunityRating:  item.CommunityRating,
+			RuntimeMinutes:   int(item.RunTimeTicks / 600_000_000),
+			Genres:           boundedStrings(item.Genres, 32, 100),
+			MediaSourceCount: len(item.MediaSources),
+		}
+		detail.ID = sharedPublicID(detail.ID)
+		return nil
+	})
+	return detail, err
 }
 
 func (c *Client) sharedEpisodes(ctx context.Context, seriesID string) ([]Episode, error) {
@@ -290,42 +319,43 @@ func (c *Client) sharedEpisodes(ctx context.Context, seriesID string) ([]Episode
 	if !ok {
 		return nil, ErrItemNotFound
 	}
-	if err := c.ensureSharedSession(ctx); err != nil {
-		return nil, err
-	}
-	configuration := c.configuration()
-	query := url.Values{
-		"Fields":           {"ProviderIds,UserData,MediaSources,Path"},
-		"IncludeItemTypes": {"Episode"},
-		"ParentId":         {nativeID},
-		"Recursive":        {"true"},
-		"SortBy":           {"SortName"},
-		"SortOrder":        {"Ascending"},
-		"UserId":           {configuration.userID},
-	}
-	var response itemResponse
-	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
-		return nil, err
-	}
-	episodes := make([]Episode, 0, len(response.Items))
-	for _, item := range response.Items {
-		if item.Type != "Episode" || item.ID == "" || item.Name == "" {
-			continue
+	var episodes []Episode
+	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
+		query := url.Values{
+			"Fields":           {"ProviderIds,UserData,MediaSources,Path"},
+			"IncludeItemTypes": {"Episode"},
+			"ParentId":         {nativeID},
+			"Recursive":        {"true"},
+			"SortBy":           {"SortName"},
+			"SortOrder":        {"Ascending"},
+			"UserId":           {configuration.userID},
 		}
-		episodes = append(episodes, Episode{
-			Item: Item{
-				ID:                 sharedPublicID(item.ID),
-				Name:               item.Name,
-				Type:               item.Type,
-				Year:               item.ProductionYear,
-				Season:             item.ParentIndexNumber,
-				Episode:            item.IndexNumber,
-				PlaybackPositionMS: item.UserData.PlaybackPositionTicks / 10_000,
-				Played:             item.UserData.Played,
-			},
-		})
-	}
-	return episodes, nil
+		var response itemResponse
+		if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
+			return err
+		}
+		next := make([]Episode, 0, len(response.Items))
+		for _, item := range response.Items {
+			if item.Type != "Episode" || item.ID == "" || item.Name == "" {
+				continue
+			}
+			next = append(next, Episode{
+				Item: Item{
+					ID:                 sharedPublicID(item.ID),
+					Name:               item.Name,
+					Type:               item.Type,
+					Year:               item.ProductionYear,
+					Season:             item.ParentIndexNumber,
+					Episode:            item.IndexNumber,
+					PlaybackPositionMS: item.UserData.PlaybackPositionTicks / 10_000,
+					Played:             item.UserData.Played,
+				},
+			})
+		}
+		episodes = next
+		return nil
+	})
+	return episodes, err
 }
 
 func (c *Client) sharedPrimaryImage(ctx context.Context, itemID string, maxWidth int) (PrimaryImage, error) {
@@ -333,10 +363,13 @@ func (c *Client) sharedPrimaryImage(ctx context.Context, itemID string, maxWidth
 	if !ok {
 		return PrimaryImage{}, ErrItemNotFound
 	}
-	if err := c.ensureSharedSession(ctx); err != nil {
-		return PrimaryImage{}, err
-	}
-	return c.PrimaryImage(ctx, nativeID, maxWidth)
+	var image PrimaryImage
+	err := c.withSharedAuth(ctx, func(_ clientConfig) error {
+		var err error
+		image, err = c.PrimaryImage(ctx, nativeID, maxWidth)
+		return err
+	})
+	return image, err
 }
 
 func (c *Client) ResolveSharedItem(ctx context.Context, target playback.EmbyItemTarget, playbackUserAgent string) (playback.SourceMedia, error) {
@@ -347,33 +380,37 @@ func (c *Client) ResolveSharedItem(ctx context.Context, target playback.EmbyItem
 	if strings.TrimSpace(playbackUserAgent) == "" {
 		return playback.SourceMedia{}, playback.ErrInvalidRequest
 	}
-	if err := c.ensureSharedSession(ctx); err != nil {
+	var media playback.SourceMedia
+	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
+		var item baseItem
+		if err := c.getJSONWithNotFound(ctx, configuration, path.Join("Users", configuration.userID, "Items", nativeID), url.Values{
+			"Fields": {"MediaSources,UserData"},
+		}, true, &item); err != nil {
+			return err
+		}
+		if item.ID != nativeID || item.Name == "" || !isPlayableItemType(item.Type) {
+			return playback.ErrNotFound
+		}
+		source, streamURL, err := c.sharedStreamURL(ctx, configuration, item)
+		if err != nil {
+			return err
+		}
+		session, err := c.playbackSession(nativeID, source.ID, "shared-"+nativeID)
+		if err != nil {
+			return playback.ErrUnavailable
+		}
+		media = playback.SourceMedia{
+			Name:            item.Name,
+			URL:             streamURL,
+			Session:         session,
+			StartPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
+		}
+		return nil
+	})
+	if err != nil {
 		return playback.SourceMedia{}, normalizePlaybackError(err)
 	}
-	configuration := c.configuration()
-	var item baseItem
-	if err := c.getJSONWithNotFound(ctx, configuration, path.Join("Users", configuration.userID, "Items", nativeID), url.Values{
-		"Fields": {"MediaSources,UserData"},
-	}, true, &item); err != nil {
-		return playback.SourceMedia{}, normalizePlaybackError(err)
-	}
-	if item.ID != nativeID || item.Name == "" || !isPlayableItemType(item.Type) {
-		return playback.SourceMedia{}, playback.ErrNotFound
-	}
-	source, streamURL, err := c.sharedStreamURL(ctx, configuration, item)
-	if err != nil {
-		return playback.SourceMedia{}, err
-	}
-	session, err := c.playbackSession(nativeID, source.ID, "shared-"+nativeID)
-	if err != nil {
-		return playback.SourceMedia{}, playback.ErrUnavailable
-	}
-	return playback.SourceMedia{
-		Name:            item.Name,
-		URL:             streamURL,
-		Session:         session,
-		StartPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
-	}, nil
+	return media, nil
 }
 
 func (c *Client) sharedStreamURL(ctx context.Context, configuration clientConfig, item baseItem) (mediaSource, string, error) {

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.20.33
+  version: 0.20.35
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -1778,7 +1778,7 @@ components:
       type: object
       required: [enabled, hour, minute, sources]
       properties:
-        enabled: { type: boolean, description: 是否按北京时间自动签到 }
+        enabled: { type: boolean, description: 是否按北京时间自动签�?}
         hour: { type: integer, minimum: 0, maximum: 23 }
         minute: { type: integer, minimum: 0, maximum: 59 }
         sources:
@@ -1801,7 +1801,7 @@ components:
         id: { type: string, enum: [dian, framehdr, gimy, guanying, hdhive, juying, mikan, sidhub] }
         baseUrl: { type: string, maxLength: 2048 }
         account: { type: string, maxLength: 200 }
-        authMode: { type: string, enum: ['', web, developer], description: 可选以兼容旧客户端；显式切换会清空原模式凭据 }
+        authMode: { type: string, enum: ['', web, developer], description: 可选以兼容旧客户端；显式切换会清空原模式凭�?}
         token: { $ref: '#/components/schemas/SecretUpdate' }
     ProviderSettings:
       type: object

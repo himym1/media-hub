@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { boundsFromElement, canPlayNatively, playNatively } from './nativePlayback'
+import { boundsFromElement, bytesToBase64, canPlayNatively, nativeSubtitleFromBytes, playNatively } from './nativePlayback'
 
 afterEach(() => {
   delete (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
@@ -17,14 +17,16 @@ describe('nativePlayback', () => {
     expect(canPlayNatively()).toBe(true)
   })
 
-  it('invokes play_native with the embed bounds', async () => {
+  it('invokes play_native with the embed bounds and subtitle', async () => {
     const invoke = vi.fn(async () => undefined)
     ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
+    const subtitle = nativeSubtitleFromBytes(new TextEncoder().encode('hello').buffer, 'chi.ass')
     await playNatively('https://cdn.example/movie.mkv', {
       title: '验收影片',
       startPositionMs: 1500,
       userAgent: 'Mozilla/5.0 MediaHub',
       bounds: { x: 10, y: 64, width: 1200, height: 640 },
+      subtitle,
     })
     expect(invoke).toHaveBeenCalledWith('play_native', {
       url: 'https://cdn.example/movie.mkv',
@@ -32,6 +34,8 @@ describe('nativePlayback', () => {
       startPositionMs: 1500,
       userAgent: 'Mozilla/5.0 MediaHub',
       bounds: { x: 10, y: 64, width: 1200, height: 640 },
+      subtitleBase64: bytesToBase64(new TextEncoder().encode('hello').buffer),
+      subtitleFileName: 'chi.ass',
     })
   })
 
