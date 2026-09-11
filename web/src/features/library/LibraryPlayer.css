@@ -15,13 +15,46 @@
   background: #000;
 }
 
+.library-player-picture {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+}
+
 .library-player-video {
   width: 100%;
   height: 100%;
   min-height: 100%;
   background: #000;
   object-fit: contain;
+  transform: scale(var(--picture-zoom, 1));
+  transform-origin: center center;
   cursor: pointer;
+}
+
+.library-player-picture.is-aspect-zoom .library-player-video {
+  object-fit: cover;
+}
+
+.library-player-picture.is-aspect-fill .library-player-video {
+  object-fit: fill;
+}
+
+.library-player-picture.is-aspect-fixed-width .library-player-video {
+  width: 100%;
+  height: auto;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+.library-player-picture.is-aspect-fixed-height .library-player-video {
+  width: auto;
+  height: 100%;
+  min-width: 100%;
+  object-fit: cover;
+  object-position: center center;
 }
 
 .library-player-center-play {
@@ -71,7 +104,18 @@
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.28) 70%, transparent 100%);
 }
 
+.library-player-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .library-player-toolbar h2 {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   margin: 0;
   color: #f2f1eb;
@@ -121,6 +165,7 @@
 }
 
 .library-player.is-native .library-player-video,
+.library-player.is-native .library-player-picture,
 .library-player.is-native .library-player-center-play {
   display: none;
 }
@@ -129,11 +174,6 @@
   flex: 1;
   min-height: 160px;
   background: #000;
-}
-
-.library-player.is-native.chrome-hidden .library-player-toolbar,
-.library-player.is-native.chrome-hidden .library-player-chrome {
-  display: none;
 }
 
 .library-player.chrome-hidden .library-player-toolbar,
@@ -269,7 +309,8 @@
 }
 
 .library-player-volume,
-.library-player-rate {
+.library-player-rate,
+.library-player-aspect {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -277,6 +318,14 @@
   padding: 0 8px;
   color: rgba(242, 241, 235, 0.78);
   font-size: 12px;
+}
+
+.library-player-zoom-value {
+  min-width: 3.25rem;
+  color: #f2f1eb;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .library-player-volume input {
@@ -301,7 +350,8 @@
   background: #f2f1eb;
 }
 
-.library-player-rate select {
+.library-player-rate select,
+.library-player-aspect select {
   min-height: 44px;
   padding: 0 10px;
   color: #f2f1eb;
@@ -364,7 +414,8 @@
   }
 
   .library-player-volume span,
-  .library-player-rate span {
+  .library-player-rate span,
+  .library-player-aspect span {
     display: none;
   }
 

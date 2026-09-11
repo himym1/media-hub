@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { boundsFromElement, bytesToBase64, canPlayNatively, nativeSubtitleFromBytes, playNatively } from './nativePlayback'
+import { boundsFromElement, bytesToBase64, canPlayNatively, controlNatively, nativeSubtitleFromBytes, playNatively } from './nativePlayback'
 
 afterEach(() => {
   delete (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
@@ -66,5 +66,16 @@ describe('nativePlayback', () => {
       title: '验收影片',
       bounds: { x: 0, y: 0, width: 100, height: 100 },
     })).rejects.toThrow('未找到 mpv。请先安装 mpv 并确保在 PATH 中。')
+  })
+
+  it('sends aspect and zoom through native_control', async () => {
+    const invoke = vi.fn(async () => undefined)
+    ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
+    await controlNatively('aspect', undefined, 'zoom')
+    await controlNatively('zoom', 1.2)
+    await controlNatively('cycle-audio')
+    expect(invoke).toHaveBeenCalledWith('native_control', { action: 'aspect', value: undefined, mode: 'zoom' })
+    expect(invoke).toHaveBeenCalledWith('native_control', { action: 'zoom', value: 1.2, mode: undefined })
+    expect(invoke).toHaveBeenCalledWith('native_control', { action: 'cycle-audio', value: undefined, mode: undefined })
   })
 })

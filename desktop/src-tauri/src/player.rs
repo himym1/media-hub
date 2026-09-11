@@ -36,6 +36,7 @@ pub struct NativeStatus {
     pub duration: f64,
     pub volume: f64,
     pub speed: f64,
+    pub zoom: f64,
 }
 
 fn parked_origin() -> PhysicalPosition<i32> {
@@ -138,10 +139,100 @@ fn input_conf_path() -> PathBuf {
     std::env::temp_dir().join("media-hub-mpv-input.conf")
 }
 
+pub(crate) fn input_conf_contents() -> &'static str {
+    concat!(
+        "MBTN_LEFT cycle pause\n",
+        "WHEEL_UP add video-zoom 0.1\n",
+        "WHEEL_DOWN add video-zoom -0.1\n",
+        "WHEEL_LEFT seek -10\n",
+        "WHEEL_RIGHT seek 10\n",
+    )
+}
+
 fn write_input_conf() -> Result<PathBuf, String> {
     let path = input_conf_path();
-    std::fs::write(&path, "MBTN_LEFT cycle pause\n").map_err(|_| "无法准备播放器。".to_string())?;
+    std::fs::write(&path, input_conf_contents()).map_err(|_| "无法准备播放器。".to_string())?;
     Ok(path)
+}
+
+pub(crate) fn native_control_commands(
+    action: &str,
+    value: Option<f64>,
+    mode: Option<&str>,
+) -> Result<Vec<Vec<serde_json::Value>>, String> {
+    match action {
+        "cycle-pause" => Ok(vec![vec![
+            serde_json::json!("cycle"),
+            serde_json::json!("pause"),
+        ]]),
+        "seek" => Ok(vec![vec![
+            serde_json::json!("seek"),
+            serde_json::json!(value.unwrap_or(0.0)),
+            serde_json::json!("absolute"),
+        ]]),
+        "volume" => Ok(vec![vec![
+            serde_json::json!("set_property"),
+            serde_json::json!("volume"),
+            serde_json::json!((value.unwrap_or(1.0) * 100.0).clamp(0.0, 100.0)),
+        ]]),
+        "speed" => Ok(vec![vec![
+            serde_json::json!("set_property"),
+            serde_json::json!("speed"),
+            serde_json::json!(value.unwrap_or(1.0)),
+        ]]),
+        "mute" => Ok(vec![vec![
+            serde_json::json!("cycle"),
+            serde_json::json!("mute"),
+        ]]),
+        "subtitles" => Ok(vec![vec![
+            serde_json::json!("cycle"),
+            serde_json::json!("sub-visibility"),
+        ]]),
+        "cycle-audio" => Ok(vec![vec![
+            serde_json::json!("cycle"),
+            serde_json::json!("audio"),
+        ]]),
+        "zoom" => {
+            let linear = value.unwrap_or(1.0).clamp(0.5, 3.0);
+            Ok(vec![vec![
+                serde_json::json!("set_property"),
+                serde_json::json!("video-zoom"),
+                serde_json::json!(linear.log2()),
+            ]])
+        }
+        "aspect" => Ok(aspect_commands(mode.unwrap_or("fit"))),
+        _ => Err("不支持的播放操作。".into()),
+    }
+}
+
+fn aspect_commands(mode: &str) -> Vec<Vec<serde_json::Value>> {
+    let (keepaspect, panscan) = match mode {
+        "zoom" | "fixed-height" => (true, 1.0),
+        "fill" => (false, 0.0),
+        _ => (true, 0.0),
+    };
+    vec![
+        vec![
+            serde_json::json!("set_property"),
+            serde_json::json!("keepaspect"),
+            serde_json::json!(keepaspect),
+        ],
+        vec![
+            serde_json::json!("set_property"),
+            serde_json::json!("panscan"),
+            serde_json::json!(panscan),
+        ],
+        vec![
+            serde_json::json!("set_property"),
+            serde_json::json!("video-unscaled"),
+            serde_json::json!("no"),
+        ],
+    ]
+}
+
+fn linear_zoom_from_mpv() -> f64 {
+    let log = ipc_number("video-zoom");
+    2_f64.powf(log).clamp(0.5, 3.0)
 }
 
 fn stop_child(state: &PlayerState) {
@@ -328,39 +419,9 @@ pub fn stop_native(app: AppHandle, state: tauri::State<PlayerState>) -> Result<(
 }
 
 #[tauri::command]
-pub fn native_control(action: String, value: Option<f64>) -> Result<(), String> {
-    match action.as_str() {
-        "cycle-pause" => {
-            ipc_command(&[serde_json::json!("cycle"), serde_json::json!("pause")])?;
-        }
-        "seek" => {
-            ipc_command(&[
-                serde_json::json!("seek"),
-                serde_json::json!(value.unwrap_or(0.0)),
-                serde_json::json!("absolute"),
-            ])?;
-        }
-        "volume" => {
-            ipc_command(&[
-                serde_json::json!("set_property"),
-                serde_json::json!("volume"),
-                serde_json::json!((value.unwrap_or(1.0) * 100.0).clamp(0.0, 100.0)),
-            ])?;
-        }
-        "speed" => {
-            ipc_command(&[
-                serde_json::json!("set_property"),
-                serde_json::json!("speed"),
-                serde_json::json!(value.unwrap_or(1.0)),
-            ])?;
-        }
-        "mute" => {
-            ipc_command(&[serde_json::json!("cycle"), serde_json::json!("mute")])?;
-        }
-        "subtitles" => {
-            ipc_command(&[serde_json::json!("cycle"), serde_json::json!("sub-visibility")])?;
-        }
-        _ => return Err("不支持的播放操作。".into()),
+pub fn native_control(action: String, value: Option<f64>, mode: Option<String>) -> Result<(), String> {
+    for command in native_control_commands(&action, value, mode.as_deref())? {
+        ipc_command(&command)?;
     }
     Ok(())
 }
@@ -373,6 +434,7 @@ pub fn native_status() -> Result<NativeStatus, String> {
         duration: ipc_number("duration"),
         volume: ipc_number("volume") / 100.0,
         speed: ipc_number("speed").max(0.1),
+        zoom: linear_zoom_from_mpv(),
     })
 }
 
@@ -385,5 +447,43 @@ mod tests {
         let origin = parked_origin();
         assert!(origin.x <= -10_000);
         assert!(origin.y <= -10_000);
+    }
+
+    #[test]
+    fn input_conf_zooms_with_the_mouse_wheel() {
+        let conf = input_conf_contents();
+        assert!(conf.contains("MBTN_LEFT cycle pause"));
+        assert!(conf.contains("WHEEL_UP add video-zoom 0.1"));
+        assert!(conf.contains("WHEEL_DOWN add video-zoom -0.1"));
+    }
+
+    #[test]
+    fn aspect_commands_fill_the_window_for_zoom() {
+        let zoom = native_control_commands("aspect", None, Some("zoom")).expect("zoom");
+        assert!(zoom.iter().any(|command| {
+            command == &vec![
+                serde_json::json!("set_property"),
+                serde_json::json!("panscan"),
+                serde_json::json!(1.0),
+            ]
+        }));
+        let fill = native_control_commands("aspect", None, Some("fill")).expect("fill");
+        assert!(fill.iter().any(|command| {
+            command == &vec![
+                serde_json::json!("set_property"),
+                serde_json::json!("keepaspect"),
+                serde_json::json!(false),
+            ]
+        }));
+        let zoom_cmd = native_control_commands("zoom", Some(2.0), None).expect("zoom value");
+        assert_eq!(
+            zoom_cmd,
+            vec![vec![
+                serde_json::json!("set_property"),
+                serde_json::json!("video-zoom"),
+                serde_json::json!(1.0),
+            ]]
+        );
+        assert!(native_control_commands("unknown", None, None).is_err());
     }
 }

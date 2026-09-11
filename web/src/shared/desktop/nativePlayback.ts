@@ -24,6 +24,7 @@ export type NativeStatus = {
   duration: number
   volume: number
   speed: number
+  zoom?: number
 }
 
 type TauriInvoke = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>
@@ -102,8 +103,8 @@ export async function stopNatively() {
   await invokeNative('stop_native')
 }
 
-export async function controlNatively(action: string, value?: number) {
-  await invokeNative('native_control', { action, value })
+export async function controlNatively(action: string, value?: number, mode?: string) {
+  await invokeNative('native_control', { action, value, mode })
 }
 
 export async function nativeStatus(): Promise<NativeStatus | null> {
