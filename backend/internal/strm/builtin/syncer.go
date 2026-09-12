@@ -84,6 +84,11 @@ func (s *Syncer) Sync(ctx context.Context, req strm.Request) (strm.Result, error
 		}
 		dest, err := strm.LocalSTRMPath(req.StrmRootMount, base, video.Relative)
 		if err != nil {
+			if req.ContinueOnError {
+				result.Failed++
+				continue
+			}
+			result.Duration = time.Since(started)
 			return result, err
 		}
 		if rel, relErr := filepath.Rel(base, dest); relErr == nil {

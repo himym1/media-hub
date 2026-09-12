@@ -25,8 +25,13 @@ func LocalSTRMPath(rootMount, localBase, relativeVideo string) (string, error) {
 		return "", ErrPathUnwritable
 	}
 	raw := strings.TrimSpace(strings.ReplaceAll(relativeVideo, "\\", "/"))
-	if raw == "" || strings.Contains(raw, "..") {
+	if raw == "" {
 		return "", ErrPathUnwritable
+	}
+	for _, part := range strings.Split(raw, "/") {
+		if part == ".." {
+			return "", ErrPathUnwritable
+		}
 	}
 	relative := strings.TrimPrefix(path.Clean("/"+raw), "/")
 	if relative == "" || relative == "." {

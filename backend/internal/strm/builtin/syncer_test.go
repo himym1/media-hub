@@ -76,6 +76,31 @@ func TestSyncWritesMovieFolderSTRM(t *testing.T) {
 	}
 }
 
+func TestSyncWritesReleaseNameWithDotDot(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "电影")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	syncer := New(filesStub{
+		userID: "103539243",
+		byID: map[string][]drive115.FileItem{
+			"folder-1": {{ID: "file-1", Name: "Searching.for.Emily.2026.1080p.WEBRip..mkv", Kind: "file", PickCode: "pick-1"}},
+		},
+	})
+	result, err := syncer.Sync(context.Background(), strm.Request{
+		FileID: "folder-1", SourcePath: "电影/寻找艾米丽 (2026)", TargetPath: target,
+		StrmBaseURL: "https://media.example", StrmRootMount: root,
+	})
+	if err != nil || result.Created != 1 {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+	path := filepath.Join(target, "寻找艾米丽 (2026)", "Searching.for.Emily.2026.1080p.WEBRip.strm")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSyncMapsUnauthorizedToAuthExpired(t *testing.T) {
 	syncer := New(filesStub{err: drive115.ErrUnauthorized})
 	_, err := syncer.Sync(context.Background(), strm.Request{

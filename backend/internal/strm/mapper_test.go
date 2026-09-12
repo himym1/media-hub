@@ -31,3 +31,17 @@ func TestLocalSTRMPathStaysInsideMount(t *testing.T) {
 		t.Fatalf("escape error=%v", err)
 	}
 }
+
+func TestLocalSTRMPathAllowsDotDotInReleaseName(t *testing.T) {
+	dest, err := LocalSTRMPath("/media", "/media/电影/寻找艾米丽 (2026)", "Searching.for.Emily.2026.1080p.WEBRip..mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join("/media/电影/寻找艾米丽 (2026)", "Searching.for.Emily.2026.1080p.WEBRip.strm")
+	if dest != want {
+		t.Fatalf("dest=%q want=%q", dest, want)
+	}
+	if _, err := LocalSTRMPath("/media", "/media/电影", "folder/../escape.mkv"); err != ErrPathUnwritable {
+		t.Fatalf("segment escape error=%v", err)
+	}
+}
