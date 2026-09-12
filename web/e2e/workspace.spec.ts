@@ -206,8 +206,13 @@ test('library plays a movie overlay and keeps the stream url out of the address 
   await expect(page.locator('.library-player-picture')).toHaveClass(/is-aspect-zoom/)
   await page.getByRole('button', { name: '放大画面' }).click()
   await expect(page.locator('.library-player-zoom-value')).toHaveText('110%')
-  await page.locator('.library-player-video').hover()
-  await page.locator('.library-player-video').evaluate((video) => video.dispatchEvent(new Event('play')))
+  await page.locator('.library-player-toolbar').dispatchEvent('mouseleave')
+  await page.locator('.library-player-chrome').dispatchEvent('mouseleave')
+  await page.locator('.library-player-video').evaluate((video) => {
+    video.pause = () => undefined
+    video.dispatchEvent(new Event('play'))
+  })
+  await page.locator('.library-player').dispatchEvent('mousemove')
   await expect(page.locator('.library-player')).toHaveClass(/is-playing/)
   await expect(page.locator('.library-player')).toHaveClass(/chrome-hidden/, { timeout: 5000 })
   await expect(page.getByRole('button', { name: '全屏' })).toBeHidden()
