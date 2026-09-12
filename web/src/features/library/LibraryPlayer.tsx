@@ -1,4 +1,4 @@
-import { Captions, Maximize2, Pause, PictureInPicture2, Play, SkipForward, Volume2, VolumeX, X } from 'lucide-react'
+import { AudioLines, Captions, Maximize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ApiError, createEmbyPlaybackDescriptor, fetchLocalSubtitle, reportPlaybackSessionEvent } from '../../shared/api/mediaHub'
 import {
@@ -17,10 +17,21 @@ import { isHlsStream } from './isHlsStream'
 import { formatPlaybackClock } from './libraryPlayback'
 import { attachPlaybackSession } from './libraryPlaybackSession'
 import { attachSubtitleTrack, setSubtitleMode, subtitleAttachResult } from './librarySubtitle'
+import {
+  clampPictureZoom,
+  formatPictureZoom,
+  isPlayerAspectId,
+  nextPlayerAspect,
+  playbackRates,
+  playbackSkipSeconds,
+  playerAspectClassName,
+  playerAspectModes,
+  stepPictureZoom,
+  type PlayerAspectId,
+} from './playerChrome'
 import { looksLikeSilentDirectPlay } from './silentAudio'
 import './LibraryPlayer.css'
 
-const playbackRates = [0.75, 1, 1.25, 1.5, 2]
 const chromeIdleMs = 2800
 
 type LibraryPlayerProps = {
@@ -50,6 +61,7 @@ export function LibraryPlayer({
 }: LibraryPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const holeRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
   const idleTimer = useRef<number | null>(null)
   const nativeRequest = useRef<NativeRequest | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -66,6 +78,8 @@ export function LibraryPlayer({
   const [allowAutoHide, setAllowAutoHide] = useState(false)
   const [silentAudio, setSilentAudio] = useState(false)
   const [nativeActive, setNativeActive] = useState(false)
+  const [aspect, setAspect] = useState<PlayerAspectId>('fit')
+  const [pictureZoom, setPictureZoom] = useState(1)
 
   const clearIdleTimer = () => {
     if (idleTimer.current != null) {
@@ -79,11 +93,11 @@ export function LibraryPlayer({
     if (sticky) setChromePinned(true)
     if (armHide) setAllowAutoHide(true)
     clearIdleTimer()
-    if (!playing || sticky || (!armHide && !allowAutoHide)) return
+    if (nativeActive || !playing || sticky || (!armHide && !allowAutoHide)) return
     idleTimer.current = window.setTimeout(() => {
       setChromeVisible(false)
     }, chromeIdleMs)
-  }, [allowAutoHide, playing])
+  }, [allowAutoHide, nativeActive, playing])
 
   useEffect(() => {
     setPipAvailable(Boolean(document.pictureInPictureEnabled))
@@ -92,13 +106,53 @@ export function LibraryPlayer({
   useEffect(() => () => clearIdleTimer(), [])
 
   useEffect(() => {
-    if (!playing || chromePinned || error) {
+    if (nativeActive || !playing || chromePinned || error) {
       clearIdleTimer()
       setChromeVisible(true)
       return
     }
     revealChrome()
-  }, [playing, chromePinned, error, revealChrome])
+  }, [playing, chromePinned, error, nativeActive, revealChrome])
+
+  const seekBy = useCallback((delta: number) => {
+    if (nativeActive) {
+      void controlNatively('seek', Math.max(0, currentSeconds + delta)).catch(() => undefined)
+      return
+    }
+    const video = videoRef.current
+    if (!video) return
+    const duration = video.duration || video.currentTime + Math.abs(delta)
+    video.currentTime = Math.min(duration, Math.max(0, video.currentTime + delta))
+  }, [currentSeconds, nativeActive])
+
+  const applyAspect = useCallback((next: PlayerAspectId) => {
+    setAspect(next)
+    if (nativeActive) void controlNatively('aspect', undefined, next).catch(() => undefined)
+  }, [nativeActive])
+
+  const applyZoom = useCallback((next: number) => {
+    const zoom = clampPictureZoom(next)
+    setPictureZoom(zoom)
+    if (nativeActive) void controlNatively('zoom', zoom).catch(() => undefined)
+  }, [nativeActive])
+
+  const togglePlayback = useCallback(() => {
+    if (nativeActive) {
+      void controlNatively('cycle-pause').catch(() => undefined)
+      return
+    }
+    const video = videoRef.current
+    if (!video) return
+    if (video.paused) void video.play().catch(() => undefined)
+    else video.pause()
+  }, [nativeActive])
+
+  const toggleFullscreen = useCallback(() => {
+    const root = holeRef.current?.closest('.library-player') ?? videoRef.current
+    if (!root) return
+    if (document.fullscreenElement) void document.exitFullscreen()
+    else void root.requestFullscreen()
+  }, [])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -113,23 +167,16 @@ export function LibraryPlayer({
       revealChrome()
       if (event.key === ' ' || event.key === 'k') {
         event.preventDefault()
-        if (nativeActive) void controlNatively('cycle-pause').catch(() => undefined)
-        else if (video) {
-          if (video.paused) void video.play().catch(() => undefined)
-          else video.pause()
-        }
-      } else if (event.key === 'ArrowLeft') {
+        togglePlayback()
+      } else if (event.key === 'ArrowLeft' || event.key === 'j') {
         event.preventDefault()
-        if (nativeActive) void controlNatively('seek', Math.max(0, currentSeconds - 5)).catch(() => undefined)
-        else if (video) video.currentTime = Math.max(0, video.currentTime - 5)
-      } else if (event.key === 'ArrowRight') {
+        seekBy(-playbackSkipSeconds)
+      } else if (event.key === 'ArrowRight' || event.key === 'l') {
         event.preventDefault()
-        if (nativeActive) void controlNatively('seek', currentSeconds + 5).catch(() => undefined)
-        else if (video) video.currentTime = Math.min(video.duration || video.currentTime + 5, video.currentTime + 5)
+        seekBy(playbackSkipSeconds)
       } else if (event.key === 'f') {
         event.preventDefault()
-        if (document.fullscreenElement) void document.exitFullscreen()
-        else void (holeRef.current?.parentElement ?? video)?.requestFullscreen()
+        toggleFullscreen()
       } else if (event.key === 'm') {
         event.preventDefault()
         if (nativeActive) void controlNatively('mute').catch(() => undefined)
@@ -145,11 +192,23 @@ export function LibraryPlayer({
           else if (video) setSubtitleMode(video, next === 'on')
           setCaptions(next)
         }
+      } else if (event.key === 'z') {
+        event.preventDefault()
+        applyAspect(nextPlayerAspect(aspect))
+      } else if (event.key === '-' || event.key === '_') {
+        event.preventDefault()
+        applyZoom(stepPictureZoom(pictureZoom, -1))
+      } else if (event.key === '=' || event.key === '+') {
+        event.preventDefault()
+        applyZoom(stepPictureZoom(pictureZoom, 1))
+      } else if (event.key === '0') {
+        event.preventDefault()
+        applyZoom(1)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [captions, currentSeconds, nativeActive, onClose, revealChrome])
+  }, [applyAspect, applyZoom, aspect, captions, nativeActive, onClose, pictureZoom, revealChrome, seekBy, toggleFullscreen, togglePlayback])
 
   useEffect(() => {
     setError(null)
@@ -158,6 +217,8 @@ export function LibraryPlayer({
     setChromeVisible(true)
     setChromePinned(false)
     setNativeActive(false)
+    setAspect('fit')
+    setPictureZoom(1)
     nativeRequest.current = null
     const video = videoRef.current
     if (!video) return
@@ -278,6 +339,9 @@ export function LibraryPlayer({
         setDurationSeconds(status.duration)
         setVolume(status.volume)
         setRate(status.speed)
+        if (typeof status.zoom === 'number' && status.zoom > 0) {
+          setPictureZoom(clampPictureZoom(status.zoom))
+        }
       })
     }, 500)
     return () => {
@@ -303,6 +367,18 @@ export function LibraryPlayer({
     return () => window.clearInterval(timer)
   }, [itemId, error, silentAudio, playing, nativeActive])
 
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || nativeActive) return
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      revealChrome(false, true)
+      setPictureZoom((current) => clampPictureZoom(current + (event.deltaY > 0 ? -0.1 : 0.1)))
+    }
+    stage.addEventListener('wheel', onWheel, { passive: false })
+    return () => stage.removeEventListener('wheel', onWheel)
+  }, [nativeActive, revealChrome])
+
   const toggleCaptions = () => {
     if (captions !== 'on' && captions !== 'off') return
     const next = captions === 'on' ? 'off' : 'on'
@@ -317,22 +393,11 @@ export function LibraryPlayer({
     setCaptions(next)
   }
 
-  const togglePlayback = () => {
-    if (nativeActive) {
-      void controlNatively('cycle-pause').catch(() => undefined)
-      return
-    }
-    const video = videoRef.current
-    if (!video) return
-    if (video.paused) void video.play().catch(() => undefined)
-    else video.pause()
-  }
-
   const seekProgress = durationSeconds > 0 ? Math.min(1, currentSeconds / durationSeconds) : 0
   const shellClass = [
     'library-player',
     nativeActive ? 'is-native' : '',
-    chromeVisible || !playing || Boolean(error) ? 'chrome-visible' : 'chrome-hidden',
+    nativeActive || chromeVisible || !playing || Boolean(error) ? 'chrome-visible' : 'chrome-hidden',
     playing ? 'is-playing' : 'is-paused',
   ].filter(Boolean).join(' ')
 
@@ -345,33 +410,90 @@ export function LibraryPlayer({
       onPointerDown={() => revealChrome(false, true)}
       role="dialog"
     >
-      <div className="library-player-stage">
-        <header className="library-player-toolbar">
+      <div className="library-player-stage" ref={stageRef}>
+        <header
+          className="library-player-toolbar"
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setChromePinned(false)
+              revealChrome()
+            }
+          }}
+          onFocusCapture={() => revealChrome(true)}
+          onMouseEnter={() => revealChrome(true)}
+          onMouseLeave={() => {
+            setChromePinned(false)
+            revealChrome()
+          }}
+        >
           <h2 id="library-player-title">{title}</h2>
-          <IconButton label="关闭播放器" onClick={onClose}><X size={17} /></IconButton>
+          <div className="library-player-toolbar-actions">
+            <label className="library-player-aspect">
+              <span>画面</span>
+              <select
+                aria-label="画面比例"
+                onChange={(event) => {
+                  if (!isPlayerAspectId(event.target.value)) return
+                  applyAspect(event.target.value)
+                  revealChrome(true)
+                }}
+                title={playerAspectModes.find((mode) => mode.id === aspect)?.description}
+                value={aspect}
+              >
+                {playerAspectModes.map((mode) => (
+                  <option key={mode.id} value={mode.id}>{mode.label}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              aria-label="缩小画面"
+              className="library-player-icon-action"
+              onClick={() => applyZoom(stepPictureZoom(pictureZoom, -1))}
+              type="button"
+            >
+              <ZoomOut size={18} />
+            </button>
+            <span aria-label={`画面缩放 ${formatPictureZoom(pictureZoom)}`} className="library-player-zoom-value">
+              {formatPictureZoom(pictureZoom)}
+            </span>
+            <button
+              aria-label="放大画面"
+              className="library-player-icon-action"
+              onClick={() => applyZoom(stepPictureZoom(pictureZoom, 1))}
+              type="button"
+            >
+              <ZoomIn size={18} />
+            </button>
+            <IconButton label="关闭播放器" onClick={onClose}><X size={17} /></IconButton>
+          </div>
         </header>
 
         {nativeActive ? <div aria-hidden="true" className="library-player-native-hole" ref={holeRef} /> : null}
 
-        <video
-          ref={videoRef}
-          className="library-player-video"
-          controls={false}
-          onClick={() => {
-            revealChrome()
-            togglePlayback()
-          }}
-          onDurationChange={(event) => setDurationSeconds(event.currentTarget.duration || 0)}
-          onPause={() => setPlaying(false)}
-          onPlay={() => setPlaying(true)}
-          onRateChange={(event) => setRate(event.currentTarget.playbackRate || 1)}
-          onTimeUpdate={(event) => setCurrentSeconds(event.currentTarget.currentTime || 0)}
-          onVolumeChange={(event) => {
-            setMuted(event.currentTarget.muted)
-            setVolume(event.currentTarget.volume)
-          }}
-          playsInline
-        />
+        <div
+          className={`library-player-picture ${playerAspectClassName(aspect)}`}
+          style={{ '--picture-zoom': String(pictureZoom) } as CSSProperties}
+        >
+          <video
+            ref={videoRef}
+            className="library-player-video"
+            controls={false}
+            onClick={() => {
+              revealChrome()
+              togglePlayback()
+            }}
+            onDurationChange={(event) => setDurationSeconds(event.currentTarget.duration || 0)}
+            onPause={() => setPlaying(false)}
+            onPlay={() => setPlaying(true)}
+            onRateChange={(event) => setRate(event.currentTarget.playbackRate || 1)}
+            onTimeUpdate={(event) => setCurrentSeconds(event.currentTarget.currentTime || 0)}
+            onVolumeChange={(event) => {
+              setMuted(event.currentTarget.muted)
+              setVolume(event.currentTarget.volume)
+            }}
+            playsInline
+          />
+        </div>
 
         {!playing && !error && !nativeActive ? (
           <button aria-label="继续播放" className="library-player-center-play" onClick={togglePlayback} type="button">
@@ -436,6 +558,16 @@ export function LibraryPlayer({
 
           <div className="library-player-controls">
             <button
+              aria-label="后退 10 秒"
+              className="library-player-icon-action"
+              onClick={() => seekBy(-playbackSkipSeconds)}
+              type="button"
+            >
+              <RotateCcw size={18} />
+              <span aria-hidden="true">-10s</span>
+            </button>
+
+            <button
               aria-label={playing ? '暂停' : '播放'}
               className="library-player-icon-action"
               onClick={togglePlayback}
@@ -443,6 +575,16 @@ export function LibraryPlayer({
             >
               {playing ? <Pause size={18} /> : <Play size={18} />}
               <span aria-hidden="true">{playing ? '暂停' : '播放'}</span>
+            </button>
+
+            <button
+              aria-label="前进 10 秒"
+              className="library-player-icon-action"
+              onClick={() => seekBy(playbackSkipSeconds)}
+              type="button"
+            >
+              <RotateCw size={18} />
+              <span aria-hidden="true">+10s</span>
             </button>
 
             <button
@@ -532,6 +674,18 @@ export function LibraryPlayer({
               </button>
             ) : null}
 
+            {nativeActive ? (
+              <button
+                aria-label="切换音轨"
+                className="library-player-icon-action"
+                onClick={() => void controlNatively('cycle-audio').catch(() => undefined)}
+                type="button"
+              >
+                <AudioLines size={18} />
+                <span aria-hidden="true">音轨</span>
+              </button>
+            ) : null}
+
             {pipAvailable && !nativeActive ? (
               <button
                 aria-label="画中画"
@@ -552,12 +706,7 @@ export function LibraryPlayer({
             <button
               aria-label="全屏"
               className="library-player-icon-action"
-              onClick={() => {
-                const root = holeRef.current?.closest('.library-player') ?? videoRef.current
-                if (!root) return
-                if (document.fullscreenElement) void document.exitFullscreen()
-                else void root.requestFullscreen()
-              }}
+              onClick={toggleFullscreen}
               type="button"
             >
               <Maximize2 size={18} />
