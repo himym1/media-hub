@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { boundsFromElement, bytesToBase64, canPlayNatively, controlNatively, nativeSubtitleFromBytes, playNatively } from './nativePlayback'
+import { boundsFromElement, bytesToBase64, canPlayNatively, controlNatively, nativeSubtitleFromBytes, playNatively, toggleNativeWindow } from './nativePlayback'
 
 afterEach(() => {
   delete (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
@@ -77,5 +77,12 @@ describe('nativePlayback', () => {
     expect(invoke).toHaveBeenCalledWith('native_control', { action: 'aspect', value: undefined, mode: 'zoom' })
     expect(invoke).toHaveBeenCalledWith('native_control', { action: 'zoom', value: 1.2, mode: undefined })
     expect(invoke).toHaveBeenCalledWith('native_control', { action: 'cycle-audio', value: undefined, mode: undefined })
+  })
+
+  it('toggles the desktop window maximize state', async () => {
+    const invoke = vi.fn(async () => undefined)
+    ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
+    await toggleNativeWindow()
+    expect(invoke).toHaveBeenCalledWith('toggle_native_window', {})
   })
 })

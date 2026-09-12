@@ -114,3 +114,7 @@ export async function nativeStatus(): Promise<NativeStatus | null> {
     return null
   }
 }
+
+export async function toggleNativeWindow() {
+  await invokeNative('toggle_native_window')
+}

@@ -190,6 +190,7 @@ pub fn run() {
             player::stop_native,
             player::native_control,
             player::native_status,
+            player::toggle_native_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -386,6 +386,8 @@ pub fn play_native(
     let surface = ensure_surface(&app)?;
     apply_bounds(&main, &surface, &bounds)?;
     surface.show().map_err(|_| "无法打开播放画面。".to_string())?;
+    // Keep the webview on top for mouse-move / double-click; mpv only paints.
+    let _ = surface.set_ignore_cursor_events(true);
     let wid = surface_wid(&surface)?;
     spawn_embedded(
         &mpv,
@@ -406,7 +408,9 @@ pub fn layout_native(app: AppHandle, bounds: EmbedBounds) -> Result<(), String> 
     let Ok(surface) = surface_window(&app) else {
         return Ok(());
     };
-    apply_bounds(&main_window(&app)?, &surface, &bounds)
+    apply_bounds(&main_window(&app)?, &surface, &bounds)?;
+    let _ = surface.set_ignore_cursor_events(true);
+    Ok(())
 }
 
 #[tauri::command]
@@ -424,6 +428,13 @@ pub fn native_control(action: String, value: Option<f64>, mode: Option<String>) 
         ipc_command(&command)?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn toggle_native_window(app: AppHandle) -> Result<(), String> {
+    main_window(&app)?
+        .toggle_maximize()
+        .map_err(|_| "无法缩放窗口。".to_string())
 }
 
 #[tauri::command]

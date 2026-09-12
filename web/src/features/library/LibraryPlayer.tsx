@@ -10,6 +10,7 @@ import {
   nativeSubtitleFromBytes,
   playNatively,
   stopNatively,
+  toggleNativeWindow,
   type NativeSubtitle,
 } from '../../shared/desktop/nativePlayback'
 import { IconButton } from '../../shared/ui/IconButton'
@@ -18,6 +19,7 @@ import { formatPlaybackClock } from './libraryPlayback'
 import { attachPlaybackSession } from './libraryPlaybackSession'
 import { attachSubtitleTrack, setSubtitleMode, subtitleAttachResult } from './librarySubtitle'
 import {
+  cancelScheduledPlayerClick,
   clampPictureZoom,
   formatPictureZoom,
   isPlayerAspectId,
@@ -26,6 +28,7 @@ import {
   playbackSkipSeconds,
   playerAspectClassName,
   playerAspectModes,
+  schedulePlayerClick,
   stepPictureZoom,
   type PlayerAspectId,
 } from './playerChrome'
@@ -63,6 +66,7 @@ export function LibraryPlayer({
   const holeRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const idleTimer = useRef<number | null>(null)
+  const clickTimer = useRef<number | null>(null)
   const nativeRequest = useRef<NativeRequest | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -93,26 +97,29 @@ export function LibraryPlayer({
     if (sticky) setChromePinned(true)
     if (armHide) setAllowAutoHide(true)
     clearIdleTimer()
-    if (nativeActive || !playing || sticky || (!armHide && !allowAutoHide)) return
+    if (!playing || sticky || (!armHide && !allowAutoHide)) return
     idleTimer.current = window.setTimeout(() => {
       setChromeVisible(false)
     }, chromeIdleMs)
-  }, [allowAutoHide, nativeActive, playing])
+  }, [allowAutoHide, playing])
 
   useEffect(() => {
     setPipAvailable(Boolean(document.pictureInPictureEnabled))
   }, [])
 
-  useEffect(() => () => clearIdleTimer(), [])
+  useEffect(() => () => {
+    clearIdleTimer()
+    cancelScheduledPlayerClick(clickTimer)
+  }, [])
 
   useEffect(() => {
-    if (nativeActive || !playing || chromePinned || error) {
+    if (!playing || chromePinned || error) {
       clearIdleTimer()
       setChromeVisible(true)
       return
     }
     revealChrome()
-  }, [playing, chromePinned, error, nativeActive, revealChrome])
+  }, [playing, chromePinned, error, revealChrome])
 
   const seekBy = useCallback((delta: number) => {
     if (nativeActive) {
@@ -154,6 +161,25 @@ export function LibraryPlayer({
     else void root.requestFullscreen()
   }, [])
 
+  const togglePresentation = useCallback(() => {
+    if (canPlayNatively()) {
+      void toggleNativeWindow().catch(() => undefined)
+      return
+    }
+    toggleFullscreen()
+  }, [toggleFullscreen])
+
+  const onSurfaceClick = useCallback(() => {
+    revealChrome(false, true)
+    schedulePlayerClick(clickTimer, togglePlayback)
+  }, [revealChrome, togglePlayback])
+
+  const onSurfaceDoubleClick = useCallback(() => {
+    cancelScheduledPlayerClick(clickTimer)
+    revealChrome(false, true)
+    togglePresentation()
+  }, [revealChrome, togglePresentation])
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const tag = (event.target as HTMLElement | null)?.tagName
@@ -176,7 +202,7 @@ export function LibraryPlayer({
         seekBy(playbackSkipSeconds)
       } else if (event.key === 'f') {
         event.preventDefault()
-        toggleFullscreen()
+        togglePresentation()
       } else if (event.key === 'm') {
         event.preventDefault()
         if (nativeActive) void controlNatively('mute').catch(() => undefined)
@@ -208,7 +234,7 @@ export function LibraryPlayer({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [applyAspect, applyZoom, aspect, captions, nativeActive, onClose, pictureZoom, revealChrome, seekBy, toggleFullscreen, togglePlayback])
+  }, [applyAspect, applyZoom, aspect, captions, nativeActive, onClose, pictureZoom, revealChrome, seekBy, togglePlayback, togglePresentation])
 
   useEffect(() => {
     setError(null)
@@ -369,15 +395,16 @@ export function LibraryPlayer({
 
   useEffect(() => {
     const stage = stageRef.current
-    if (!stage || nativeActive) return
+    if (!stage) return
     const onWheel = (event: WheelEvent) => {
+      if ((event.target as HTMLElement | null)?.closest('input, select, button, label')) return
       event.preventDefault()
       revealChrome(false, true)
-      setPictureZoom((current) => clampPictureZoom(current + (event.deltaY > 0 ? -0.1 : 0.1)))
+      applyZoom(stepPictureZoom(pictureZoom, event.deltaY > 0 ? -1 : 1))
     }
     stage.addEventListener('wheel', onWheel, { passive: false })
     return () => stage.removeEventListener('wheel', onWheel)
-  }, [nativeActive, revealChrome])
+  }, [applyZoom, pictureZoom, revealChrome])
 
   const toggleCaptions = () => {
     if (captions !== 'on' && captions !== 'off') return
@@ -397,7 +424,7 @@ export function LibraryPlayer({
   const shellClass = [
     'library-player',
     nativeActive ? 'is-native' : '',
-    nativeActive || chromeVisible || !playing || Boolean(error) ? 'chrome-visible' : 'chrome-hidden',
+    chromeVisible || !playing || Boolean(error) ? 'chrome-visible' : 'chrome-hidden',
     playing ? 'is-playing' : 'is-paused',
   ].filter(Boolean).join(' ')
 
@@ -468,7 +495,15 @@ export function LibraryPlayer({
           </div>
         </header>
 
-        {nativeActive ? <div aria-hidden="true" className="library-player-native-hole" ref={holeRef} /> : null}
+        {nativeActive ? (
+          <div
+            aria-hidden="true"
+            className="library-player-native-hole"
+            onClick={onSurfaceClick}
+            onDoubleClick={onSurfaceDoubleClick}
+            ref={holeRef}
+          />
+        ) : null}
 
         <div
           className={`library-player-picture ${playerAspectClassName(aspect)}`}
@@ -478,10 +513,8 @@ export function LibraryPlayer({
             ref={videoRef}
             className="library-player-video"
             controls={false}
-            onClick={() => {
-              revealChrome()
-              togglePlayback()
-            }}
+            onClick={onSurfaceClick}
+            onDoubleClick={onSurfaceDoubleClick}
             onDurationChange={(event) => setDurationSeconds(event.currentTarget.duration || 0)}
             onPause={() => setPlaying(false)}
             onPlay={() => setPlaying(true)}
@@ -706,7 +739,7 @@ export function LibraryPlayer({
             <button
               aria-label="全屏"
               className="library-player-icon-action"
-              onClick={toggleFullscreen}
+              onClick={togglePresentation}
               type="button"
             >
               <Maximize2 size={18} />

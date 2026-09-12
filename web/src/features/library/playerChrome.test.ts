@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  cancelScheduledPlayerClick,
   clampPictureZoom,
   formatPictureZoom,
   isPlayerAspectId,
@@ -7,10 +8,16 @@ import {
   nextPlayerAspect,
   playerAspectClassName,
   playerAspectModes,
+  playerClickDelayMs,
   playbackRates,
   playbackSkipSeconds,
+  schedulePlayerClick,
   stepPictureZoom,
 } from './playerChrome'
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('playerChrome', () => {
   it('keeps the same aspect labels as Android', () => {
@@ -47,5 +54,21 @@ describe('playerChrome', () => {
     expect(playbackSkipSeconds).toBe(10)
     expect(playbackRates).toContain(0.5)
     expect(playbackRates).toContain(1)
+    expect(playerClickDelayMs).toBeGreaterThan(200)
+  })
+
+  it('delays a surface click so double-click can take over', () => {
+    vi.useFakeTimers()
+    const timer = { current: null as number | null }
+    const click = vi.fn()
+    schedulePlayerClick(timer, click)
+    vi.advanceTimersByTime(200)
+    expect(click).not.toHaveBeenCalled()
+    cancelScheduledPlayerClick(timer)
+    vi.runAllTimers()
+    expect(click).not.toHaveBeenCalled()
+    schedulePlayerClick(timer, click)
+    vi.advanceTimersByTime(playerClickDelayMs)
+    expect(click).toHaveBeenCalledOnce()
   })
 })

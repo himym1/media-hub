@@ -50,3 +50,21 @@ export function linearZoomFromLog(logZoom: number) {
 export function logZoomFromLinear(value: number) {
   return Math.log2(clampPictureZoom(value))
 }
+
+export const playerClickDelayMs = 280
+
+export type PlayerClickTimer = { current: number | null }
+
+export function schedulePlayerClick(timer: PlayerClickTimer, onClick: () => void, delayMs = playerClickDelayMs) {
+  if (timer.current != null) window.clearTimeout(timer.current)
+  timer.current = window.setTimeout(() => {
+    timer.current = null
+    onClick()
+  }, delayMs)
+}
+
+export function cancelScheduledPlayerClick(timer: PlayerClickTimer) {
+  if (timer.current == null) return
+  window.clearTimeout(timer.current)
+  timer.current = null
+}

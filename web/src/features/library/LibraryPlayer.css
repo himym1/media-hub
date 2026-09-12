@@ -175,6 +175,12 @@
   flex: 1;
   min-height: 160px;
   background: #000;
+  cursor: pointer;
+}
+
+.library-player.is-native.chrome-hidden .library-player-toolbar,
+.library-player.is-native.chrome-hidden .library-player-chrome {
+  display: none;
 }
 
 .library-player.chrome-hidden .library-player-toolbar,
