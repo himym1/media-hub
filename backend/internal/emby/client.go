@@ -29,6 +29,8 @@ var (
 	ErrUpstreamResponse = errors.New("Emby returned an invalid response")
 )
 
+const defaultLibraryTimeout = 15 * time.Second
+
 type RuntimeConfig struct {
 	BaseURL         string
 	APIKey          string
@@ -60,6 +62,7 @@ type Client struct {
 	client         *http.Client
 	imageClient    *http.Client
 	subtitleClient *http.Client
+	libraryClient  *http.Client
 	sessionToken   string
 }
 
@@ -189,6 +192,10 @@ func NewConfiguredClient(configuration RuntimeConfig, timeout time.Duration) *Cl
 	if subtitleTimeout < defaultSubtitleTimeout {
 		subtitleTimeout = defaultSubtitleTimeout
 	}
+	libraryTimeout := timeout
+	if libraryTimeout < defaultLibraryTimeout {
+		libraryTimeout = defaultLibraryTimeout
+	}
 	redirectPolicy := func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
@@ -206,6 +213,11 @@ func NewConfiguredClient(configuration RuntimeConfig, timeout time.Duration) *Cl
 		},
 		subtitleClient: &http.Client{
 			Timeout:       subtitleTimeout,
+			CheckRedirect: redirectPolicy,
+			Transport:     embyHTTPTransport(configuration.ProxyURL),
+		},
+		libraryClient: &http.Client{
+			Timeout:       libraryTimeout,
 			CheckRedirect: redirectPolicy,
 			Transport:     embyHTTPTransport(configuration.ProxyURL),
 		},
@@ -235,6 +247,9 @@ func (c *Client) Configure(configuration RuntimeConfig) {
 	if c.subtitleClient != nil {
 		c.subtitleClient.Transport = embyHTTPTransport(configuration.ProxyURL)
 	}
+	if c.libraryClient != nil {
+		c.libraryClient.Transport = embyHTTPTransport(configuration.ProxyURL)
+	}
 	c.mutex.Unlock()
 }
 
@@ -256,6 +271,13 @@ func (c *Client) configuration() clientConfig {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	return c.config
+}
+
+func (c *Client) jsonHTTP() *http.Client {
+	if c.libraryClient != nil {
+		return c.libraryClient
+	}
+	return c.client
 }
 
 func (c *Client) Configured() bool {
@@ -706,8 +728,7 @@ func (c *Client) FindPlayableItem(ctx context.Context, title, mediaType string, 
 		return Item{}, found, err
 	}
 	if mediaType == "movie" {
-		ready, err := c.playbackReady(ctx, configuration, item.ID)
-		return item, ready, err
+		return item, true, nil
 	}
 	query := url.Values{
 		"Fields":    {"ProviderIds,MediaSources"},
@@ -970,7 +991,7 @@ func (c *Client) getJSONResponse(
 		applyEmbyAuth(request, configuration)
 	}
 
-	response, err := c.client.Do(request)
+	response, err := c.jsonHTTP().Do(request)
 	if err != nil {
 		return fmt.Errorf("request Emby: %w", err)
 	}
@@ -1025,7 +1046,7 @@ func (c *Client) postJSONBody(
 		request.Header.Set("User-Agent", "Media-Hub/emby")
 	}
 	applyEmbyAuth(request, configuration)
-	response, err := c.client.Do(request)
+	response, err := c.jsonHTTP().Do(request)
 	if err != nil {
 		return fmt.Errorf("request Emby: %w", err)
 	}

@@ -332,11 +332,12 @@ func (s *Store) RetryTransferJob(ctx context.Context, userID int64, jobID string
 	job.ErrorCode = ""
 	job.ErrorMessage = ""
 	job.Retryable = false
+	job.Attempts = 0
 	job.NextAttemptAt = 0
 	job.UpdatedAt = now.UTC().Unix()
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE transfer_jobs SET state = ?, resume_state = '', error_code = '',
-			error_message = '', retryable = 0, next_attempt_at = 0, updated_at = ?
+			error_message = '', retryable = 0, attempts = 0, next_attempt_at = 0, updated_at = ?
 		WHERE id = ?`, job.State, job.UpdatedAt, job.ID); err != nil {
 		return TransferJob{}, fmt.Errorf("retry transfer job: %w", err)
 	}

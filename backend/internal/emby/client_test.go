@@ -221,6 +221,31 @@ func TestFindPlayableItemRequiresEveryEpisodeInRange(t *testing.T) {
 	}
 }
 
+func TestFindPlayableItemMovieDoesNotRequirePlaybackInfo(t *testing.T) {
+	playbackHits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Items":
+			_, _ = w.Write([]byte(`{"Items":[{"Id":"movie-1","Name":"Movie","Type":"Movie","ProductionYear":2026,"ProviderIds":{"Tmdb":"123"}}],"TotalRecordCount":1}`))
+		case "/Items/movie-1/PlaybackInfo":
+			playbackHits++
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key", time.Second, "")
+	item, found, err := client.FindPlayableItem(context.Background(), "Movie", "movie", 2026, "123", 0, 0, 0)
+	if err != nil || !found || item.ID != "movie-1" {
+		t.Fatalf("find playable movie: item=%#v found=%v err=%v", item, found, err)
+	}
+	if playbackHits != 0 {
+		t.Fatalf("playback info hits=%d", playbackHits)
+	}
+}
+
 func TestFindIndexedItemMatchesReleaseStyleNamesWithoutProviderIds(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/Items" {

@@ -204,4 +204,7 @@ func TestNewConfiguredClientUsesLongerSubtitleTimeout(t *testing.T) {
 	if client.client.Timeout != time.Second {
 		t.Fatalf("probe timeout = %s", client.client.Timeout)
 	}
+	if client.libraryClient == nil || client.libraryClient.Timeout != defaultLibraryTimeout {
+		t.Fatalf("library timeout = %v", client.libraryClient)
+	}
 }

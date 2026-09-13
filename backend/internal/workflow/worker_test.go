@@ -460,3 +460,81 @@ func TestSubmitSyncDoesNotRenameLibraryRoot(t *testing.T) {
 		t.Fatalf("strm=%#v", syncer.request)
 	}
 }
+
+func TestMovieEmbyIndexDoesNotRequirePlaybackInfo(t *testing.T) {
+	ctx := context.Background()
+	playbackHits := 0
+	embyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("X-Emby-Token") != "emby-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch request.URL.Path {
+		case "/Items":
+			_, _ = w.Write([]byte(`{"Items":[{"Id":"emby-item","Name":"Movie","Type":"Movie","ProductionYear":2026,"ProviderIds":{"Tmdb":"123"}}],"TotalRecordCount":1}`))
+		case "/Items/emby-item/PlaybackInfo":
+			playbackHits++
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer embyServer.Close()
+
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(
+		dataStore, search.NewService(transferSourceStub{}), codec,
+		emby.NewClient(embyServer.URL, "emby-key", time.Second),
+		nil,
+		config.Workflow{
+			Movie: config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/media/电影", EmbyLibraryID: "library-movies"},
+		},
+		nil, nil, nil,
+	)
+	job := store.TransferJob{
+		ID: "job-index-playback", UserID: admin.ID, IdempotencyKey: "request_index_playback",
+		RequestHash: []byte("hash"), SelectionToken: "encrypted", SourceID: "sidhub",
+		CandidateID: "candidate", Title: "Movie", Year: 2026, MediaType: "movie", TMDBID: "123",
+		State: "queued", CreatedAt: 1, UpdatedAt: 1,
+	}
+	if _, _, err := dataStore.CreateTransferJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	job.State = "indexing_emby"
+	job.UpdatedAt = 2
+	if updated, err := dataStore.UpdateTransferJob(ctx, job, "queued", "setup index"); err != nil || !updated {
+		t.Fatalf("prepare index job: updated=%v err=%v", updated, err)
+	}
+	loaded, err := dataStore.TransferJob(ctx, admin.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.processJob(ctx, loaded); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = dataStore.TransferJob(ctx, admin.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.State != "verifying_playback" || loaded.EmbyItemID != "emby-item" {
+		t.Fatalf("state=%q emby=%q", loaded.State, loaded.EmbyItemID)
+	}
+	if playbackHits != 0 {
+		t.Fatalf("playback info hits=%d", playbackHits)
+	}
+}

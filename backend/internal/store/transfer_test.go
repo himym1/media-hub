@@ -88,6 +88,54 @@ func TestInterruptedQMediaSyncSubmissionRequiresAttention(t *testing.T) {
 	}
 }
 
+func TestRetryTransferJobResetsAttempts(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := TransferJob{
+		ID: "retry-attempts", UserID: admin.ID, IdempotencyKey: "request_retry_attempts",
+		RequestHash: []byte("hash"), SelectionToken: "encrypted", SourceID: "sidhub",
+		CandidateID: "candidate", Title: "Movie", MediaType: "movie", TMDBID: "123",
+		State: "queued", CreatedAt: 100, UpdatedAt: 100,
+	}
+	if _, _, err := dataStore.CreateTransferJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	job.State = "failed"
+	job.ResumeState = "indexing_emby"
+	job.Retryable = true
+	job.Attempts = 6
+	job.ErrorCode = "emby_index_unavailable"
+	job.UpdatedAt = 101
+	if updated, err := dataStore.UpdateTransferJob(ctx, job, "queued", "prepare attempts"); err != nil || !updated {
+		t.Fatalf("prepare retry attempts: updated=%v err=%v", updated, err)
+	}
+	retried, err := dataStore.RetryTransferJob(ctx, admin.ID, job.ID, time.Unix(200, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retried.State != "indexing_emby" || retried.Attempts != 0 {
+		t.Fatalf("retried=%#v", retried)
+	}
+	loaded, err := dataStore.TransferJob(ctx, admin.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Attempts != 0 || loaded.State != "indexing_emby" {
+		t.Fatalf("loaded=%#v", loaded)
+	}
+}
+
 func TestRetryTransferUsesPersistedResumeStateAndRecoversDamagedSourceJob(t *testing.T) {
 	ctx := context.Background()
 	dataStore, err := Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))

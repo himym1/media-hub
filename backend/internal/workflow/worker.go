@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path"
 	"strings"
 	"time"
 
 	"media-hub/backend/internal/config"
+	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/selection"
 	"media-hub/backend/internal/store"
@@ -397,10 +399,9 @@ func (s *Service) refreshEmby(ctx context.Context, job store.TransferJob) error 
 }
 
 func (s *Service) pollEmbyIndex(ctx context.Context, job store.TransferJob) error {
-	item, found, err := s.emby.FindPlayableItem(
-		ctx, job.Title, job.MediaType, job.Year, job.TMDBID, job.Season, job.EpisodeStart, job.EpisodeEnd,
-	)
+	item, found, err := s.findIndexedLibraryItem(ctx, job)
 	if err != nil {
+		slog.Default().Warn("emby index lookup failed", "job_id", job.ID, "error", err)
 		job.Attempts++
 		return s.retryExternalStage(ctx, &job, "indexing_emby", "emby_index_unavailable", "无法读取 Emby 入库状态")
 	}
@@ -425,6 +426,15 @@ func (s *Service) pollEmbyIndex(ctx context.Context, job store.TransferJob) erro
 	job.State = "verifying_playback"
 	job.NextAttemptAt = 0
 	return s.save(ctx, &job, "indexing_emby", "Emby 已完成入库")
+}
+
+func (s *Service) findIndexedLibraryItem(ctx context.Context, job store.TransferJob) (emby.Item, bool, error) {
+	if job.MediaType == "series" {
+		return s.emby.FindPlayableItem(
+			ctx, job.Title, job.MediaType, job.Year, job.TMDBID, job.Season, job.EpisodeStart, job.EpisodeEnd,
+		)
+	}
+	return s.emby.FindIndexedItem(ctx, job.Title, job.MediaType, job.Year, job.TMDBID)
 }
 
 func (s *Service) verifyPlayback(ctx context.Context, job store.TransferJob) error {
