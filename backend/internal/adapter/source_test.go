@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"testing"
@@ -178,5 +179,21 @@ func TestNewUsesNativeJuyingOnlyWithCompleteOfficialCredentials(t *testing.T) {
 	}
 	if got := New(config.SearchSource{ID: "juying", AuthMode: "invalid", Account: "user", Token: "pass"}, time.Second, nil, nil); got != nil {
 		t.Fatalf("invalid mode source = %#v", got)
+	}
+}
+
+func TestEnsureTransferDestinationWithoutEnsurerKeepsParent(t *testing.T) {
+	id, title, err := ensureTransferDestination(context.Background(), nil, "movie-folder", "寻找艾米丽", "Finding.Emily")
+	if err != nil || id != "movie-folder" || title != "寻找艾米丽" {
+		t.Fatalf("id=%q title=%q err=%v", id, title, err)
+	}
+}
+
+func TestStorageFolderNamePrefersMediaTitle(t *testing.T) {
+	if got := storageFolderName("寻找艾米丽", "Finding.Emily.2026.mkv"); got != "寻找艾米丽" {
+		t.Fatalf("title=%q", got)
+	}
+	if got := storageFolderName("", "Finding.Emily.2026.mkv"); got != "Finding.Emily.2026.mkv" {
+		t.Fatalf("fallback=%q", got)
 	}
 }

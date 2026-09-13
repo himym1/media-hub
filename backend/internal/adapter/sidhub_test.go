@@ -59,12 +59,12 @@ func TestSidhubTransferDecodesAndSubmitsOnlyValidMagnet(t *testing.T) {
 	reference, _ := json.Marshal(sidhubReference{Title: "Van Helsing", LinkPath: "/link_start/?seed_id=101"})
 
 	result, err := source.StartTransfer(context.Background(), search.TransferRequest{
-		Reference: string(reference), DestinationID: "movie-folder", IdempotencyKey: "request-1",
+		Title: "寻找艾米丽", Reference: string(reference), DestinationID: "movie-folder", IdempotencyKey: "request-1",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != "completed" || offline.destination != "movie-folder" || len(offline.urls) != 1 {
+	if result.Status != "completed" || result.FileID != "movie-folder/寻找艾米丽" || result.Path != "寻找艾米丽" || offline.destination != "movie-folder/寻找艾米丽" || len(offline.urls) != 1 {
 		t.Fatalf("result=%+v offline=%+v", result, offline)
 	}
 	if offline.urls[0] != "magnet:?xt=urn:btih:"+sidhubTestHash {

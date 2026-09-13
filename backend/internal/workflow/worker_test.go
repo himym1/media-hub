@@ -381,3 +381,82 @@ func TestNotificationMessageIncludesJobError(t *testing.T) {
 		t.Fatalf("message=%q", message)
 	}
 }
+
+type libraryRootTransferStub struct{}
+
+func (libraryRootTransferStub) ID() string    { return "framehdr" }
+func (libraryRootTransferStub) Label() string { return "帧影" }
+func (libraryRootTransferStub) Search(context.Context, string) ([]search.Candidate, error) {
+	return nil, nil
+}
+func (libraryRootTransferStub) StartTransfer(context.Context, search.TransferRequest) (search.TransferResult, error) {
+	return search.TransferResult{Status: "completed", FileID: "100", Path: "/cloud/电影", IsFile: false}, nil
+}
+func (libraryRootTransferStub) TransferStatus(context.Context, int64, string) (search.TransferResult, error) {
+	return search.TransferResult{}, nil
+}
+
+func TestSubmitSyncDoesNotRenameLibraryRoot(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	searchService := search.NewService(libraryRootTransferStub{})
+	syncer := &strmStub{}
+	renames := 0
+	service := NewService(
+		dataStore, searchService, codec,
+		emby.NewClient("http://emby.local", "emby-key", time.Second),
+		nil,
+		config.Workflow{
+			SyncMode:      config.SyncModeBuiltin,
+			StrmBaseURL:   "https://media.example",
+			StrmRootMount: "/media",
+			Movie:         config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/media/电影", EmbyLibraryID: "library-movies"},
+		},
+		func(context.Context, string) (string, error) { return "/cloud/电影", nil },
+		func(_ context.Context, fileID, name string) error {
+			renames++
+			t.Fatalf("renamed library root %s to %s", fileID, name)
+			return nil
+		},
+		nil,
+	)
+	service.UseSTRMSyncer(syncer)
+	token := service.SelectionToken(search.Candidate{
+		ID: "framehdr:item-1", Title: "寻找艾米丽", Year: 2026, MediaType: "movie", TMDBID: "1339588", SourceID: "framehdr",
+		SourceRef: "private-reference", TransferState: "available", Revision: searchService.CurrentRevision(),
+	})
+	publicJob, _, err := service.Enqueue(ctx, admin.ID, token, "request_library_root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := service.processJob(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if renames != 0 {
+		t.Fatalf("renames=%d", renames)
+	}
+	if syncer.calls != 1 || syncer.request.FileID != "100" {
+		t.Fatalf("strm=%#v", syncer.request)
+	}
+}

@@ -147,7 +147,11 @@ func (m *Mikan) StartTransfer(ctx context.Context, input search.TransferRequest)
 	if m.offline == nil {
 		return search.TransferResult{}, search.Failure{Code: "source_unconfigured", Message: "115 离线转存未配置", Retryable: false}
 	}
-	if err := m.offline.AddOfflineURLs(ctx, input.DestinationID, []string{reference.URL}); err != nil {
+	destinationID, storageTitle, err := ensureTransferDestination(ctx, asFolderEnsurer(m.offline), input.DestinationID, input.Title, reference.Title)
+	if err != nil {
+		return search.TransferResult{}, transferFolderFailure(err)
+	}
+	if err := m.offline.AddOfflineURLs(ctx, destinationID, []string{reference.URL}); err != nil {
 		var uncertain interface{ SubmissionUncertain() bool }
 		if errors.As(err, &uncertain) && uncertain.SubmissionUncertain() {
 			return search.TransferResult{}, search.Failure{Code: "source_submission_unknown", Message: "115 离线转存结果未知，需要人工确认", Retryable: true}
@@ -157,8 +161,8 @@ func (m *Mikan) StartTransfer(ctx context.Context, input search.TransferRequest)
 	return search.TransferResult{
 		OperationID: input.IdempotencyKey,
 		Status:      "completed",
-		FileID:      input.DestinationID,
-		Path:        reference.Title,
+		FileID:      destinationID,
+		Path:        storageTitle,
 		IsFile:      false,
 	}, nil
 }

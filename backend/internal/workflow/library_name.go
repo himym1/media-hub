@@ -80,3 +80,12 @@ func needsLibraryRename(currentPath, desired string) bool {
 	}
 	return !strings.EqualFold(current, desired)
 }
+
+func shouldRenameTransferredFolder(fileID, destinationID, currentPath, desired string) bool {
+	fileID = strings.TrimSpace(fileID)
+	destinationID = strings.TrimSpace(destinationID)
+	if fileID == "" || fileID == destinationID {
+		return false
+	}
+	return needsLibraryRename(currentPath, desired)
+}

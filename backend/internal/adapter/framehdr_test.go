@@ -30,6 +30,10 @@ func (m *memoryShareReceiver) ReceiveShare(_ context.Context, destinationID, sha
 	return m.err
 }
 
+func (m *memoryShareReceiver) EnsureFolder(_ context.Context, parentID, name string) (string, error) {
+	return parentID + "/" + name, nil
+}
+
 type uncertainTestError struct{}
 
 func (uncertainTestError) Error() string             { return "uncertain" }
@@ -74,12 +78,12 @@ func TestFrameHDRTransferReceivesShareWithoutExposingURL(t *testing.T) {
 	source := NewFrameHDR("https://framehdr.com", "user", "pass", time.Second, receiver, nil)
 	reference, _ := json.Marshal(frameHDRReference{Title: "Van Helsing 2160p", ShareCode: "shareABC123", ReceiveCode: "WENG"})
 	result, err := source.StartTransfer(context.Background(), search.TransferRequest{
-		Reference: string(reference), DestinationID: "456", IdempotencyKey: "request-1",
+		Title: "范海辛", Reference: string(reference), DestinationID: "456", IdempotencyKey: "request-1",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != "completed" || receiver.destination != "456" || receiver.shareCode != "shareABC123" || receiver.receiveCode != "WENG" || len(receiver.fileIDs) != 0 {
+	if result.Status != "completed" || result.FileID != "456/范海辛" || result.Path != "范海辛" || receiver.destination != "456/范海辛" || receiver.shareCode != "shareABC123" || receiver.receiveCode != "WENG" || len(receiver.fileIDs) != 0 {
 		t.Fatalf("result=%+v receiver=%+v", result, receiver)
 	}
 }

@@ -280,7 +280,7 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 		}
 	}
 	desiredName := libraryEntryName(job.Title, job.Year, isFile, sourcePath)
-	if s.renameSource != nil && needsLibraryRename(sourcePath, desiredName) {
+	if s.renameSource != nil && shouldRenameTransferredFolder(provider.FileID, target.DestinationID, sourcePath, desiredName) {
 		if err := s.renameSource(ctx, provider.FileID, desiredName); err != nil {
 			if saveErr := s.save(ctx, &job, "transferred", "标准化目录名失败，继续同步"); saveErr != nil {
 				return saveErr

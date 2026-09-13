@@ -26,6 +26,10 @@ func (m *memoryOffline) AddOfflineURLs(_ context.Context, destinationID string, 
 	return m.err
 }
 
+func (m *memoryOffline) EnsureFolder(_ context.Context, parentID, name string) (string, error) {
+	return parentID + "/" + name, nil
+}
+
 func TestMikanSearchParsesRSSItems(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/RSS/Search" || r.URL.Query().Get("searchstr") != "范海辛" {
@@ -95,12 +99,12 @@ func TestMikanTransferSubmitsOfflineURL(t *testing.T) {
 	source := NewMikan("https://mikanani.me", "", time.Second, offline, nil)
 	reference, _ := json.Marshal(mikanReference{Title: "Van Helsing", URL: "magnet:?xt=urn:btih:abc"})
 	result, err := source.StartTransfer(context.Background(), search.TransferRequest{
-		Reference: string(reference), DestinationID: "folder-1", IdempotencyKey: "job-1",
+		Title: "范海辛", Reference: string(reference), DestinationID: "folder-1", IdempotencyKey: "job-1",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != "completed" || result.FileID != "folder-1" || offline.destination != "folder-1" {
+	if result.Status != "completed" || result.FileID != "folder-1/范海辛" || result.Path != "范海辛" || offline.destination != "folder-1/范海辛" {
 		t.Fatalf("result=%+v offline=%+v", result, offline)
 	}
 	if len(offline.urls) != 1 || !strings.HasPrefix(offline.urls[0], "magnet:") {

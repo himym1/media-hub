@@ -26,6 +26,48 @@ type FolderEnsurer interface {
 	EnsureFolder(ctx context.Context, parentID, name string) (string, error)
 }
 
+func asFolderEnsurer(value any) FolderEnsurer {
+	ensurer, _ := value.(FolderEnsurer)
+	return ensurer
+}
+
+func storageFolderName(preferred, fallback string) string {
+	title := strings.TrimSpace(preferred)
+	if title == "" {
+		title = strings.TrimSpace(fallback)
+	}
+	title = strings.Map(func(character rune) rune {
+		switch character {
+		case '/', '\\', 0:
+			return -1
+		default:
+			return character
+		}
+	}, title)
+	title = strings.TrimSpace(title)
+	runes := []rune(title)
+	if len(runes) > 200 {
+		title = string(runes[:200])
+	}
+	return strings.TrimSpace(title)
+}
+
+func ensureTransferDestination(ctx context.Context, ensurer FolderEnsurer, parentID, preferred, fallback string) (string, string, error) {
+	storageTitle := storageFolderName(preferred, fallback)
+	if ensurer == nil || storageTitle == "" {
+		return parentID, storageTitle, nil
+	}
+	folderID, err := ensurer.EnsureFolder(ctx, parentID, storageTitle)
+	if err != nil {
+		return "", "", err
+	}
+	return folderID, storageTitle, nil
+}
+
+func transferFolderFailure(err error) search.Failure {
+	return search.Failure{Code: "source_unavailable", Message: "无法创建中文片名目录", Retryable: automaticWriteRetryAllowed(err)}
+}
+
 // ShareInspector validates media names and returns the top-level entries to import.
 type ShareInspector interface {
 	InspectShare(ctx context.Context, shareCode, receiveCode string) (videoNames, rootIDs []string, err error)

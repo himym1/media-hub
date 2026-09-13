@@ -176,7 +176,11 @@ func (s *Sidhub) StartTransfer(ctx context.Context, input search.TransferRequest
 	if s.offline == nil {
 		return search.TransferResult{}, search.Failure{Code: "source_unconfigured", Message: "115 离线转存未配置", Retryable: false}
 	}
-	if err := s.offline.AddOfflineURLs(ctx, input.DestinationID, []string{magnet}); err != nil {
+	destinationID, storageTitle, err := ensureTransferDestination(ctx, asFolderEnsurer(s.offline), input.DestinationID, input.Title, reference.Title)
+	if err != nil {
+		return search.TransferResult{}, transferFolderFailure(err)
+	}
+	if err := s.offline.AddOfflineURLs(ctx, destinationID, []string{magnet}); err != nil {
 		var uncertain interface{ SubmissionUncertain() bool }
 		if errors.As(err, &uncertain) && uncertain.SubmissionUncertain() {
 			return search.TransferResult{}, search.Failure{Code: "source_submission_unknown", Message: "115 离线转存结果未知，需要人工确认", Retryable: true}
@@ -186,8 +190,8 @@ func (s *Sidhub) StartTransfer(ctx context.Context, input search.TransferRequest
 	return search.TransferResult{
 		OperationID: input.IdempotencyKey,
 		Status:      "completed",
-		FileID:      input.DestinationID,
-		Path:        reference.Title,
+		FileID:      destinationID,
+		Path:        storageTitle,
 		IsFile:      false,
 	}, nil
 }

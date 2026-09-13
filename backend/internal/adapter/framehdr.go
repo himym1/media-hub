@@ -172,7 +172,11 @@ func (f *FrameHDR) StartTransfer(ctx context.Context, input search.TransferReque
 			return search.TransferResult{}, search.Failure{Code: "source_identity_mismatch", Message: "分享内容像是电视剧分集，请按剧集重新搜索", Retryable: false}
 		}
 	}
-	if err := f.receiver.ReceiveShare(ctx, input.DestinationID, reference.ShareCode, reference.ReceiveCode, nil); err != nil {
+	destinationID, storageTitle, err := ensureTransferDestination(ctx, asFolderEnsurer(f.receiver), input.DestinationID, input.Title, reference.Title)
+	if err != nil {
+		return search.TransferResult{}, transferFolderFailure(err)
+	}
+	if err := f.receiver.ReceiveShare(ctx, destinationID, reference.ShareCode, reference.ReceiveCode, nil); err != nil {
 		var uncertain interface{ SubmissionUncertain() bool }
 		if errors.As(err, &uncertain) && uncertain.SubmissionUncertain() {
 			return search.TransferResult{}, search.Failure{Code: "source_submission_unknown", Message: "115 分享接收结果未知，需要人工确认", Retryable: true}
@@ -180,7 +184,7 @@ func (f *FrameHDR) StartTransfer(ctx context.Context, input search.TransferReque
 		return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "帧影资源接收到 115 失败", Retryable: automaticWriteRetryAllowed(err)}
 	}
 	return search.TransferResult{
-		OperationID: input.IdempotencyKey, Status: "completed", FileID: input.DestinationID, Path: reference.Title, IsFile: false,
+		OperationID: input.IdempotencyKey, Status: "completed", FileID: destinationID, Path: storageTitle, IsFile: false,
 	}, nil
 }
 

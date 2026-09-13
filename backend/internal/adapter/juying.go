@@ -280,14 +280,9 @@ func (s *Juying) StartTransfer(ctx context.Context, input search.TransferRequest
 		if s.receiver == nil {
 			return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "115 分享接收器不可用", Retryable: false}
 		}
-		storageTitle := juyingStorageTitle(input.Title, reference.Title)
-		destinationID := input.DestinationID
-		if ensurer, ok := s.receiver.(FolderEnsurer); ok {
-			folderID, err := ensurer.EnsureFolder(ctx, input.DestinationID, storageTitle)
-			if err != nil {
-				return search.TransferResult{}, search.Failure{Code: "source_unavailable", Message: "无法创建中文片名目录", Retryable: automaticWriteRetryAllowed(err)}
-			}
-			destinationID = folderID
+		destinationID, storageTitle, err := ensureTransferDestination(ctx, asFolderEnsurer(s.receiver), input.DestinationID, input.Title, reference.Title)
+		if err != nil {
+			return search.TransferResult{}, transferFolderFailure(err)
 		}
 		if inspector, ok := s.receiver.(ShareInspector); ok {
 			videoNames, _, err := inspector.InspectShare(ctx, reference.ShareCode, reference.ReceiveCode)
@@ -314,27 +309,6 @@ func (s *Juying) StartTransfer(ctx context.Context, input search.TransferRequest
 	default:
 		return search.TransferResult{}, search.Failure{Code: "invalid_selection", Message: "资源引用无效", Retryable: false}
 	}
-}
-
-func juyingStorageTitle(preferred, fallback string) string {
-	title := strings.TrimSpace(preferred)
-	if title == "" {
-		title = strings.TrimSpace(fallback)
-	}
-	title = strings.Map(func(character rune) rune {
-		switch character {
-		case '/', '\\', 0:
-			return -1
-		default:
-			return character
-		}
-	}, title)
-	title = strings.TrimSpace(title)
-	runes := []rune(title)
-	if len(runes) > 200 {
-		title = string(runes[:200])
-	}
-	return strings.TrimSpace(title)
 }
 
 func (s *Juying) TransferStatus(_ context.Context, _ int64, operationID string) (search.TransferResult, error) {
