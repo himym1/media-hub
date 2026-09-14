@@ -170,6 +170,22 @@ function clickDownloadBlob(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+export function startDesktopInstallerDownload(release: DesktopRelease) {
+  const fileName = desktopInstallerFileName(release)
+  const href = new URL(release.downloadPath, window.location.origin).toString()
+  if (!href.startsWith(`${window.location.origin}/api/v1/client/desktop/releases/`)) {
+    throw new Error('更新地址无效')
+  }
+  const anchor = document.createElement('a')
+  anchor.href = href
+  anchor.rel = 'noopener'
+  // WebView2 swallows `<a download>` and never raises Tauri's on_download.
+  document.body.append(anchor)
+  anchor.click()
+  anchor.remove()
+  return fileName
+}
+
 export async function downloadDesktopInstaller(release: DesktopRelease) {
   const fileName = desktopInstallerFileName(release)
   const picker = saveFilePicker()

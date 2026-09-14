@@ -55,7 +55,11 @@
 .desktop-update-actions a.primary-action,
 .desktop-update-settings a.secondary-command { text-decoration: none; }
 .desktop-update-banner .form-error,
-.desktop-update-settings .form-error { flex: 1 1 100%; }
+.desktop-update-banner .form-hint,
+.desktop-update-settings .form-error,
+.desktop-update-settings .form-hint { flex: 1 1 100%; }
+.desktop-update-banner .form-hint,
+.desktop-update-settings .form-hint { color: #c5c8bc; font-size: 12px; }
 .page-pane[hidden] { display: none !important; }
 .welcome-row { display: flex; align-items: end; justify-content: space-between; gap: 30px; }
 .eyebrow { margin: 0 0 12px; }

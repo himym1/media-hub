@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
 import type { DesktopRelease } from '../../shared/api/mediaHub'
-import { desktopInstallerFileName, desktopPlatformFromPath, formatDesktopUpdateSize } from '../../shared/desktop/desktopUpdate'
+import { desktopInstallerFileName, desktopPlatformFromPath, formatDesktopUpdateSize, startDesktopInstallerDownload } from '../../shared/desktop/desktopUpdate'
 import type { DesktopUpdateState } from '../../shared/desktop/useDesktopUpdate'
 
 export function DesktopUpdateBanner({ update }: { update: DesktopUpdateState }) {
@@ -100,16 +100,30 @@ function SaveInstallerLink({
   className: string
   release: DesktopRelease
 }) {
-  let fileName = ''
+  const [status, setStatus] = useState<string | null>(null)
   try {
-    fileName = desktopInstallerFileName(release)
+    desktopInstallerFileName(release)
   } catch {
     return null
   }
   return (
-    <a className={className} download={fileName} href={release.downloadPath} rel="noopener">
-      {children}
-    </a>
+    <>
+      <button
+        className={className}
+        onClick={() => {
+          try {
+            const fileName = startDesktopInstallerDownload(release)
+            setStatus(`已保存到「下载」文件夹，请完全退出后再打开 ${fileName}`)
+          } catch (cause) {
+            setStatus(cause instanceof Error ? cause.message : '无法下载桌面更新')
+          }
+        }}
+        type="button"
+      >
+        {children}
+      </button>
+      {status ? <span className="form-hint" role="status">{status}</span> : null}
+    </>
   )
 }
 

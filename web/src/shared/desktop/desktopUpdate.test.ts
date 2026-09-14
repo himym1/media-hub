@@ -7,6 +7,7 @@ import {
   desktopInstallerFileName,
   desktopNativeInstallReady,
   downloadDesktopInstaller,
+  startDesktopInstallerDownload,
   desktopUpdateErrorMessage,
   desktopUpdateRequired,
   desktopVersionCode,
@@ -76,6 +77,34 @@ describe('desktopUpdate', () => {
     })
     ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
     await expect(desktopAppVersion()).resolves.toBeNull()
+  })
+
+  it('starts a WebView download without the download attribute', () => {
+    const clicks: Array<{ href: string; download: string }> = []
+    const origin = 'https://media.himym.us.ci'
+    const anchor = {
+      href: '',
+      rel: '',
+      click() {
+        clicks.push({ href: this.href, download: '' })
+      },
+      remove() {},
+    }
+    vi.stubGlobal('window', { location: { origin } })
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => {
+        expect(tag).toBe('a')
+        return anchor
+      },
+      body: { append: vi.fn() },
+    })
+    expect(startDesktopInstallerDownload(release)).toBe('media-hub-20039.exe')
+    expect(clicks).toEqual([{
+      href: `${origin}/api/v1/client/desktop/releases/20039/installer`,
+      download: '',
+    }])
+    expect(() => startDesktopInstallerDownload({ ...release, downloadPath: '/tmp/setup.exe' })).toThrow('更新地址无效')
+    vi.unstubAllGlobals()
   })
 
   it('saves the private installer through the file picker', async () => {
