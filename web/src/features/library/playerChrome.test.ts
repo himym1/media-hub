@@ -13,6 +13,8 @@ import {
   playbackSkipSeconds,
   schedulePlayerClick,
   shouldAutoHidePlayerChrome,
+  shouldRevealChromeFromNativePointer,
+  nativePointerFromStatus,
   stepPictureZoom,
 } from './playerChrome'
 
@@ -56,6 +58,16 @@ describe('playerChrome', () => {
     expect(shouldAutoHidePlayerChrome(false, true, false, false)).toBe(true)
     expect(shouldAutoHidePlayerChrome(false, true, true, false)).toBe(false)
     expect(shouldAutoHidePlayerChrome(false, false, false, false)).toBe(false)
+    expect(shouldAutoHidePlayerChrome(true, true, false, false, false)).toBe(false)
+  })
+
+  it('reveals chrome when the native pointer moves or enters', () => {
+    expect(nativePointerFromStatus({ cursorHover: true })).toBeNull()
+    const pointer = nativePointerFromStatus({ mouseX: 10, mouseY: 20, cursorHover: true })
+    expect(shouldRevealChromeFromNativePointer(null, pointer!)).toBe(true)
+    expect(shouldRevealChromeFromNativePointer(pointer, pointer!)).toBe(false)
+    expect(shouldRevealChromeFromNativePointer(pointer, { x: 12, y: 20, hover: true })).toBe(true)
+    expect(shouldRevealChromeFromNativePointer(pointer, { x: 10, y: 20, hover: false })).toBe(false)
   })
 
   it('exposes skip and speed options used by the PC chrome', () => {

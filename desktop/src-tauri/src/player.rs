@@ -38,6 +38,8 @@ pub struct NativeStatus {
     pub speed: f64,
     pub zoom: f64,
     pub cursor_hover: bool,
+    pub mouse_x: f64,
+    pub mouse_y: f64,
 }
 
 fn parked_origin() -> PhysicalPosition<i32> {
@@ -357,8 +359,29 @@ fn ipc_bool(property: &str) -> bool {
         .unwrap_or(false)
 }
 
+#[derive(Clone, Copy, Default)]
+pub(crate) struct MousePos {
+    pub x: f64,
+    pub y: f64,
+    pub hover: bool,
+}
+
+pub(crate) fn mouse_pos_from_value(value: &serde_json::Value) -> MousePos {
+    let number = |key: &str| {
+        value
+            .get(key)
+            .and_then(|item| item.as_f64().or_else(|| item.as_i64().map(|n| n as f64)))
+            .unwrap_or(0.0)
+    };
+    MousePos {
+        x: number("x"),
+        y: number("y"),
+        hover: value.get("hover").and_then(|hover| hover.as_bool()).unwrap_or(false),
+    }
+}
+
 pub(crate) fn mouse_hover_from_pos(value: &serde_json::Value) -> bool {
-    value.get("hover").and_then(|hover| hover.as_bool()).unwrap_or(false)
+    mouse_pos_from_value(value).hover
 }
 
 pub(crate) fn sid_from_track_list(value: &serde_json::Value) -> Option<i64> {
@@ -404,13 +427,14 @@ fn select_external_subtitle() {
     }
 }
 
-fn ipc_mouse_hover() -> bool {
+fn ipc_mouse_pos() -> MousePos {
     ipc_command(&[
         serde_json::json!("get_property"),
         serde_json::json!("mouse-pos"),
     ])
     .ok()
-    .is_some_and(|value| mouse_hover_from_pos(&value))
+    .map(|value| mouse_pos_from_value(&value))
+    .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -513,6 +537,7 @@ pub fn toggle_native_window(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn native_status() -> Result<NativeStatus, String> {
+    let pos = ipc_mouse_pos();
     Ok(NativeStatus {
         paused: ipc_bool("pause"),
         time: ipc_number("time-pos"),
@@ -520,7 +545,9 @@ pub fn native_status() -> Result<NativeStatus, String> {
         volume: ipc_number("volume") / 100.0,
         speed: ipc_number("speed").max(0.1),
         zoom: linear_zoom_from_mpv(),
-        cursor_hover: ipc_mouse_hover(),
+        cursor_hover: pos.hover,
+        mouse_x: pos.x,
+        mouse_y: pos.y,
     })
 }
 
@@ -575,7 +602,10 @@ mod tests {
 
     #[test]
     fn mouse_hover_reads_mpv_cursor_state() {
-        assert!(mouse_hover_from_pos(&serde_json::json!({"x": 12, "y": 8, "hover": true})));
+        let pos = mouse_pos_from_value(&serde_json::json!({"x": 12, "y": 8, "hover": true}));
+        assert!(pos.hover);
+        assert_eq!(pos.x, 12.0);
+        assert_eq!(pos.y, 8.0);
         assert!(!mouse_hover_from_pos(&serde_json::json!({"x": 12, "y": 8, "hover": false})));
         assert!(!mouse_hover_from_pos(&serde_json::json!({})));
     }

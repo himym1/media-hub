@@ -51,8 +51,39 @@ export function logZoomFromLinear(value: number) {
   return Math.log2(clampPictureZoom(value))
 }
 
-export function shouldAutoHidePlayerChrome(_nativeActive: boolean, playing: boolean, pinned: boolean, hasError: boolean) {
-  return playing && !pinned && !hasError
+export function shouldAutoHidePlayerChrome(
+  _nativeActive: boolean,
+  playing: boolean,
+  pinned: boolean,
+  hasError: boolean,
+  nativePointerReady = true,
+) {
+  return playing && !pinned && !hasError && nativePointerReady
+}
+
+export type NativePointer = {
+  x: number
+  y: number
+  hover: boolean
+}
+
+export function nativePointerFromStatus(status: {
+  mouseX?: number
+  mouseY?: number
+  cursorHover?: boolean
+}): NativePointer | null {
+  if (typeof status.mouseX !== 'number' || typeof status.mouseY !== 'number') return null
+  return {
+    x: status.mouseX,
+    y: status.mouseY,
+    hover: Boolean(status.cursorHover),
+  }
+}
+
+export function shouldRevealChromeFromNativePointer(previous: NativePointer | null, next: NativePointer) {
+  if (!next.hover) return false
+  if (!previous) return true
+  return !previous.hover || previous.x !== next.x || previous.y !== next.y
 }
 
 export const playerClickDelayMs = 280

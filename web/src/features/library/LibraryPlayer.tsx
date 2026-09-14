@@ -30,7 +30,9 @@ import {
   playerAspectClassName,
   playerAspectModes,
   schedulePlayerClick,
+  nativePointerFromStatus,
   shouldAutoHidePlayerChrome,
+  shouldRevealChromeFromNativePointer,
   stepPictureZoom,
   type PlayerAspectId,
 } from './playerChrome'
@@ -72,6 +74,7 @@ export function LibraryPlayer({
   const clickTimer = useRef<number | null>(null)
   const nativeRequest = useRef<NativeRequest | null>(null)
   const nativeClock = useRef({ seconds: 0, paused: false })
+  const nativePointer = useRef<ReturnType<typeof nativePointerFromStatus>>(null)
   const [error, setError] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
   const [muted, setMuted] = useState(false)
@@ -86,6 +89,7 @@ export function LibraryPlayer({
   const [allowAutoHide, setAllowAutoHide] = useState(false)
   const [silentAudio, setSilentAudio] = useState(false)
   const [nativeActive, setNativeActive] = useState(false)
+  const [nativePointerReady, setNativePointerReady] = useState(false)
   const [subtitleHint, setSubtitleHint] = useState<string | null>(null)
   const [aspect, setAspect] = useState<PlayerAspectId>('fit')
   const [pictureZoom, setPictureZoom] = useState(1)
@@ -120,13 +124,13 @@ export function LibraryPlayer({
   }, [])
 
   useEffect(() => {
-    if (!shouldAutoHidePlayerChrome(nativeActive, playing, chromePinned, Boolean(error))) {
+    if (!shouldAutoHidePlayerChrome(nativeActive, playing, chromePinned, Boolean(error), !nativeActive || nativePointerReady)) {
       clearIdleTimer()
       setChromeVisible(true)
       return
     }
     revealChrome(false, true)
-  }, [chromePinned, error, nativeActive, playing, revealChrome])
+  }, [chromePinned, error, nativeActive, nativePointerReady, playing, revealChrome])
 
   useEffect(() => {
     if (!nativeActive) return
@@ -360,6 +364,8 @@ export function LibraryPlayer({
       seconds: (request.startPositionMs ?? 0) / 1000,
       paused: false,
     }
+    nativePointer.current = null
+    setNativePointerReady(false)
     void (async () => {
       try {
         await playNatively(request.url, {
@@ -403,6 +409,14 @@ export function LibraryPlayer({
         setRate(status.speed)
         if (typeof status.zoom === 'number' && status.zoom > 0) {
           setPictureZoom(clampPictureZoom(status.zoom))
+        }
+        const pointer = nativePointerFromStatus(status)
+        if (pointer) {
+          if (shouldRevealChromeFromNativePointer(nativePointer.current, pointer)) {
+            revealChromeRef.current(false, true)
+          }
+          nativePointer.current = pointer
+          setNativePointerReady(true)
         }
         if (wasPaused !== status.paused && request.sessionId) {
           void reportPlaybackSessionEvent(
