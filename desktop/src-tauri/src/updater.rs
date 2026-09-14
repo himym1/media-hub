@@ -69,7 +69,11 @@ pub async fn install_desktop_update(
     .await
     .map_err(|_| "下载更新失败。".to_string())??;
     start_installer(&installer_temp_path(version_code, kind), kind)?;
-    app.exit(0);
+    let app_for_exit = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(500));
+        app_for_exit.exit(0);
+    });
     Ok(())
 }
 
@@ -280,8 +284,41 @@ fn start_installer(path: &Path, kind: ArtifactKind) -> Result<(), String> {
 fn windows_installer_path_is_safe(path: &Path) -> bool {
     path.to_str().is_some_and(|value| {
         Path::new(value).is_absolute()
-            && !value.chars().any(|byte| matches!(byte, '"' | '&' | '|' | '>' | '<' | '^' | '%'))
+            && !value.chars().any(|byte| matches!(byte, '"' | '\'' | '`' | '&' | '|' | '>' | '<' | '^' | '%'))
     })
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+fn windows_silent_update_command(installer: &str) -> Result<String, String> {
+    if !windows_installer_path_is_safe(Path::new(installer)) {
+        return Err("更新包路径无效。".into());
+    }
+    Ok(format!(
+        "Start-Sleep -Seconds 5; Start-Process -FilePath '{installer}' -ArgumentList '/S','/UPDATE','/R' -Wait"
+    ))
+}
+
+fn windows_update_script(installer: &str) -> Result<String, String> {
+    if !windows_installer_path_is_safe(Path::new(installer)) {
+        return Err("更新包路径无效。".into());
+    }
+    Ok(format!(
+        "@echo off\r\ntimeout /t 5 /nobreak >nul\r\nstart \"\" /wait \"{installer}\" /S /UPDATE /R\r\n"
+    ))
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+fn write_windows_update_script(installer: &Path) -> Result<PathBuf, String> {
+    let installer_str = installer
+        .to_str()
+        .ok_or_else(|| "更新包路径无效。".to_string())?;
+    let script = windows_update_script(installer_str)?;
+    let script_path = installer.with_extension("cmd");
+    if !windows_installer_path_is_safe(&script_path) {
+        return Err("更新包路径无效。".into());
+    }
+    fs::write(&script_path, script).map_err(|_| "无法准备安装程序。".to_string())?;
+    Ok(script_path)
 }
 
 fn start_windows_installer(path: &Path) -> Result<(), String> {
@@ -289,20 +326,31 @@ fn start_windows_installer(path: &Path) -> Result<(), String> {
     {
         use std::os::windows::process::CommandExt;
         use std::process::Command;
-        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+        const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-        if !windows_installer_path_is_safe(path) {
-            return Err("更新包路径无效。".into());
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        // CREATE_NEW_CONSOLE and DETACHED_PROCESS cannot be combined.
+        let breakaway_console = CREATE_BREAKAWAY_FROM_JOB | CREATE_NEW_CONSOLE | CREATE_NEW_PROCESS_GROUP;
+        let breakaway_detached = CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
+        let script = write_windows_update_script(path)?;
+        let script_arg = script
+            .to_str()
+            .ok_or_else(|| "更新包路径无效。".to_string())?;
+        // `start` goes through ShellExecute so the waiter is not a WebView2 job child.
+        if Command::new("cmd")
+            .args(["/C", "start", "", "/MIN", script_arg])
+            .creation_flags(breakaway_console)
+            .spawn()
+            .is_ok()
+        {
+            return Ok(());
         }
         let installer = path.to_str().ok_or_else(|| "更新包路径无效。".to_string())?;
-        // Hidden CREATE_NO_WINDOW parents can swallow the NSIS wizard. Detach a
-        // visible start so the dialog appears after this process exits.
-        let script = format!(
-            "ping -n 6 127.0.0.1 >nul & taskkill /IM \"Media Hub.exe\" /F >nul 2>&1 & ping -n 2 127.0.0.1 >nul & start \"\" \"{installer}\""
-        );
-        Command::new("cmd")
-            .args(["/C", "start", "", "cmd", "/C", &script])
-            .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP)
+        let command = windows_silent_update_command(installer)?;
+        Command::new("powershell")
+            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &command])
+            .creation_flags(breakaway_detached)
             .spawn()
             .map_err(|_| "无法启动安装程序。".to_string())?;
         return Ok(());
@@ -403,10 +451,27 @@ mod tests {
         assert!(!windows_installer_path_is_safe(Path::new("media-hub-20044.exe")));
         if cfg!(windows) {
             assert!(!windows_installer_path_is_safe(Path::new(r"C:\Temp\media-hub-20044.exe&calc")));
+            assert!(!windows_installer_path_is_safe(Path::new(r"C:\Temp\media-hub-20044.exe'calc")));
             assert!(windows_installer_path_is_safe(Path::new(r"C:\Temp\media-hub-20044.exe")));
+            let command = windows_silent_update_command(r"C:\Temp\media-hub-20044.exe").expect("cmd");
+            let script = windows_update_script(r"C:\Temp\media-hub-20044.exe").expect("script");
+            assert!(command.contains("/S"));
+            assert!(command.contains("/UPDATE"));
+            assert!(command.contains("/R"));
+            assert!(script.contains("/S"));
+            assert!(script.contains("/UPDATE"));
+            assert!(script.contains("/R"));
+            assert!(windows_silent_update_command(r"C:\Temp\media-hub-20044.exe'calc").is_err());
         } else {
             assert!(!windows_installer_path_is_safe(Path::new("/tmp/media-hub-20044.exe&calc")));
             assert!(windows_installer_path_is_safe(Path::new("/tmp/media-hub-20044.exe")));
+            let command = windows_silent_update_command("/tmp/media-hub-20044.exe").expect("cmd");
+            let script = windows_update_script("/tmp/media-hub-20044.exe").expect("script");
+            assert!(command.contains("/S"));
+            assert!(command.contains("/UPDATE"));
+            assert!(command.contains("/R"));
+            assert!(script.contains("start \"\" /wait \"/tmp/media-hub-20044.exe\" /S /UPDATE /R"));
+            assert!(windows_update_script("/tmp/media-hub-20044.exe&calc").is_err());
         }
     }
 

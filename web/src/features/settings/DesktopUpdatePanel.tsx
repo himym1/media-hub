@@ -53,7 +53,7 @@ export function DesktopUpdateSettings({ update }: { update: DesktopUpdateState }
           type="button"
         >
           {update.release ? <Download size={16} /> : <RefreshCw size={16} />}
-          {update.installing ? '正在下载并安装…' : update.release ? `安装 ${update.release.versionName}` : update.checking ? '正在检查' : '检查更新'}
+          {update.installing ? '正在更新…' : update.release ? `更新 ${update.release.versionName}` : update.checking ? '正在检查' : '检查更新'}
         </button>
       )}
       {update.release && update.nativeInstall ? (
@@ -86,7 +86,7 @@ function UpdateAction({
   return (
     <button className="primary-action" disabled={installing} onClick={() => void onInstall()} type="button">
       <Download size={16} />
-      {installing ? '正在下载并安装…' : `安装 ${release.versionName}`}
+      {installing ? '正在更新…' : `更新 ${release.versionName}`}
     </button>
   )
 }
@@ -118,6 +118,6 @@ function updateHint(nativeInstall: boolean, downloadPath: string) {
     return nativeInstall ? '下载后会打开安装盘，请把 Media Hub 拖到「应用程序」后重新打开' : '下载后请退出应用，打开安装盘并把 Media Hub 拖到「应用程序」'
   }
   return nativeInstall
-    ? '会先退出再打开安装向导。若提示「Windows 已保护你的电脑」，点「更多信息」再「仍要运行」'
+    ? '会自动安装并重新打开，大约半分钟'
     : '请先完全退出 Media Hub，再打开约 3.1 MB 的安装包。若被拦截，点「更多信息 / 仍要运行」'
 }

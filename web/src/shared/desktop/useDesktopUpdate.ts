@@ -3,6 +3,7 @@ import { ApiError, getLatestDesktopRelease, type DesktopRelease } from '../api/m
 import {
   desktopAppPlatform,
   desktopAppVersion,
+  desktopNativeInstallReady,
   desktopUpdateErrorMessage,
   desktopUpdateRequired,
   desktopVersionCode,
@@ -52,7 +53,7 @@ export function useDesktopUpdate(): DesktopUpdateState {
       }
       const version = await desktopAppVersion()
       setCurrentVersion(version ?? '')
-      setNativeInstall(version != null)
+      setNativeInstall(desktopNativeInstallReady(version, platform))
       const latest = await getLatestDesktopRelease(platform)
       if (version == null) {
         setRequired(false)

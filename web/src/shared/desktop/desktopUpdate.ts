@@ -39,6 +39,13 @@ export function desktopUpdateRequired(currentVersionCode: number, latest: Deskto
   return currentVersionCode < latest.minimumSupportedVersionCode
 }
 
+export function desktopNativeInstallReady(version: string | null, platform: DesktopPlatform | null) {
+  if (!version || !platform) return false
+  if (platform === 'darwin') return desktopVersionCode(version) != null
+  const code = desktopVersionCode(version)
+  return code != null && code >= 20_050
+}
+
 export function formatDesktopUpdateSize(bytes: number) {
   if (bytes <= 0) return '未知大小'
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`

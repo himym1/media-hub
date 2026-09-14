@@ -5,6 +5,7 @@ import {
   desktopAppVersion,
   desktopInstallerPath,
   desktopInstallerFileName,
+  desktopNativeInstallReady,
   downloadDesktopInstaller,
   desktopUpdateErrorMessage,
   desktopUpdateRequired,
@@ -47,6 +48,13 @@ describe('desktopUpdate', () => {
     expect(newerDesktopRelease(20039, release)).toBeNull()
     expect(desktopUpdateRequired(20009, release)).toBe(true)
     expect(desktopUpdateRequired(20010, release)).toBe(false)
+  })
+
+  it('keeps Windows on the download path until the silent updater ships', () => {
+    expect(desktopNativeInstallReady('0.20.48', 'windows')).toBe(false)
+    expect(desktopNativeInstallReady('0.20.50', 'windows')).toBe(true)
+    expect(desktopNativeInstallReady('0.20.48', 'darwin')).toBe(true)
+    expect(desktopNativeInstallReady(null, 'windows')).toBe(false)
   })
 
   it('formats installer size and hides raw URLs', () => {
