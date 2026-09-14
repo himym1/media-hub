@@ -54,3 +54,9 @@
   - Desktop Rust: run `cargo test --manifest-path desktop/src-tauri/Cargo.toml` from the repository root.
 - API contract changes must keep client models consistent and buildable; run the smallest relevant local checks within the limits above.
 - Report checks actually run and checks not run. Do not broaden or repeat successful checks without new changes, failures, or unresolved concerns.
+
+## 远程 SSH 目标
+
+- `himym`：Media Hub 生产 NAS 部署主机，承载 Docker、媒体数据和 Media Hub 服务。
+- `dmit`：Media Hub 的 Mikan egress SSH 目标；`deploy/compose.mikan-egress.yaml` 通过 `MEDIA_HUB_MIKAN_EGRESS_SSH_HOST` 连接远端 `127.0.0.1:17898`，仅在启用 egress overlay 时使用。
+- 涉及部署或远程运维时必须同时确认 SSH alias、远程目录和是否启用了 egress overlay；不要记录 secret value。
