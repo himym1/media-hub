@@ -724,3 +724,96 @@ func TestOfflineFolderFailsWhenVideosNeverArrive(t *testing.T) {
 		}
 	}
 }
+
+type subtitleAttachStub struct {
+	ids    []string
+	status string
+}
+
+func (s *subtitleAttachStub) AttachChinese(_ context.Context, itemID string) (string, error) {
+	s.ids = append(s.ids, itemID)
+	if s.status == "" {
+		return "attached", nil
+	}
+	return s.status, nil
+}
+
+func TestMovieIndexAttachesChineseSubtitles(t *testing.T) {
+	ctx := context.Background()
+	embyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("X-Emby-Token") != "emby-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if request.URL.Path == "/Items" {
+			_, _ = w.Write([]byte(`{"Items":[{"Id":"emby-item","Name":"Movie","Type":"Movie","ProductionYear":2026,"ProviderIds":{"Tmdb":"123"}}],"TotalRecordCount":1}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer embyServer.Close()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(
+		dataStore, search.NewService(transferSourceStub{}), codec,
+		emby.NewClient(embyServer.URL, "emby-key", time.Second),
+		nil,
+		config.Workflow{
+			Movie: config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/media/电影", EmbyLibraryID: "library-movies"},
+		},
+		nil, nil, nil,
+	)
+	attacher := &subtitleAttachStub{}
+	service.UseSubtitles(attacher)
+	job := store.TransferJob{
+		ID: "job-attach-subs", UserID: admin.ID, IdempotencyKey: "request_attach_subs",
+		RequestHash: []byte("hash"), SelectionToken: "encrypted", SourceID: "sidhub",
+		CandidateID: "candidate", Title: "Movie", Year: 2026, MediaType: "movie", TMDBID: "123",
+		State: "queued", CreatedAt: 1, UpdatedAt: 1,
+	}
+	if _, _, err := dataStore.CreateTransferJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	job.State = "indexing_emby"
+	job.UpdatedAt = 2
+	if updated, err := dataStore.UpdateTransferJob(ctx, job, "queued", "setup index"); err != nil || !updated {
+		t.Fatalf("prepare index job: updated=%v err=%v", updated, err)
+	}
+	loaded, err := dataStore.TransferJob(ctx, admin.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.processJob(ctx, loaded); err != nil {
+		t.Fatal(err)
+	}
+	if len(attacher.ids) != 1 || attacher.ids[0] != "emby-item" {
+		t.Fatalf("attached ids=%v", attacher.ids)
+	}
+	detail, err := service.Get(ctx, admin.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, event := range detail.Events {
+		if event.Message == "已自动挂载中文字幕（1）" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("events=%#v", detail.Events)
+	}
+}

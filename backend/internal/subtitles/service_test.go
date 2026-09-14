@@ -244,6 +244,49 @@ func TestRemoveLocalDeletesSidecar(t *testing.T) {
 	}
 }
 
+func TestAttachChineseSkipsWhenSidecarExists(t *testing.T) {
+	mount := t.TempDir()
+	mediaDir := filepath.Join(mount, "电影")
+	if err := os.MkdirAll(mediaDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mediaDir, "Movie.strm"), []byte("https://example/115/url/x"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mediaDir, "Movie.chi.srt"), []byte("1\n00:00:01,000 --> 00:00:02,000\n你好\n"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	stub := &embyStub{target: emby.SubtitleTarget{ID: "item-1", Path: "/media3/115-strm/电影/Movie.strm"}}
+	service := New(stub, nil, func() string { return mount })
+	status, err := service.AttachChinese(context.Background(), "item-1")
+	if err != nil || status != AttachExisted || stub.embyCalls != 0 {
+		t.Fatalf("status=%q err=%v calls=%d", status, err, stub.embyCalls)
+	}
+}
+
+func TestAttachChineseDownloadsBestHit(t *testing.T) {
+	mount := t.TempDir()
+	mediaDir := filepath.Join(mount, "电影")
+	if err := os.MkdirAll(mediaDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mediaDir, "Movie.strm"), []byte("https://example/115/url/x"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	stub := &embyStub{
+		target: emby.SubtitleTarget{ID: "item-1", Path: "/media3/115-strm/电影/Movie.strm"},
+		embyHits: []emby.RemoteSubtitle{
+			{ID: "en", Name: "English", Language: "eng"},
+			{ID: "chi-1", Name: "Movie.Chs", Format: "srt"},
+		},
+	}
+	service := New(stub, nil, func() string { return mount })
+	status, err := service.AttachChinese(context.Background(), "item-1")
+	if err != nil || status != AttachAdded || stub.downloaded != "chi-1" {
+		t.Fatalf("status=%q downloaded=%q err=%v", status, stub.downloaded, err)
+	}
+}
+
 func TestDownloadRoutesEmbyIDs(t *testing.T) {
 	stub := &embyStub{}
 	service := New(stub, nil, nil)

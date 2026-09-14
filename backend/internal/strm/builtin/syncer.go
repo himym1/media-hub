@@ -26,14 +26,24 @@ type Files interface {
 	SessionUserID(ctx context.Context) (string, error)
 }
 
+type FileDownload interface {
+	DownloadFile(ctx context.Context, pickCode, name string) ([]byte, error)
+}
+
 type videoFile struct {
 	Relative string
 	PickCode string
 	Size     int64
 }
 
+type subtitleFile struct {
+	Relative string
+	PickCode string
+}
+
 type Syncer struct {
 	files    Files
+	download FileDownload
 	mutex    sync.Mutex
 	lastList time.Time
 }
@@ -42,11 +52,29 @@ func New(files Files) *Syncer {
 	return &Syncer{files: files}
 }
 
+func (s *Syncer) UseDownload(download FileDownload) {
+	if s == nil {
+		return
+	}
+	s.mutex.Lock()
+	s.download = download
+	s.mutex.Unlock()
+}
+
+func (s *Syncer) downloader() FileDownload {
+	if s == nil {
+		return nil
+	}
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	return s.download
+}
+
 func (s *Syncer) HasVideos(ctx context.Context, folderID string) (bool, error) {
 	if s == nil || s.files == nil || strings.TrimSpace(folderID) == "" {
 		return false, strm.ErrInvalidRequest
 	}
-	videos, _, err := s.collect(ctx, strm.Request{FileID: folderID})
+	videos, _, _, err := s.collect(ctx, strm.Request{FileID: folderID})
 	if err != nil {
 		return false, err
 	}
@@ -72,7 +100,7 @@ func (s *Syncer) Sync(ctx context.Context, req strm.Request) (strm.Result, error
 	if err := strm.MountWritable(req.StrmRootMount); err != nil {
 		return strm.Result{}, err
 	}
-	videos, folders, err := s.collect(ctx, req)
+	videos, subs, folders, err := s.collect(ctx, req)
 	if err != nil {
 		return strm.Result{}, err
 	}
@@ -131,6 +159,9 @@ func (s *Syncer) Sync(ctx context.Context, req strm.Request) (strm.Result, error
 		default:
 			result.Skipped++
 		}
+		if !req.DryRun {
+			s.writeMatchingSubtitle(ctx, dest, video, subs)
+		}
 	}
 	if req.Prune && !req.DryRun && result.Failed == 0 {
 		removed, pruneErr := strm.Prune(req.StrmRootMount, base, keep)
@@ -156,7 +187,50 @@ func (s *Syncer) Sync(ctx context.Context, req strm.Request) (strm.Result, error
 	return result, nil
 }
 
-func (s *Syncer) collect(ctx context.Context, req strm.Request) ([]videoFile, map[string]int64, error) {
+func (s *Syncer) writeMatchingSubtitle(ctx context.Context, mediaPath string, video videoFile, subs []subtitleFile) {
+	download := s.downloader()
+	if download == nil || mediaPath == "" {
+		return
+	}
+	sub, ok := matchingSubtitle(video.Relative, subs)
+	if !ok {
+		return
+	}
+	var body []byte
+	if err := strm.Retry(ctx, func() error {
+		var downloadErr error
+		body, downloadErr = download.DownloadFile(ctx, sub.PickCode, path.Base(sub.Relative))
+		return downloadErr
+	}); err != nil || len(body) == 0 {
+		return
+	}
+	_, _ = strm.WriteSidecar(mediaPath, "chi", path.Base(sub.Relative), body)
+}
+
+func matchingSubtitle(videoRelative string, subs []subtitleFile) (subtitleFile, bool) {
+	stem := strings.TrimSuffix(videoRelative, path.Ext(videoRelative))
+	var ass subtitleFile
+	var other subtitleFile
+	hasAss := false
+	hasOther := false
+	for _, sub := range subs {
+		if strings.TrimSuffix(sub.Relative, path.Ext(sub.Relative)) != stem || sub.PickCode == "" {
+			continue
+		}
+		switch strings.ToLower(path.Ext(sub.Relative)) {
+		case ".ass", ".ssa":
+			ass, hasAss = sub, true
+		default:
+			other, hasOther = sub, true
+		}
+	}
+	if hasAss {
+		return ass, true
+	}
+	return other, hasOther
+}
+
+func (s *Syncer) collect(ctx context.Context, req strm.Request) ([]videoFile, []subtitleFile, map[string]int64, error) {
 	if req.IsFile {
 		var item drive115.FileItem
 		if err := strm.Retry(ctx, func() error {
@@ -164,25 +238,26 @@ func (s *Syncer) collect(ctx context.Context, req strm.Request) ([]videoFile, ma
 			item, infoErr = s.files.FileInfo(ctx, req.FileID)
 			return mapDriveError(infoErr)
 		}); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if _, ok := strm.VideoExtension(item.Name); !ok {
-			return nil, nil, strm.ErrNoVideos
+			return nil, nil, nil, strm.ErrNoVideos
 		}
 		if item.PickCode == "" {
-			return nil, nil, strm.ErrListFailed
+			return nil, nil, nil, strm.ErrListFailed
 		}
-		return []videoFile{{Relative: item.Name, PickCode: item.PickCode, Size: item.Size}}, map[string]int64{}, nil
+		return []videoFile{{Relative: item.Name, PickCode: item.PickCode, Size: item.Size}}, nil, map[string]int64{}, nil
 	}
 	return s.walk(ctx, req.FileID, "", 0, req)
 }
 
-func (s *Syncer) walk(ctx context.Context, folderID, prefix string, depth int, req strm.Request) ([]videoFile, map[string]int64, error) {
+func (s *Syncer) walk(ctx context.Context, folderID, prefix string, depth int, req strm.Request) ([]videoFile, []subtitleFile, map[string]int64, error) {
 	if depth > maxDepth {
-		return nil, nil, strm.ErrListFailed
+		return nil, nil, nil, strm.ErrListFailed
 	}
 	folders := map[string]int64{}
 	videos := make([]videoFile, 0)
+	subs := make([]subtitleFile, 0)
 	offset := 0
 	for {
 		var items []drive115.FileItem
@@ -195,7 +270,7 @@ func (s *Syncer) walk(ctx context.Context, folderID, prefix string, depth int, r
 			items, total, listErr = s.files.ListFiles(ctx, folderID, listPageSize, offset)
 			return mapDriveError(listErr)
 		}); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for _, item := range items {
 			name := strings.TrimSpace(item.Name)
@@ -213,49 +288,68 @@ func (s *Syncer) walk(ctx context.Context, folderID, prefix string, depth int, r
 						continue
 					}
 				}
-				nestedVideos, nestedFolders, err := s.walk(ctx, item.ID, relative, depth+1, req)
+				nestedVideos, nestedSubs, nestedFolders, err := s.walk(ctx, item.ID, relative, depth+1, req)
 				if err != nil {
-					return nil, nil, err
+					return nil, nil, nil, err
 				}
 				videos = append(videos, nestedVideos...)
+				subs = append(subs, nestedSubs...)
 				for id, updated := range nestedFolders {
 					folders[id] = updated
 				}
 				if len(videos) > maxFiles {
-					return nil, nil, strm.ErrListFailed
+					return nil, nil, nil, strm.ErrListFailed
 				}
 				continue
 			}
-			if _, ok := strm.VideoExtension(name); !ok {
+			_, isVideo := strm.VideoExtension(name)
+			_, isSubtitle := strm.SubtitleExtension(name)
+			if !isVideo && !isSubtitle {
 				continue
 			}
-			pickCode := item.PickCode
-			if pickCode == "" {
-				if err := strm.Retry(ctx, func() error {
-					info, infoErr := s.files.FileInfo(ctx, item.ID)
-					if infoErr != nil {
-						return mapDriveError(infoErr)
-					}
-					pickCode = info.PickCode
-					return nil
-				}); err != nil {
-					return nil, nil, err
+			pickCode, err := s.filePickCode(ctx, item)
+			if err != nil {
+				if isSubtitle {
+					continue
 				}
+				return nil, nil, nil, err
 			}
-			if pickCode == "" {
-				return nil, nil, strm.ErrListFailed
+			if isVideo {
+				videos = append(videos, videoFile{Relative: relative, PickCode: pickCode, Size: item.Size})
+				if len(videos) > maxFiles {
+					return nil, nil, nil, strm.ErrListFailed
+				}
+				continue
 			}
-			videos = append(videos, videoFile{Relative: relative, PickCode: pickCode, Size: item.Size})
-			if len(videos) > maxFiles {
-				return nil, nil, strm.ErrListFailed
-			}
+			subs = append(subs, subtitleFile{Relative: relative, PickCode: pickCode})
 		}
 		offset += len(items)
 		if len(items) == 0 || offset >= total || len(items) < listPageSize {
 			break
 		}
 	}
-	return videos, folders, nil
+	return videos, subs, folders, nil
+}
+
+func (s *Syncer) filePickCode(ctx context.Context, item drive115.FileItem) (string, error) {
+	pickCode := item.PickCode
+	if pickCode != "" {
+		return pickCode, nil
+	}
+	if err := strm.Retry(ctx, func() error {
+		info, infoErr := s.files.FileInfo(ctx, item.ID)
+		if infoErr != nil {
+			return mapDriveError(infoErr)
+		}
+		pickCode = info.PickCode
+		return nil
+	}); err != nil {
+		return "", err
+	}
+	if pickCode == "" {
+		return "", strm.ErrListFailed
+	}
+	return pickCode, nil
 }
 
 func (s *Syncer) throttle(ctx context.Context) error {

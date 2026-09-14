@@ -79,6 +79,39 @@ func (s *Service) Local(ctx context.Context, itemID string) (strm.Sidecar, error
 	return strm.ReadSidecar(mediaPath, "chi")
 }
 
+func (s *Service) AttachChinese(ctx context.Context, itemID string) (string, error) {
+	if s == nil || s.emby == nil {
+		return AttachMissing, emby.ErrNotConfigured
+	}
+	if _, err := s.Local(ctx, itemID); err == nil {
+		return AttachExisted, nil
+	}
+	hits, err := s.Search(ctx, itemID, "chi")
+	if err != nil {
+		return AttachMissing, err
+	}
+	picked, ok := PickChinese(hits)
+	if !ok {
+		return AttachMissing, nil
+	}
+	if err := s.Download(ctx, itemID, picked.ID); err != nil {
+		return AttachMissing, err
+	}
+	if target, targetErr := s.emby.SubtitleTarget(ctx, itemID); targetErr == nil {
+		if mediaPath, pathErr := strm.ResolveLibraryFile(s.mountPath(), target.Path); pathErr == nil {
+			_ = strm.PromoteExternalSidecar(mediaPath)
+		}
+	}
+	return AttachAdded, nil
+}
+
+func (s *Service) mountPath() string {
+	if s == nil || s.mount == nil {
+		return ""
+	}
+	return s.mount()
+}
+
 func (s *Service) Download(ctx context.Context, itemID, subtitleID string) error {
 	if strings.HasPrefix(subtitleID, assrtIDPrefix) {
 		return s.downloadAssrt(ctx, itemID, strings.TrimPrefix(subtitleID, assrtIDPrefix))

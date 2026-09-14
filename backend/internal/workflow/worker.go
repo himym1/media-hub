@@ -478,9 +478,53 @@ func (s *Service) pollEmbyIndex(ctx context.Context, job store.TransferJob) erro
 			return saveErr
 		}
 	}
+	s.attachLibrarySubtitles(ctx, &job)
 	job.State = "verifying_playback"
 	job.NextAttemptAt = 0
 	return s.save(ctx, &job, "indexing_emby", "Emby 已完成入库")
+}
+
+func (s *Service) attachLibrarySubtitles(ctx context.Context, job *store.TransferJob) {
+	attacher := s.subtitleAttacher()
+	if attacher == nil || strings.TrimSpace(job.EmbyItemID) == "" {
+		return
+	}
+	ids := []string{job.EmbyItemID}
+	if job.MediaType == "series" && s.emby != nil {
+		episodes, err := s.emby.Episodes(ctx, job.EmbyItemID)
+		if err != nil || len(episodes) == 0 {
+			return
+		}
+		ids = make([]string, 0, len(episodes))
+		for _, episode := range episodes {
+			if episode.ID != "" {
+				ids = append(ids, episode.ID)
+			}
+		}
+	}
+	attachCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	downloaded := 0
+	missing := 0
+	for _, id := range ids {
+		status, err := attacher.AttachChinese(attachCtx, id)
+		if err != nil {
+			continue
+		}
+		switch status {
+		case "attached":
+			downloaded++
+		case "missing":
+			missing++
+		}
+	}
+	if downloaded > 0 {
+		_ = s.save(ctx, job, "indexing_emby", fmt.Sprintf("已自动挂载中文字幕（%d）", downloaded))
+		return
+	}
+	if missing > 0 {
+		_ = s.save(ctx, job, "indexing_emby", "未找到可用中文字幕，可稍后在媒体库补")
+	}
 }
 
 func (s *Service) findIndexedLibraryItem(ctx context.Context, job store.TransferJob) (emby.Item, bool, error) {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -73,6 +74,24 @@ func TestRemoveSidecarsDeletesLanguageFiles(t *testing.T) {
 	}
 	if _, err := os.Stat(other); err != nil {
 		t.Fatalf("neighbor sidecar was removed: %v", err)
+	}
+}
+
+func TestPromoteExternalSidecarCopiesZhCN(t *testing.T) {
+	dir := t.TempDir()
+	media := filepath.Join(dir, "Movie.strm")
+	if err := os.WriteFile(media, []byte("https://example/115/url/x"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Movie.zh-CN.srt"), []byte("1\n00:00:01,000 --> 00:00:02,000\n你好\n"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	if err := PromoteExternalSidecar(media); err != nil {
+		t.Fatal(err)
+	}
+	sidecar, err := ReadSidecar(media, "chi")
+	if err != nil || !strings.Contains(string(sidecar.Body), "你好") {
+		t.Fatalf("sidecar=%#v err=%v", sidecar, err)
 	}
 }
 

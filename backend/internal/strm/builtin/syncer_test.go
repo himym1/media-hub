@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"media-hub/backend/internal/drive115"
@@ -223,6 +224,49 @@ func TestSyncContinuesOtherFilesWhenOneWriteFails(t *testing.T) {
 	}
 	if info, statErr := os.Stat(blockedDir); statErr != nil || info.IsDir() {
 		t.Fatal("failed write should not replace the blocking path")
+	}
+}
+
+type downloadStub struct {
+	byPick map[string][]byte
+}
+
+func (s downloadStub) DownloadFile(_ context.Context, pickCode, _ string) ([]byte, error) {
+	body, ok := s.byPick[pickCode]
+	if !ok {
+		return nil, errors.New("missing subtitle")
+	}
+	return body, nil
+}
+
+func TestSyncWritesMatchingChineseSidecar(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "电视剧")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	syncer := New(filesStub{
+		userID: "103539243",
+		byID: map[string][]drive115.FileItem{
+			"folder-1": {
+				{ID: "file-1", Name: "Signal 2016 E03.mkv", Kind: "file", PickCode: "pick-video"},
+				{ID: "sub-1", Name: "Signal 2016 E03.ass", Kind: "file", PickCode: "pick-sub"},
+				{ID: "other-1", Name: "readme.txt", Kind: "file"},
+			},
+		},
+	})
+	syncer.UseDownload(downloadStub{byPick: map[string][]byte{"pick-sub": []byte("[Script Info]\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,你好")}})
+	result, err := syncer.Sync(context.Background(), strm.Request{
+		FileID: "folder-1", SourcePath: "电视剧/信号 (2016)", TargetPath: target,
+		StrmBaseURL: "https://media.example", StrmRootMount: root,
+	})
+	if err != nil || result.Created != 1 {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+	sidecar := filepath.Join(target, "信号 (2016)", "Signal 2016 E03.chi.ass")
+	body, err := os.ReadFile(sidecar)
+	if err != nil || !strings.Contains(string(body), "你好") {
+		t.Fatalf("sidecar=%q err=%v", body, err)
 	}
 }
 

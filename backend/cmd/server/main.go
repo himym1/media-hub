@@ -171,6 +171,7 @@ func run(logger *slog.Logger) error {
 		},
 	)
 	builtinSyncer := builtin.New(drive115AuthService)
+	builtinSyncer.UseDownload(drive115AuthService)
 	strmCoordinator := strm.NewCoordinator(
 		dataStore,
 		builtinSyncer,
@@ -231,6 +232,7 @@ func run(logger *slog.Logger) error {
 	subtitleService := subtitles.New(embyClient, assrtClient, func() string {
 		return settingsService.Values().Workflow.StrmRootMount
 	})
+	workflowService.UseSubtitles(subtitleService)
 	overview := integration.NewOverviewService(
 		searchService,
 		drive115AuthService,

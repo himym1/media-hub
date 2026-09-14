@@ -126,6 +126,31 @@ func RemoveSidecars(mediaPath string) error {
 	return nil
 }
 
+func PromoteExternalSidecar(mediaPath string) error {
+	if _, err := ReadSidecar(mediaPath, "chi"); err == nil {
+		return nil
+	}
+	mediaPath = filepath.Clean(mediaPath)
+	dir := filepath.Dir(mediaPath)
+	stem := strings.TrimSuffix(mediaPath, filepath.Ext(mediaPath))
+	base := filepath.Base(stem)
+	for _, extra := range []string{".zh-CN.srt", ".zh-CN.ass", ".zh-cn.srt", ".zh-cn.ass", ".zh.srt", ".zh.ass", ".chs.srt", ".chs.ass"} {
+		source := filepath.Join(dir, base+extra)
+		if !strings.HasPrefix(source, dir+string(os.PathSeparator)) {
+			continue
+		}
+		body, err := os.ReadFile(source)
+		if err != nil || len(body) == 0 || len(body) > maxSidecarBytes {
+			continue
+		}
+		if _, err := WriteSidecar(mediaPath, "chi", base+extra, body); err != nil {
+			return err
+		}
+		return nil
+	}
+	return ErrSidecarNotFound
+}
+
 func sidecarLanguages(language string) []string {
 	lang := sanitizeLanguage(language)
 	if lang == "" {

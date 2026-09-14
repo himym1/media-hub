@@ -17,6 +17,16 @@ func VideoExtension(name string) (string, bool) {
 	return ext, ok
 }
 
+func SubtitleExtension(name string) (string, bool) {
+	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(name)))
+	switch ext {
+	case ".ass", ".ssa", ".srt":
+		return ext, true
+	default:
+		return "", false
+	}
+}
+
 func URL(baseURL, ext, pickCode, userID string) string {
 	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if !strings.HasPrefix(ext, ".") {

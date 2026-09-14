@@ -52,6 +52,12 @@ type TransferredContentValidator func(context.Context, string, string) error
 // FolderVideoInspector reports whether a 115 folder already contains video files.
 type FolderVideoInspector func(context.Context, string) (bool, error)
 
+// SubtitleAttacher hangs a Chinese sidecar on an Emby movie or episode.
+// Status is existed, attached, or missing; errors must not fail the transfer.
+type SubtitleAttacher interface {
+	AttachChinese(context.Context, string) (string, error)
+}
+
 type Service struct {
 	store             *store.Store
 	search            *search.Service
@@ -62,6 +68,7 @@ type Service struct {
 	renameSource      SourceRenamer
 	validateTransfer  TransferredContentValidator
 	folderHasVideos   FolderVideoInspector
+	subtitles         SubtitleAttacher
 	strm              strm.Syncer
 	mutex             sync.RWMutex
 	workflow          config.Workflow
@@ -111,10 +118,22 @@ func (s *Service) UseFolderVideos(inspect FolderVideoInspector) {
 	s.mutex.Unlock()
 }
 
+func (s *Service) UseSubtitles(attacher SubtitleAttacher) {
+	s.mutex.Lock()
+	s.subtitles = attacher
+	s.mutex.Unlock()
+}
+
 func (s *Service) folderVideos() FolderVideoInspector {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 	return s.folderHasVideos
+}
+
+func (s *Service) subtitleAttacher() SubtitleAttacher {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.subtitles
 }
 
 func (s *Service) strmSyncer() strm.Syncer {

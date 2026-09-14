@@ -18,3 +18,12 @@ func TestVideoExtensionAcceptsKnownContainers(t *testing.T) {
 		t.Fatal("text files must not be treated as video")
 	}
 }
+
+func TestSubtitleExtensionAcceptsTextSubs(t *testing.T) {
+	if ext, ok := SubtitleExtension("Show.E01.ass"); !ok || ext != ".ass" {
+		t.Fatalf("ext=%q ok=%v", ext, ok)
+	}
+	if _, ok := SubtitleExtension("Show.E01.mkv"); ok {
+		t.Fatal("videos must not be treated as subtitles")
+	}
+}
