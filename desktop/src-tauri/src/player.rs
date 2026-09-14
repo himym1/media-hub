@@ -286,6 +286,9 @@ fn spawn_embedded(
     let mut child = cmd.spawn().map_err(|_| "无法启动播放器。".to_string())?;
     wait_child_started(&mut child, Duration::from_millis(1200))?;
     *state.child.lock().map_err(|_| "无法记录播放器。".to_string())? = Some(child);
+    if sub_file.is_some() {
+        select_external_subtitle();
+    }
     Ok(())
 }
 
@@ -356,6 +359,49 @@ fn ipc_bool(property: &str) -> bool {
 
 pub(crate) fn mouse_hover_from_pos(value: &serde_json::Value) -> bool {
     value.get("hover").and_then(|hover| hover.as_bool()).unwrap_or(false)
+}
+
+pub(crate) fn sid_from_track_list(value: &serde_json::Value) -> Option<i64> {
+    let tracks = value.as_array()?;
+    let mut last_external = None;
+    let mut last_sub = None;
+    for track in tracks {
+        if track.get("type").and_then(|item| item.as_str()) != Some("sub") {
+            continue;
+        }
+        let Some(id) = track.get("id").and_then(|item| item.as_i64()) else {
+            continue;
+        };
+        last_sub = Some(id);
+        if track.get("external").and_then(|item| item.as_bool()) == Some(true) {
+            last_external = Some(id);
+        }
+    }
+    last_external.or(last_sub)
+}
+
+fn select_external_subtitle() {
+    for _ in 0..25 {
+        if let Ok(list) = ipc_command(&[
+            serde_json::json!("get_property"),
+            serde_json::json!("track-list"),
+        ]) {
+            if let Some(sid) = sid_from_track_list(&list) {
+                let _ = ipc_command(&[
+                    serde_json::json!("set_property"),
+                    serde_json::json!("sid"),
+                    serde_json::json!(sid),
+                ]);
+                let _ = ipc_command(&[
+                    serde_json::json!("set_property"),
+                    serde_json::json!("sub-visibility"),
+                    serde_json::json!(true),
+                ]);
+                return;
+            }
+        }
+        std::thread::sleep(Duration::from_millis(80));
+    }
 }
 
 fn ipc_mouse_hover() -> bool {
@@ -523,5 +569,21 @@ mod tests {
         assert!(mouse_hover_from_pos(&serde_json::json!({"x": 12, "y": 8, "hover": true})));
         assert!(!mouse_hover_from_pos(&serde_json::json!({"x": 12, "y": 8, "hover": false})));
         assert!(!mouse_hover_from_pos(&serde_json::json!({})));
+    }
+
+    #[test]
+    fn prefers_the_external_subtitle_track() {
+        let tracks = serde_json::json!([
+            {"id": 1, "type": "video"},
+            {"id": 1, "type": "audio", "lang": "eng"},
+            {"id": 1, "type": "sub", "lang": "eng", "external": false},
+            {"id": 2, "type": "sub", "external": true, "title": "chi"}
+        ]);
+        assert_eq!(sid_from_track_list(&tracks), Some(2));
+        assert_eq!(sid_from_track_list(&serde_json::json!([{"id": 1, "type": "audio"}])), None);
+        assert_eq!(
+            sid_from_track_list(&serde_json::json!([{"id": 1, "type": "sub", "external": false}])),
+            Some(1)
+        );
     }
 }

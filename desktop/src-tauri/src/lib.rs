@@ -119,7 +119,7 @@ pub(crate) fn subtitle_extension(file_name: &str) -> &'static str {
 }
 
 pub(crate) fn subtitle_temp_path(file_name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("media-hub-sub.{}", subtitle_extension(file_name)))
+    std::env::temp_dir().join(format!("media-hub-sub.chi.{}", subtitle_extension(file_name)))
 }
 
 pub(crate) fn write_subtitle_temp(bytes: &[u8], file_name: &str) -> Result<PathBuf, String> {
@@ -177,7 +177,9 @@ pub(crate) fn mpv_args(
     }
     if let Some(sub_file) = sub_file {
         args.push(format!("--sub-file={}", sub_file.display()));
+        args.push("--sid=auto".to_string());
         args.push("--sub-visibility=yes".to_string());
+        args.push("--subs-with-matching-audio=no".to_string());
     }
     if start_position_ms > 0 {
         args.push(format!("--start={:.3}", start_position_ms as f64 / 1000.0));
@@ -314,7 +316,9 @@ mod tests {
         let path = PathBuf::from(r"C:\Temp\media-hub-sub.ass");
         let args = mpv_args("片", 0, None, None, None, None, Some(&path));
         assert!(args.iter().any(|arg| arg == &format!("--sub-file={}", path.display())));
+        assert!(args.iter().any(|arg| arg == "--sid=auto"));
         assert!(args.iter().any(|arg| arg == "--sub-visibility=yes"));
+        assert!(args.iter().any(|arg| arg == "--subs-with-matching-audio=no"));
     }
 
     #[test]
@@ -328,7 +332,7 @@ mod tests {
     #[test]
     fn write_subtitle_temp_round_trips() {
         let path = write_subtitle_temp(b"1\n00:00:01,000 --> 00:00:02,000\nok\n", "chi.srt").expect("write");
-        assert!(path.ends_with("media-hub-sub.srt"));
+        assert!(path.ends_with("media-hub-sub.chi.srt"));
         assert_eq!(std::fs::read(&path).expect("read"), b"1\n00:00:01,000 --> 00:00:02,000\nok\n");
         let _ = std::fs::remove_file(path);
     }

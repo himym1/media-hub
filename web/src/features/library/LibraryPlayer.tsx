@@ -17,7 +17,7 @@ import { IconButton } from '../../shared/ui/IconButton'
 import { isHlsStream } from './isHlsStream'
 import { formatPlaybackClock } from './libraryPlayback'
 import { attachPlaybackSession } from './libraryPlaybackSession'
-import { attachSubtitleTrack, setSubtitleMode, subtitleAttachResult } from './librarySubtitle'
+import { attachSubtitleTrack, setSubtitleMode, subtitleAttachResult, subtitleStartHint } from './librarySubtitle'
 import {
   cancelScheduledPlayerClick,
   clampPictureZoom,
@@ -83,6 +83,7 @@ export function LibraryPlayer({
   const [allowAutoHide, setAllowAutoHide] = useState(false)
   const [silentAudio, setSilentAudio] = useState(false)
   const [nativeActive, setNativeActive] = useState(false)
+  const [subtitleHint, setSubtitleHint] = useState<string | null>(null)
   const [aspect, setAspect] = useState<PlayerAspectId>('fit')
   const [pictureZoom, setPictureZoom] = useState(1)
 
@@ -246,6 +247,7 @@ export function LibraryPlayer({
     setChromeVisible(true)
     setChromePinned(false)
     setNativeActive(false)
+    setSubtitleHint(null)
     setAspect('fit')
     setPictureZoom(1)
     nativeRequest.current = null
@@ -279,10 +281,12 @@ export function LibraryPlayer({
             subtitle: nativeSubtitle,
           }
           setCaptions(nativeSubtitle ? 'on' : 'missing')
+          setSubtitleHint(nativeSubtitle && subtitle ? subtitleStartHint(subtitle.bytes) : null)
           setNativeActive(true)
           return
         }
         const attached = subtitleAttachResult(subtitle)
+        setSubtitleHint(attached.kind === 'track' && subtitle ? subtitleStartHint(subtitle.bytes) : null)
         if (attached.kind === 'track') {
           subtitleUrl = attached.url
           detachSubtitle = attachSubtitleTrack(video, attached.url)
@@ -543,6 +547,10 @@ export function LibraryPlayer({
             <strong>{error}</strong>
             <a className="primary-action" href={externalUrl} rel="noreferrer" target="_blank">在 Emby 打开</a>
           </div>
+        ) : null}
+
+        {subtitleHint && !error ? (
+          <p className="library-player-note" role="status">{subtitleHint}</p>
         ) : null}
 
         {captions === 'ass' && !nativeActive ? (
