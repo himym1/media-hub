@@ -21,6 +21,8 @@ import (
 const (
 	workerPollInterval = 5 * time.Second
 	transferPollDelay  = 5 * time.Second
+	offlinePollDelay   = 30 * time.Second
+	offlineWaitTimeout = 6 * time.Hour
 	syncPollDelay      = 15 * time.Second
 	maxAutomaticTries  = 5
 )
@@ -188,18 +190,30 @@ func (s *Service) processTransfer(ctx context.Context, job store.TransferJob) er
 			return s.fail(ctx, &job, "transferring", "provider_state_invalid", "资源转存状态无法解密", false, "")
 		}
 	}
-	job.Attempts++
-	job.NextAttemptAt = 0
-	if err := s.save(ctx, &job, "transferring", ""); err != nil {
-		return err
-	}
+	inspect := s.folderVideos()
+	canInspect := inspect != nil && provider.FileID != "" && !provider.IsFile
+	startedTransfer := provider.OperationID == ""
 	var result search.TransferResult
-	if provider.OperationID == "" {
+	if startedTransfer {
+		job.Attempts++
+		job.NextAttemptAt = 0
+		if err := s.save(ctx, &job, "transferring", ""); err != nil {
+			return err
+		}
 		result, err = source.StartTransfer(ctx, search.TransferRequest{
 			UserID: job.UserID, Title: job.Title, MediaType: payload.MediaType, Reference: payload.Reference, DestinationID: target.DestinationID,
 			IdempotencyKey: job.ID + "_transfer",
 		})
+	} else if canInspect {
+		result = search.TransferResult{
+			OperationID: provider.OperationID, FileID: provider.FileID, Path: provider.Path, IsFile: provider.IsFile, Status: "pending",
+		}
 	} else {
+		job.Attempts++
+		job.NextAttemptAt = 0
+		if err := s.save(ctx, &job, "transferring", ""); err != nil {
+			return err
+		}
 		result, err = source.TransferStatus(ctx, job.UserID, provider.OperationID)
 	}
 	if err != nil {
@@ -212,7 +226,12 @@ func (s *Service) processTransfer(ctx context.Context, job store.TransferJob) er
 		return err
 	}
 	job.ProviderToken = providerToken
-	if result.Status == "pending" {
+	if result.FileID != "" && !result.IsFile && inspect != nil {
+		ready, waitErr := s.waitForOfflineVideos(ctx, &job, inspect, result.FileID, startedTransfer)
+		if waitErr != nil || !ready {
+			return waitErr
+		}
+	} else if result.Status == "pending" {
 		job.NextAttemptAt = s.now().UTC().Add(transferPollDelay).Unix()
 		job.ErrorCode = ""
 		job.ErrorMessage = ""
@@ -227,11 +246,41 @@ func (s *Service) processTransfer(ctx context.Context, job store.TransferJob) er
 	return s.save(ctx, &job, "transferring", "资源转存完成")
 }
 
+func (s *Service) waitForOfflineVideos(ctx context.Context, job *store.TransferJob, inspect FolderVideoInspector, folderID string, announce bool) (bool, error) {
+	ready, err := inspect(ctx, folderID)
+	if err != nil {
+		if errors.Is(err, strm.ErrAuthExpired) {
+			return false, s.fail(ctx, job, job.State, "strm_auth_expired", "115 授权已失效，请在概览页重新扫码后再重试任务", true, "transferring")
+		}
+		return false, s.handleSourceFailure(ctx, job, search.Failure{Code: "source_unavailable", Message: "无法确认 115 离线是否到账", Retryable: true})
+	}
+	if ready {
+		return true, nil
+	}
+	if s.now().UTC().Sub(time.Unix(job.CreatedAt, 0).UTC()) >= offlineWaitTimeout {
+		return false, s.fail(ctx, job, job.State, "offline_incomplete", "115 离线未完成，目录里还没有视频", true, "transferring")
+	}
+	expectedState := job.State
+	if expectedState == "transferred" {
+		job.State = "transferring"
+	}
+	job.Attempts = 0
+	job.NextAttemptAt = s.now().UTC().Add(offlinePollDelay).Unix()
+	job.ErrorCode = ""
+	job.ErrorMessage = ""
+	message := ""
+	if announce {
+		message = "已提交 115 离线，等待视频到账"
+	}
+	return false, s.save(ctx, job, expectedState, message)
+}
+
 func (s *Service) handleSourceFailure(ctx context.Context, job *store.TransferJob, err error) error {
 	var failure search.Failure
 	if !errors.As(err, &failure) {
 		failure = search.Failure{Code: "source_unavailable", Message: "资源源连接失败", Retryable: true}
 	}
+	from := job.State
 	if failure.Code == "source_submission_unknown" || failure.Code == "source_access_unknown" {
 		job.State = "needs_attention"
 		job.ResumeState = "transferring"
@@ -243,15 +292,15 @@ func (s *Service) handleSourceFailure(ctx context.Context, job *store.TransferJo
 		if failure.Code == "source_access_unknown" {
 			eventMessage = "资源访问结果需要人工确认"
 		}
-		return s.save(ctx, job, "transferring", eventMessage)
+		return s.save(ctx, job, from, eventMessage)
 	}
 	if failure.Retryable && job.Attempts < maxAutomaticTries {
 		job.ErrorCode = failure.Code
 		job.ErrorMessage = failure.Message
 		job.NextAttemptAt = s.now().UTC().Add(backoff(job.Attempts)).Unix()
-		return s.save(ctx, job, "transferring", "等待自动重试")
+		return s.save(ctx, job, from, "等待自动重试")
 	}
-	return s.fail(ctx, job, "transferring", failure.Code, failure.Message, failure.Retryable, "transferring")
+	return s.fail(ctx, job, from, failure.Code, failure.Message, failure.Retryable, "transferring")
 }
 
 func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
@@ -279,6 +328,12 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 	if s.validateTransfer != nil && !isFile {
 		if err := s.validateTransfer(ctx, job.MediaType, provider.FileID); err != nil {
 			return s.fail(ctx, &job, "transferred", "source_identity_mismatch", err.Error(), false, "transferred")
+		}
+	}
+	if inspect := s.folderVideos(); inspect != nil && !isFile && provider.FileID != "" {
+		ready, waitErr := s.waitForOfflineVideos(ctx, &job, inspect, provider.FileID, true)
+		if waitErr != nil || !ready {
+			return waitErr
 		}
 	}
 	desiredName := libraryEntryName(job.Title, job.Year, isFile, sourcePath)
@@ -357,7 +412,7 @@ func builtinSyncFailure(err error) (string, string) {
 	case errors.Is(err, strm.ErrPathUnwritable):
 		return "strm_path_unwritable", "STRM 目录不可写，请检查 Media Hub 的媒体库挂载"
 	case errors.Is(err, strm.ErrNoVideos):
-		return "strm_list_failed", "转存目录里没有可生成 STRM 的视频文件"
+		return "offline_incomplete", "115 离线未完成，目录里还没有视频"
 	case errors.Is(err, strm.ErrInvalidRequest):
 		return "strm_list_failed", "STRM 同步参数不完整"
 	default:

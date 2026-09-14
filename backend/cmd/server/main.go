@@ -170,9 +170,10 @@ func run(logger *slog.Logger) error {
 			return nil
 		},
 	)
+	builtinSyncer := builtin.New(drive115AuthService)
 	strmCoordinator := strm.NewCoordinator(
 		dataStore,
-		builtin.New(drive115AuthService),
+		builtinSyncer,
 		drive115AuthService,
 		strm.NewRedirectCache(drive115AuthService),
 		workflowService.Workflow,
@@ -181,6 +182,7 @@ func run(logger *slog.Logger) error {
 	strmCoordinator.UseAlerter(wecomClient)
 	strmCoordinator.UseLibraryRefresher(embyClient)
 	workflowService.UseSTRMSyncer(strmCoordinator)
+	workflowService.UseFolderVideos(builtinSyncer.HasVideos)
 	checkinService := checkin.NewService(dataStore, searchService, wecomClient)
 	settingsService := settings.NewService(
 		dataStore, securePayloadCodec, settings.FromConfig(configuration),

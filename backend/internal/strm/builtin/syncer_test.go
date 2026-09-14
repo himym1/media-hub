@@ -226,6 +226,24 @@ func TestSyncContinuesOtherFilesWhenOneWriteFails(t *testing.T) {
 	}
 }
 
+func TestHasVideosReportsEmptyAndReadyFolders(t *testing.T) {
+	syncer := New(filesStub{
+		userID: "1",
+		byID: map[string][]drive115.FileItem{
+			"empty": {},
+			"ready": {{ID: "video-1", Name: "Movie.mkv", Kind: "file", PickCode: "pick-1", Size: 1024}},
+		},
+	})
+	ready, err := syncer.HasVideos(context.Background(), "empty")
+	if err != nil || ready {
+		t.Fatalf("empty folder ready=%v err=%v", ready, err)
+	}
+	ready, err = syncer.HasVideos(context.Background(), "ready")
+	if err != nil || !ready {
+		t.Fatalf("ready folder ready=%v err=%v", ready, err)
+	}
+}
+
 func TestSyncDoesNotClearSessionOnListFailure(t *testing.T) {
 	syncer := New(filesStub{userID: "1", err: drive115.ErrUpstreamResponse})
 	_, err := syncer.Sync(context.Background(), strm.Request{

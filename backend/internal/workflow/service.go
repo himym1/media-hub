@@ -49,6 +49,9 @@ type SourceRenamer func(context.Context, string, string) error
 // TransferredContentValidator inspects a transferred 115 folder before STRM sync.
 type TransferredContentValidator func(context.Context, string, string) error
 
+// FolderVideoInspector reports whether a 115 folder already contains video files.
+type FolderVideoInspector func(context.Context, string) (bool, error)
+
 type Service struct {
 	store             *store.Store
 	search            *search.Service
@@ -58,6 +61,7 @@ type Service struct {
 	resolveSourcePath SourcePathResolver
 	renameSource      SourceRenamer
 	validateTransfer  TransferredContentValidator
+	folderHasVideos   FolderVideoInspector
 	strm              strm.Syncer
 	mutex             sync.RWMutex
 	workflow          config.Workflow
@@ -99,6 +103,18 @@ func (s *Service) UseSTRMSyncer(syncer strm.Syncer) {
 	s.mutex.Lock()
 	s.strm = syncer
 	s.mutex.Unlock()
+}
+
+func (s *Service) UseFolderVideos(inspect FolderVideoInspector) {
+	s.mutex.Lock()
+	s.folderHasVideos = inspect
+	s.mutex.Unlock()
+}
+
+func (s *Service) folderVideos() FolderVideoInspector {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.folderHasVideos
 }
 
 func (s *Service) strmSyncer() strm.Syncer {

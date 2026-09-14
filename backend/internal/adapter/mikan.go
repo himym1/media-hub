@@ -160,7 +160,7 @@ func (m *Mikan) StartTransfer(ctx context.Context, input search.TransferRequest)
 	}
 	return search.TransferResult{
 		OperationID: input.IdempotencyKey,
-		Status:      "completed",
+		Status:      "pending",
 		FileID:      destinationID,
 		Path:        storageTitle,
 		IsFile:      false,

@@ -104,7 +104,7 @@ func TestMikanTransferSubmitsOfflineURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != "completed" || result.FileID != "folder-1/范海辛" || result.Path != "范海辛" || offline.destination != "folder-1/范海辛" {
+	if result.Status != "pending" || result.FileID != "folder-1/范海辛" || result.Path != "范海辛" || offline.destination != "folder-1/范海辛" {
 		t.Fatalf("result=%+v offline=%+v", result, offline)
 	}
 	if len(offline.urls) != 1 || !strings.HasPrefix(offline.urls[0], "magnet:") {

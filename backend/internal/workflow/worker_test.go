@@ -538,3 +538,189 @@ func TestMovieEmbyIndexDoesNotRequirePlaybackInfo(t *testing.T) {
 		t.Fatalf("playback info hits=%d", playbackHits)
 	}
 }
+
+type offlineFolderSourceStub struct{ starts *int }
+
+func (s offlineFolderSourceStub) ID() string    { return "sidhub" }
+func (s offlineFolderSourceStub) Label() string { return "Sidhub" }
+func (s offlineFolderSourceStub) Search(context.Context, string) ([]search.Candidate, error) {
+	return nil, nil
+}
+func (s offlineFolderSourceStub) StartTransfer(context.Context, search.TransferRequest) (search.TransferResult, error) {
+	*s.starts++
+	return search.TransferResult{OperationID: "op-1", Status: "pending", FileID: "folder-1", Path: "异魔禁区", IsFile: false}, nil
+}
+func (s offlineFolderSourceStub) TransferStatus(context.Context, int64, string) (search.TransferResult, error) {
+	return search.TransferResult{}, search.Failure{Code: "invalid_source_response", Message: "should not poll sidhub status", Retryable: false}
+}
+
+func TestOfflineFolderWaitsForVideosBeforeTransferComplete(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	starts := 0
+	searchService := search.NewService(offlineFolderSourceStub{starts: &starts})
+	service := NewService(
+		dataStore, searchService, codec,
+		emby.NewClient("http://emby.local", "emby-key", time.Second),
+		nil,
+		config.Workflow{
+			StrmBaseURL:   "https://media.example",
+			StrmRootMount: "/media",
+			Movie:         config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
+		},
+		nil, nil, nil,
+	)
+	ready := false
+	service.UseFolderVideos(func(context.Context, string) (bool, error) { return ready, nil })
+	token := service.SelectionToken(search.Candidate{
+		ID: "sidhub:seed-1", Title: "异魔禁区", Year: 2001, MediaType: "movie", TMDBID: "1", SourceID: "sidhub",
+		SourceRef: `{"title":"异魔禁区","linkPath":"/link_start/?seed_id=1"}`, TransferState: "available", Revision: searchService.CurrentRevision(),
+	})
+	publicJob, _, err := service.Enqueue(ctx, admin.ID, token, "request_offline_wait")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := service.processJob(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != "transferring" || starts != 1 {
+		t.Fatalf("waiting state=%q starts=%d", job.State, starts)
+	}
+	detail, err := service.Get(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundWait := false
+	for _, event := range detail.Events {
+		if event.Message == "已提交 115 离线，等待视频到账" {
+			foundWait = true
+		}
+		if event.Message == "资源转存完成" {
+			t.Fatal("empty folder was marked transferred")
+		}
+	}
+	if !foundWait {
+		t.Fatal("missing offline wait event")
+	}
+	ready = true
+	if err := service.processJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	job, err = dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != "transferred" || starts != 1 {
+		t.Fatalf("ready state=%q starts=%d", job.State, starts)
+	}
+}
+
+func TestOfflineFolderFailsWhenVideosNeverArrive(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	starts := 0
+	searchService := search.NewService(offlineFolderSourceStub{starts: &starts})
+	service := NewService(
+		dataStore, searchService, codec,
+		emby.NewClient("http://emby.local", "emby-key", time.Second),
+		nil,
+		config.Workflow{
+			StrmBaseURL:   "https://media.example",
+			StrmRootMount: "/media",
+			Movie:         config.WorkflowTarget{DestinationID: "100", QMediaSyncTargetPath: "/strm/movies", EmbyLibraryID: "library-movies"},
+		},
+		nil, nil, nil,
+	)
+	service.UseFolderVideos(func(context.Context, string) (bool, error) { return false, nil })
+	token := service.SelectionToken(search.Candidate{
+		ID: "sidhub:seed-2", Title: "异魔禁区", Year: 2001, MediaType: "movie", TMDBID: "1", SourceID: "sidhub",
+		SourceRef: `{"title":"异魔禁区","linkPath":"/link_start/?seed_id=2"}`, TransferState: "available", Revision: searchService.CurrentRevision(),
+	})
+	if token == "" {
+		t.Fatal("empty selection token")
+	}
+	publicJob, _, err := service.Enqueue(ctx, admin.ID, token, "request_offline_timeout")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := service.processJob(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != "transferring" || starts != 1 {
+		t.Fatalf("waiting state=%q starts=%d", job.State, starts)
+	}
+	created := time.Unix(job.CreatedAt, 0).UTC()
+	service.now = func() time.Time { return created.Add(offlineWaitTimeout + time.Second) }
+	if err := service.processJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	job, err = dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != "failed" || job.ErrorCode != "offline_incomplete" || !job.Retryable {
+		t.Fatalf("state=%q code=%q retryable=%v", job.State, job.ErrorCode, job.Retryable)
+	}
+	if job.ErrorMessage != "115 离线未完成，目录里还没有视频" {
+		t.Fatalf("message=%q", job.ErrorMessage)
+	}
+	detail, err := service.Get(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range detail.Events {
+		if event.Message == "资源转存完成" {
+			t.Fatal("empty folder was marked transferred")
+		}
+	}
+}

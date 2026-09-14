@@ -42,6 +42,17 @@ func New(files Files) *Syncer {
 	return &Syncer{files: files}
 }
 
+func (s *Syncer) HasVideos(ctx context.Context, folderID string) (bool, error) {
+	if s == nil || s.files == nil || strings.TrimSpace(folderID) == "" {
+		return false, strm.ErrInvalidRequest
+	}
+	videos, _, err := s.collect(ctx, strm.Request{FileID: folderID})
+	if err != nil {
+		return false, err
+	}
+	return len(videos) > 0, nil
+}
+
 func (s *Syncer) Sync(ctx context.Context, req strm.Request) (strm.Result, error) {
 	started := time.Now()
 	if s == nil || s.files == nil {
