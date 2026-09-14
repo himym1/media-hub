@@ -21,8 +21,8 @@ import (
 const (
 	workerPollInterval = 5 * time.Second
 	transferPollDelay  = 5 * time.Second
-	offlinePollDelay   = 30 * time.Second
-	offlineWaitTimeout = 6 * time.Hour
+	offlinePollDelay   = 15 * time.Second
+	offlineWaitTimeout = 10 * time.Minute
 	syncPollDelay      = 15 * time.Second
 	maxAutomaticTries  = 5
 )
