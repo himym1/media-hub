@@ -98,11 +98,13 @@ export function LibraryPlayer({
     if (sticky) setChromePinned(true)
     if (armHide) setAllowAutoHide(true)
     clearIdleTimer()
-    if (nativeActive || !playing || sticky || (!armHide && !allowAutoHide)) return
+    if (!playing || sticky || (!armHide && !allowAutoHide)) return
     idleTimer.current = window.setTimeout(() => {
       setChromeVisible(false)
     }, chromeIdleMs)
-  }, [allowAutoHide, nativeActive, playing])
+  }, [allowAutoHide, playing])
+  const revealChromeRef = useRef(revealChrome)
+  revealChromeRef.current = revealChrome
 
   useEffect(() => {
     setPipAvailable(Boolean(document.pictureInPictureEnabled))
@@ -119,7 +121,7 @@ export function LibraryPlayer({
       setChromeVisible(true)
       return
     }
-    revealChrome()
+    revealChrome(false, true)
   }, [chromePinned, error, nativeActive, playing, revealChrome])
 
   const seekBy = useCallback((delta: number) => {
@@ -369,8 +371,9 @@ export function LibraryPlayer({
         if (typeof status.zoom === 'number' && status.zoom > 0) {
           setPictureZoom(clampPictureZoom(status.zoom))
         }
+        if (status.cursorHover) revealChromeRef.current(false, true)
       })
-    }, 500)
+    }, 250)
     return () => {
       cancelled = true
       observer.disconnect()

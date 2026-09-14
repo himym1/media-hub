@@ -25,6 +25,7 @@ export type NativeStatus = {
   volume: number
   speed: number
   zoom?: number
+  cursorHover?: boolean
 }
 
 type TauriInvoke = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>

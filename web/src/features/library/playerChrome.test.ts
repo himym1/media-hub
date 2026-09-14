@@ -51,8 +51,8 @@ describe('playerChrome', () => {
     expect(logZoomFromLinear(2)).toBe(1)
   })
 
-  it('keeps native desktop chrome visible because mpv owns the pointer', () => {
-    expect(shouldAutoHidePlayerChrome(true, true, false, false)).toBe(false)
+  it('hides chrome while playing unless it is pinned or failed', () => {
+    expect(shouldAutoHidePlayerChrome(true, true, false, false)).toBe(true)
     expect(shouldAutoHidePlayerChrome(false, true, false, false)).toBe(true)
     expect(shouldAutoHidePlayerChrome(false, true, true, false)).toBe(false)
     expect(shouldAutoHidePlayerChrome(false, false, false, false)).toBe(false)

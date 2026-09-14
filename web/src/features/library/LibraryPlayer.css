@@ -180,9 +180,7 @@
 
 .library-player.is-native.chrome-hidden .library-player-toolbar,
 .library-player.is-native.chrome-hidden .library-player-chrome {
-  opacity: 1;
-  pointer-events: auto;
-  transform: none;
+  display: none;
 }
 
 .library-player.chrome-hidden .library-player-toolbar,

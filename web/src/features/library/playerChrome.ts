@@ -51,8 +51,8 @@ export function logZoomFromLinear(value: number) {
   return Math.log2(clampPictureZoom(value))
 }
 
-export function shouldAutoHidePlayerChrome(nativeActive: boolean, playing: boolean, pinned: boolean, hasError: boolean) {
-  return !nativeActive && playing && !pinned && !hasError
+export function shouldAutoHidePlayerChrome(_nativeActive: boolean, playing: boolean, pinned: boolean, hasError: boolean) {
+  return playing && !pinned && !hasError
 }
 
 export const playerClickDelayMs = 280

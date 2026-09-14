@@ -37,6 +37,7 @@ pub struct NativeStatus {
     pub volume: f64,
     pub speed: f64,
     pub zoom: f64,
+    pub cursor_hover: bool,
 }
 
 fn parked_origin() -> PhysicalPosition<i32> {
@@ -353,6 +354,19 @@ fn ipc_bool(property: &str) -> bool {
         .unwrap_or(false)
 }
 
+pub(crate) fn mouse_hover_from_pos(value: &serde_json::Value) -> bool {
+    value.get("hover").and_then(|hover| hover.as_bool()).unwrap_or(false)
+}
+
+fn ipc_mouse_hover() -> bool {
+    ipc_command(&[
+        serde_json::json!("get_property"),
+        serde_json::json!("mouse-pos"),
+    ])
+    .ok()
+    .is_some_and(|value| mouse_hover_from_pos(&value))
+}
+
 #[tauri::command]
 pub fn play_native(
     app: AppHandle,
@@ -451,6 +465,7 @@ pub fn native_status() -> Result<NativeStatus, String> {
         volume: ipc_number("volume") / 100.0,
         speed: ipc_number("speed").max(0.1),
         zoom: linear_zoom_from_mpv(),
+        cursor_hover: ipc_mouse_hover(),
     })
 }
 
@@ -501,5 +516,12 @@ mod tests {
             ]]
         );
         assert!(native_control_commands("unknown", None, None).is_err());
+    }
+
+    #[test]
+    fn mouse_hover_reads_mpv_cursor_state() {
+        assert!(mouse_hover_from_pos(&serde_json::json!({"x": 12, "y": 8, "hover": true})));
+        assert!(!mouse_hover_from_pos(&serde_json::json!({"x": 12, "y": 8, "hover": false})));
+        assert!(!mouse_hover_from_pos(&serde_json::json!({})));
     }
 }
