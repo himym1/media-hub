@@ -262,6 +262,9 @@ func TestAttachChineseSkipsWhenSidecarExists(t *testing.T) {
 	if err != nil || status != AttachExisted || stub.embyCalls != 0 {
 		t.Fatalf("status=%q err=%v calls=%d", status, err, stub.embyCalls)
 	}
+	if _, err := os.Stat(filepath.Join(mediaDir, "Movie.chi.default.srt")); err != nil {
+		t.Fatalf("default sidecar: %v", err)
+	}
 }
 
 func TestAttachChineseDownloadsBestHit(t *testing.T) {

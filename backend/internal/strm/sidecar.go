@@ -68,6 +68,9 @@ func WriteSidecar(mediaPath, language, sourceName string, body []byte) (string, 
 		_ = os.Remove(temp)
 		return "", err
 	}
+	if err := writeDefaultSidecar(dest, body); err != nil {
+		return dest, err
+	}
 	return dest, nil
 }
 
@@ -121,14 +124,18 @@ func RemoveSidecars(mediaPath string) error {
 			if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
 				return err
 			}
+			if err := os.Remove(defaultSidecarPath(dest)); err != nil && !os.IsNotExist(err) {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
 func PromoteExternalSidecar(mediaPath string) error {
-	if _, err := ReadSidecar(mediaPath, "chi"); err == nil {
-		return nil
+	if sidecar, err := ReadSidecar(mediaPath, "chi"); err == nil {
+		dest := strings.TrimSuffix(filepath.Clean(mediaPath), filepath.Ext(mediaPath)) + "." + sidecar.Name
+		return writeDefaultSidecar(dest, sidecar.Body)
 	}
 	mediaPath = filepath.Clean(mediaPath)
 	dir := filepath.Dir(mediaPath)
@@ -149,6 +156,34 @@ func PromoteExternalSidecar(mediaPath string) error {
 		return nil
 	}
 	return ErrSidecarNotFound
+}
+
+func writeDefaultSidecar(dest string, body []byte) error {
+	defaultDest := defaultSidecarPath(dest)
+	if defaultDest == dest {
+		return nil
+	}
+	dir := filepath.Dir(dest)
+	if !strings.HasPrefix(defaultDest, dir+string(os.PathSeparator)) {
+		return fmt.Errorf("subtitle path is invalid")
+	}
+	temp := defaultDest + ".tmp"
+	if err := os.WriteFile(temp, body, 0o664); err != nil {
+		return err
+	}
+	if err := os.Rename(temp, defaultDest); err != nil {
+		_ = os.Remove(temp)
+		return err
+	}
+	return nil
+}
+
+func defaultSidecarPath(dest string) string {
+	ext := filepath.Ext(dest)
+	if ext == "" {
+		return dest
+	}
+	return strings.TrimSuffix(dest, ext) + ".default" + ext
 }
 
 func sidecarLanguages(language string) []string {

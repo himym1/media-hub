@@ -5,6 +5,7 @@ import {
   deleteEmbyItem,
   downloadEmbyRemoteSubtitle,
   embyPrimaryImageURL,
+  fetchLocalSubtitle,
   getEmbyEpisodes,
   getEmbyItem,
   getEmbyLibraries,
@@ -393,6 +394,16 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
   })
   const downloadSubtitle = useMutation({
     mutationFn: (subtitleId: string) => downloadEmbyRemoteSubtitle(item.id, subtitleId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['emby-local-subtitle', item.id] })
+    },
+  })
+  const localSubtitle = useQuery({
+    queryKey: ['emby-local-subtitle', item.id],
+    queryFn: () => fetchLocalSubtitle(item.id),
+    enabled: !shared && item.type !== 'Series',
+    retry: false,
+    staleTime: 60_000,
   })
   const preview = previewDelete.data
   const busy = previewDelete.isPending || confirmDelete.isPending || refreshing || searchSubtitles.isPending || downloadSubtitle.isPending
@@ -419,6 +430,12 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
           <div><dt>时长</dt><dd>{item.runtimeMinutes ? `${item.runtimeMinutes} 分钟` : '未提供'}</dd></div>
           <div><dt>评分</dt><dd>{item.communityRating ? item.communityRating.toFixed(1) : '未提供'}</dd></div>
           <div><dt>进度</dt><dd>{playbackStatus(item)}</dd></div>
+          {shared || item.type === 'Series' ? null : (
+            <div>
+              <dt>字幕</dt>
+              <dd>{localSubtitle.isLoading ? '检查中' : localSubtitle.data ? '已挂中文' : '未挂中文'}</dd>
+            </div>
+          )}
         </dl>
         {genres.length ? <div className="library-genres">{genres.map((genre) => <span key={genre}>{genre}</span>)}</div> : null}
       </div>

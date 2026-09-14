@@ -138,6 +138,7 @@ test('library supports browsing item details and safe Emby actions', async ({ pa
   await expect(libraryItem).not.toContainText('TMDB')
   await libraryItem.click()
   await expect(page.getByRole('heading', { name: '验收影片', level: 2 })).toBeVisible()
+  await expect(page.getByText('已挂中文', { exact: true })).toBeVisible()
   await expect(page.getByText('用于验证媒体库详情。')).toBeVisible()
   await expect(page.locator('.library-detail').getByText('剧情', { exact: true })).toBeVisible()
   await expect(page.locator('.library-detail').getByText('科幻', { exact: true })).toBeVisible()

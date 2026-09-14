@@ -42,6 +42,9 @@ func TestWriteSidecarNextToSTRM(t *testing.T) {
 	if dest != filepath.Join(dir, "S01E01.chi.ass") {
 		t.Fatalf("dest = %q", dest)
 	}
+	if _, err := os.Stat(filepath.Join(dir, "S01E01.chi.default.ass")); err != nil {
+		t.Fatalf("default sidecar: %v", err)
+	}
 	body, err := os.ReadFile(dest)
 	if err != nil || string(body) != "[Script Info]\n" {
 		t.Fatalf("sidecar = %q err=%v", body, err)
@@ -66,11 +69,17 @@ func TestRemoveSidecarsDeletesLanguageFiles(t *testing.T) {
 	if err := os.WriteFile(other, []byte("[Script Info]\n"), 0o664); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, "S01E01.chi.default.ass"), []byte("[Script Info]\n"), 0o664); err != nil {
+		t.Fatal(err)
+	}
 	if err := RemoveSidecars(media); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
 		t.Fatalf("sidecar still exists: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "S01E01.chi.default.ass")); !os.IsNotExist(err) {
+		t.Fatalf("default sidecar still exists: %v", err)
 	}
 	if _, err := os.Stat(other); err != nil {
 		t.Fatalf("neighbor sidecar was removed: %v", err)
@@ -92,6 +101,9 @@ func TestPromoteExternalSidecarCopiesZhCN(t *testing.T) {
 	sidecar, err := ReadSidecar(media, "chi")
 	if err != nil || !strings.Contains(string(sidecar.Body), "你好") {
 		t.Fatalf("sidecar=%#v err=%v", sidecar, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "Movie.chi.default.srt")); err != nil {
+		t.Fatalf("default sidecar: %v", err)
 	}
 }
 

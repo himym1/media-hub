@@ -84,6 +84,11 @@ func (s *Service) AttachChinese(ctx context.Context, itemID string) (string, err
 		return AttachMissing, emby.ErrNotConfigured
 	}
 	if _, err := s.Local(ctx, itemID); err == nil {
+		if target, targetErr := s.emby.SubtitleTarget(ctx, itemID); targetErr == nil {
+			if mediaPath, pathErr := strm.ResolveLibraryFile(s.mountPath(), target.Path); pathErr == nil {
+				_ = strm.PromoteExternalSidecar(mediaPath)
+			}
+		}
 		return AttachExisted, nil
 	}
 	hits, err := s.Search(ctx, itemID, "chi")
