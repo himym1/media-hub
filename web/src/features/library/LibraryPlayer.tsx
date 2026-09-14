@@ -29,6 +29,7 @@ import {
   playerAspectClassName,
   playerAspectModes,
   schedulePlayerClick,
+  shouldAutoHidePlayerChrome,
   stepPictureZoom,
   type PlayerAspectId,
 } from './playerChrome'
@@ -97,11 +98,11 @@ export function LibraryPlayer({
     if (sticky) setChromePinned(true)
     if (armHide) setAllowAutoHide(true)
     clearIdleTimer()
-    if (!playing || sticky || (!armHide && !allowAutoHide)) return
+    if (nativeActive || !playing || sticky || (!armHide && !allowAutoHide)) return
     idleTimer.current = window.setTimeout(() => {
       setChromeVisible(false)
     }, chromeIdleMs)
-  }, [allowAutoHide, playing])
+  }, [allowAutoHide, nativeActive, playing])
 
   useEffect(() => {
     setPipAvailable(Boolean(document.pictureInPictureEnabled))
@@ -113,13 +114,13 @@ export function LibraryPlayer({
   }, [])
 
   useEffect(() => {
-    if (!playing || chromePinned || error) {
+    if (!shouldAutoHidePlayerChrome(nativeActive, playing, chromePinned, Boolean(error))) {
       clearIdleTimer()
       setChromeVisible(true)
       return
     }
     revealChrome()
-  }, [playing, chromePinned, error, revealChrome])
+  }, [chromePinned, error, nativeActive, playing, revealChrome])
 
   const seekBy = useCallback((delta: number) => {
     if (nativeActive) {

@@ -12,6 +12,7 @@ import {
   playbackRates,
   playbackSkipSeconds,
   schedulePlayerClick,
+  shouldAutoHidePlayerChrome,
   stepPictureZoom,
 } from './playerChrome'
 
@@ -48,6 +49,13 @@ describe('playerChrome', () => {
     expect(formatPictureZoom(1)).toBe('100%')
     expect(formatPictureZoom(1.1)).toBe('110%')
     expect(logZoomFromLinear(2)).toBe(1)
+  })
+
+  it('keeps native desktop chrome visible because mpv owns the pointer', () => {
+    expect(shouldAutoHidePlayerChrome(true, true, false, false)).toBe(false)
+    expect(shouldAutoHidePlayerChrome(false, true, false, false)).toBe(true)
+    expect(shouldAutoHidePlayerChrome(false, true, true, false)).toBe(false)
+    expect(shouldAutoHidePlayerChrome(false, false, false, false)).toBe(false)
   })
 
   it('exposes skip and speed options used by the PC chrome', () => {

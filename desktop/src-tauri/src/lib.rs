@@ -154,7 +154,7 @@ pub(crate) fn mpv_args(
         "--force-window=yes".to_string(),
         "--keep-open=no".to_string(),
         "--ytdl=no".to_string(),
-        "--osc=no".to_string(),
+        "--osc=yes".to_string(),
         "--no-border".to_string(),
         "--focus-on=never".to_string(),
         format!("--title={}", title.replace(['\n', '\r'], " ")),
@@ -290,6 +290,7 @@ mod tests {
     fn mpv_args_keep_comma_user_agent_out_of_header_lists() {
         let agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
         let args = mpv_args("范海辛", 0, Some(agent), Some(42), None, None, None);
+        assert!(args.iter().any(|arg| arg == "--osc=yes"));
         assert!(args.iter().any(|arg| arg == "--slang=zh,chi,zh-Hans,zh-CN,zh-TW,zh-HK"));
         assert!(args.iter().any(|arg| arg == &format!("--user-agent={agent}")));
         assert!(args.iter().any(|arg| arg == "--wid=42"));
