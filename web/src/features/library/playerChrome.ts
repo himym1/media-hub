@@ -86,6 +86,37 @@ export function shouldRevealChromeFromNativePointer(previous: NativePointer | nu
   return !previous.hover || previous.x !== next.x || previous.y !== next.y
 }
 
+export function shouldArmNativeChromeHide(previous: NativePointer | null, next: NativePointer) {
+  return Boolean(previous && next.hover && (previous.x !== next.x || previous.y !== next.y))
+}
+
+export function playerChromeInsets(
+  visible: boolean,
+  toolbar?: { getBoundingClientRect: () => { height: number } } | null,
+  chrome?: { getBoundingClientRect: () => { height: number } } | null,
+) {
+  if (!visible) return { top: 0, bottom: 0 }
+  return {
+    top: Math.max(56, Math.round(toolbar?.getBoundingClientRect().height ?? 72)),
+    bottom: Math.max(96, Math.round(chrome?.getBoundingClientRect().height ?? 148)),
+  }
+}
+
+export function nativeEmbedRect(
+  hole: { getBoundingClientRect: () => { left: number; top: number; width: number; height: number } },
+  insets: { top: number; bottom: number },
+) {
+  const rect = hole.getBoundingClientRect()
+  const top = Math.max(0, insets.top)
+  const bottom = Math.max(0, insets.bottom)
+  return {
+    x: rect.left,
+    y: rect.top + top,
+    width: Math.max(8, rect.width),
+    height: Math.max(8, rect.height - top - bottom),
+  }
+}
+
 export const playerClickDelayMs = 280
 
 export type PlayerClickTimer = { current: number | null }

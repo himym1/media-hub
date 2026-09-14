@@ -14,7 +14,10 @@ import {
   schedulePlayerClick,
   shouldAutoHidePlayerChrome,
   shouldRevealChromeFromNativePointer,
+  shouldArmNativeChromeHide,
+  nativeEmbedRect,
   nativePointerFromStatus,
+  playerChromeInsets,
   stepPictureZoom,
 } from './playerChrome'
 
@@ -68,6 +71,17 @@ describe('playerChrome', () => {
     expect(shouldRevealChromeFromNativePointer(pointer, pointer!)).toBe(false)
     expect(shouldRevealChromeFromNativePointer(pointer, { x: 12, y: 20, hover: true })).toBe(true)
     expect(shouldRevealChromeFromNativePointer(pointer, { x: 10, y: 20, hover: false })).toBe(false)
+    expect(shouldArmNativeChromeHide(null, pointer!)).toBe(false)
+    expect(shouldArmNativeChromeHide(pointer, { x: 12, y: 20, hover: true })).toBe(true)
+  })
+
+  it('keeps native video out from under the chrome', () => {
+    expect(playerChromeInsets(false, { getBoundingClientRect: () => ({ height: 64 }) }, { getBoundingClientRect: () => ({ height: 120 }) })).toEqual({ top: 0, bottom: 0 })
+    expect(playerChromeInsets(true, { getBoundingClientRect: () => ({ height: 64 }) }, { getBoundingClientRect: () => ({ height: 120 }) })).toEqual({ top: 64, bottom: 120 })
+    expect(nativeEmbedRect(
+      { getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 800 }) },
+      { top: 64, bottom: 120 },
+    )).toEqual({ x: 0, y: 64, width: 1280, height: 616 })
   })
 
   it('exposes skip and speed options used by the PC chrome', () => {

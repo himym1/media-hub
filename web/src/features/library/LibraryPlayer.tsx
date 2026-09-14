@@ -30,7 +30,10 @@ import {
   playerAspectClassName,
   playerAspectModes,
   schedulePlayerClick,
+  nativeEmbedRect,
   nativePointerFromStatus,
+  playerChromeInsets,
+  shouldArmNativeChromeHide,
   shouldAutoHidePlayerChrome,
   shouldRevealChromeFromNativePointer,
   stepPictureZoom,
@@ -69,7 +72,10 @@ export function LibraryPlayer({
 }: LibraryPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const holeRef = useRef<HTMLDivElement>(null)
+  const toolbarRef = useRef<HTMLElement>(null)
+  const chromeBarRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
+  const chromeVisibleRef = useRef(true)
   const idleTimer = useRef<number | null>(null)
   const clickTimer = useRef<number | null>(null)
   const nativeRequest = useRef<NativeRequest | null>(null)
@@ -113,6 +119,13 @@ export function LibraryPlayer({
   }, [allowAutoHide, playing])
   const revealChromeRef = useRef(revealChrome)
   revealChromeRef.current = revealChrome
+  chromeVisibleRef.current = chromeVisible
+
+  const nativeSurfaceBounds = () => {
+    const hole = holeRef.current
+    if (!hole) return null
+    return nativeEmbedRect(hole, playerChromeInsets(chromeVisibleRef.current, toolbarRef.current, chromeBarRef.current))
+  }
 
   useEffect(() => {
     setPipAvailable(Boolean(document.pictureInPictureEnabled))
@@ -372,7 +385,7 @@ export function LibraryPlayer({
           title: request.title,
           startPositionMs: request.startPositionMs,
           userAgent: request.userAgent,
-          bounds: boundsFromElement(hole),
+          bounds: nativeSurfaceBounds() ?? boundsFromElement(hole),
           subtitle: request.subtitle,
         })
         if (cancelled) return
@@ -392,7 +405,8 @@ export function LibraryPlayer({
       }
     })()
     const relayout = () => {
-      void layoutNatively(boundsFromElement(hole)).catch(() => undefined)
+      const bounds = nativeSurfaceBounds()
+      if (bounds) void layoutNatively(bounds).catch(() => undefined)
     }
     const observer = new ResizeObserver(relayout)
     observer.observe(hole)
@@ -415,8 +429,10 @@ export function LibraryPlayer({
           if (shouldRevealChromeFromNativePointer(nativePointer.current, pointer)) {
             revealChromeRef.current(false, true)
           }
+          if (shouldArmNativeChromeHide(nativePointer.current, pointer)) {
+            setNativePointerReady(true)
+          }
           nativePointer.current = pointer
-          setNativePointerReady(true)
         }
         if (wasPaused !== status.paused && request.sessionId) {
           void reportPlaybackSessionEvent(
@@ -437,6 +453,12 @@ export function LibraryPlayer({
       void stopNatively().catch(() => undefined)
     }
   }, [itemId, nativeActive])
+
+  useEffect(() => {
+    if (!nativeActive) return
+    const bounds = nativeSurfaceBounds()
+    if (bounds) void layoutNatively(bounds).catch(() => undefined)
+  }, [chromeVisible, itemId, nativeActive])
 
   useEffect(() => {
     if (error || silentAudio || nativeActive) return
@@ -498,6 +520,7 @@ export function LibraryPlayer({
     >
       <div className="library-player-stage" ref={stageRef}>
         <header
+          ref={toolbarRef}
           className="library-player-toolbar"
           onBlurCapture={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -619,6 +642,7 @@ export function LibraryPlayer({
         ) : null}
 
         <div
+          ref={chromeBarRef}
           className="library-player-chrome"
           onFocusCapture={() => revealChrome(true)}
           onBlurCapture={(event) => {
