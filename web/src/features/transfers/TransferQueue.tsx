@@ -50,13 +50,18 @@ export function TransferQueue({ query }: TransferQueueProps) {
   const queryClient = useQueryClient()
   const [selectedID, setSelectedID] = useState<string | null>(taskIdFromLocation)
   const [showArchived, setShowArchived] = useState(archivedFromLocation)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deletedIDs, setDeletedIDs] = useState<string[]>([])
   const archivedQuery = useQuery({
     queryKey: ['transfers', 'archived'],
     queryFn: () => listTransfers(100, true),
     enabled: showArchived,
   })
   const currentQuery = showArchived ? archivedQuery : query
-  const jobs = useMemo(() => currentQuery.data?.transfers ?? [], [currentQuery.data?.transfers])
+  const jobs = useMemo(
+    () => (currentQuery.data?.transfers ?? []).filter((job) => !deletedIDs.includes(job.id)),
+    [currentQuery.data?.transfers, deletedIDs],
+  )
   const activeJobs = jobs.filter((job) => runningStates.has(job.state) || job.state === 'needs_attention')
   const historyJobs = jobs.filter((job) => !activeJobs.includes(job))
 
@@ -68,6 +73,10 @@ export function TransferQueue({ query }: TransferQueueProps) {
     window.addEventListener('popstate', restoreTask)
     return () => window.removeEventListener('popstate', restoreTask)
   }, [])
+
+  useEffect(() => {
+    setConfirmingDelete(false)
+  }, [selectedID])
 
   useEffect(() => {
     if (!currentQuery.data) return
@@ -115,13 +124,17 @@ export function TransferQueue({ query }: TransferQueueProps) {
   const remove = useMutation({
     mutationFn: deleteTransfer,
     onSuccess: async (_result, id) => {
+      setConfirmingDelete(false)
+      setDeletedIDs((current) => current.includes(id) ? current : [...current, id])
       if (selectedID === id) {
         setSelectedID(null)
         commitUrl({ task: null })
       }
+      queryClient.setQueriesData<{ transfers: TransferJob[] }>({ queryKey: ['transfers'] }, (current) => (
+        current ? { transfers: current.transfers.filter((job) => job.id !== id) } : current
+      ))
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['transfers'] }),
-        queryClient.invalidateQueries({ queryKey: ['transfer', id] }),
         queryClient.invalidateQueries({ queryKey: ['transfer-notifications'] }),
       ])
     },
@@ -184,7 +197,19 @@ export function TransferQueue({ query }: TransferQueueProps) {
               {archive.error ? <div className="task-error" role="alert"><CircleAlert size={17} /><span>{archive.error.message}</span></div> : null}
               {remove.error ? <div className="task-error" role="alert"><CircleAlert size={17} /><span>{remove.error.message}</span></div> : null}
               {detail.data.state === 'completed' ? <button className="secondary-action" disabled={archive.isPending} onClick={() => archive.mutate({ id: detail.data.id, archived: !showArchived })} type="button">{showArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}{archive.isPending ? '正在处理…' : showArchived ? '恢复到任务列表' : '归档任务'}</button> : null}
-              {detail.data.state === 'failed' || detail.data.state === 'needs_attention' ? <button className="danger-button" disabled={remove.isPending} onClick={() => window.confirm('删除这条失败任务记录？不会影响 115 / Emby 中的媒体。') && remove.mutate(detail.data.id)} type="button"><Trash2 size={16} />{remove.isPending ? '正在删除…' : '删除任务'}</button> : null}
+              {detail.data.state === 'failed' || detail.data.state === 'needs_attention' ? (
+                confirmingDelete ? (
+                  <div className="inline-delete-confirm">
+                    <p>删除这条失败任务记录？不会影响 115 / Emby 中的媒体。</p>
+                    <div className="inline-delete-confirm-actions">
+                      <button className="danger-button" disabled={remove.isPending} onClick={() => remove.mutate(detail.data.id)} type="button">{remove.isPending ? '正在删除…' : '确认删除'}</button>
+                      <button className="secondary-action" disabled={remove.isPending} onClick={() => setConfirmingDelete(false)} type="button">取消</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button className="danger-button" disabled={remove.isPending} onClick={() => setConfirmingDelete(true)} type="button"><Trash2 size={16} />删除任务</button>
+                )
+              ) : null}
             </> : null}
           </aside>
         </div>

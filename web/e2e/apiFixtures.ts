@@ -59,12 +59,27 @@ const providerSettings = {
   sources,
 }
 
-type FixtureOptions = { authenticated?: boolean; withSubscription?: boolean }
-type FixtureState = { transferArchived: boolean; itemDeleted: boolean }
+type FixtureOptions = { authenticated?: boolean; withSubscription?: boolean; withFailedTransfer?: boolean }
+type FixtureState = { transferArchived: boolean; itemDeleted: boolean; transferDeleted: boolean }
+
+const failedTransfer = {
+  id: 'task-failed',
+  title: '失败影片',
+  year: 2026,
+  mediaType: 'movie',
+  tmdbId: '101',
+  source: 'sidhub',
+  state: 'failed',
+  retryable: false,
+  archived: false,
+  errorMessage: 'Sidhub 转存到 115 失败',
+  createdAt: '2026-09-13T10:18:00Z',
+  updatedAt: '2026-09-13T10:18:00Z',
+}
 
 export async function installApiFixtures(page: Page, options: FixtureOptions = {}) {
   const authenticated = options.authenticated ?? true
-  const state: FixtureState = { transferArchived: false, itemDeleted: false }
+  const state: FixtureState = { transferArchived: false, itemDeleted: false, transferDeleted: false }
   await page.route('**/api/v1/**', async (route) => respond(route, authenticated, state, options))
 }
 
@@ -81,11 +96,22 @@ async function respond(route: Route, authenticated: boolean, state: FixtureState
   if (path === '/api/v1/system/overview') return json(route, { integrations })
   if (path === '/api/v1/transfers' && request.method() === 'GET') {
     const archived = url.searchParams.get('archived') === 'true'
+    if (options.withFailedTransfer) {
+      return json(route, { transfers: !archived && !state.transferDeleted ? [failedTransfer] : [] })
+    }
     return json(route, { transfers: archived === state.transferArchived ? [{ ...transfer, archived }] : [] })
   }
   if (path === '/api/v1/transfers/task-1/archived' && request.method() === 'PATCH') {
     state.transferArchived = JSON.parse(request.postData() ?? '{}').archived === true
     return json(route, { ...transfer, archived: state.transferArchived })
+  }
+  if (path === '/api/v1/transfers/task-failed' && request.method() === 'DELETE') {
+    state.transferDeleted = true
+    return json(route, null, 204)
+  }
+  if (path === '/api/v1/transfers/task-failed') {
+    if (state.transferDeleted) return json(route, { code: 'transfer_not_found', title: '转存任务不存在' }, 404)
+    return json(route, { ...failedTransfer, events: [{ id: 1, state: 'failed', message: failedTransfer.errorMessage, createdAt: failedTransfer.updatedAt }] })
   }
   if (path === '/api/v1/transfers/task-1') return json(route, { ...transfer, events: [{ id: 1, state: 'completed', message: '播放验证通过', createdAt: transfer.updatedAt }] })
   if (path === '/api/v1/notifications') return json(route, { notifications: [] })

@@ -86,6 +86,7 @@ type SubscriptionViewProps = {
 export function SubscriptionView({ draftCandidate, onDraftConsumed }: SubscriptionViewProps) {
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [editor, setEditor] = useState<EditorState>(() => emptyEditor())
   const importInput = useRef<HTMLInputElement>(null)
   const subscriptions = useQuery({
@@ -109,6 +110,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
   useEffect(() => {
     if (!draftCandidate?.tmdbId) return
     setSelectedId(null)
+    setConfirmingDelete(false)
     setEditor(editorFromCandidate(draftCandidate))
     onDraftConsumed()
   }, [draftCandidate, onDraftConsumed])
@@ -117,8 +119,13 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
     if (!selectedId || !subscriptions.data) return
     if (subscriptions.data.subscriptions.some((item) => item.id === selectedId)) return
     setSelectedId(null)
+    setConfirmingDelete(false)
     setEditor(emptyEditor())
   }, [selectedId, subscriptions.data])
+
+  useEffect(() => {
+    setConfirmingDelete(false)
+  }, [selectedId])
 
 
   const refresh = async () => {
@@ -157,6 +164,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
   const remove = useMutation({
     mutationFn: deleteSubscription,
     onSuccess: async () => {
+      setConfirmingDelete(false)
       setSelectedId(null)
       setEditor(emptyEditor())
       await refresh()
@@ -270,9 +278,18 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
               {editor.qualityPreset === 'custom' ? <div className="check-row"><label><input checked={editor.allowUnknownSize} onChange={(event) => setField(setEditor, 'allowUnknownSize', event.target.checked)} type="checkbox" />设定体积范围时允许未知体积</label><label><input checked={editor.preferSmaller} onChange={(event) => setField(setEditor, 'preferSmaller', event.target.checked)} type="checkbox" />同分时优先较小版本</label></div> : <p className="preset-summary">{qualityPresetSummary(editor.qualityPreset)}</p>}
             </details>
             <div className="editor-actions">
-              {selected ? <><IconButton label={selected.enabled ? '暂停订阅' : '恢复订阅'} onClick={() => toggle.mutate({ id: selected.id, enabled: !selected.enabled })}>{selected.enabled ? <Pause size={16} /> : <Play size={16} />}</IconButton><IconButton label="立即运行" onClick={() => runNow.mutate(selected.id)}><RefreshCw size={16} /></IconButton><IconButton label="删除订阅" onClick={() => window.confirm('删除此订阅及运行历史？') && remove.mutate(selected.id)}><Trash2 size={16} /></IconButton></> : null}
+              {selected ? <><IconButton label={selected.enabled ? '暂停订阅' : '恢复订阅'} onClick={() => toggle.mutate({ id: selected.id, enabled: !selected.enabled })}>{selected.enabled ? <Pause size={16} /> : <Play size={16} />}</IconButton><IconButton label="立即运行" onClick={() => runNow.mutate(selected.id)}><RefreshCw size={16} /></IconButton><IconButton disabled={remove.isPending} label="删除订阅" onClick={() => setConfirmingDelete(true)}><Trash2 size={16} /></IconButton></> : null}
               <button className="primary-action compact" disabled={save.isPending || !editor.tmdbId.trim() || !editor.title.trim()} type="submit"><Save size={16} />{save.isPending ? '保存中' : '保存订阅'}</button>
             </div>
+            {selected && confirmingDelete ? (
+              <div className="inline-delete-confirm">
+                <p>删除此订阅及运行历史？</p>
+                <div className="inline-delete-confirm-actions">
+                  <button className="danger-button" disabled={remove.isPending} onClick={() => remove.mutate(selected.id)} type="button">{remove.isPending ? '正在删除…' : '确认删除'}</button>
+                  <button className="secondary-action" disabled={remove.isPending} onClick={() => setConfirmingDelete(false)} type="button">取消</button>
+                </div>
+              </div>
+            ) : null}
           </form>
 
           {selected ? <div className="subscription-runs"><div className="section-heading"><div><h2>运行历史<span>{runs.data?.runs.length ?? 0}</span></h2></div></div>{runs.data?.runs.map((run) => <div className="subscription-run" key={run.id}><span className={`run-state ${run.state}`} /> <div><strong>{runLabels[run.state]}</strong><small>{run.message || '无补充信息'} · {formatTime(run.startedAt)}</small></div>{run.transferJobId ? <code>{run.transferJobId.slice(0, 8)}</code> : null}</div>)}{!runs.isLoading && runs.data?.runs.length === 0 ? <div className="empty-inline">还没有运行记录</div> : null}</div> : null}

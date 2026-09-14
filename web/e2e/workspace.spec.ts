@@ -100,6 +100,21 @@ test('task deep link survives initial list loading', async ({ page }) => {
   await expect(page.getByLabel('任务详情')).toBeVisible()
 })
 
+test('failed task delete uses in-page confirm instead of a native dialog', async ({ page }) => {
+  let nativeDialog = false
+  page.on('dialog', () => {
+    nativeDialog = true
+  })
+  await installApiFixtures(page, { withFailedTransfer: true })
+  await page.goto('/?view=transfers&task=task-failed')
+  await page.getByRole('button', { name: '删除任务' }).click()
+  await expect(page.getByText('删除这条失败任务记录？不会影响 115 / Emby 中的媒体。')).toBeVisible()
+  await expect(nativeDialog, 'Tauri and some WebViews swallow window.confirm').toBe(false)
+  await page.getByRole('button', { name: '确认删除' }).click()
+  await expect(page.getByRole('button', { name: /失败影片/ })).toHaveCount(0)
+  await expect(page.getByText('还没有转存任务')).toBeVisible()
+})
+
 test('terminal task can be archived and restored without deletion', async ({ page }) => {
   await installApiFixtures(page)
   await page.goto('/?view=transfers&task=task-1')
