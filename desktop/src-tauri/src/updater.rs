@@ -255,7 +255,18 @@ fn download_and_verify(
         let _ = fs::remove_file(destination);
         return Err("更新包校验失败。".into());
     }
+    unblock_downloaded_file(destination);
     Ok(())
+}
+
+pub(crate) fn unblock_downloaded_file(path: &Path) {
+    let Some(value) = path.to_str() else {
+        return;
+    };
+    if value.contains('\n') || value.contains('\r') || value.contains('\0') {
+        return;
+    }
+    let _ = fs::remove_file(format!("{value}:Zone.Identifier"));
 }
 
 fn start_installer(path: &Path, kind: ArtifactKind) -> Result<(), String> {
@@ -278,22 +289,20 @@ fn start_windows_installer(path: &Path) -> Result<(), String> {
     {
         use std::os::windows::process::CommandExt;
         use std::process::Command;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
         if !windows_installer_path_is_safe(path) {
             return Err("更新包路径无效。".into());
         }
         let installer = path.to_str().ok_or_else(|| "更新包路径无效。".to_string())?;
-        // Close the running app first; NSIS cannot replace a locked Media Hub.exe.
+        // Hidden CREATE_NO_WINDOW parents can swallow the NSIS wizard. Detach a
+        // visible start so the dialog appears after this process exits.
+        let script = format!(
+            "ping -n 6 127.0.0.1 >nul & taskkill /IM \"Media Hub.exe\" /F >nul 2>&1 & ping -n 2 127.0.0.1 >nul & start \"\" \"{installer}\""
+        );
         Command::new("cmd")
-            .args([
-                "/C",
-                "start",
-                "",
-                "cmd",
-                "/C",
-                &format!("ping -n 3 127.0.0.1 >nul & \"{installer}\""),
-            ])
-            .creation_flags(CREATE_NO_WINDOW)
+            .args(["/C", "start", "", "cmd", "/C", &script])
+            .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP)
             .spawn()
             .map_err(|_| "无法启动安装程序。".to_string())?;
         return Ok(());
@@ -399,6 +408,11 @@ mod tests {
             assert!(!windows_installer_path_is_safe(Path::new("/tmp/media-hub-20044.exe&calc")));
             assert!(windows_installer_path_is_safe(Path::new("/tmp/media-hub-20044.exe")));
         }
+    }
+
+    #[test]
+    fn unblock_ignores_paths_with_control_characters() {
+        unblock_downloaded_file(Path::new("media-hub-20048.exe\nZone.Identifier"));
     }
 
     #[test]

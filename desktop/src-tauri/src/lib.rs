@@ -208,12 +208,24 @@ pub fn run() {
                     .title("Media Hub")
                     .inner_size(1280.0, 800.0)
                     .on_download(|_webview, event| {
-                        if let DownloadEvent::Requested { url, destination } = event {
-                            if let Some(name) = updater::trusted_download_file_name(url.as_str()) {
-                                if let Some(dir) = updater::user_download_dir() {
-                                    *destination = dir.join(name);
+                        match event {
+                            DownloadEvent::Requested { url, destination } => {
+                                if let Some(name) = updater::trusted_download_file_name(url.as_str()) {
+                                    if let Some(dir) = updater::user_download_dir() {
+                                        *destination = dir.join(name);
+                                    }
                                 }
                             }
+                            DownloadEvent::Finished { url, path, success } => {
+                                if success {
+                                    if let Some(path) = path {
+                                        if updater::trusted_download_file_name(url.as_str()).is_some() {
+                                            updater::unblock_downloaded_file(&path);
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                         true
                     })

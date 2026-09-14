@@ -117,5 +117,7 @@ function updateHint(nativeInstall: boolean, downloadPath: string) {
   if (desktopPlatformFromPath(downloadPath) === 'darwin') {
     return nativeInstall ? '下载后会打开安装盘，请把 Media Hub 拖到「应用程序」后重新打开' : '下载后请退出应用，打开安装盘并把 Media Hub 拖到「应用程序」'
   }
-  return nativeInstall ? '下载后会关闭应用并安装' : '下载后请退出应用再运行安装包'
+  return nativeInstall
+    ? '会先退出再打开安装向导。若提示「Windows 已保护你的电脑」，点「更多信息」再「仍要运行」'
+    : '请先完全退出 Media Hub，再打开约 3.1 MB 的安装包。若被拦截，点「更多信息 / 仍要运行」'
 }
