@@ -9,6 +9,7 @@ import {
   nativeStatus,
   nativeSubtitleFromBytes,
   playNatively,
+  setNativeCursorVisible,
   stopNatively,
   toggleNativeWindow,
   type NativeSubtitle,
@@ -124,6 +125,15 @@ export function LibraryPlayer({
     }
     revealChrome(false, true)
   }, [chromePinned, error, nativeActive, playing, revealChrome])
+
+  useEffect(() => {
+    if (!nativeActive) return
+    const hide = !chromeVisible && playing && !error
+    void setNativeCursorVisible(!hide)
+    return () => {
+      void setNativeCursorVisible(true)
+    }
+  }, [chromeVisible, error, nativeActive, playing])
 
   const seekBy = useCallback((delta: number) => {
     if (nativeActive) {

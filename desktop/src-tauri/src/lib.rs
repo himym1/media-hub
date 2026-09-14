@@ -202,6 +202,7 @@ pub fn run() {
             player::native_control,
             player::native_status,
             player::toggle_native_window,
+            player::set_native_cursor_visible,
         ])
         .setup(|app| {
             if app.get_webview_window("main").is_none() {

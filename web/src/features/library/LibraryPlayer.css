@@ -169,6 +169,11 @@
   cursor: pointer;
 }
 
+.library-player.chrome-hidden,
+.library-player.chrome-hidden * {
+  cursor: none;
+}
+
 .library-player.chrome-hidden .library-player-toolbar,
 .library-player.chrome-hidden .library-player-chrome,
 .library-player.chrome-hidden .library-player-center-play,

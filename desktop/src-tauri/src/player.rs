@@ -481,9 +481,17 @@ pub fn stop_native(app: AppHandle, state: tauri::State<PlayerState>) -> Result<(
         let _ = park_surface(&surface);
     }
     if let Ok(window) = main_window(&app) {
+        let _ = window.set_cursor_visible(true);
         let _ = window.set_fullscreen(false);
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn set_native_cursor_visible(app: AppHandle, visible: bool) -> Result<(), String> {
+    main_window(&app)?
+        .set_cursor_visible(visible)
+        .map_err(|_| "无法切换鼠标指针。".to_string())
 }
 
 #[tauri::command]

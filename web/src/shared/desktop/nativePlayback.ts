@@ -119,3 +119,11 @@ export async function nativeStatus(): Promise<NativeStatus | null> {
 export async function toggleNativeWindow() {
   await invokeNative('toggle_native_window')
 }
+
+export async function setNativeCursorVisible(visible: boolean) {
+  try {
+    await invokeNative('set_native_cursor_visible', { visible })
+  } catch {
+    // Older shells hide the pointer with CSS only.
+  }
+}

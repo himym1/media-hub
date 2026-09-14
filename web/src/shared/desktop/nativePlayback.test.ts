@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { boundsFromElement, bytesToBase64, canPlayNatively, controlNatively, nativeSubtitleFromBytes, playNatively, toggleNativeWindow } from './nativePlayback'
+import { boundsFromElement, bytesToBase64, canPlayNatively, controlNatively, nativeSubtitleFromBytes, playNatively, setNativeCursorVisible, toggleNativeWindow } from './nativePlayback'
 
 afterEach(() => {
   delete (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
@@ -84,5 +84,14 @@ describe('nativePlayback', () => {
     ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
     await toggleNativeWindow()
     expect(invoke).toHaveBeenCalledWith('toggle_native_window', {})
+  })
+
+  it('hides the desktop pointer without failing on older shells', async () => {
+    const invoke = vi.fn(async () => undefined)
+    ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
+    await setNativeCursorVisible(false)
+    expect(invoke).toHaveBeenCalledWith('set_native_cursor_visible', { visible: false })
+    invoke.mockRejectedValueOnce('missing')
+    await expect(setNativeCursorVisible(true)).resolves.toBeUndefined()
   })
 })
