@@ -21,6 +21,7 @@ import (
 	"media-hub/backend/internal/auth"
 	"media-hub/backend/internal/checkin"
 	"media-hub/backend/internal/config"
+	"media-hub/backend/internal/desktoprelease"
 	"media-hub/backend/internal/drive115"
 	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/httpapi"
@@ -244,6 +245,7 @@ func run(logger *slog.Logger) error {
 	localUploadService := localupload.NewService(dataStore, securePayloadCodec, configuration.LocalUploadRoots)
 	archiveService := archive.NewService(dataStore, securePayloadCodec, drive115AuthService)
 	androidReleaseService := androidrelease.NewService(configuration.AndroidReleaseDir)
+	desktopReleaseService := desktoprelease.NewService(configuration.AndroidReleaseDir)
 
 	runtimeContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -288,7 +290,7 @@ func run(logger *slog.Logger) error {
 			Auth: authService, Overview: overview, Search: searchService, Discovery: tmdbClient,
 			Emby: embyHub, RemoteSubtitles: subtitleService, EmbyPosterCache: posterCache, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
 			Playback: playback.NewService(drive115AuthService, embyHub),
-			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService, SourceCheckIns: checkinService,
+			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService, DesktopReleases: desktopReleaseService, SourceCheckIns: checkinService,
 			Settings: settingsService, WeComTester: wecomClient, STRM: strmCoordinator,
 			SecureCookies: configuration.SecureCookies,
 			Web:           webui.Handler(),

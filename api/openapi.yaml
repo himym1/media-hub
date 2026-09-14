@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.20.38
+  version: 0.20.39
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -166,6 +166,71 @@ paths:
               schema: { type: string, pattern: '^[0-9a-f]{64}$' }
           content:
             application/vnd.android.package-archive:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /client/desktop/releases/latest:
+    get:
+      operationId: getLatestDesktopRelease
+      summary: Read the latest private desktop release metadata
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - name: platform
+          in: query
+          required: false
+          schema: { type: string, enum: [windows, darwin], default: windows }
+      responses:
+        '200':
+          description: Latest Windows NSIS or macOS DMG release
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DesktopRelease' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /client/desktop/releases/{versionCode}/installer:
+    get:
+      operationId: downloadDesktopRelease
+      summary: Download one authenticated Windows desktop installer
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - name: versionCode
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Windows NSIS installer
+          headers:
+            X-Checksum-SHA256:
+              schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /client/desktop/releases/{versionCode}/dmg:
+    get:
+      operationId: downloadDesktopDarwinRelease
+      summary: Download one authenticated macOS desktop disk image
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - name: versionCode
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: macOS DMG
+          headers:
+            X-Checksum-SHA256:
+              schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+          content:
+            application/x-apple-diskimage:
               schema: { type: string, format: binary }
         '400': { $ref: '#/components/responses/ProblemResponse' }
         '401': { $ref: '#/components/responses/ProblemResponse' }
@@ -1668,6 +1733,18 @@ components:
         publishedAt: { type: string, format: date-time }
         notes: { type: string, maxLength: 4000 }
         downloadPath: { type: string, pattern: '^/api/v1/client/android/releases/[1-9][0-9]*/apk$' }
+    DesktopRelease:
+      type: object
+      required: [versionCode, versionName, minimumSupportedVersionCode, sha256, sizeBytes, publishedAt, notes, downloadPath]
+      properties:
+        versionCode: { type: integer, minimum: 1 }
+        versionName: { type: string }
+        minimumSupportedVersionCode: { type: integer, minimum: 0 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        sizeBytes: { type: integer, format: int64, minimum: 1 }
+        publishedAt: { type: string, format: date-time }
+        notes: { type: string, maxLength: 4000 }
+        downloadPath: { type: string, pattern: '^/api/v1/client/desktop/releases/[1-9][0-9]*/(installer|dmg)$' }
     AuthConfiguration:
       type: object
       required: [configured]
@@ -1778,7 +1855,7 @@ components:
       type: object
       required: [enabled, hour, minute, sources]
       properties:
-        enabled: { type: boolean, description: 是否按北京时间自动签�?}
+        enabled: { type: boolean, description: 是否按北京时间自动签到 }
         hour: { type: integer, minimum: 0, maximum: 23 }
         minute: { type: integer, minimum: 0, maximum: 59 }
         sources:

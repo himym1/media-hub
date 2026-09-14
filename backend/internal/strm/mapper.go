@@ -41,7 +41,11 @@ func LocalSTRMPath(rootMount, localBase, relativeVideo string) (string, error) {
 	if !ok {
 		return "", ErrInvalidRequest
 	}
-	dest := filepath.Clean(filepath.Join(base, strings.TrimSuffix(relative, ext)+".strm"))
+	name := strings.TrimRight(strings.TrimSuffix(relative, ext), ".")
+	if name == "" || name == "." {
+		return "", ErrPathUnwritable
+	}
+	dest := filepath.Clean(filepath.Join(base, name+".strm"))
 	if !within(root, dest) || !within(base, dest) {
 		return "", ErrPathUnwritable
 	}

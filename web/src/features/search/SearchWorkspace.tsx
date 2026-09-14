@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react
 import { useQuery } from '@tanstack/react-query'
 import { Film, LayoutGrid, LibraryBig, ListPlus, ListTodo, LogOut, Settings2, TerminalSquare } from 'lucide-react'
 import { getSystemOverview, listTransfers, type Candidate } from '../../shared/api/mediaHub'
+import { useDesktopUpdate } from '../../shared/desktop/useDesktopUpdate'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { LibraryView } from '../library/LibraryView'
 import { OperationsView } from '../operations/OperationsView'
+import { DesktopUpdateBanner } from '../settings/DesktopUpdatePanel'
 import { SettingsView } from '../settings/SettingsView'
 import { SubscriptionView } from '../subscriptions/SubscriptionView'
 import { TransferQueue } from '../transfers/TransferQueue'
@@ -46,6 +48,7 @@ function viewFromLocation(): WorkspaceView {
 }
 
 export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
+  const desktopUpdate = useDesktopUpdate()
   const [activeView, setActiveView] = useState<WorkspaceView>(viewFromLocation)
   const [draftSubscription, setDraftSubscription] = useState<Candidate | null>(null)
   const [providerSettingsDirty, setProviderSettingsDirty] = useState(false)
@@ -182,6 +185,7 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
           </nav>
         ) : null}
 
+        <DesktopUpdateBanner update={desktopUpdate} />
         <div className="page-wrap">
           <div aria-hidden={activeView !== '发现'} className="page-pane" hidden={activeView !== '发现'}>
             <DiscoveryView
@@ -205,7 +209,7 @@ export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps
             <OperationsView />
           </div>
           <div aria-hidden={activeView !== '服务'} className="page-pane" hidden={activeView !== '服务'}>
-            <SettingsView integrations={integrations} onDirtyChange={updateProviderDirty} onLogout={guardedLogout} onRefresh={() => void overview.refetch()} />
+            <SettingsView desktopUpdate={desktopUpdate} integrations={integrations} onDirtyChange={updateProviderDirty} onLogout={guardedLogout} onRefresh={() => void overview.refetch()} />
           </div>
         </div>
       </main>

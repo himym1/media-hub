@@ -4,6 +4,7 @@ use std::time::Duration;
 
 mod browser;
 mod player;
+mod updater;
 
 pub(crate) fn is_supported_playback_url(url: &str) -> bool {
     if url.contains('\n') || url.contains('\r') || url.contains('\0') {
@@ -185,6 +186,9 @@ pub fn run() {
         .manage(player::PlayerState::default())
         .invoke_handler(tauri::generate_handler![
             browser::open_in_app,
+            updater::desktop_app_version,
+            updater::desktop_app_platform,
+            updater::install_desktop_update,
             player::play_native,
             player::layout_native,
             player::stop_native,

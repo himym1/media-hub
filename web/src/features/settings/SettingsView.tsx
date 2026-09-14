@@ -18,8 +18,10 @@ import {
   type Integration,
   type IntegrationStatus,
 } from '../../shared/api/mediaHub'
+import type { DesktopUpdateState } from '../../shared/desktop/useDesktopUpdate'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
+import { DesktopUpdateSettings } from './DesktopUpdatePanel'
 import { ProviderSettingsForm } from './ProviderSettingsForm'
 
 const statusLabel: Record<IntegrationStatus, string> = { healthy: '在线', degraded: '受限', unavailable: '离线', unconfigured: '未配置' }
@@ -47,13 +49,14 @@ function formatCapacity(bytes?: number) {
 }
 
 type SettingsViewProps = {
+  desktopUpdate: DesktopUpdateState
   integrations: Integration[]
   onDirtyChange: (dirty: boolean) => void
   onLogout: () => void
   onRefresh: () => void
 }
 
-export function SettingsView({ integrations, onDirtyChange, onLogout, onRefresh }: SettingsViewProps) {
+export function SettingsView({ desktopUpdate, integrations, onDirtyChange, onLogout, onRefresh }: SettingsViewProps) {
   const [section, setSection] = useState<SettingsSection>(sectionFromLocation)
   const [providerDirty, setProviderDirty] = useState(false)
   const providerDirtyRef = useRef(false)
@@ -220,6 +223,7 @@ export function SettingsView({ integrations, onDirtyChange, onLogout, onRefresh 
           {password.isSuccess ? <span className="form-success" role="status">密码已修改，其他设备的会话已撤销</span> : null}
           <button className="primary-action" disabled={password.isPending || newPassword.length < 12 || newPassword !== confirmation || currentPassword === newPassword} type="submit"><KeyRound size={16} />{password.isPending ? '正在修改…' : '修改密码'}</button>
         </form>
+        <DesktopUpdateSettings update={desktopUpdate} />
         <section className="session-actions">
           <div><strong>当前会话</strong><span>退出后需要重新输入管理员密码。</span></div>
           <button className="secondary-command" onClick={onLogout} type="button"><LogOut size={16} />退出登录</button>

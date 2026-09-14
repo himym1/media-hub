@@ -214,6 +214,17 @@ export type SubscriptionRun = {
   updatedAt: string
 }
 
+export type DesktopRelease = {
+  versionCode: number
+  versionName: string
+  minimumSupportedVersionCode: number
+  sha256: string
+  sizeBytes: number
+  publishedAt: string
+  notes: string
+  downloadPath: string
+}
+
 export type AuthConfiguration = {
   configured: boolean
 }
@@ -415,6 +426,10 @@ async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
+}
+
+export function getLatestDesktopRelease(platform: 'windows' | 'darwin' = 'windows') {
+  return requestJSON<DesktopRelease>(`/api/v1/client/desktop/releases/latest?platform=${platform}`)
 }
 
 export function getAuthConfiguration() {

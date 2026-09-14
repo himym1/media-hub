@@ -1,4 +1,4 @@
-name: desktop-windows
+name: desktop-macos
 
 on:
   workflow_dispatch:
@@ -7,14 +7,14 @@ on:
     branches: [main]
     paths:
       - 'desktop/**'
-      - '.github/workflows/desktop-windows.yml'
+      - '.github/workflows/desktop-macos.yml'
 
 permissions:
   contents: write
 
 jobs:
-  windows:
-    runs-on: windows-latest
+  macos:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -36,33 +36,30 @@ jobs:
         with:
           projectPath: desktop
           tauriScript: pnpm tauri
+          args: --bundles dmg
           includeRelease: true
           includeDebug: false
       - uses: actions/upload-artifact@v4
         with:
-          name: media-hub-windows
-          path: |
-            desktop/src-tauri/target/release/bundle/nsis/*.exe
-            desktop/src-tauri/target/release/bundle/msi/*.msi
+          name: media-hub-macos
+          path: desktop/src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
           retention-days: 30
       - if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            desktop/src-tauri/target/release/bundle/nsis/*.exe
-            desktop/src-tauri/target/release/bundle/msi/*.msi
+          files: desktop/src-tauri/target/release/bundle/dmg/*.dmg
 
   publish-nas:
-    needs: windows
+    needs: macos
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: [self-hosted, linux, x64, media-hub]
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: media-hub-windows
+          name: media-hub-macos
           path: dist
-      - name: Publish private desktop release on NAS
+      - name: Publish private macOS desktop release on NAS
         shell: bash
         run: |
           set -euo pipefail
@@ -70,16 +67,16 @@ jobs:
           IFS=. read -r major minor patch <<< "$version"
           [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ ]]
           code=$((major * 1000000 + minor * 1000 + patch))
-          exe=$(find dist -type f -name '*-setup.exe' | head -n 1)
-          test -n "$exe"
+          dmg=$(find dist -type f -name '*.dmg' | head -n 1)
+          test -n "$dmg"
           release_dir=/volume1/docker/media-hub/releases
           test -w "$release_dir"
-          output="media-hub-${code}.exe"
-          exe_tmp="$release_dir/.$output.tmp"
-          manifest_tmp="$release_dir/.desktop-latest.json.tmp"
-          install -m 0444 "$exe" "$exe_tmp"
-          sha=$(sha256sum "$exe_tmp" | awk '{print $1}')
-          size=$(stat -c '%s' "$exe_tmp")
+          output="media-hub-${code}.dmg"
+          dmg_tmp="$release_dir/.$output.tmp"
+          manifest_tmp="$release_dir/.desktop-darwin-latest.json.tmp"
+          install -m 0444 "$dmg" "$dmg_tmp"
+          sha=$(sha256sum "$dmg_tmp" | awk '{print $1}')
+          size=$(stat -c '%s' "$dmg_tmp")
           jq -n \
             --argjson versionCode "$code" \
             --arg versionName "$version" \
@@ -88,5 +85,5 @@ jobs:
             --arg publishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{versionCode:$versionCode,versionName:$versionName,minimumSupportedVersionCode:1,sha256:$sha256,sizeBytes:$sizeBytes,publishedAt:$publishedAt,notes:("Media Hub " + $versionName)}' > "$manifest_tmp"
           chmod 0444 "$manifest_tmp"
-          mv -f "$exe_tmp" "$release_dir/$output"
-          mv -f "$manifest_tmp" "$release_dir/desktop-latest.json"
+          mv -f "$dmg_tmp" "$release_dir/$output"
+          mv -f "$manifest_tmp" "$release_dir/desktop-darwin-latest.json"

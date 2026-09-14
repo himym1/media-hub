@@ -33,7 +33,15 @@ GitHub Actions workflow `.github/workflows/desktop-windows.yml` builds NSIS (`.e
 
 After install, keep `mpv.exe` available. Media Hub does not proxy video bytes; mpv opens the descriptor HTTPS URL directly.
 
+On a version tag, the same workflow copies the NSIS installer to the NAS `releases/` directory as `media-hub-<versionCode>.exe` plus `desktop-latest.json`. The packaged app checks that feed after login and can download, verify SHA-256, and run a silent current-user install.
+
+## macOS disk image
+
+`.github/workflows/desktop-macos.yml` builds a `.dmg` on `macos-latest`. A version tag also writes `media-hub-<versionCode>.dmg` and `desktop-darwin-latest.json` to the NAS `releases/` directory. The Mac app opens the disk image after checksum verification; drag Media Hub into Applications, then reopen it.
+
+The DMG is unsigned unless Apple notarization secrets are added later. Gatekeeper may require a right-click → Open the first time.
+
 ## Scope
 
-- Windows is the intended packaged target; `tauri dev` works on the current host OS.
+- Packaged installers are Windows NSIS and macOS DMG. `tauri dev` works on the current host OS.
 - Do not add Electron.

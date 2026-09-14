@@ -9,6 +9,7 @@ import (
 	"media-hub/backend/internal/androidrelease"
 	"media-hub/backend/internal/archive"
 	"media-hub/backend/internal/auth"
+	"media-hub/backend/internal/desktoprelease"
 	"media-hub/backend/internal/drive115"
 	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/integration"
@@ -26,6 +27,11 @@ import (
 type AndroidReleaseProvider interface {
 	Latest(context.Context) (androidrelease.Release, error)
 	OpenAPK(context.Context, int) (androidrelease.Release, io.ReadSeekCloser, error)
+}
+
+type DesktopReleaseProvider interface {
+	Latest(context.Context, desktoprelease.Platform) (desktoprelease.Release, error)
+	OpenInstaller(context.Context, int, desktoprelease.Platform) (desktoprelease.Release, io.ReadSeekCloser, error)
 }
 
 type OverviewProvider interface {
@@ -189,6 +195,7 @@ type Dependencies struct {
 	STRM             STRMService
 	SecureCookies    bool
 	AndroidReleases  AndroidReleaseProvider
+	DesktopReleases  DesktopReleaseProvider
 	SourceCheckIns   SourceCheckInService
 	Web              http.Handler
 }
@@ -297,6 +304,11 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	if dependencies.AndroidReleases != nil {
 		mux.Handle("GET /api/v1/client/android/releases/latest", h.protected(h.getLatestAndroidRelease))
 		mux.Handle("GET /api/v1/client/android/releases/{versionCode}/apk", h.protected(h.downloadAndroidRelease))
+	}
+	if dependencies.DesktopReleases != nil {
+		mux.Handle("GET /api/v1/client/desktop/releases/latest", h.protected(h.getLatestDesktopRelease))
+		mux.Handle("GET /api/v1/client/desktop/releases/{versionCode}/installer", h.protected(h.downloadDesktopRelease))
+		mux.Handle("GET /api/v1/client/desktop/releases/{versionCode}/dmg", h.protected(h.downloadDesktopRelease))
 	}
 	if dependencies.Web != nil {
 		mux.Handle("GET /", dependencies.Web)

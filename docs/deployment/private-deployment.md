@@ -12,6 +12,10 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
   data/media-hub.db
   releases/latest.json
   releases/media-hub-<versionCode>.apk
+  releases/desktop-latest.json
+  releases/media-hub-<versionCode>.exe
+  releases/desktop-darwin-latest.json
+  releases/media-hub-<versionCode>.dmg
   tunnel/id_ed25519    # mode 0600, never commit
   backups/
 ```
@@ -104,6 +108,12 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
 GitHub tag workflow 生成签名 APK 和 `latest.json`。将两者放入 `releases/`，文件名保持 `media-hub-<versionCode>.apk`。App 使用 Bearer 会话下载，验证声明的大小和 SHA-256 后交给 Android Package Installer；系统仍要求用户确认，并需要为 Media Hub 授予“安装未知应用”权限。
 
 Android 签名密钥只保存在 GitHub Actions secrets 和离线备份中，不能提交到仓库或放入 Docker 镜像。所有后续 APK 必须使用同一签名密钥。
+
+## Desktop release
+
+`desktop-windows` 和 `desktop-macos` workflow 在 `v*.*.*` tag 上分别构建 NSIS 和 DMG，再写入 NAS：`desktop-latest.json` + `media-hub-<versionCode>.exe`，以及 `desktop-darwin-latest.json` + `media-hub-<versionCode>.dmg`。客户端用 Web 会话检查 `/api/v1/client/desktop/releases/latest?platform=windows|darwin`，下载后校验大小和 SHA-256。Windows 会静默运行安装器；macOS 打开磁盘映像，需要把应用拖到「应用程序」。安装或替换期间应用会退出。
+
+不要把 GitHub Release 上的安装包当成应用内更新源；仓库是私有的，客户端只走同源鉴权下载。macOS 包默认未公证，第一次打开可能需要右键打开。
 
 ## 验收
 

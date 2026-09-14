@@ -432,9 +432,14 @@ pub fn native_control(action: String, value: Option<f64>, mode: Option<String>) 
 
 #[tauri::command]
 pub fn toggle_native_window(app: AppHandle) -> Result<(), String> {
-    main_window(&app)?
-        .toggle_maximize()
-        .map_err(|_| "无法缩放窗口。".to_string())
+    let window = main_window(&app)?;
+    let maximized = window.is_maximized().unwrap_or(false);
+    if maximized {
+        window.unmaximize()
+    } else {
+        window.maximize()
+    }
+    .map_err(|_| "无法缩放窗口。".to_string())
 }
 
 #[tauri::command]

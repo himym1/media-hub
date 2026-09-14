@@ -22,6 +22,8 @@ One private release path. Web is baked into the image. Android is the signed APK
 - Public origin: `https://media.himym.us.ci`
 - Android `versionCode` = `major * 1000000 + minor * 1000 + patch` (example `0.9.0` → `9000`)
 - APK name on NAS: `releases/media-hub-<versionCode>.apk` plus `releases/latest.json`
+- Desktop NSIS on NAS: `releases/media-hub-<versionCode>.exe` plus `releases/desktop-latest.json`
+- Desktop DMG on NAS: `releases/media-hub-<versionCode>.dmg` plus `releases/desktop-darwin-latest.json`
 - Do not commit `.env`, keystores, tokens, cookies, or NAS exports
 - Do not drop SQLite tables
 - Backup NAS before `compose up`
@@ -210,6 +212,7 @@ gh workflow run release.yml -f version="$VERSION" -f skip_image=true
 - `curl --fail https://media.himym.us.ci/api/v1/health`
 - Confirm Web loads and login still works (do not log secrets)
 - Confirm `/api/v1/client/android/releases/latest` returns the new `versionCode` when authenticated
+- Confirm `/api/v1/client/desktop/releases/latest?platform=windows` and `?platform=darwin` return the new `versionCode` after the desktop workflows publish to NAS
 
 ## Report
 
