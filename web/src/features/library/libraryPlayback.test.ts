@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EmbyItem } from '../../shared/api/mediaHub'
-import { episodeLabel, playbackActionLabel, playbackStatus } from './libraryPlayback'
+import { episodeLabel, libraryWatchLabel, playbackActionLabel, playbackStatus } from './libraryPlayback'
 
 const item = (input: Partial<EmbyItem> = {}): EmbyItem => ({
   id: 'item-1',
@@ -21,6 +21,8 @@ describe('playbackStatus', () => {
     expect(playbackActionLabel(item())).toBe('播放')
     expect(playbackActionLabel(item({ playbackPositionMs: 30_000 }))).toBe('继续播放')
     expect(playbackActionLabel(item({ played: true }))).toBe('重新播放')
+    expect(libraryWatchLabel(true, item())).toBe('播放')
+    expect(libraryWatchLabel(false, item({ playbackPositionMs: 30_000 }))).toBe('在 Emby 打开')
   })
 
   it('labels episodes with a number and title', () => {

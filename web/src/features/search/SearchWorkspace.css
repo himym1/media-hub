@@ -362,7 +362,7 @@ h1 em { color: #d7f36a; font-style: normal; }
 .library-episode-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; }
 .library-episode-list strong { display: block; color: var(--text); font-size: 13px; font-weight: 550; }
 .library-episode-list small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 12px; }
-.library-episode-list .primary-action { width: auto; min-height: 44px; margin: 0; padding: 0 13px; }
+.library-episode-list .primary-action { width: auto; min-height: 44px; margin: 0; padding: 0 13px; text-decoration: none; }
 .library-delete-confirm p { margin: 0; color: var(--text-secondary, var(--text-muted)); font-size: 13px; line-height: 1.5; }
 .library-delete-confirm .library-detail-actions { margin-top: 0; }
 .service-grid { display: grid; gap: 1px; margin-top: 28px; border: 1px solid #2a2d30; background: #2a2d30; }

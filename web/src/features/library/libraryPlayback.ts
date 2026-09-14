@@ -14,10 +14,16 @@ export function playbackStatus(item: EmbyItem) {
   return `继续 ${time}`
 }
 
+export const embyOpenLabel = '在 Emby 打开'
+
 export function playbackActionLabel(item: Pick<EmbyItem, 'played' | 'playbackPositionMs'>) {
   if (item.played) return '重新播放'
   if ((item.playbackPositionMs ?? 0) >= 30_000) return '继续播放'
   return '播放'
+}
+
+export function libraryWatchLabel(inPage: boolean, item: Pick<EmbyItem, 'played' | 'playbackPositionMs'>) {
+  return inPage ? playbackActionLabel(item) : embyOpenLabel
 }
 
 export function episodeLabel(item: Pick<EmbyItem, 'name' | 'episode'>, seriesTitle = '') {

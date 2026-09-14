@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Captions, ChevronLeft, ChevronRight, CircleAlert, Film, Play, RefreshCw, Search, Trash2, X } from 'lucide-react'
+import { BookOpen, Captions, ChevronLeft, ChevronRight, CircleAlert, Film, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import {
   deleteEmbyItem,
   downloadEmbyRemoteSubtitle,
@@ -21,11 +21,13 @@ import {
   type EmbyItemDetail,
   type EmbyRemoteSubtitle,
 } from '../../shared/api/mediaHub'
+import { canPlayNatively } from '../../shared/desktop/nativePlayback'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
 import { LibraryEpisodes } from './LibraryEpisodes'
 import { LibraryPlayer } from './LibraryPlayer'
-import { episodeLabel, playbackActionLabel, playbackStatus } from './libraryPlayback'
+import { LibraryWatchAction } from './LibraryWatchAction'
+import { episodeLabel, playbackStatus } from './libraryPlayback'
 
 const pageSize = 24
 
@@ -108,6 +110,8 @@ export function LibraryView() {
     },
   })
 
+  const inPagePlayback = canPlayNatively()
+
   useEffect(() => {
     const restoreLocation = () => {
       const nextLibrary = locationValue('library')
@@ -122,6 +126,12 @@ export function LibraryView() {
     window.addEventListener('popstate', restoreLocation)
     return () => window.removeEventListener('popstate', restoreLocation)
   }, [])
+
+  useEffect(() => {
+    if (inPagePlayback || !playId) return
+    setPlayId(null)
+    commitUrl({ play: null }, 'replace')
+  }, [inPagePlayback, playId])
 
   useEffect(() => {
     if (!libraries.data) return
@@ -171,6 +181,7 @@ export function LibraryView() {
     commitUrl({ media: null, play: null })
   }
   const startPlay = (target: Pick<EmbyEpisode, 'id' | 'name' | 'externalUrl'>) => {
+    if (!inPagePlayback) return
     setPlayId(target.id)
     commitUrl({ play: target.id })
   }
@@ -306,10 +317,10 @@ export function LibraryView() {
           {!itemId ? <div className="library-detail-empty"><Film size={28} /><strong>选择一个媒体</strong><span>查看简介、年份和播放信息。</span></div> : null}
           {detail.isLoading && !detail.data ? <div className="status-loading">正在读取媒体详情…</div> : null}
           {detail.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>详情读取失败</strong><span>{detail.error.message}</span></div><button onClick={() => void detail.refetch()} type="button">重试</button></div> : null}
-          {detail.data ? <LibraryItemDetail key={detail.data.id} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} shared={isSharedEmbyId(detail.data.id)} /> : null}
+          {detail.data ? <LibraryItemDetail inPagePlayback={inPagePlayback} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} shared={isSharedEmbyId(detail.data.id)} /> : null}
         </aside>
       </div>
-      {playTarget ? (
+      {inPagePlayback && playTarget ? (
         <LibraryPlayer
           externalUrl={playTarget.externalUrl}
           itemId={playTarget.id}
@@ -352,8 +363,9 @@ function LibraryPosterCard({ item, selected, onSelect }: { item: EmbyItem; selec
   )
 }
 
-function LibraryItemDetail({ item, onDeleted, onPlay, onRefresh, refreshing, shared }: {
+function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh, refreshing, shared }: {
   item: EmbyItemDetail
+  inPagePlayback: boolean
   onDeleted: () => void
   onPlay: (target: Pick<EmbyEpisode, 'id' | 'name' | 'externalUrl'>) => void
   onRefresh: (id: string) => void
@@ -423,10 +435,14 @@ function LibraryItemDetail({ item, onDeleted, onPlay, onRefresh, refreshing, sha
     {shared ? <p className="library-shared-note">共享库只读；播放由播放设备直连 Emby（通常经代理）。</p> : null}
     <div className="library-detail-actions">
       {item.type === 'Series' ? null : (
-        <button className="primary-action" disabled={busy} onClick={() => onPlay(item)} type="button">
-          <Play size={16} />
-          {playbackActionLabel(item)}
-        </button>
+        <LibraryWatchAction
+          busy={busy}
+          externalUrl={item.externalUrl}
+          inPage={inPagePlayback}
+          item={item}
+          name={item.name}
+          onPlay={() => onPlay(item)}
+        />
       )}
       {shared ? null : <button className="secondary-command" disabled={busy} onClick={() => onRefresh(item.id)} type="button"><RefreshCw size={16} />{refreshing ? '已提交…' : '刷新元数据'}</button>}
       {shared ? null : canSearchSubtitles ? (
@@ -447,7 +463,7 @@ function LibraryItemDetail({ item, onDeleted, onPlay, onRefresh, refreshing, sha
       )}
       {shared || preview ? null : <button className="danger-button" disabled={busy} onClick={() => previewDelete.mutate()} type="button"><Trash2 size={16} />{previewDelete.isPending ? '正在读取删除预览…' : '从 Emby 删除'}</button>}
     </div>
-    {item.type === 'Series' ? <LibraryEpisodes onPlay={onPlay} seriesId={item.id} seriesTitle={item.name} /> : null}
+    {item.type === 'Series' ? <LibraryEpisodes inPagePlayback={inPagePlayback} onPlay={onPlay} seriesId={item.id} seriesTitle={item.name} /> : null}
     {subtitleResults ? (
       <section className="library-subtitle-panel" aria-label="中文字幕搜索结果">
         <div className="library-subtitle-heading">

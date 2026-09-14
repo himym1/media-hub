@@ -1,15 +1,17 @@
-import { CircleAlert, Play } from 'lucide-react'
+import { CircleAlert } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { getEmbyEpisodes, type EmbyEpisode } from '../../shared/api/mediaHub'
-import { episodeLabel, playbackActionLabel, playbackStatus } from './libraryPlayback'
+import { LibraryWatchAction } from './LibraryWatchAction'
+import { episodeLabel, playbackStatus } from './libraryPlayback'
 
 type LibraryEpisodesProps = {
   seriesId: string
   seriesTitle: string
+  inPagePlayback: boolean
   onPlay: (episode: EmbyEpisode) => void
 }
 
-export function LibraryEpisodes({ seriesId, seriesTitle, onPlay }: LibraryEpisodesProps) {
+export function LibraryEpisodes({ seriesId, seriesTitle, inPagePlayback, onPlay }: LibraryEpisodesProps) {
   const episodes = useQuery({
     queryKey: ['emby-episodes', seriesId],
     queryFn: () => getEmbyEpisodes(seriesId),
@@ -33,7 +35,6 @@ export function LibraryEpisodes({ seriesId, seriesTitle, onPlay }: LibraryEpisod
   return (
     <ul className="library-episode-list">
       {items.map((episode) => {
-        const label = playbackActionLabel(episode)
         const name = episodeLabel(episode, seriesTitle)
         return (
           <li key={episode.id}>
@@ -41,15 +42,14 @@ export function LibraryEpisodes({ seriesId, seriesTitle, onPlay }: LibraryEpisod
               <strong>{name}</strong>
               <small>{playbackStatus(episode)}</small>
             </div>
-            <button
-              aria-label={`${label} ${name}`}
-              className="primary-action"
-              onClick={() => onPlay(episode)}
-              type="button"
-            >
-              <Play size={16} />
-              {label}
-            </button>
+            <LibraryWatchAction
+              externalUrl={episode.externalUrl}
+              inPage={inPagePlayback}
+              item={episode}
+              name={name}
+              named
+              onPlay={() => onPlay(episode)}
+            />
           </li>
         )
       })}
