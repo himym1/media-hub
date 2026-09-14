@@ -17,7 +17,7 @@ import {
 import { IconButton } from '../../shared/ui/IconButton'
 import { isHlsStream } from './isHlsStream'
 import { formatPlaybackClock } from './libraryPlayback'
-import { attachPlaybackSession } from './libraryPlaybackSession'
+import { attachNativePlaybackSession, attachPlaybackSession } from './libraryPlaybackSession'
 import { attachSubtitleTrack, setSubtitleMode, subtitleAttachResult, subtitleStartHint } from './librarySubtitle'
 import {
   cancelScheduledPlayerClick,
@@ -53,6 +53,7 @@ type NativeRequest = {
   title: string
   startPositionMs?: number
   userAgent?: string
+  sessionId?: string
   subtitle?: NativeSubtitle | null
 }
 
@@ -70,6 +71,7 @@ export function LibraryPlayer({
   const idleTimer = useRef<number | null>(null)
   const clickTimer = useRef<number | null>(null)
   const nativeRequest = useRef<NativeRequest | null>(null)
+  const nativeClock = useRef({ seconds: 0, paused: false })
   const [error, setError] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
   const [muted, setMuted] = useState(false)
@@ -288,6 +290,7 @@ export function LibraryPlayer({
             title,
             startPositionMs: descriptor.startPositionMs,
             userAgent: descriptor.userAgent,
+            sessionId: descriptor.sessionId,
             subtitle: nativeSubtitle,
           }
           setCaptions(nativeSubtitle ? 'on' : 'missing')
@@ -351,7 +354,12 @@ export function LibraryPlayer({
     const hole = holeRef.current
     if (!hole) return
     let cancelled = false
+    let detachSession = () => {}
     const request = nativeRequest.current
+    nativeClock.current = {
+      seconds: (request.startPositionMs ?? 0) / 1000,
+      paused: false,
+    }
     void (async () => {
       try {
         await playNatively(request.url, {
@@ -361,7 +369,16 @@ export function LibraryPlayer({
           bounds: boundsFromElement(hole),
           subtitle: request.subtitle,
         })
-        if (!cancelled) setPlaying(true)
+        if (cancelled) return
+        setPlaying(true)
+        detachSession = attachNativePlaybackSession(
+          request.sessionId,
+          () => ({
+            positionMs: Math.max(0, Math.floor(nativeClock.current.seconds * 1000)),
+            paused: nativeClock.current.paused,
+          }),
+          reportPlaybackSessionEvent,
+        )
       } catch (cause) {
         if (!cancelled) {
           setError(cause instanceof Error ? cause.message : '系统播放器未能打开这路流。')
@@ -377,6 +394,8 @@ export function LibraryPlayer({
     const poll = window.setInterval(() => {
       void nativeStatus().then((status) => {
         if (!status || cancelled) return
+        const wasPaused = nativeClock.current.paused
+        nativeClock.current = { seconds: status.time, paused: status.paused }
         setPlaying(!status.paused)
         setCurrentSeconds(status.time)
         setDurationSeconds(status.duration)
@@ -385,8 +404,14 @@ export function LibraryPlayer({
         if (typeof status.zoom === 'number' && status.zoom > 0) {
           setPictureZoom(clampPictureZoom(status.zoom))
         }
-        // Mouse-move on the webview already reveals chrome. Do not refresh
-        // the idle timer from a hover poll or the bars never hide.
+        if (wasPaused !== status.paused && request.sessionId) {
+          void reportPlaybackSessionEvent(
+            request.sessionId,
+            'progress',
+            Math.max(0, Math.floor(status.time * 1000)),
+            status.paused,
+          )
+        }
       })
     }, 250)
     return () => {
@@ -394,6 +419,7 @@ export function LibraryPlayer({
       observer.disconnect()
       window.removeEventListener('resize', relayout)
       window.clearInterval(poll)
+      detachSession()
       void stopNatively().catch(() => undefined)
     }
   }, [itemId, nativeActive])

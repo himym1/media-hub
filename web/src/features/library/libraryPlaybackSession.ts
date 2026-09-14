@@ -41,3 +41,23 @@ export function attachPlaybackSession(
     if (started) send('stopped', true)
   }
 }
+
+export function attachNativePlaybackSession(
+  sessionId: string | undefined,
+  getState: () => { positionMs: number; paused: boolean },
+  report: ReportSession,
+) {
+  if (!sessionId) return () => {}
+  const send = (event: SessionEvent, paused: boolean) => {
+    void report(sessionId, event, Math.max(0, Math.floor(getState().positionMs)), paused)
+  }
+  send('started', getState().paused)
+  const timer = globalThis.setInterval(() => {
+    const state = getState()
+    send('progress', state.paused)
+  }, 15_000)
+  return () => {
+    globalThis.clearInterval(timer)
+    send('stopped', true)
+  }
+}

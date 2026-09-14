@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { attachPlaybackSession } from './libraryPlaybackSession'
+import { attachNativePlaybackSession, attachPlaybackSession } from './libraryPlaybackSession'
 
 function fakeVideo(currentTime = 0) {
   const listeners = new Map<string, Set<() => void>>()
@@ -40,5 +40,19 @@ describe('attachPlaybackSession', () => {
     const detach = attachPlaybackSession(undefined, fakeVideo() as unknown as HTMLVideoElement, report)
     detach()
     expect(report).not.toHaveBeenCalled()
+  })
+
+  it('reports desktop native progress from the current clock', () => {
+    vi.useFakeTimers()
+    const report = vi.fn().mockResolvedValue(undefined)
+    const state = { positionMs: 4_200, paused: false }
+    const detach = attachNativePlaybackSession('session-2', () => state, report)
+    expect(report.mock.calls[0]?.slice(0, 3)).toEqual(['session-2', 'started', 4200])
+    state.positionMs = 19_500
+    vi.advanceTimersByTime(15_000)
+    expect(report.mock.calls[1]?.slice(0, 3)).toEqual(['session-2', 'progress', 19_500])
+    detach()
+    expect(report.mock.calls.at(-1)?.slice(0, 4)).toEqual(['session-2', 'stopped', 19_500, true])
+    vi.useRealTimers()
   })
 })
