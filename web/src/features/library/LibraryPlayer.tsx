@@ -375,7 +375,8 @@ export function LibraryPlayer({
         if (typeof status.zoom === 'number' && status.zoom > 0) {
           setPictureZoom(clampPictureZoom(status.zoom))
         }
-        if (status.cursorHover) revealChromeRef.current(false, true)
+        // Mouse-move on the webview already reveals chrome. Do not refresh
+        // the idle timer from a hover poll or the bars never hide.
       })
     }, 250)
     return () => {

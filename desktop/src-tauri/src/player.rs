@@ -459,6 +459,7 @@ pub fn play_native(
         sub_path.as_deref(),
         &state,
     )?;
+    let _ = main.set_fullscreen(true);
     let _ = main.set_focus();
     Ok(())
 }
@@ -479,6 +480,9 @@ pub fn stop_native(app: AppHandle, state: tauri::State<PlayerState>) -> Result<(
     if let Ok(surface) = surface_window(&app) {
         let _ = park_surface(&surface);
     }
+    if let Ok(window) = main_window(&app) {
+        let _ = window.set_fullscreen(false);
+    }
     Ok(())
 }
 
@@ -493,13 +497,10 @@ pub fn native_control(action: String, value: Option<f64>, mode: Option<String>) 
 #[tauri::command]
 pub fn toggle_native_window(app: AppHandle) -> Result<(), String> {
     let window = main_window(&app)?;
-    let maximized = window.is_maximized().unwrap_or(false);
-    if maximized {
-        window.unmaximize()
-    } else {
-        window.maximize()
-    }
-    .map_err(|_| "无法缩放窗口。".to_string())
+    let fullscreen = window.is_fullscreen().unwrap_or(false);
+    window
+        .set_fullscreen(!fullscreen)
+        .map_err(|_| "无法切换全屏。".to_string())
 }
 
 #[tauri::command]
