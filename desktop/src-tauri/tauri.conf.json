@@ -1,22 +1,14 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Media Hub",
-  "version": "0.20.40",
+  "version": "0.20.45",
   "identifier": "us.ci.himym.mediahub",
   "build": {
     "devUrl": "https://media.himym.us.ci",
     "frontendDist": "https://media.himym.us.ci"
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "Media Hub",
-        "width": 1280,
-        "height": 800,
-        "url": "https://media.himym.us.ci"
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }

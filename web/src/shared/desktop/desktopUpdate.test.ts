@@ -4,6 +4,7 @@ import {
   desktopAppPlatform,
   desktopAppVersion,
   desktopInstallerPath,
+  desktopInstallerFileName,
   downloadDesktopInstaller,
   desktopUpdateErrorMessage,
   desktopUpdateRequired,
@@ -11,6 +12,7 @@ import {
   formatDesktopUpdateSize,
   installDesktopUpdate,
   isDesktopShell,
+  isDesktopUpdateCancelled,
   newerDesktopRelease,
 } from './desktopUpdate'
 
@@ -68,19 +70,25 @@ describe('desktopUpdate', () => {
     await expect(desktopAppVersion()).resolves.toBeNull()
   })
 
-  it('opens the private installer path for older desktop shells', () => {
-    const anchor = { href: '', download: '', rel: '', click: vi.fn(), remove: vi.fn() }
-    const body = { append: vi.fn() }
-    vi.stubGlobal('document', { body, createElement: () => anchor })
-    downloadDesktopInstaller(release)
-    expect(anchor.href).toBe(release.downloadPath)
-    expect(anchor.download).toBe('media-hub-20039.exe')
-    expect(anchor.click).toHaveBeenCalled()
-    expect(() => downloadDesktopInstaller({ ...release, downloadPath: '/tmp/setup.exe' })).toThrow('更新地址无效')
-    const mac = { ...release, downloadPath: desktopInstallerPath(20039, 'darwin') }
-    downloadDesktopInstaller(mac)
-    expect(anchor.href).toBe(mac.downloadPath)
-    expect(anchor.download).toBe('media-hub-20039.dmg')
+  it('saves the private installer through the file picker', async () => {
+    const writable = { write: vi.fn(), close: vi.fn() }
+    const picker = vi.fn(async () => ({ createWritable: async () => writable }))
+    const bytes = new Uint8Array([1, 2, 3, 4])
+    vi.stubGlobal('showSaveFilePicker', picker)
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      blob: async () => new Blob([bytes]),
+    })))
+    const digest = await crypto.subtle.digest('SHA-256', bytes)
+    const sha256 = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+    await downloadDesktopInstaller({ ...release, sha256, sizeBytes: bytes.byteLength })
+    expect(picker).toHaveBeenCalled()
+    expect(writable.write).toHaveBeenCalled()
+    expect(writable.close).toHaveBeenCalled()
+    await expect(downloadDesktopInstaller({ ...release, downloadPath: '/tmp/setup.exe' })).rejects.toThrow('更新地址无效')
+    expect(desktopInstallerFileName({ ...release, downloadPath: desktopInstallerPath(20039, 'darwin') })).toBe('media-hub-20039.dmg')
+    expect(isDesktopUpdateCancelled(new DOMException('cancelled', 'AbortError'))).toBe(true)
     vi.unstubAllGlobals()
   })
 

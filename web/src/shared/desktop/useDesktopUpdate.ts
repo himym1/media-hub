@@ -9,6 +9,7 @@ import {
   downloadDesktopInstaller,
   installDesktopUpdate,
   isDesktopShell,
+  isDesktopUpdateCancelled,
   newerDesktopRelease,
 } from './desktopUpdate'
 
@@ -93,12 +94,14 @@ export function useDesktopUpdate(): DesktopUpdateState {
       if (nativeInstall) {
         await installDesktopUpdate(release)
       } else {
-        downloadDesktopInstaller(release)
-        setInstalling(false)
+        await downloadDesktopInstaller(release)
       }
     } catch (cause) {
+      if (!isDesktopUpdateCancelled(cause)) {
+        setError(desktopUpdateErrorMessage(cause))
+      }
+    } finally {
       setInstalling(false)
-      setError(desktopUpdateErrorMessage(cause))
     }
   }, [installing, nativeInstall, release])
 

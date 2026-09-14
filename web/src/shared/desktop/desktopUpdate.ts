@@ -98,18 +98,89 @@ export async function desktopAppVersion() {
   }
 }
 
-export function downloadDesktopInstaller(release: DesktopRelease) {
+export function desktopInstallerFileName(release: DesktopRelease) {
   const platform = desktopPlatformFromPath(release.downloadPath)
   if (!platform || release.downloadPath !== desktopInstallerPath(release.versionCode, platform)) {
     throw new Error('更新地址无效')
   }
+  return `media-hub-${release.versionCode}.${platform === 'darwin' ? 'dmg' : 'exe'}`
+}
+
+export function isDesktopUpdateCancelled(cause: unknown) {
+  return cause instanceof DOMException && cause.name === 'AbortError'
+}
+
+type SaveFileHandle = {
+  createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }>
+}
+
+function saveFilePicker() {
+  const picker = (globalThis as {
+    showSaveFilePicker?: (options: {
+      suggestedName: string
+      types: Array<{ description: string; accept: Record<string, string[]> }>
+    }) => Promise<SaveFileHandle>
+  }).showSaveFilePicker
+  return typeof picker === 'function' ? picker.bind(globalThis) : null
+}
+
+async function fetchInstallerBlob(release: DesktopRelease) {
+  const response = await fetch(release.downloadPath, {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/octet-stream' },
+  })
+  if (response.status === 401) {
+    throw new Error('登录已过期，请重新登录后再更新。')
+  }
+  if (!response.ok) {
+    throw new Error('无法下载桌面更新')
+  }
+  const blob = await response.blob()
+  if (blob.size !== release.sizeBytes || !(await installerChecksumMatches(blob, release.sha256))) {
+    throw new Error('更新包校验失败')
+  }
+  return blob
+}
+
+async function installerChecksumMatches(blob: Blob, expected: string) {
+  if (!globalThis.crypto?.subtle) {
+    return blob.size > 0
+  }
+  const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
+  const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+  return hex === expected.trim().toLowerCase()
+}
+
+function clickDownloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
-  anchor.href = release.downloadPath
-  anchor.download = `media-hub-${release.versionCode}.${platform === 'darwin' ? 'dmg' : 'exe'}`
+  anchor.href = url
+  anchor.download = fileName
   anchor.rel = 'noopener'
   document.body.append(anchor)
   anchor.click()
   anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+export async function downloadDesktopInstaller(release: DesktopRelease) {
+  const fileName = desktopInstallerFileName(release)
+  const picker = saveFilePicker()
+  if (picker) {
+    const handle = await picker({
+      suggestedName: fileName,
+      types: [{ description: 'Media Hub', accept: { 'application/octet-stream': [`.${fileName.split('.').pop()}`] } }],
+    })
+    const blob = await fetchInstallerBlob(release)
+    const writable = await handle.createWritable()
+    try {
+      await writable.write(blob)
+    } finally {
+      await writable.close()
+    }
+    return
+  }
+  clickDownloadBlob(await fetchInstallerBlob(release), fileName)
 }
 
 export async function installDesktopUpdate(release: DesktopRelease) {

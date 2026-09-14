@@ -2,9 +2,14 @@ use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::time::Duration;
 
+use tauri::webview::{DownloadEvent, WebviewWindowBuilder};
+use tauri::{Manager, WebviewUrl};
+
 mod browser;
 mod player;
 mod updater;
+
+pub(crate) const DESKTOP_ORIGIN: &str = "https://media.himym.us.ci";
 
 pub(crate) fn is_supported_playback_url(url: &str) -> bool {
     if url.contains('\n') || url.contains('\r') || url.contains('\0') {
@@ -196,6 +201,26 @@ pub fn run() {
             player::native_status,
             player::toggle_native_window,
         ])
+        .setup(|app| {
+            if app.get_webview_window("main").is_none() {
+                let url = tauri::Url::parse(DESKTOP_ORIGIN)?;
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+                    .title("Media Hub")
+                    .inner_size(1280.0, 800.0)
+                    .on_download(|_webview, event| {
+                        if let DownloadEvent::Requested { url, destination } = event {
+                            if let Some(name) = updater::trusted_download_file_name(url.as_str()) {
+                                if let Some(dir) = updater::user_download_dir() {
+                                    *destination = dir.join(name);
+                                }
+                            }
+                        }
+                        true
+                    })
+                    .build()?;
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -233,12 +258,10 @@ mod tests {
     fn desktop_window_loads_production_origin() {
         let config: serde_json::Value =
             serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
-        assert_eq!(config["build"]["devUrl"], "https://media.himym.us.ci");
-        assert_eq!(config["build"]["frontendDist"], "https://media.himym.us.ci");
-        assert_eq!(
-            config["app"]["windows"][0]["url"],
-            "https://media.himym.us.ci"
-        );
+        assert_eq!(config["build"]["devUrl"], DESKTOP_ORIGIN);
+        assert_eq!(config["build"]["frontendDist"], DESKTOP_ORIGIN);
+        assert_eq!(config["app"]["windows"], serde_json::json!([]));
+        assert_eq!(DESKTOP_ORIGIN, "https://media.himym.us.ci");
         let capabilities: serde_json::Value =
             serde_json::from_str(include_str!("../capabilities/default.json")).expect("capabilities");
         assert_eq!(capabilities["windows"], serde_json::json!(["main", "browser"]));

@@ -123,6 +123,31 @@ fn installer_artifact(download_path: &str) -> Result<(u32, ArtifactKind), String
     Ok((version_code, kind))
 }
 
+pub(crate) fn trusted_download_file_name(url: &str) -> Option<String> {
+    let parsed = Url::parse(url).ok()?;
+    if parsed.scheme() != "https" && parsed.scheme() != "http" {
+        return None;
+    }
+    if parsed.query().is_some() || parsed.fragment().is_some() {
+        return None;
+    }
+    let (version_code, kind) = installer_artifact(parsed.path()).ok()?;
+    Some(match kind {
+        ArtifactKind::Windows => format!("media-hub-{version_code}.exe"),
+        ArtifactKind::Darwin => format!("media-hub-{version_code}.dmg"),
+    })
+}
+
+pub(crate) fn user_download_dir() -> Option<PathBuf> {
+    let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"))?;
+    let downloads = PathBuf::from(home).join("Downloads");
+    if downloads.is_dir() {
+        Some(downloads)
+    } else {
+        Some(std::env::temp_dir())
+    }
+}
+
 fn installer_url(window_url: &Url, version_code: u32, kind: ArtifactKind) -> Result<Url, String> {
     if window_url.scheme() != "https" && window_url.scheme() != "http" {
         return Err("更新地址无效。".into());
@@ -240,16 +265,35 @@ fn start_installer(path: &Path, kind: ArtifactKind) -> Result<(), String> {
     }
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
+fn windows_installer_path_is_safe(path: &Path) -> bool {
+    path.to_str().is_some_and(|value| {
+        Path::new(value).is_absolute()
+            && !value.chars().any(|byte| matches!(byte, '"' | '&' | '|' | '>' | '<' | '^' | '%'))
+    })
+}
+
 fn start_windows_installer(path: &Path) -> Result<(), String> {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         use std::process::Command;
-        const DETACHED_PROCESS: u32 = 0x0000_0008;
-        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-        Command::new(path)
-            .arg("/S")
-            .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP)
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        if !windows_installer_path_is_safe(path) {
+            return Err("更新包路径无效。".into());
+        }
+        let installer = path.to_str().ok_or_else(|| "更新包路径无效。".to_string())?;
+        // Close the running app first; NSIS cannot replace a locked Media Hub.exe.
+        Command::new("cmd")
+            .args([
+                "/C",
+                "start",
+                "",
+                "cmd",
+                "/C",
+                &format!("ping -n 3 127.0.0.1 >nul & \"{installer}\""),
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|_| "无法启动安装程序。".to_string())?;
         return Ok(());
@@ -343,5 +387,41 @@ mod tests {
         assert!(normalize_sha256("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef").is_ok());
         assert!(normalize_sha256("short").is_err());
         assert!(normalize_sha256("g".repeat(64).as_str()).is_err());
+    }
+
+    #[test]
+    fn windows_installer_path_rejects_shell_metacharacters() {
+        assert!(!windows_installer_path_is_safe(Path::new("media-hub-20044.exe")));
+        if cfg!(windows) {
+            assert!(!windows_installer_path_is_safe(Path::new(r"C:\Temp\media-hub-20044.exe&calc")));
+            assert!(windows_installer_path_is_safe(Path::new(r"C:\Temp\media-hub-20044.exe")));
+        } else {
+            assert!(!windows_installer_path_is_safe(Path::new("/tmp/media-hub-20044.exe&calc")));
+            assert!(windows_installer_path_is_safe(Path::new("/tmp/media-hub-20044.exe")));
+        }
+    }
+
+    #[test]
+    fn trusted_download_names_stay_on_the_private_installer_path() {
+        assert_eq!(
+            trusted_download_file_name(
+                "https://media.himym.us.ci/api/v1/client/desktop/releases/20044/installer"
+            )
+            .as_deref(),
+            Some("media-hub-20044.exe")
+        );
+        assert_eq!(
+            trusted_download_file_name("https://media.himym.us.ci/api/v1/client/desktop/releases/20044/dmg")
+                .as_deref(),
+            Some("media-hub-20044.dmg")
+        );
+        assert!(trusted_download_file_name(
+            "https://media.himym.us.ci/api/v1/client/android/releases/20044/apk"
+        )
+        .is_none());
+        assert!(trusted_download_file_name(
+            "https://media.himym.us.ci/api/v1/client/desktop/releases/20044/installer?x=1"
+        )
+        .is_none());
     }
 }

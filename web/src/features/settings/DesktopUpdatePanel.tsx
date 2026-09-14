@@ -1,5 +1,7 @@
+import type { ReactNode } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
-import { desktopPlatformFromPath, formatDesktopUpdateSize } from '../../shared/desktop/desktopUpdate'
+import type { DesktopRelease } from '../../shared/api/mediaHub'
+import { desktopInstallerFileName, desktopPlatformFromPath, formatDesktopUpdateSize } from '../../shared/desktop/desktopUpdate'
 import type { DesktopUpdateState } from '../../shared/desktop/useDesktopUpdate'
 
 export function DesktopUpdateBanner({ update }: { update: DesktopUpdateState }) {
@@ -15,10 +17,8 @@ export function DesktopUpdateBanner({ update }: { update: DesktopUpdateState }) 
         {update.required ? null : (
           <button className="secondary-command" disabled={update.installing} onClick={update.dismiss} type="button">稍后</button>
         )}
-        <button className="primary-action" disabled={update.installing} onClick={() => void update.install()} type="button">
-          <Download size={16} />
-          {update.installing ? '正在下载并安装…' : `${update.nativeInstall ? '安装' : '下载'} ${update.prompt.versionName}`}
-        </button>
+        <UpdateAction installing={update.installing} nativeInstall={update.nativeInstall} onInstall={update.install} release={update.prompt} />
+        {update.nativeInstall ? <SaveInstallerLink className="secondary-command" release={update.prompt}>保存安装包</SaveInstallerLink> : null}
       </div>
       {update.error ? <span className="form-error" role="alert">{update.error}</span> : null}
     </div>
@@ -40,17 +40,76 @@ export function DesktopUpdateSettings({ update }: { update: DesktopUpdateState }
         <strong>桌面端更新</strong>
         <span>{label}</span>
       </div>
-      <button
-        className="secondary-command"
-        disabled={update.checking || update.installing}
-        onClick={() => { if (update.release) void update.install(); else void update.check() }}
-        type="button"
-      >
-        {update.release ? <Download size={16} /> : <RefreshCw size={16} />}
-        {update.installing ? '正在下载并安装…' : update.release ? `${update.nativeInstall ? '安装' : '下载'} ${update.release.versionName}` : update.checking ? '正在检查' : '检查更新'}
-      </button>
+      {update.release && !update.nativeInstall ? (
+        <SaveInstallerLink className="secondary-command" release={update.release}>
+          <Download size={16} />
+          下载 {update.release.versionName}
+        </SaveInstallerLink>
+      ) : (
+        <button
+          className="secondary-command"
+          disabled={update.checking || update.installing}
+          onClick={() => { if (update.release) void update.install(); else void update.check() }}
+          type="button"
+        >
+          {update.release ? <Download size={16} /> : <RefreshCw size={16} />}
+          {update.installing ? '正在下载并安装…' : update.release ? `安装 ${update.release.versionName}` : update.checking ? '正在检查' : '检查更新'}
+        </button>
+      )}
+      {update.release && update.nativeInstall ? (
+        <SaveInstallerLink className="secondary-command" release={update.release}>保存安装包</SaveInstallerLink>
+      ) : null}
       {update.error && update.release ? <span className="form-error" role="alert">{update.error}</span> : null}
     </section>
+  )
+}
+
+function UpdateAction({
+  installing,
+  nativeInstall,
+  onInstall,
+  release,
+}: {
+  installing: boolean
+  nativeInstall: boolean
+  onInstall: () => Promise<void>
+  release: DesktopRelease
+}) {
+  if (!nativeInstall) {
+    return (
+      <SaveInstallerLink className="primary-action" release={release}>
+        <Download size={16} />
+        下载 {release.versionName}
+      </SaveInstallerLink>
+    )
+  }
+  return (
+    <button className="primary-action" disabled={installing} onClick={() => void onInstall()} type="button">
+      <Download size={16} />
+      {installing ? '正在下载并安装…' : `安装 ${release.versionName}`}
+    </button>
+  )
+}
+
+function SaveInstallerLink({
+  children,
+  className,
+  release,
+}: {
+  children: ReactNode
+  className: string
+  release: DesktopRelease
+}) {
+  let fileName = ''
+  try {
+    fileName = desktopInstallerFileName(release)
+  } catch {
+    return null
+  }
+  return (
+    <a className={className} download={fileName} href={release.downloadPath} rel="noopener">
+      {children}
+    </a>
   )
 }
 
