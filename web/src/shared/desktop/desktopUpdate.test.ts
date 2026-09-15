@@ -16,10 +16,14 @@ import {
   isDesktopShell,
   isDesktopUpdateCancelled,
   newerDesktopRelease,
+  rememberDismissedDesktopRelease,
+  rememberDownloadedDesktopRelease,
+  resolveDesktopUpdate,
 } from './desktopUpdate'
 
 afterEach(() => {
   delete (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
+  globalThis.localStorage?.removeItem('media-hub.desktop-update')
 })
 
 const release: DesktopRelease = {
@@ -49,6 +53,36 @@ describe('desktopUpdate', () => {
     expect(newerDesktopRelease(20039, release)).toBeNull()
     expect(desktopUpdateRequired(20009, release)).toBe(true)
     expect(desktopUpdateRequired(20010, release)).toBe(false)
+  })
+
+  it('asks an unknown shell to relaunch after it already downloaded the latest', () => {
+    expect(resolveDesktopUpdate(null, release)).toEqual({ release, required: false, pendingRelaunch: false })
+    expect(resolveDesktopUpdate(null, release, { downloadedCode: 20039 })).toEqual({
+      release,
+      required: false,
+      pendingRelaunch: true,
+    })
+    expect(resolveDesktopUpdate(null, release, { dismissedCode: 20039 })).toEqual({
+      release: null,
+      required: false,
+      pendingRelaunch: false,
+    })
+    expect(resolveDesktopUpdate('0.20.39', release)).toEqual({ release: null, required: false, pendingRelaunch: false })
+  })
+
+  it('stores downloaded and dismissed version codes', () => {
+    const map = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => { map.set(key, value) },
+      removeItem: (key: string) => { map.delete(key) },
+    })
+    const latest = { ...release, versionCode: 20058, versionName: '0.20.58' }
+    rememberDownloadedDesktopRelease(20058)
+    expect(resolveDesktopUpdate(null, latest)).toEqual({ release: latest, required: false, pendingRelaunch: true })
+    rememberDismissedDesktopRelease(20058)
+    expect(resolveDesktopUpdate(null, latest)).toEqual({ release: null, required: false, pendingRelaunch: false })
+    vi.unstubAllGlobals()
   })
 
   it('keeps Windows on the download path until the silent updater ships', () => {

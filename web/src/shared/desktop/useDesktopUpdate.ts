@@ -5,19 +5,19 @@ import {
   desktopAppVersion,
   desktopNativeInstallReady,
   desktopUpdateErrorMessage,
-  desktopUpdateRequired,
-  desktopVersionCode,
   downloadDesktopInstaller,
   installDesktopUpdate,
   isDesktopShell,
   isDesktopUpdateCancelled,
-  newerDesktopRelease,
+  rememberDismissedDesktopRelease,
+  resolveDesktopUpdate,
 } from './desktopUpdate'
 
 export type DesktopUpdateState = {
   available: boolean
   currentVersion: string
   nativeInstall: boolean
+  pendingRelaunch: boolean
   release: DesktopRelease | null
   prompt: DesktopRelease | null
   required: boolean
@@ -34,6 +34,7 @@ export function useDesktopUpdate(): DesktopUpdateState {
   const [currentVersion, setCurrentVersion] = useState('')
   const [nativeInstall, setNativeInstall] = useState(false)
   const [release, setRelease] = useState<DesktopRelease | null>(null)
+  const [pendingRelaunch, setPendingRelaunch] = useState(false)
   const [required, setRequired] = useState(false)
   const [installing, setInstalling] = useState(false)
   const [checking, setChecking] = useState(false)
@@ -48,6 +49,7 @@ export function useDesktopUpdate(): DesktopUpdateState {
       const platform = await desktopAppPlatform()
       if (!platform) {
         setRelease(null)
+        setPendingRelaunch(false)
         setRequired(false)
         return
       }
@@ -55,22 +57,13 @@ export function useDesktopUpdate(): DesktopUpdateState {
       setCurrentVersion(version ?? '')
       setNativeInstall(desktopNativeInstallReady(version, platform))
       const latest = await getLatestDesktopRelease(platform)
-      if (version == null) {
-        setRequired(false)
-        setRelease(latest)
-        return
-      }
-      const currentCode = desktopVersionCode(version)
-      if (currentCode == null) {
-        setRelease(null)
-        setRequired(false)
-        return
-      }
-      const next = newerDesktopRelease(currentCode, latest)
-      setRequired(Boolean(next && desktopUpdateRequired(currentCode, latest)))
-      setRelease(next)
+      const decision = resolveDesktopUpdate(version, latest)
+      setRequired(decision.required)
+      setPendingRelaunch(decision.pendingRelaunch)
+      setRelease(decision.release)
     } catch (cause) {
       setRelease(null)
+      setPendingRelaunch(false)
       setRequired(false)
       if (cause instanceof ApiError && (cause.status === 404 || cause.code === 'desktop_release_unavailable')) {
         setError(null)
@@ -96,6 +89,7 @@ export function useDesktopUpdate(): DesktopUpdateState {
         await installDesktopUpdate(release)
       } else {
         await downloadDesktopInstaller(release)
+        await check()
       }
     } catch (cause) {
       if (!isDesktopUpdateCancelled(cause)) {
@@ -104,17 +98,23 @@ export function useDesktopUpdate(): DesktopUpdateState {
     } finally {
       setInstalling(false)
     }
-  }, [installing, nativeInstall, release])
+  }, [check, installing, nativeInstall, release])
 
   const dismiss = useCallback(() => {
     if (!release || required || installing) return
+    rememberDismissedDesktopRelease(release.versionCode)
     setDismissedCode(release.versionCode)
-  }, [installing, release, required])
+    if (pendingRelaunch) {
+      setRelease(null)
+      setPendingRelaunch(false)
+    }
+  }, [installing, pendingRelaunch, release, required])
 
   return {
     available,
     currentVersion,
     nativeInstall,
+    pendingRelaunch,
     release,
     prompt: release && (required || release.versionCode !== dismissedCode) ? release : null,
     required,

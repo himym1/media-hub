@@ -35,6 +35,89 @@ export function newerDesktopRelease(currentVersionCode: number, latest: DesktopR
   return latest.versionCode > currentVersionCode ? latest : null
 }
 
+const desktopUpdateStorageKey = 'media-hub.desktop-update'
+
+export type StoredDesktopUpdate = {
+  dismissedCode?: number
+  downloadedCode?: number
+}
+
+export type DesktopUpdateDecision = {
+  release: DesktopRelease | null
+  required: boolean
+  pendingRelaunch: boolean
+}
+
+function desktopUpdateStorage(): Storage | null {
+  try {
+    return globalThis.localStorage
+  } catch {
+    return null
+  }
+}
+
+export function readStoredDesktopUpdate(): StoredDesktopUpdate {
+  const raw = desktopUpdateStorage()?.getItem(desktopUpdateStorageKey)
+  if (!raw) return {}
+  try {
+    const value = JSON.parse(raw) as StoredDesktopUpdate
+    return {
+      dismissedCode: Number.isInteger(value.dismissedCode) ? value.dismissedCode : undefined,
+      downloadedCode: Number.isInteger(value.downloadedCode) ? value.downloadedCode : undefined,
+    }
+  } catch {
+    return {}
+  }
+}
+
+function writeStoredDesktopUpdate(value: StoredDesktopUpdate) {
+  const storage = desktopUpdateStorage()
+  if (!storage) return
+  storage.setItem(desktopUpdateStorageKey, JSON.stringify(value))
+}
+
+export function rememberDownloadedDesktopRelease(versionCode: number) {
+  writeStoredDesktopUpdate({ ...readStoredDesktopUpdate(), downloadedCode: versionCode })
+}
+
+export function rememberDismissedDesktopRelease(versionCode: number) {
+  writeStoredDesktopUpdate({ ...readStoredDesktopUpdate(), dismissedCode: versionCode })
+}
+
+export function clearStoredDesktopUpdate() {
+  desktopUpdateStorage()?.removeItem(desktopUpdateStorageKey)
+}
+
+export function resolveDesktopUpdate(
+  currentVersion: string | null,
+  latest: DesktopRelease,
+  stored: StoredDesktopUpdate = readStoredDesktopUpdate(),
+): DesktopUpdateDecision {
+  if (currentVersion == null) {
+    if (stored.dismissedCode === latest.versionCode) {
+      return { release: null, required: false, pendingRelaunch: false }
+    }
+    if (stored.downloadedCode === latest.versionCode) {
+      return { release: latest, required: false, pendingRelaunch: true }
+    }
+    return { release: latest, required: false, pendingRelaunch: false }
+  }
+  const currentCode = desktopVersionCode(currentVersion)
+  if (currentCode == null) {
+    return { release: null, required: false, pendingRelaunch: false }
+  }
+  if (currentCode >= latest.versionCode) {
+    clearStoredDesktopUpdate()
+    return { release: null, required: false, pendingRelaunch: false }
+  }
+  const next = newerDesktopRelease(currentCode, latest)
+  return {
+    release: next,
+    required: Boolean(next && desktopUpdateRequired(currentCode, latest)),
+    pendingRelaunch: false,
+  }
+}
+
 export function desktopUpdateRequired(currentVersionCode: number, latest: DesktopRelease) {
   return currentVersionCode < latest.minimumSupportedVersionCode
 }
@@ -183,6 +266,7 @@ export function startDesktopInstallerDownload(release: DesktopRelease) {
   document.body.append(anchor)
   anchor.click()
   anchor.remove()
+  rememberDownloadedDesktopRelease(release.versionCode)
   return fileName
 }
 
@@ -201,9 +285,11 @@ export async function downloadDesktopInstaller(release: DesktopRelease) {
     } finally {
       await writable.close()
     }
+    rememberDownloadedDesktopRelease(release.versionCode)
     return
   }
   clickDownloadBlob(await fetchInstallerBlob(release), fileName)
+  rememberDownloadedDesktopRelease(release.versionCode)
 }
 
 export async function installDesktopUpdate(release: DesktopRelease) {
@@ -216,4 +302,5 @@ export async function installDesktopUpdate(release: DesktopRelease) {
     sha256: release.sha256,
     sizeBytes: release.sizeBytes,
   })
+  rememberDownloadedDesktopRelease(release.versionCode)
 }

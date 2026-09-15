@@ -6,6 +6,18 @@ import type { DesktopUpdateState } from '../../shared/desktop/useDesktopUpdate'
 
 export function DesktopUpdateBanner({ update }: { update: DesktopUpdateState }) {
   if (!update.available || !update.prompt) return null
+  if (update.pendingRelaunch) {
+    return (
+      <div className="desktop-update-banner" role="status">
+        <p>
+          桌面端 {update.prompt.versionName} 已下载。请按 Command+Q 完全退出，再从「应用程序」打开 Media Hub。只关窗口，或从下载文件夹、安装盘启动，会继续用旧版。
+        </p>
+        <div className="desktop-update-actions">
+          <button className="secondary-command" onClick={update.dismiss} type="button">知道了</button>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="desktop-update-banner" role="status">
       <p>
@@ -17,8 +29,8 @@ export function DesktopUpdateBanner({ update }: { update: DesktopUpdateState }) 
         {update.required ? null : (
           <button className="secondary-command" disabled={update.installing} onClick={update.dismiss} type="button">稍后</button>
         )}
-        <UpdateAction installing={update.installing} nativeInstall={update.nativeInstall} onInstall={update.install} release={update.prompt} />
-        {update.nativeInstall ? <SaveInstallerLink className="secondary-command" release={update.prompt}>保存安装包</SaveInstallerLink> : null}
+        <UpdateAction installing={update.installing} nativeInstall={update.nativeInstall} onDownloaded={update.check} onInstall={update.install} release={update.prompt} />
+        {update.nativeInstall ? <SaveInstallerLink className="secondary-command" onDownloaded={update.check} release={update.prompt}>保存安装包</SaveInstallerLink> : null}
       </div>
       {update.error ? <span className="form-error" role="alert">{update.error}</span> : null}
     </div>
@@ -27,7 +39,9 @@ export function DesktopUpdateBanner({ update }: { update: DesktopUpdateState }) 
 
 export function DesktopUpdateSettings({ update }: { update: DesktopUpdateState }) {
   if (!update.available) return null
-  const label = update.release
+  const label = update.pendingRelaunch
+    ? `已下载 ${update.release?.versionName}，请按 Command+Q 后从「应用程序」打开`
+    : update.release
     ? `发现 ${update.release.versionName}，约 ${formatDesktopUpdateSize(update.release.sizeBytes)}`
     : update.checking
       ? '正在检查更新…'
@@ -50,12 +64,12 @@ export function DesktopUpdateSettings({ update }: { update: DesktopUpdateState }
           <RefreshCw size={16} />
           {update.checking ? '正在检查' : '检查更新'}
         </button>
-        {update.release && !update.nativeInstall ? (
-          <SaveInstallerLink className="secondary-command" release={update.release}>
+        {update.release && !update.pendingRelaunch && !update.nativeInstall ? (
+          <SaveInstallerLink className="secondary-command" onDownloaded={update.check} release={update.release}>
             <Download size={16} />
             下载 {update.release.versionName}
           </SaveInstallerLink>
-        ) : update.release ? (
+        ) : update.release && !update.pendingRelaunch ? (
           <button
             className="secondary-command"
             disabled={update.installing}
@@ -66,8 +80,8 @@ export function DesktopUpdateSettings({ update }: { update: DesktopUpdateState }
             {update.installing ? '正在更新…' : `更新 ${update.release.versionName}`}
           </button>
         ) : null}
-        {update.release && update.nativeInstall ? (
-          <SaveInstallerLink className="secondary-command" release={update.release}>保存安装包</SaveInstallerLink>
+        {update.release && update.nativeInstall && !update.pendingRelaunch ? (
+          <SaveInstallerLink className="secondary-command" onDownloaded={update.check} release={update.release}>保存安装包</SaveInstallerLink>
         ) : null}
       </div>
       {update.error && update.release ? <span className="form-error" role="alert">{update.error}</span> : null}
@@ -78,17 +92,19 @@ export function DesktopUpdateSettings({ update }: { update: DesktopUpdateState }
 function UpdateAction({
   installing,
   nativeInstall,
+  onDownloaded,
   onInstall,
   release,
 }: {
   installing: boolean
   nativeInstall: boolean
+  onDownloaded?: () => void
   onInstall: () => Promise<void>
   release: DesktopRelease
 }) {
   if (!nativeInstall) {
     return (
-      <SaveInstallerLink className="primary-action" release={release}>
+      <SaveInstallerLink className="primary-action" onDownloaded={onDownloaded} release={release}>
         <Download size={16} />
         下载 {release.versionName}
       </SaveInstallerLink>
@@ -105,10 +121,12 @@ function UpdateAction({
 function SaveInstallerLink({
   children,
   className,
+  onDownloaded,
   release,
 }: {
   children: ReactNode
   className: string
+  onDownloaded?: () => void
   release: DesktopRelease
 }) {
   const [status, setStatus] = useState<string | null>(null)
@@ -124,6 +142,7 @@ function SaveInstallerLink({
         onClick={() => {
           try {
             const fileName = startDesktopInstallerDownload(release)
+            onDownloaded?.()
             setStatus(`已保存到「下载」文件夹，请完全退出后再打开 ${fileName}`)
           } catch (cause) {
             setStatus(cause instanceof Error ? cause.message : '无法下载桌面更新')
@@ -140,7 +159,9 @@ function SaveInstallerLink({
 
 function updateHint(nativeInstall: boolean, downloadPath: string) {
   if (desktopPlatformFromPath(downloadPath) === 'darwin') {
-    return nativeInstall ? '下载后会打开安装盘，请把 Media Hub 拖到「应用程序」后重新打开' : '下载后请退出应用，打开安装盘并把 Media Hub 拖到「应用程序」'
+    return nativeInstall
+      ? '下载后会打开安装盘，请把 Media Hub 拖到「应用程序」，再按 Command+Q 完全退出后从「应用程序」打开'
+      : '请把 Media Hub 拖到「应用程序」，再按 Command+Q 完全退出，从「应用程序」打开。只关窗口会继续用旧版'
   }
   return nativeInstall
     ? '会自动安装并重新打开，大约半分钟'
