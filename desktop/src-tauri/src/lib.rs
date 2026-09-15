@@ -203,6 +203,8 @@ pub fn run() {
             player::native_status,
             player::toggle_native_window,
             player::set_native_cursor_visible,
+            player::open_player_window,
+            player::close_player_window,
         ])
         .setup(|app| {
             if app.get_webview_window("main").is_none() {
@@ -279,7 +281,7 @@ mod tests {
         assert_eq!(DESKTOP_ORIGIN, "https://media.himym.us.ci");
         let capabilities: serde_json::Value =
             serde_json::from_str(include_str!("../capabilities/default.json")).expect("capabilities");
-        assert_eq!(capabilities["windows"], serde_json::json!(["main", "browser"]));
+        assert_eq!(capabilities["windows"], serde_json::json!(["main", "browser", "player"]));
     }
 
     #[test]

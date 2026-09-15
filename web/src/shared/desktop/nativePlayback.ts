@@ -129,3 +129,25 @@ export async function setNativeCursorVisible(visible: boolean) {
     // Older shells hide the pointer with CSS only.
   }
 }
+
+export type OpenPlayerWindowRequest = {
+  playId: string
+  title?: string
+  seriesId?: string
+}
+
+export async function openPlayerWindow(request: OpenPlayerWindowRequest) {
+  await invokeNative('open_player_window', {
+    playId: request.playId,
+    title: request.title ?? '',
+    seriesId: request.seriesId ?? '',
+  })
+}
+
+export async function closePlayerWindow() {
+  try {
+    await invokeNative('close_player_window')
+  } catch {
+    if (typeof window.close === 'function') window.close()
+  }
+}

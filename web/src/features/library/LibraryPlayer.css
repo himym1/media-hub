@@ -1,3 +1,37 @@
+.player-shell-status {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 16px;
+  min-height: 100dvh;
+  padding: 32px 24px;
+  color: #c4c6bf;
+  background: #050607;
+  text-align: center;
+}
+
+.player-shell-status h1 {
+  max-width: 28rem;
+  color: #f2f1eb;
+  font-size: 28px;
+  line-height: 1.25;
+}
+
+.player-shell-status p {
+  max-width: 28rem;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.player-shell-status .primary-action {
+  width: auto;
+  min-width: 120px;
+  margin: 0;
+  padding: 0 18px;
+  text-decoration: none;
+}
+
 .library-player {
   position: fixed;
   inset: 0;

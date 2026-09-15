@@ -5,7 +5,11 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, Window};
+use tauri::webview::WebviewWindowBuilder;
+use tauri::{
+    AppHandle, Manager, PhysicalPosition, PhysicalSize, Url, WebviewUrl, WebviewWindow, Window,
+    WindowEvent,
+};
 
 use crate::{
     command_path_with_extras, decode_subtitle_base64, is_supported_playback_url, mpv_args,
@@ -13,6 +17,7 @@ use crate::{
 };
 
 pub const SURFACE_LABEL: &str = "mpv-surface";
+pub const PLAYER_LABEL: &str = "player";
 
 #[derive(Default)]
 pub struct PlayerState {
@@ -57,13 +62,17 @@ fn park_surface(surface: &Window) -> Result<(), String> {
     Ok(())
 }
 
+fn close_surface(app: &AppHandle) {
+    if let Some(surface) = app.get_window(SURFACE_LABEL) {
+        let _ = surface.close();
+    }
+}
+
 fn ensure_surface(app: &AppHandle) -> Result<Window, String> {
     if let Some(existing) = app.get_window(SURFACE_LABEL) {
         return Ok(existing);
     }
-    let Some(main) = app.get_window("main") else {
-        return Err("找不到应用窗口。".into());
-    };
+    let host = host_native_window(app)?;
     tauri::window::WindowBuilder::new(app, SURFACE_LABEL)
         .title(" ")
         .decorations(false)
@@ -72,7 +81,7 @@ fn ensure_surface(app: &AppHandle) -> Result<Window, String> {
         .visible(false)
         .inner_size(8.0, 8.0)
         .position(-20_000.0, -20_000.0)
-        .parent(&main)
+        .parent(&host)
         .map_err(|_| "无法准备播放画面。".to_string())?
         .build()
         .map_err(|_| "无法准备播放画面。".to_string())?;
@@ -83,9 +92,73 @@ fn ensure_surface(app: &AppHandle) -> Result<Window, String> {
     Ok(surface)
 }
 
+fn host_window(app: &AppHandle) -> Result<WebviewWindow, String> {
+    app.get_webview_window(PLAYER_LABEL)
+        .or_else(|| app.get_webview_window("main"))
+        .ok_or_else(|| "找不到应用窗口。".into())
+}
+
+fn host_native_window(app: &AppHandle) -> Result<Window, String> {
+    app.get_window(PLAYER_LABEL)
+        .or_else(|| app.get_window("main"))
+        .ok_or_else(|| "找不到应用窗口。".into())
+}
+
 fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {
     app.get_webview_window("main")
         .ok_or_else(|| "找不到应用窗口。".into())
+}
+
+pub(crate) fn sanitized_item_id(value: &str) -> Result<&str, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.len() > 64 {
+        return Err("播放条目无效。".into());
+    }
+    if !trimmed
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+    {
+        return Err("播放条目无效。".into());
+    }
+    Ok(trimmed)
+}
+
+pub(crate) fn player_window_title(title: Option<&str>) -> String {
+    let trimmed = title.unwrap_or("").replace(['\n', '\r'], " ");
+    let trimmed = trimmed.trim();
+    if trimmed.is_empty() || trimmed.len() > 80 {
+        "播放".into()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+pub(crate) fn player_page_url(play_id: &str, series_id: Option<&str>) -> Result<Url, String> {
+    let play = sanitized_item_id(play_id)?;
+    let mut href = format!("{}/?view=player&play={play}", crate::DESKTOP_ORIGIN);
+    if let Some(series) = series_id.map(str::trim).filter(|value| !value.is_empty()) {
+        href.push_str("&series=");
+        href.push_str(sanitized_item_id(series)?);
+    }
+    Url::parse(&href).map_err(|_| "无法打开播放窗口。".to_string())
+}
+
+fn restore_host_chrome(app: &AppHandle) {
+    if let Some(player) = app.get_webview_window(PLAYER_LABEL) {
+        let _ = player.set_cursor_visible(true);
+        let _ = player.set_fullscreen(false);
+        return;
+    }
+    if let Ok(window) = main_window(app) {
+        let _ = window.set_cursor_visible(true);
+        let _ = window.set_fullscreen(false);
+    }
+}
+
+fn teardown_player_window(app: &AppHandle, state: &PlayerState) {
+    stop_child(state);
+    close_surface(app);
+    restore_host_chrome(app);
 }
 
 fn surface_window(app: &AppHandle) -> Result<Window, String> {
@@ -466,9 +539,9 @@ pub fn play_native(
         }
         None => None,
     };
-    let main = main_window(&app)?;
+    let host = host_window(&app)?;
     let surface = ensure_surface(&app)?;
-    apply_bounds(&main, &surface, &bounds)?;
+    apply_bounds(&host, &surface, &bounds)?;
     surface.show().map_err(|_| "无法打开播放画面。".to_string())?;
     // Keep the webview on top for mouse-move / double-click; mpv only paints.
     let _ = surface.set_ignore_cursor_events(true);
@@ -483,8 +556,11 @@ pub fn play_native(
         sub_path.as_deref(),
         &state,
     )?;
-    let _ = main.set_fullscreen(true);
-    let _ = main.set_focus();
+    // Dedicated player stays windowed; only the old in-main overlay needs fullscreen.
+    if app.get_webview_window(PLAYER_LABEL).is_none() {
+        let _ = host.set_fullscreen(true);
+    }
+    let _ = host.set_focus();
     Ok(())
 }
 
@@ -493,7 +569,7 @@ pub fn layout_native(app: AppHandle, bounds: EmbedBounds) -> Result<(), String> 
     let Ok(surface) = surface_window(&app) else {
         return Ok(());
     };
-    apply_bounds(&main_window(&app)?, &surface, &bounds)?;
+    apply_bounds(&host_window(&app)?, &surface, &bounds)?;
     let _ = surface.set_ignore_cursor_events(true);
     Ok(())
 }
@@ -504,16 +580,13 @@ pub fn stop_native(app: AppHandle, state: tauri::State<PlayerState>) -> Result<(
     if let Ok(surface) = surface_window(&app) {
         let _ = park_surface(&surface);
     }
-    if let Ok(window) = main_window(&app) {
-        let _ = window.set_cursor_visible(true);
-        let _ = window.set_fullscreen(false);
-    }
+    restore_host_chrome(&app);
     Ok(())
 }
 
 #[tauri::command]
 pub fn set_native_cursor_visible(app: AppHandle, visible: bool) -> Result<(), String> {
-    main_window(&app)?
+    host_window(&app)?
         .set_cursor_visible(visible)
         .map_err(|_| "无法切换鼠标指针。".to_string())
 }
@@ -528,11 +601,61 @@ pub fn native_control(action: String, value: Option<f64>, mode: Option<String>) 
 
 #[tauri::command]
 pub fn toggle_native_window(app: AppHandle) -> Result<(), String> {
-    let window = main_window(&app)?;
+    let window = host_window(&app)?;
     let fullscreen = window.is_fullscreen().unwrap_or(false);
     window
         .set_fullscreen(!fullscreen)
         .map_err(|_| "无法切换全屏。".to_string())
+}
+
+#[tauri::command]
+pub fn open_player_window(
+    app: AppHandle,
+    play_id: String,
+    title: Option<String>,
+    series_id: Option<String>,
+) -> Result<(), String> {
+    let url = player_page_url(&play_id, series_id.as_deref())?;
+    let title = player_window_title(title.as_deref());
+    if let Some(existing) = app.get_webview_window(PLAYER_LABEL) {
+        existing
+            .navigate(url)
+            .map_err(|_| "无法打开播放窗口。".to_string())?;
+        let _ = existing.set_title(&title);
+        let _ = existing.show();
+        let _ = existing.set_focus();
+        return Ok(());
+    }
+    let window = WebviewWindowBuilder::new(&app, PLAYER_LABEL, WebviewUrl::External(url))
+        .title(title)
+        .inner_size(1280.0, 800.0)
+        .min_inner_size(720.0, 480.0)
+        .decorations(true)
+        .skip_taskbar(false)
+        .center()
+        .build()
+        .map_err(|_| "无法打开播放窗口。".to_string())?;
+    let handle = app.clone();
+    window.on_window_event(move |event| {
+        if matches!(
+            event,
+            WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed
+        ) {
+            if let Some(state) = handle.try_state::<PlayerState>() {
+                teardown_player_window(&handle, &state);
+            }
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn close_player_window(app: AppHandle, state: tauri::State<PlayerState>) -> Result<(), String> {
+    teardown_player_window(&app, &state);
+    if let Some(window) = app.get_webview_window(PLAYER_LABEL) {
+        let _ = window.close();
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -624,5 +747,26 @@ mod tests {
             sid_from_track_list(&serde_json::json!([{"id": 1, "type": "sub", "external": false}])),
             Some(1)
         );
+    }
+
+    #[test]
+    fn player_ids_stay_short_and_plain() {
+        assert_eq!(sanitized_item_id("item-1").expect("id"), "item-1");
+        assert_eq!(sanitized_item_id(" r_12 ").expect("shared"), "r_12");
+        assert!(sanitized_item_id("").is_err());
+        assert!(sanitized_item_id("https://cdn.example/x").is_err());
+        assert!(sanitized_item_id("item/1").is_err());
+    }
+
+    #[test]
+    fn player_page_stays_on_the_desktop_origin() {
+        let url = player_page_url("item-1", Some("series-2")).expect("url");
+        assert_eq!(
+            url.as_str(),
+            "https://media.himym.us.ci/?view=player&play=item-1&series=series-2"
+        );
+        assert!(player_page_url("https://evil.example", None).is_err());
+        assert_eq!(player_window_title(Some("  范海辛\n续  ")), "范海辛 续");
+        assert_eq!(player_window_title(None), "播放");
     }
 }

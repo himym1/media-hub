@@ -22,7 +22,7 @@ import {
   type EmbyItemDetail,
   type EmbyRemoteSubtitle,
 } from '../../shared/api/mediaHub'
-import { canPlayNatively } from '../../shared/desktop/nativePlayback'
+import { canPlayNatively, openPlayerWindow } from '../../shared/desktop/nativePlayback'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
 import { LibraryEpisodes } from './LibraryEpisodes'
@@ -183,8 +183,11 @@ export function LibraryView() {
   }
   const startPlay = (target: Pick<EmbyEpisode, 'id' | 'name' | 'externalUrl'>) => {
     if (!inPagePlayback) return
-    setPlayId(target.id)
-    commitUrl({ play: target.id })
+    const seriesId = detail.data?.type === 'Series' ? detail.data.id : undefined
+    void openPlayerWindow({ playId: target.id, title: target.name, seriesId }).catch(() => {
+      setPlayId(target.id)
+      commitUrl({ play: target.id })
+    })
   }
   const closePlay = () => {
     setPlayId(null)
@@ -232,9 +235,9 @@ export function LibraryView() {
     : undefined
 
   return (
-    <section className="library-page">
+    <section className={itemId ? 'library-page has-detail' : 'library-page'}>
       <header className="view-header compact-view-header">
-        <div><h1>媒体库</h1><p>浏览已入库内容，查看媒体信息并按需刷新元数据。</p></div>
+        <div><h1>媒体库</h1><p>已入库的电影和剧集。</p></div>
         <IconButton label="刷新媒体库列表" onClick={() => void libraries.refetch()} subtle><RefreshCw size={17} /></IconButton>
       </header>
 
@@ -247,6 +250,7 @@ export function LibraryView() {
       ) : null}
       {mutationError ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{mutationError.message}</span></div> : null}
 
+      <div className="library-browse">
       {hasShared ? (
         <div className="library-scope" role="tablist" aria-label="媒体库来源">
           <button aria-selected={scope === 'mine'} className={scope === 'mine' ? 'library-scope-button selected' : 'library-scope-button'} onClick={() => selectScope('mine')} role="tab" type="button">我的库</button>
@@ -290,7 +294,6 @@ export function LibraryView() {
         {selectedLibrary && !submittedQuery && !isSharedEmbyId(selectedLibrary.id) ? <button className="secondary-command" disabled={refreshLibrary.isPending} onClick={() => refreshLibrary.mutate(selectedLibrary.id)} type="button"><RefreshCw size={16} />{refreshLibrary.isPending ? '已提交…' : '刷新此库'}</button> : null}
       </div>
 
-      <div className={itemId ? 'library-browser has-detail' : 'library-browser'}>
         <div className="library-results">
           <div className="library-results-heading">
             <div>
@@ -312,15 +315,19 @@ export function LibraryView() {
             {items.map((item) => <LibraryPosterCard item={item} key={item.id} selected={item.id === itemId} onSelect={selectItem} />)}
           </div>
         </div>
+      </div>
 
+      {itemId ? (
         <aside className="library-detail" aria-label="媒体详情">
-          {itemId ? <div className="library-detail-back"><IconButton label="返回媒体列表" onClick={closeItem} subtle><ChevronLeft size={17} /></IconButton><span>返回媒体列表</span></div> : null}
-          {!itemId ? <div className="library-detail-empty"><Film size={28} /><strong>选择一个媒体</strong><span>查看简介、年份和播放信息。</span></div> : null}
+          <button className="library-detail-back" onClick={closeItem} type="button">
+            <ChevronLeft aria-hidden="true" size={18} />
+            返回媒体列表
+          </button>
           {detail.isLoading && !detail.data ? <div className="status-loading">正在读取媒体详情…</div> : null}
           {detail.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>详情读取失败</strong><span>{detail.error.message}</span></div><button onClick={() => void detail.refetch()} type="button">重试</button></div> : null}
           {detail.data ? <LibraryItemDetail inPagePlayback={inPagePlayback} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} shared={isSharedEmbyId(detail.data.id)} /> : null}
         </aside>
-      </div>
+      ) : null}
       {inPagePlayback && playTarget ? (
         <LibraryPlayer
           externalUrl={playTarget.externalUrl}
@@ -415,7 +422,7 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
     <div className="library-detail-hero">
       <div className="library-detail-poster">
         {!posterFailed ? (
-          <img alt="" decoding="async" height={300} onError={() => setPosterFailed(true)} src={embyPrimaryImageURL(item.id)} width={200} />
+          <img alt="" decoding="async" height={360} onError={() => setPosterFailed(true)} src={embyPrimaryImageURL(item.id)} width={240} />
         ) : (
           <span className="library-poster-fallback" aria-hidden="true"><Film size={36} /></span>
         )}
@@ -438,6 +445,18 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
           )}
         </dl>
         {genres.length ? <div className="library-genres">{genres.map((genre) => <span key={genre}>{genre}</span>)}</div> : null}
+        {item.type === 'Series' ? null : (
+          <div className="library-detail-actions library-detail-actions-primary">
+            <LibraryWatchAction
+              busy={busy}
+              externalUrl={item.externalUrl}
+              inPage={inPagePlayback}
+              item={item}
+              name={item.name}
+              onPlay={() => onPlay(item)}
+            />
+          </div>
+        )}
       </div>
     </div>
     <p className="library-overview">{item.overview || '暂未提供简介。'}</p>
@@ -450,17 +469,7 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
       </dl>
     </details>
     {shared ? <p className="library-shared-note">共享库只读；播放由播放设备直连 Emby（通常经代理）。</p> : null}
-    <div className="library-detail-actions">
-      {item.type === 'Series' ? null : (
-        <LibraryWatchAction
-          busy={busy}
-          externalUrl={item.externalUrl}
-          inPage={inPagePlayback}
-          item={item}
-          name={item.name}
-          onPlay={() => onPlay(item)}
-        />
-      )}
+    <div className="library-detail-actions library-detail-actions-secondary">
       {shared ? null : <button className="secondary-command" disabled={busy} onClick={() => onRefresh(item.id)} type="button"><RefreshCw size={16} />{refreshing ? '已提交…' : '刷新元数据'}</button>}
       {shared ? null : canSearchSubtitles ? (
         <button

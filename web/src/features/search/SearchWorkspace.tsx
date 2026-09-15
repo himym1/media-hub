@@ -5,6 +5,8 @@ import { getSystemOverview, listTransfers, type Candidate } from '../../shared/a
 import { useDesktopUpdate } from '../../shared/desktop/useDesktopUpdate'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { LibraryView } from '../library/LibraryView'
+import { PlayerShell } from '../library/PlayerShell'
+import { isPlayerView } from '../library/playerRoute'
 import { OperationsView } from '../operations/OperationsView'
 import { DesktopUpdateBanner } from '../settings/DesktopUpdatePanel'
 import { SettingsView } from '../settings/SettingsView'
@@ -47,7 +49,12 @@ function viewFromLocation(): WorkspaceView {
   return slugViews[new URLSearchParams(window.location.search).get('view') ?? ''] ?? '发现'
 }
 
-export function SearchWorkspace({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
+export function SearchWorkspace(props: SearchWorkspaceProps) {
+  if (isPlayerView()) return <PlayerShell />
+  return <WorkspaceShell {...props} />
+}
+
+function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
   const desktopUpdate = useDesktopUpdate()
   const [activeView, setActiveView] = useState<WorkspaceView>(viewFromLocation)
   const [draftSubscription, setDraftSubscription] = useState<Candidate | null>(null)

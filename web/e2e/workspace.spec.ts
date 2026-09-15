@@ -158,13 +158,11 @@ test('library supports browsing item details and safe Emby actions', async ({ pa
   await expect(page).not.toHaveURL(/media=item-1/)
   await page.goBack()
   await expect(page.getByRole('heading', { name: '验收影片', level: 2 })).toBeVisible()
-  if (testInfo.project.name === 'mobile') {
-    await expect(page.getByRole('button', { name: '返回媒体列表' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: '验收影片', level: 2 })).toBeInViewport()
-    await expect(page.getByRole('button', { name: /验收影片/ })).toBeHidden()
-    await page.getByRole('button', { name: '返回媒体列表' }).click()
-    await expect(page.getByRole('button', { name: /验收影片/ })).toBeVisible()
-  }
+  await expect(page.getByRole('button', { name: '返回媒体列表' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '验收影片', level: 2 })).toBeInViewport()
+  await expect(page.getByRole('button', { name: /验收影片/ })).toBeHidden()
+  await page.getByRole('button', { name: '返回媒体列表' }).click()
+  await expect(page.getByRole('button', { name: /验收影片/ })).toBeVisible()
 })
 
 test('library previews and confirms Emby delete without touching 115 files', async ({ page }, testInfo) => {
@@ -200,6 +198,16 @@ test('library opens Emby from the web instead of an in-page player', async ({ pa
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page).not.toHaveURL(/play=item-1/)
   await attachScreenshot(page, testInfo, 'library-emby-open')
+})
+
+test('player view stays out of the web library chrome', async ({ page }) => {
+  await installApiFixtures(page)
+  await page.goto('/?view=player&play=item-1')
+  await expect(page.getByRole('heading', { name: '验收影片' })).toBeVisible()
+  await expect(page.getByText('请在桌面应用中播放，或在 Emby 打开。')).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: '主导航' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: '在 Emby 打开' })).toHaveAttribute('href', 'https://emby.example/web/index.html#!/item?id=item-1')
 })
 
 test('library series opens Emby per episode and keeps a page-level play button off the detail', async ({ page }) => {

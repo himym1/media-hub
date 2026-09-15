@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { boundsFromElement, bytesToBase64, canPlayNatively, controlNatively, nativeSubtitleFromBytes, playNatively, setNativeCursorVisible, toggleNativeWindow } from './nativePlayback'
+import { boundsFromElement, bytesToBase64, canPlayNatively, closePlayerWindow, controlNatively, nativeSubtitleFromBytes, openPlayerWindow, playNatively, setNativeCursorVisible, toggleNativeWindow } from './nativePlayback'
 
 afterEach(() => {
   delete (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
@@ -93,5 +93,25 @@ describe('nativePlayback', () => {
     expect(invoke).toHaveBeenCalledWith('set_native_cursor_visible', { visible: false })
     invoke.mockRejectedValueOnce('missing')
     await expect(setNativeCursorVisible(true)).resolves.toBeUndefined()
+  })
+
+  it('opens a dedicated player window', async () => {
+    const invoke = vi.fn(async () => undefined)
+    ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
+    await openPlayerWindow({ playId: 'item-1', title: '验收影片', seriesId: 'series-2' })
+    expect(invoke).toHaveBeenCalledWith('open_player_window', {
+      playId: 'item-1',
+      title: '验收影片',
+      seriesId: 'series-2',
+    })
+  })
+
+  it('closes the player window without throwing on older shells', async () => {
+    const invoke = vi.fn(async () => undefined)
+    ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
+    await closePlayerWindow()
+    expect(invoke).toHaveBeenCalledWith('close_player_window', {})
+    invoke.mockRejectedValueOnce('missing')
+    await expect(closePlayerWindow()).resolves.toBeUndefined()
   })
 })
