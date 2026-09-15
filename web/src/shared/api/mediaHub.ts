@@ -271,6 +271,7 @@ export type EmbyLibrary = {
   id: string
   name: string
   collectionType?: string
+  parentId?: string
 }
 
 export type EmbyItem = {

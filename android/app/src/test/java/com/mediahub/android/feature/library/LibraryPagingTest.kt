@@ -1,5 +1,6 @@
 package com.mediahub.android.feature.library
 
+import com.mediahub.android.core.network.MediaLibrary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -16,5 +17,18 @@ class LibraryPagingTest {
         assertEquals(true, libraryHasMore(itemCount = 24, total = 25, searching = false))
         assertEquals(false, libraryHasMore(itemCount = 25, total = 25, searching = false))
         assertEquals(false, libraryHasMore(itemCount = 8, total = 25, searching = true))
+    }
+
+    @Test
+    fun adultGroupsStayOffTheRootTabRow() {
+        val libraries = listOf(
+            MediaLibrary(id = "movies", name = "电影", collectionType = "movies"),
+            MediaLibrary(id = AdultLibraryId, name = "成人影视", collectionType = "movies"),
+            MediaLibrary(id = "group-jp", name = "日本", collectionType = "movies", parentId = AdultLibraryId),
+        )
+        assertEquals(listOf("movies", AdultLibraryId), rootLibraries(libraries).map { it.id })
+        assertEquals(listOf("group-jp"), childLibraries(libraries, AdultLibraryId).map { it.id })
+        assertEquals(AdultLibraryId, libraryRootId(libraries, "group-jp"))
+        assertEquals("movies", libraryRootId(libraries, "movies"))
     }
 }

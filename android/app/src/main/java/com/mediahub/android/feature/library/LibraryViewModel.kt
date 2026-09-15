@@ -266,3 +266,20 @@ internal fun nextLibraryPage(current: Int, delta: Int, total: Int): Int? {
 
 internal fun libraryHasMore(itemCount: Int, total: Int, searching: Boolean): Boolean =
     !searching && itemCount < total.coerceAtLeast(0)
+
+internal const val AdultLibraryId = "adult"
+
+internal fun rootLibraries(libraries: List<MediaLibrary>) =
+    libraries.filter { it.parentId.isNullOrBlank() }
+
+internal fun childLibraries(libraries: List<MediaLibrary>, parentId: String) =
+    libraries.filter { it.parentId == parentId }
+
+internal fun libraryRootId(libraries: List<MediaLibrary>, selectedId: String?): String? {
+    val selected = libraries.firstOrNull { it.id == selectedId }
+    return if (selectedId == AdultLibraryId || selected?.parentId == AdultLibraryId) {
+        AdultLibraryId
+    } else {
+        selectedId
+    }
+}

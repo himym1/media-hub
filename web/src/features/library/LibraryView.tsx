@@ -49,6 +49,7 @@ import { LibraryEpisodes } from './LibraryEpisodes'
 import { LibraryPlayer } from './LibraryPlayer'
 import { LibraryWatchAction } from './LibraryWatchAction'
 import { episodeLabel, playbackStatus } from './libraryPlayback'
+import { adultLibraryId, childLibraries, libraryRootId, rootLibraries } from './libraryGroups'
 
 const pageSize = 24
 
@@ -88,6 +89,9 @@ export function LibraryView() {
 
   const libraries = useQuery({ queryKey: ['emby-libraries'], queryFn: getEmbyLibraries })
   const allLibraries = useMemo(() => libraries.data?.libraries ?? [], [libraries.data?.libraries])
+  const topLibraries = useMemo(() => rootLibraries(allLibraries), [allLibraries])
+  const adultGroups = useMemo(() => childLibraries(allLibraries, adultLibraryId), [allLibraries])
+  const selectedRootId = libraryRootId(allLibraries, libraryId)
   const libraryItems = useQuery({
     queryKey: ['emby-library-items', libraryId, page],
     queryFn: () => getEmbyLibraryItems(libraryId!, page * pageSize, pageSize),
@@ -276,7 +280,7 @@ export function LibraryView() {
       <div className="library-browse">
         <div className="library-header-bar">
           <div className="library-nav-cluster">
-            {allLibraries.length > 3 ? (
+            {topLibraries.length > 3 ? (
               <button
                 aria-label="向左滚动媒体库"
                 className="library-nav-scroll-btn left"
@@ -294,10 +298,10 @@ export function LibraryView() {
               onWheel={handleTabsWheel}
               ref={tabsRef}
             >
-              {allLibraries.map((library) => {
+              {topLibraries.map((library) => {
                 const typeLabel = libraryCollectionLabel(library.collectionType)
                 const name = library.name
-                const isSelected = library.id === libraryId
+                const isSelected = library.id === selectedRootId
                 const Icon = getLibraryIcon(name, library.collectionType)
                 return (
                   <button
@@ -317,7 +321,7 @@ export function LibraryView() {
               })}
             </nav>
 
-            {allLibraries.length > 3 ? (
+            {topLibraries.length > 3 ? (
               <button
                 aria-label="向右滚动媒体库"
                 className="library-nav-scroll-btn right"
@@ -338,7 +342,7 @@ export function LibraryView() {
                 type="button"
               >
                 <LayoutGrid size={14} />
-                <span>全部 ({allLibraries.length})</span>
+                <span>全部 ({topLibraries.length})</span>
                 {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </button>
             ) : null}
@@ -409,13 +413,37 @@ export function LibraryView() {
           </div>
         </div>
 
+        {selectedRootId === adultLibraryId && adultGroups.length > 0 ? (
+          <nav aria-label="成人影视分组" className="library-group-chips">
+            <button
+              aria-pressed={libraryId === adultLibraryId}
+              className={libraryId === adultLibraryId ? 'library-group-chip active' : 'library-group-chip'}
+              onClick={() => selectLibrary(adultLibraryId)}
+              type="button"
+            >
+              全部
+            </button>
+            {adultGroups.map((group) => (
+              <button
+                aria-pressed={libraryId === group.id}
+                className={libraryId === group.id ? 'library-group-chip active' : 'library-group-chip'}
+                key={group.id}
+                onClick={() => selectLibrary(group.id)}
+                type="button"
+              >
+                {group.name}
+              </button>
+            ))}
+          </nav>
+        ) : null}
+
         {isExpanded ? (
           <div aria-label="全部媒体库" className="library-expand-panel" role="region">
             <div className="library-expand-header">
               <div className="library-expand-title">
                 <LayoutGrid size={15} />
                 <span>全部媒体库</span>
-                <span className="library-expand-badge">{allLibraries.length} 个分类</span>
+                <span className="library-expand-badge">{topLibraries.length} 个分类</span>
               </div>
               <button
                 className="library-expand-close-btn"
@@ -427,10 +455,10 @@ export function LibraryView() {
               </button>
             </div>
             <div className="library-expand-grid">
-              {allLibraries.map((library) => {
+              {topLibraries.map((library) => {
                 const typeLabel = libraryCollectionLabel(library.collectionType)
                 const name = library.name
-                const isSelected = library.id === libraryId
+                const isSelected = library.id === selectedRootId
                 const Icon = getLibraryIcon(name, library.collectionType)
                 return (
                   <button

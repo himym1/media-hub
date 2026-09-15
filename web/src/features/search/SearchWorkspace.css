@@ -524,6 +524,37 @@ h1 em { color: var(--accent); font-style: normal; }
   color: inherit;
 }
 
+.library-group-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 4px 4px;
+}
+
+.library-group-chip {
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.library-group-chip:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+
+.library-group-chip.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+
 .tab-type {
   font-size: 11px;
   opacity: 0.65;

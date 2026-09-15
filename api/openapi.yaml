@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.21.10
+  version: 0.21.11
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -2218,6 +2218,8 @@ components:
         name:
           type: string
         collectionType:
+          type: string
+        parentId:
           type: string
     EmbyItemSearchResponse:
       type: object

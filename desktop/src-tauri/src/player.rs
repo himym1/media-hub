@@ -639,9 +639,6 @@ pub fn play_native(
             sub_path.as_deref(),
             &state,
         )?;
-        if app.get_webview_window(PLAYER_LABEL).is_none() {
-            let _ = host.set_fullscreen(true);
-        }
     } else {
         let geometry = windowed_geometry(&host, &bounds)?;
         spawn_mpv(
@@ -691,15 +688,15 @@ pub fn layout_native(
     state: tauri::State<PlayerState>,
     bounds: EmbedBounds,
 ) -> Result<(), String> {
+    if !should_apply_windowed_layout(state.windowed_fullscreen.load(Ordering::SeqCst)) {
+        return Ok(());
+    }
     if host_embed_supported() {
         let Ok(surface) = surface_window(&app) else {
             return Ok(());
         };
         apply_bounds(&host_window(&app)?, &surface, &bounds)?;
         let _ = surface.set_ignore_cursor_events(true);
-        return Ok(());
-    }
-    if !should_apply_windowed_layout(state.windowed_fullscreen.load(Ordering::SeqCst)) {
         return Ok(());
     }
     let host = host_window(&app)?;
@@ -749,15 +746,7 @@ pub async fn native_control(action: String, value: Option<f64>, mode: Option<Str
 }
 
 #[tauri::command]
-pub fn toggle_native_window(app: AppHandle, state: tauri::State<PlayerState>) -> Result<(), String> {
-    if host_embed_supported() {
-        let window = host_window(&app)?;
-        let fullscreen = window.is_fullscreen().unwrap_or(false);
-        window
-            .set_fullscreen(!fullscreen)
-            .map_err(|_| "无法切换全屏。".to_string())?;
-        return Ok(());
-    }
+pub fn toggle_native_window(state: tauri::State<PlayerState>) -> Result<(), String> {
     let next = !state.windowed_fullscreen.load(Ordering::SeqCst);
     state.windowed_fullscreen.store(next, Ordering::SeqCst);
     let geometry = state

@@ -191,12 +191,23 @@ internal fun LibraryScreen(
             .fillMaxSize()
             .padding(horizontal = 12.dp),
     ) {
-        if (uiState.libraries.size >= 2) {
+        val topLibraries = rootLibraries(uiState.libraries)
+        val adultGroups = childLibraries(uiState.libraries, AdultLibraryId)
+        val selectedRootId = libraryRootId(uiState.libraries, uiState.selectedLibraryId).orEmpty()
+        if (topLibraries.size >= 2) {
             MediaHubTabRow(
-                options = uiState.libraries.map { it.id to it.name },
-                selected = uiState.selectedLibraryId.orEmpty(),
+                options = topLibraries.map { it.id to it.name },
+                selected = selectedRootId,
                 onSelected = actions.onSelectLibrary,
                 modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+            )
+        }
+        if (selectedRootId == AdultLibraryId && adultGroups.isNotEmpty()) {
+            MediaHubTabRow(
+                options = listOf(AdultLibraryId to "全部") + adultGroups.map { it.id to it.name },
+                selected = uiState.selectedLibraryId.orEmpty(),
+                onSelected = actions.onSelectLibrary,
+                modifier = Modifier.padding(bottom = 4.dp),
             )
         }
         MediaHubSearchField(

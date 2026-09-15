@@ -27,7 +27,12 @@ func (c *Client) listLocalLibraries(ctx context.Context, configuration clientCon
 		views = nil
 	}
 	folders, _ := c.readEmbyMediaFolders(ctx, configuration)
-	libraries, adultIDs := mergeLocalLibraries(configuration, views, folders)
+	libraries, adultSources := mergeLocalLibraries(configuration, views, folders)
+	adultIDs := make([]string, 0, len(adultSources))
+	for _, source := range adultSources {
+		adultIDs = append(adultIDs, source.ID)
+	}
+	libraries = append(libraries, c.collectAdultGroups(ctx, configuration, adultSources)...)
 	c.storeLocalLibraries(libraries, adultIDs)
 	return libraries
 }
@@ -90,11 +95,11 @@ func configuredLibraries(configuration clientConfig) []Library {
 	return libraries
 }
 
-func mergeLocalLibraries(configuration clientConfig, views, folders []baseItem) ([]Library, []string) {
+func mergeLocalLibraries(configuration clientConfig, views, folders []baseItem) ([]Library, []Library) {
 	libraries := configuredLibraries(configuration)
 	seen := make(map[string]struct{}, len(libraries)+len(views)+len(folders))
 	adultSeen := make(map[string]struct{})
-	adultIDs := make([]string, 0)
+	adultSources := make([]Library, 0)
 	collectAdult := func(item baseItem) {
 		if !isAdultFolder(item) {
 			return
@@ -103,7 +108,11 @@ func mergeLocalLibraries(configuration clientConfig, views, folders []baseItem) 
 			return
 		}
 		adultSeen[item.ID] = struct{}{}
-		adultIDs = append(adultIDs, item.ID)
+		adultSources = append(adultSources, Library{
+			ID:             item.ID,
+			Name:           item.Name,
+			CollectionType: strings.TrimSpace(item.CollectionType),
+		})
 	}
 	for _, library := range libraries {
 		seen[library.ID] = struct{}{}
@@ -127,7 +136,7 @@ func mergeLocalLibraries(configuration clientConfig, views, folders []baseItem) 
 		collectAdult(item)
 	}
 	libraries = append(libraries, adultLibrary())
-	return libraries, adultIDs
+	return libraries, adultSources
 }
 
 func isBrowsableLocalView(item baseItem) bool {

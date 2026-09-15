@@ -75,6 +75,7 @@ type Library struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
 	CollectionType string `json:"collectionType,omitempty"`
+	ParentID       string `json:"parentId,omitempty"`
 }
 
 type Item struct {
@@ -466,6 +467,9 @@ func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limi
 	}
 	if isAdultLibraryID(libraryID) {
 		return c.browseAdultItems(ctx, configuration, offset, limit)
+	}
+	if adultGroupAllowed(c.listLocalLibraries(ctx, configuration), libraryID) {
+		return c.browseAdultGroup(ctx, configuration, libraryID, offset, limit)
 	}
 	query := url.Values{
 		"Fields":           {"OfficialRating,Genres,ProviderIds,UserData,MediaSources,Path"},

@@ -327,6 +327,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
                         id = item.getString("id"),
                         name = item.getString("name"),
                         collectionType = item.optionalString("collectionType"),
+                        parentId = item.optionalString("parentId"),
                     ),
                 )
             }

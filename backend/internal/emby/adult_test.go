@@ -66,13 +66,14 @@ func TestLibrariesHidesAdultFoldersAndAddsAggregateTab(t *testing.T) {
 	for _, library := range libraries {
 		ids = append(ids, library.ID+"/"+library.Name)
 	}
-	if len(libraries) != 3 || libraries[0].ID != "library-movies" || libraries[1].ID != "pt-movies" ||
-		libraries[2].ID != adultLibraryID || libraries[2].Name != adultLibraryName {
+	if len(libraries) != 4 || libraries[0].ID != "library-movies" || libraries[1].ID != "pt-movies" ||
+		libraries[2].ID != adultLibraryID || libraries[2].Name != adultLibraryName ||
+		libraries[3].ID != "adult-folder" || libraries[3].ParentID != adultLibraryID || libraries[3].Name != "成人电影" {
 		t.Fatalf("libraries=%v", ids)
 	}
 	for _, library := range libraries {
-		if library.ID == "adult-folder" || library.Name == "成人电影" {
-			t.Fatalf("source adult folder leaked: %#v", library)
+		if library.ID == "adult-folder" && library.ParentID != adultLibraryID {
+			t.Fatalf("source adult folder leaked as a root tab: %#v", library)
 		}
 	}
 	if got := client.cachedAdultFolderIDs(); len(got) != 1 || got[0] != "adult-folder" {
@@ -147,5 +148,75 @@ func TestBrowseMovesAdultItemsIntoAggregateLibrary(t *testing.T) {
 	}
 	if !ids["hidden-1"] || !ids["pt-adult"] || !ids["hidden-video"] {
 		t.Fatalf("adult ids=%v", ids)
+	}
+	group, err := client.BrowseItems(context.Background(), "adult-folder", 0, 10)
+	if err != nil || group.Total != 2 {
+		t.Fatalf("adult group=%#v err=%v", group, err)
+	}
+}
+
+func TestAdultGroupsUseFirstLevelFolders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Users/user-1/Views":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"Items": []map[string]any{
+					{"Id": "library-movies", "Name": "电影", "CollectionType": "movies"},
+				},
+			})
+		case "/Library/MediaFolders":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"Items": []map[string]any{
+					{"Id": "adult-folder", "Name": "成人电影", "CollectionType": "movies"},
+				},
+			})
+		case "/Items":
+			query := request.URL.Query()
+			if query.Get("Recursive") == "false" && query.Get("ParentId") == "adult-folder" {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"Items": []map[string]any{
+						{"Id": "group-jp", "Name": "日本", "Type": "Folder"},
+						{"Id": "group-eu", "Name": "欧美", "Type": "Folder"},
+					},
+				})
+				return
+			}
+			switch query.Get("ParentId") {
+			case "group-jp":
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"Items": []map[string]any{
+						{"Id": "jp-1", "Name": "JP", "Type": "Movie", "Path": "/volume4/media/成人/日本/JP.mkv"},
+					},
+				})
+			case "adult-folder":
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"Items": []map[string]any{
+						{"Id": "jp-1", "Name": "JP", "Type": "Movie", "Path": "/volume4/media/成人/日本/JP.mkv"},
+						{"Id": "eu-1", "Name": "EU", "Type": "Movie", "Path": "/volume4/media/成人/欧美/EU.mkv"},
+					},
+				})
+			default:
+				_ = json.NewEncoder(w).Encode(map[string]any{"Items": []any{}})
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key", time.Second, "user-1")
+	client.Configure(RuntimeConfig{BaseURL: server.URL, APIKey: "test-key", UserID: "user-1"})
+	libraries, err := client.Libraries(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(libraries) != 4 || libraries[1].ID != adultLibraryID ||
+		libraries[2].ID != "group-jp" || libraries[2].ParentID != adultLibraryID ||
+		libraries[3].ID != "group-eu" || libraries[3].ParentID != adultLibraryID {
+		t.Fatalf("libraries=%#v", libraries)
+	}
+	group, err := client.BrowseItems(context.Background(), "group-jp", 0, 10)
+	if err != nil || group.Total != 1 || group.Items[0].ID != "jp-1" {
+		t.Fatalf("group browse=%#v err=%v", group, err)
 	}
 }

@@ -343,6 +343,7 @@ data class MediaLibrary(
     val id: String,
     val name: String,
     val collectionType: String?,
+    val parentId: String? = null,
 )
 
 data class EmbyItem(

@@ -119,6 +119,100 @@ func excludeAdultItems(items []baseItem) []baseItem {
 	return filtered
 }
 
+func adultGroupAllowed(libraries []Library, libraryID string) bool {
+	libraryID = strings.TrimSpace(libraryID)
+	if libraryID == "" || isAdultLibraryID(libraryID) {
+		return false
+	}
+	for _, library := range libraries {
+		if library.ID == libraryID && library.ParentID == adultLibraryID {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Client) collectAdultGroups(ctx context.Context, configuration clientConfig, sources []Library) []Library {
+	groups := make([]Library, 0)
+	seen := make(map[string]struct{}, len(sources))
+	add := func(library Library) {
+		if library.ID == "" || strings.TrimSpace(library.Name) == "" {
+			return
+		}
+		if _, exists := seen[library.ID]; exists {
+			return
+		}
+		seen[library.ID] = struct{}{}
+		library.ParentID = adultLibraryID
+		if strings.TrimSpace(library.CollectionType) == "" {
+			library.CollectionType = "movies"
+		}
+		groups = append(groups, library)
+	}
+	for _, source := range sources {
+		children, err := c.listImmediateFolders(ctx, configuration, source.ID)
+		if err != nil || len(children) == 0 {
+			add(source)
+			continue
+		}
+		for _, child := range children {
+			add(Library{
+				ID:             child.ID,
+				Name:           child.Name,
+				CollectionType: strings.TrimSpace(child.CollectionType),
+			})
+		}
+	}
+	return groups
+}
+
+func (c *Client) listImmediateFolders(ctx context.Context, configuration clientConfig, folderID string) ([]baseItem, error) {
+	query := url.Values{
+		"Fields":           {"Path"},
+		"IncludeItemTypes": {"Folder,BoxSet"},
+		"Limit":            {"200"},
+		"ParentId":         {folderID},
+		"Recursive":        {"false"},
+		"SortBy":           {"SortName"},
+		"SortOrder":        {"Ascending"},
+		"StartIndex":       {"0"},
+	}
+	var response itemResponse
+	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
+		return nil, err
+	}
+	folders := make([]baseItem, 0)
+	for _, item := range response.Items {
+		if item.ID == "" || strings.TrimSpace(item.Name) == "" {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(item.Type)) {
+		case "folder", "boxset", "collectionfolder":
+			folders = append(folders, item)
+		}
+	}
+	return folders, nil
+}
+
+func (c *Client) browseAdultGroup(ctx context.Context, configuration clientConfig, folderID string, offset, limit int) (SearchResult, error) {
+	items, err := c.listFolderCatalog(ctx, configuration, folderID, false)
+	if err != nil {
+		return SearchResult{}, err
+	}
+	collected := catalogAdultItems(items)
+	sort.SliceStable(collected, func(i, j int) bool {
+		return strings.ToLower(collected[i].Name) < strings.ToLower(collected[j].Name)
+	})
+	if offset > len(collected) {
+		offset = len(collected)
+	}
+	end := offset + limit
+	if end > len(collected) {
+		end = len(collected)
+	}
+	return publicItems(itemResponse{Items: collected[offset:end], TotalRecordCount: len(collected)}), nil
+}
+
 func (c *Client) cachedAdultFolderIDs() []string {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
