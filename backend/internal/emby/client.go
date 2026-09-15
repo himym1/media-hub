@@ -57,13 +57,15 @@ type clientConfig struct {
 }
 
 type Client struct {
-	mutex          sync.RWMutex
-	config         clientConfig
-	client         *http.Client
-	imageClient    *http.Client
-	subtitleClient *http.Client
-	libraryClient  *http.Client
-	sessionToken   string
+	mutex            sync.RWMutex
+	config           clientConfig
+	client           *http.Client
+	imageClient      *http.Client
+	subtitleClient   *http.Client
+	libraryClient    *http.Client
+	sessionToken     string
+	localLibraries   []Library
+	localLibrariesAt time.Time
 }
 
 type ServerInfo struct {
@@ -138,6 +140,7 @@ type baseItem struct {
 	Genres            []string          `json:"Genres"`
 	MediaSources      []mediaSource     `json:"MediaSources"`
 	Path              string            `json:"Path"`
+	ParentID          string            `json:"ParentId"`
 	SeriesID          string            `json:"SeriesId"`
 	SeriesName        string            `json:"SeriesName"`
 	UserData          userData          `json:"UserData"`
@@ -238,6 +241,7 @@ func (c *Client) Configure(configuration RuntimeConfig) {
 	c.mutex.Lock()
 	c.config = runtimeClientConfig(configuration)
 	c.sessionToken = ""
+	c.clearLocalLibraries()
 	if c.client != nil {
 		c.client.Transport = embyHTTPTransport(configuration.ProxyURL)
 	}
@@ -337,25 +341,6 @@ func (c *Client) ServerInfo(ctx context.Context) (ServerInfo, error) {
 	return c.readServerInfo(ctx, configuration, "System/Info", true)
 }
 
-func (c *Client) Libraries(context.Context) ([]Library, error) {
-	configuration := c.configuration()
-	if err := validateAuthenticated(configuration); err != nil {
-		return nil, err
-	}
-	libraries := make([]Library, 0, 2)
-	if configuration.movieLibraryID != "" {
-		libraries = append(libraries, Library{
-			ID: configuration.movieLibraryID, Name: "115电影", CollectionType: "movies",
-		})
-	}
-	if configuration.seriesLibraryID != "" && configuration.seriesLibraryID != configuration.movieLibraryID {
-		libraries = append(libraries, Library{
-			ID: configuration.seriesLibraryID, Name: "115电视剧", CollectionType: "tvshows",
-		})
-	}
-	return libraries, nil
-}
-
 func configuredLibraryIDs(configuration clientConfig) []string {
 	ids := make([]string, 0, 2)
 	if configuration.movieLibraryID != "" {
@@ -365,15 +350,6 @@ func configuredLibraryIDs(configuration clientConfig) []string {
 		ids = append(ids, configuration.seriesLibraryID)
 	}
 	return ids
-}
-
-func libraryAllowed(configuration clientConfig, libraryID string) bool {
-	for _, configuredID := range configuredLibraryIDs(configuration) {
-		if libraryID == configuredID {
-			return true
-		}
-	}
-	return false
 }
 
 func (c *Client) SearchItems(ctx context.Context, queryText string, limit int) (SearchResult, error) {
@@ -398,26 +374,35 @@ func (c *Client) SearchItems(ctx context.Context, queryText string, limit int) (
 	if configuration.userID != "" {
 		query.Set("UserId", configuration.userID)
 	}
-	var response itemResponse
+	var cloud []baseItem
+	var local []baseItem
 	seen := make(map[string]struct{})
-	for _, libraryID := range configuredLibraryIDs(configuration) {
-		query.Set("ParentId", libraryID)
+	appendUnique := func(items []baseItem, configured bool) {
+		for _, item := range items {
+			if item.ID == "" {
+				continue
+			}
+			if _, exists := seen[item.ID]; exists {
+				continue
+			}
+			seen[item.ID] = struct{}{}
+			if configured {
+				cloud = append(cloud, item)
+				continue
+			}
+			local = append(local, item)
+		}
+	}
+	for _, library := range c.listLocalLibraries(ctx, configuration) {
+		query.Set("ParentId", library.ID)
 		var libraryResponse itemResponse
 		if err := c.getJSON(ctx, configuration, "Items", query, true, &libraryResponse); err != nil {
 			return SearchResult{}, err
 		}
-		for _, item := range libraryResponse.Items {
-			if _, exists := seen[item.ID]; item.ID != "" && exists {
-				continue
-			}
-			if item.ID != "" {
-				seen[item.ID] = struct{}{}
-			}
-			response.Items = append(response.Items, item)
-		}
+		appendUnique(libraryResponse.Items, isConfiguredLibrary(configuration, library.ID))
 	}
 	seriesIDs := make(map[string]struct{})
-	for _, item := range response.Items {
+	for _, item := range cloud {
 		if item.Type != "Series" || item.ID == "" {
 			continue
 		}
@@ -429,7 +414,7 @@ func (c *Client) SearchItems(ctx context.Context, queryText string, limit int) (
 			seriesIDs[item.ID] = struct{}{}
 		}
 	}
-	filtered := filter115Items(response.Items, seriesIDs)
+	filtered := append(filter115Items(cloud, seriesIDs), catalogItems(local)...)
 	if len(filtered) > limit {
 		filtered = filtered[:limit]
 	}
@@ -470,7 +455,7 @@ func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limi
 		return SearchResult{}, err
 	}
 	libraryID = strings.TrimSpace(libraryID)
-	if !libraryAllowed(configuration, libraryID) {
+	if !libraryAllowed(c.listLocalLibraries(ctx, configuration), libraryID) {
 		return SearchResult{}, ErrItemNotFound
 	}
 	if offset < 0 {
@@ -496,11 +481,16 @@ func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limi
 	if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
 		return SearchResult{}, err
 	}
-	seriesIDs, err := c.cloudSeriesIDs(ctx, configuration, libraryID)
-	if err != nil {
-		return SearchResult{}, err
+	var filtered []baseItem
+	if isConfiguredLibrary(configuration, libraryID) {
+		seriesIDs, err := c.cloudSeriesIDs(ctx, configuration, libraryID)
+		if err != nil {
+			return SearchResult{}, err
+		}
+		filtered = filter115Items(response.Items, seriesIDs)
+	} else {
+		filtered = catalogItems(response.Items)
 	}
-	filtered := filter115Items(response.Items, seriesIDs)
 	if offset > len(filtered) {
 		offset = len(filtered)
 	}
@@ -521,7 +511,7 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 		return ItemDetail{}, ErrUpstreamResponse
 	}
 	query := url.Values{
-		"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,Path,ProviderIds,RunTimeTicks,SeriesName,UserData"},
+		"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,ParentId,Path,ProviderIds,RunTimeTicks,SeriesName,UserData"},
 	}
 	endpointPath := path.Join("Items", itemID)
 	if configuration.userID != "" {
@@ -534,7 +524,7 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 	if item.ID != itemID || item.Name == "" {
 		return ItemDetail{}, ErrItemNotFound
 	}
-	visible, err := c.cloudItemVisible(ctx, configuration, item)
+	visible, err := c.catalogItemVisible(ctx, configuration, item)
 	if err != nil {
 		return ItemDetail{}, err
 	}

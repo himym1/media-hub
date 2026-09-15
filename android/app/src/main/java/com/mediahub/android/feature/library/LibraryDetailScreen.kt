@@ -56,6 +56,7 @@ import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextButton
 import com.mediahub.android.core.designsystem.MediaHubTopAppBar
 import com.mediahub.android.core.image.PosterLoader
+import com.mediahub.android.core.network.EmbyDeletePreview
 import com.mediahub.android.core.network.EmbyItemDetail
 import com.mediahub.android.core.network.EmbyItem
 import com.mediahub.android.core.network.EmbyRemoteSubtitle
@@ -313,11 +314,7 @@ private fun DeleteActions(state: LibraryDetailState, actions: LibraryDetailActio
         MediaHubConfirmDialog(
             visible = preview != null,
             title = "确认从 Emby 删除？",
-            message = if (preview != null) {
-                val versions = if (preview.versionCount > 1) "的 ${preview.versionCount} 个版本" else ""
-                val series = if (preview.type == "Series") "及全部分集" else ""
-                "将从 Emby 移除「${preview.name}」$versions$series。\n\nNAS 上约 ${preview.fileCount} 个 STRM 和同名字幕会被清掉，115 网盘上的原始文件不会被删除。本机字幕缓存也会一并删除。"
-            } else "",
+            message = if (preview != null) deletePreviewCopy(preview) else "",
             confirmLabel = if (state.deleting) "正在删除…" else "确认删除",
             cancelLabel = "取消",
             isDestructive = true,
@@ -434,4 +431,14 @@ internal fun playbackActionLabel(item: EmbyItem): String = when {
     item.played -> "重新播放"
     item.playbackPositionMs >= 30_000L -> "继续播放"
     else -> "播放"
+}
+
+internal fun deletePreviewCopy(preview: EmbyDeletePreview): String {
+    val versions = if (preview.versionCount > 1) "的 ${preview.versionCount} 个版本" else ""
+    val series = if (preview.type == "Series") "及全部分集" else ""
+    return if (preview.cloudKept) {
+        "将从 Emby 移除「${preview.name}」$versions$series。\n\nNAS 上约 ${preview.fileCount} 个 STRM 和同名字幕会被清掉，115 网盘上的原始文件不会被删除。本机字幕缓存也会一并删除。"
+    } else {
+        "将从 Emby 移除「${preview.name}」$versions$series。\n\nNAS 上约 ${preview.fileCount} 个本地媒体文件会被删除，此操作不可恢复。"
+    }
 }

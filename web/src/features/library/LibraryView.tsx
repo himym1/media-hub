@@ -560,7 +560,10 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
 function deletePreviewCopy(preview: EmbyDeletePreview) {
   const series = preview.type === 'Series' ? '及全部分集' : ''
   const versions = preview.versionCount > 1 ? `的 ${preview.versionCount} 个版本` : ''
-  return `将从 Emby 删除「${preview.name}」${versions}${series}。NAS 上约 ${preview.fileCount} 个 STRM 和同名字幕会被清掉，115 网盘文件不会删除。`
+  if (preview.cloudKept) {
+    return `将从 Emby 删除「${preview.name}」${versions}${series}。NAS 上约 ${preview.fileCount} 个 STRM 和同名字幕会被清掉，115 网盘文件不会删除。`
+  }
+  return `将从 Emby 删除「${preview.name}」${versions}${series}。NAS 上约 ${preview.fileCount} 个本地媒体文件会被删除，此操作不可恢复。`
 }
 
 function libraryCollectionLabel(type?: string) {

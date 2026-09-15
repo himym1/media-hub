@@ -187,6 +187,43 @@ func (c *Client) cloudSeriesIDs(ctx context.Context, configuration clientConfig,
 	return ids, nil
 }
 
+func isLocalMediaItem(item baseItem) bool {
+	if is115Item(item) {
+		return false
+	}
+	if isLocalMediaPath(item.Path) {
+		return true
+	}
+	for _, source := range item.MediaSources {
+		if isLocalMediaPath(source.Path) {
+			return true
+		}
+	}
+	return false
+}
+
+func isLocalMediaPath(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || isStrmPath(trimmed) || pickCodeFromValue(trimmed) != "" {
+		return false
+	}
+	if hasForeignURL(trimmed) {
+		return false
+	}
+	return strings.HasPrefix(trimmed, "/")
+}
+
+func (c *Client) catalogItemVisible(ctx context.Context, configuration clientConfig, item baseItem) (bool, error) {
+	if is115Item(item) {
+		return true, nil
+	}
+	inLocal, err := c.itemInNon115Library(ctx, configuration, item)
+	if err != nil || inLocal || item.Type != "Series" {
+		return inLocal, err
+	}
+	return c.cloudItemVisible(ctx, configuration, item)
+}
+
 func (c *Client) cloudItemVisible(ctx context.Context, configuration clientConfig, item baseItem) (bool, error) {
 	if item.Type != "Series" {
 		return is115Item(item), nil

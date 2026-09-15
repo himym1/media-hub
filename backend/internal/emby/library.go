@@ -52,7 +52,7 @@ func (c *Client) Episodes(ctx context.Context, seriesID string) ([]Episode, erro
 	}
 	items := make([]Episode, 0, len(response.Items))
 	for _, item := range response.Items {
-		if item.ID == "" || item.Type != "Episode" || !is115Item(item) {
+		if item.ID == "" || item.Type != "Episode" || (!is115Item(item) && !isLocalMediaItem(item)) {
 			continue
 		}
 		item = presentEpisodeItem(item)

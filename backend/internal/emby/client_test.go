@@ -3,9 +3,9 @@ package emby
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"io"
 	"strings"
 	"testing"
 	"time"
@@ -327,10 +327,9 @@ func TestApplyTMDBMetadataPostsRemoteSearchApply(t *testing.T) {
 	}
 }
 
-func TestLibrariesReturnsConfiguredMovieAndTVFoldersWithoutProbingEmby(t *testing.T) {
-	requests := 0
-	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		requests++
+func TestLibrariesFallsBackToConfiguredFoldersWhenViewsFail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
@@ -346,8 +345,5 @@ func TestLibrariesReturnsConfiguredMovieAndTVFoldersWithoutProbingEmby(t *testin
 	if len(libraries) != 2 || libraries[0].ID != "library-movies" || libraries[0].Name != "115电影" ||
 		libraries[1].ID != "library-shows" || libraries[1].Name != "115电视剧" {
 		t.Fatalf("unexpected libraries: %#v", libraries)
-	}
-	if requests != 0 {
-		t.Fatalf("Emby requests=%d", requests)
 	}
 }

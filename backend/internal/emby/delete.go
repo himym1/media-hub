@@ -45,7 +45,7 @@ func (c *Client) DeletePreview(ctx context.Context, itemID string) (DeletePrevie
 	}
 	return DeletePreview{
 		ID: item.ID, Name: item.Name, Type: item.Type,
-		FileCount: fileCount, DeletesFiles: true, CloudKept: true, VersionCount: len(ids),
+		FileCount: fileCount, DeletesFiles: true, CloudKept: is115Item(item), VersionCount: len(ids),
 	}, nil
 }
 
@@ -229,7 +229,7 @@ func (c *Client) visibleItem(ctx context.Context, itemID string) (baseItem, clie
 	if itemID == "" {
 		return baseItem{}, configuration, ErrUpstreamResponse
 	}
-	query := url.Values{"Fields": {"ProviderIds,MediaSources,Path"}}
+	query := url.Values{"Fields": {"ProviderIds,MediaSources,ParentId,Path"}}
 	endpointPath := path.Join("Items", itemID)
 	if configuration.userID != "" {
 		endpointPath = path.Join("Users", configuration.userID, "Items", itemID)
@@ -241,7 +241,7 @@ func (c *Client) visibleItem(ctx context.Context, itemID string) (baseItem, clie
 	if !strings.EqualFold(item.ID, itemID) || item.Name == "" {
 		return baseItem{}, configuration, ErrItemNotFound
 	}
-	visible, err := c.cloudItemVisible(ctx, configuration, item)
+	visible, err := c.catalogItemVisible(ctx, configuration, item)
 	if err != nil {
 		return baseItem{}, configuration, err
 	}

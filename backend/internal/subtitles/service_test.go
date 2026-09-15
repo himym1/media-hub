@@ -109,6 +109,34 @@ func TestSearchSkipsUnrelatedAssrtHitsAndUsesFilename(t *testing.T) {
 	}
 }
 
+func TestSearchUsesEmbyForLocalLibraryFiles(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("Assrt should not be queried for local library files")
+	}))
+	defer server.Close()
+	stub := &embyStub{
+		target: emby.SubtitleTarget{
+			ID: "pt-1", Type: "Movie", Name: "Local",
+			Path: "/media/links/电影/英美电影/Local.mkv",
+		},
+		embyHits: []emby.RemoteSubtitle{{ID: "opensubtitles-1", Name: "chi.srt", Language: "chi"}},
+	}
+	service := New(stub, assrt.NewClient(server.URL, "token", time.Second), func() string { return "/media" })
+	hits, err := service.Search(context.Background(), "pt-1", "chi")
+	if err != nil || len(hits) != 1 || hits[0].ID != "opensubtitles-1" || stub.embyCalls != 1 {
+		t.Fatalf("hits=%#v err=%v embyCalls=%d", hits, err, stub.embyCalls)
+	}
+}
+
+func TestCanWriteAssrtSidecarRejectsLocalLibraryPaths(t *testing.T) {
+	if canWriteAssrtSidecar("/media", "/media/links/电影/Local.mkv") {
+		t.Fatal("local mkv should not use Assrt sidecar writes")
+	}
+	if !canWriteAssrtSidecar("/media", "/media3/115-strm/电影/movie.strm") {
+		t.Fatal("115 strm should stay writable")
+	}
+}
+
 func TestSearchSkipsEmbyWhenAssrtReturnsEmpty(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[]}}`))

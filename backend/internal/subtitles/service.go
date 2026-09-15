@@ -41,7 +41,7 @@ func (s *Service) Search(ctx context.Context, itemID, language string) ([]emby.R
 	if s.emby == nil {
 		return nil, emby.ErrNotConfigured
 	}
-	if chineseLanguage(language) && s.assrt != nil && s.assrt.Configured() {
+	if chineseLanguage(language) && s.assrt != nil && s.assrt.Configured() && s.canWriteAssrtSidecar(ctx, itemID) {
 		hits, err := s.searchAssrt(ctx, itemID)
 		if err == nil {
 			return hits, nil
@@ -222,6 +222,9 @@ func (s *Service) downloadAssrt(ctx context.Context, itemID, rawID string) error
 	if s.mount != nil {
 		mount = s.mount()
 	}
+	if !canWriteAssrtSidecar(mount, target.Path) {
+		return errors.New("Assrt sidecar is unavailable for local library files")
+	}
 	mediaPath, err := strm.ResolveLibraryFile(mount, target.Path)
 	if err != nil {
 		return err
@@ -264,6 +267,36 @@ func sortRemoteSubtitles(items []emby.RemoteSubtitle, scores map[string]int) {
 	sort.SliceStable(items, func(i, j int) bool {
 		return scores[items[i].ID] > scores[items[j].ID]
 	})
+}
+
+func (s *Service) canWriteAssrtSidecar(ctx context.Context, itemID string) bool {
+	if s == nil || s.emby == nil {
+		return false
+	}
+	target, err := s.emby.SubtitleTarget(ctx, itemID)
+	if err != nil {
+		return false
+	}
+	return canWriteAssrtSidecar(s.mountPath(), target.Path)
+}
+
+func canWriteAssrtSidecar(mount, embyPath string) bool {
+	if !looksLike115LibraryPath(embyPath) {
+		return false
+	}
+	if strings.TrimSpace(mount) == "" {
+		return true
+	}
+	_, err := strm.ResolveLibraryFile(mount, embyPath)
+	return err == nil
+}
+
+func looksLike115LibraryPath(embyPath string) bool {
+	value := strings.ToLower(strings.TrimSpace(embyPath))
+	if value == "" {
+		return false
+	}
+	return strings.Contains(value, "115-strm") || strings.HasSuffix(value, ".strm")
 }
 
 func chineseLanguage(language string) bool {

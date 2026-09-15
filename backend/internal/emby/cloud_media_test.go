@@ -49,3 +49,18 @@ func TestFilter115ItemsKeepsCloudMovies(t *testing.T) {
 		t.Fatalf("items=%#v", items)
 	}
 }
+
+func TestCatalogItemsKeepLocalMovies(t *testing.T) {
+	items := catalogItems([]baseItem{
+		{ID: "local", Name: "Local", Type: "Movie", Path: "/media/links/电影/movie.mkv"},
+		{ID: "cloud", Name: "Cloud", Type: "Movie", Path: "/library/movie.strm"},
+		{ID: "skip", Name: "", Type: "Movie", Path: "/media/links/电影/skip.mkv"},
+		{ID: "folder", Name: "Folder", Type: "Folder"},
+	})
+	if len(items) != 2 || items[0].ID != "local" || items[1].ID != "cloud" {
+		t.Fatalf("items=%#v", items)
+	}
+	if !isLocalMediaItem(items[0]) || isLocalMediaItem(items[1]) {
+		t.Fatalf("local detection=%#v", items)
+	}
+}

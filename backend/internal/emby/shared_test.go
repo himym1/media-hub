@@ -109,8 +109,18 @@ func TestSharedLibrariesBrowseAndPlayback(t *testing.T) {
 
 func TestHubRoutesSharedIDs(t *testing.T) {
 	t.Parallel()
+	localServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/Library/MediaFolders" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"Items": []map[string]any{{"Id": "local-movies", "Name": "电影", "CollectionType": "movies"}},
+		})
+	}))
+	t.Cleanup(localServer.Close)
 	local := NewConfiguredClient(RuntimeConfig{
-		BaseURL: "https://emby.local", APIKey: "key", MovieLibraryID: "local-movies",
+		BaseURL: localServer.URL, APIKey: "key", MovieLibraryID: "local-movies",
 	}, 0)
 	sharedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
