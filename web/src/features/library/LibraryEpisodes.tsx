@@ -1,5 +1,5 @@
-import { Check, CircleAlert, Play } from 'lucide-react'
-import { useMemo } from 'react'
+import { ArrowUpDown, Check, CircleAlert, Play } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getEmbyEpisodes, type EmbyEpisode } from '../../shared/api/mediaHub'
 import { LibraryWatchAction } from './LibraryWatchAction'
@@ -19,6 +19,7 @@ export function LibraryEpisodes({ seriesId, seriesTitle, inPagePlayback, onPlay 
   })
   const rawItems = episodes.data?.items
   const items = useMemo(() => rawItems ?? [], [rawItems])
+  const [descending, setDescending] = useState(false)
 
   const upNextEpisode = useMemo(() => {
     if (items.length === 0) return null
@@ -28,6 +29,11 @@ export function LibraryEpisodes({ seriesId, seriesTitle, inPagePlayback, onPlay 
       ?? items[0]
     )
   }, [items])
+
+  const displayItems = useMemo(() => {
+    if (!descending) return items
+    return [...items].reverse()
+  }, [items, descending])
 
   if (episodes.isLoading) return <div className="status-loading">正在读取分集…</div>
   if (episodes.isError) {
@@ -72,8 +78,22 @@ export function LibraryEpisodes({ seriesId, seriesTitle, inPagePlayback, onPlay 
         </div>
       ) : null}
 
+      <div className="episode-controls-bar">
+        <span className="episode-count-badge">共 {items.length} 集</span>
+        {items.length > 6 ? (
+          <button
+            className="episode-sort-btn"
+            onClick={() => setDescending((prev) => !prev)}
+            type="button"
+          >
+            <ArrowUpDown size={12} />
+            {descending ? '倒序（最新在首）' : '正序（第 1 集在首）'}
+          </button>
+        ) : null}
+      </div>
+
       <ul className="library-episode-list">
-        {items.map((episode) => {
+        {displayItems.map((episode) => {
           const name = episodeLabel(episode, seriesTitle)
           const isPlayed = Boolean(episode.played)
           const hasProgress = (episode.playbackPositionMs ?? 0) >= 30_000 && !isPlayed

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Captions, ChevronLeft, ChevronRight, CircleAlert, Film, Play, RefreshCw, Search, Star, Trash2, X } from 'lucide-react'
+import { ArrowDownUp, BookOpen, Captions, ChevronLeft, ChevronRight, CircleAlert, ExternalLink, Film, Play, RefreshCw, Search, Star, Trash2, X } from 'lucide-react'
 import {
   deleteEmbyItem,
   downloadEmbyRemoteSubtitle,
@@ -43,6 +43,10 @@ export function LibraryView() {
   const [page, setPage] = useState(0)
   const [queryText, setQueryText] = useState('')
   const [submittedQuery, setSubmittedQuery] = useState('')
+  const [sortBy, setSortBy] = useState<'default' | 'year-desc' | 'year-asc' | 'name-asc'>('default')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'Movie' | 'Series'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'unplayed' | 'played'>('all')
+  const [spotlightIndex, setSpotlightIndex] = useState(0)
 
   const libraries = useQuery({ queryKey: ['emby-libraries'], queryFn: getEmbyLibraries })
   const allLibraries = useMemo(() => libraries.data?.libraries ?? [], [libraries.data?.libraries])
@@ -121,6 +125,7 @@ export function LibraryView() {
     setPage(0)
     setQueryText('')
     setSubmittedQuery('')
+    setSpotlightIndex(0)
     commitUrl({ library: id, media: null, play: null })
   }
   const selectItem = (id: string) => {
@@ -151,6 +156,7 @@ export function LibraryView() {
     setSubmittedQuery(value)
     setItemId(null)
     setPlayId(null)
+    setSpotlightIndex(0)
     commitUrl({ media: null, play: null })
   }
   const clearSearch = () => {
@@ -158,18 +164,63 @@ export function LibraryView() {
     setSubmittedQuery('')
     setItemId(null)
     setPlayId(null)
+    setSpotlightIndex(0)
     commitUrl({ media: null, play: null })
   }
   const changePage = (nextPage: number) => {
     setPage(nextPage)
     setItemId(null)
     setPlayId(null)
+    setSpotlightIndex(0)
     commitUrl({ media: null, play: null })
   }
 
   const result = submittedQuery ? search : libraryItems
-  const items = result.data?.items ?? []
-  const total = result.data?.total ?? 0
+  const rawItems = useMemo(() => result.data?.items ?? [], [result.data?.items])
+
+  const continueWatchingItems = useMemo(() => {
+    return rawItems.filter((item) => (item.playbackPositionMs ?? 0) >= 30_000 && !item.played)
+  }, [rawItems])
+
+  const spotlightCandidates = useMemo(() => {
+    if (rawItems.length === 0) return []
+    const inProgress = rawItems.filter((item) => (item.playbackPositionMs ?? 0) >= 30_000 && !item.played)
+    const rest = rawItems.filter((item) => !((item.playbackPositionMs ?? 0) >= 30_000 && !item.played))
+    return [...inProgress, ...rest].slice(0, 4)
+  }, [rawItems])
+
+  const activeSpotlight = spotlightCandidates[spotlightIndex] ?? spotlightCandidates[0]
+
+  const items = useMemo(() => {
+    let list = [...rawItems]
+    if (typeFilter !== 'all') {
+      list = list.filter((item) => item.type === typeFilter)
+    }
+    if (statusFilter === 'in-progress') {
+      list = list.filter((item) => (item.playbackPositionMs ?? 0) >= 30_000 && !item.played)
+    } else if (statusFilter === 'played') {
+      list = list.filter((item) => Boolean(item.played))
+    } else if (statusFilter === 'unplayed') {
+      list = list.filter((item) => !item.played && (item.playbackPositionMs ?? 0) < 30_000)
+    }
+
+    if (sortBy === 'year-desc') {
+      list.sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
+    } else if (sortBy === 'year-asc') {
+      list.sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999))
+    } else if (sortBy === 'name-asc') {
+      list.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    }
+    return list
+  }, [rawItems, typeFilter, statusFilter, sortBy])
+
+  const total = submittedQuery ? items.length : (result.data?.total ?? 0)
+  const hasActiveFilters = typeFilter !== 'all' || statusFilter !== 'all' || sortBy !== 'default'
+  const resetFilters = () => {
+    setTypeFilter('all')
+    setStatusFilter('all')
+    setSortBy('default')
+  }
   const selectedLibrary = allLibraries.find((library) => library.id === libraryId)
   const mutationError = refreshLibrary.error ?? refreshItem.error
   const playEpisode = episodes.data?.items.find((episode) => episode.id === playId)
@@ -293,11 +344,12 @@ export function LibraryView() {
           </div>
         ) : null}
 
-        {!submittedQuery && page === 0 && items.length > 0 ? (
+        {!submittedQuery && page === 0 && activeSpotlight ? (
           <div className="library-hero-spotlight">
             <div
               className="spotlight-backdrop"
-              style={{ backgroundImage: `url(${embyPrimaryImageURL(items[0].id)})` }}
+              key={activeSpotlight.id}
+              style={{ backgroundImage: `url(${embyPrimaryImageURL(activeSpotlight.id)})` }}
             />
             <div className="spotlight-vignette" />
             <div className="spotlight-content">
@@ -307,38 +359,211 @@ export function LibraryView() {
                   className="spotlight-poster"
                   decoding="async"
                   height={150}
-                  src={embyPrimaryImageURL(items[0].id)}
+                  key={activeSpotlight.id}
+                  src={embyPrimaryImageURL(activeSpotlight.id)}
                   width={100}
                 />
               </div>
               <div className="spotlight-body">
                 <div className="spotlight-badges">
                   <span className="spotlight-tag">
-                    {selectedLibrary ? selectedLibrary.name : '精选推荐'}
+                    {(activeSpotlight.playbackPositionMs ?? 0) >= 30_000 && !activeSpotlight.played
+                      ? '继续观看'
+                      : activeSpotlight.played
+                        ? '重温推荐'
+                        : selectedLibrary
+                          ? selectedLibrary.name
+                          : '精选推荐'}
                   </span>
-                  <span className="spotlight-tag">{mediaTypeLabel(items[0].type)}</span>
-                  {items[0].played ? (
+                  <span className="spotlight-tag">{mediaTypeLabel(activeSpotlight.type)}</span>
+                  {activeSpotlight.played ? (
                     <span className="spotlight-status played">已看完</span>
-                  ) : (items[0].playbackPositionMs ?? 0) >= 30_000 ? (
-                    <span className="spotlight-status in-progress">正在观看</span>
+                  ) : (activeSpotlight.playbackPositionMs ?? 0) >= 30_000 ? (
+                    <span className="spotlight-status in-progress">
+                      {playbackStatus(activeSpotlight)}
+                    </span>
                   ) : null}
-                  {items[0].year ? <span className="spotlight-year">{items[0].year}</span> : null}
+                  {activeSpotlight.year ? <span className="spotlight-year">{activeSpotlight.year}</span> : null}
                 </div>
-                <h2 className="spotlight-title">{items[0].name}</h2>
+                <h2 className="spotlight-title">{activeSpotlight.name}</h2>
                 <div className="spotlight-actions">
                   <button
                     className="spotlight-play-btn"
-                    onClick={() => selectItem(items[0].id)}
+                    onClick={() => selectItem(activeSpotlight.id)}
                     type="button"
                   >
                     <Play fill="currentColor" size={14} />
-                    立即查看与播放
+                    {(activeSpotlight.playbackPositionMs ?? 0) >= 30_000 && !activeSpotlight.played
+                      ? '继续播放'
+                      : activeSpotlight.played
+                        ? '重新播放'
+                        : '立即播放'}
+                  </button>
+                  <button
+                    className="spotlight-detail-btn"
+                    onClick={() => selectItem(activeSpotlight.id)}
+                    type="button"
+                  >
+                    影片详情
                   </button>
                 </div>
               </div>
             </div>
+
+            {spotlightCandidates.length > 1 ? (
+              <div className="spotlight-carousel-controls">
+                <div className="spotlight-dots">
+                  {spotlightCandidates.map((c, i) => (
+                    <button
+                      aria-label={`切换到推荐 ${i + 1}`}
+                      className={i === spotlightIndex ? 'spotlight-dot active' : 'spotlight-dot'}
+                      key={c.id}
+                      onClick={() => setSpotlightIndex(i)}
+                      type="button"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
+
+        {!submittedQuery && page === 0 && continueWatchingItems.length > 0 ? (
+          <div className="continue-watching-section">
+            <div className="continue-watching-header">
+              <div className="continue-watching-title">
+                <span aria-hidden="true" className="live-indicator" />
+                <strong>继续观看</strong>
+                <span className="library-count-tag">{continueWatchingItems.length}</span>
+              </div>
+            </div>
+            <div className="continue-watching-rail">
+              {continueWatchingItems.map((item) => {
+                const status = playbackStatus(item)
+                return (
+                  <button
+                    className="continue-card"
+                    key={item.id}
+                    onClick={() => selectItem(item.id)}
+                    type="button"
+                  >
+                    <span className="continue-card-poster">
+                      <img
+                        alt=""
+                        decoding="async"
+                        loading="lazy"
+                        src={embyPrimaryImageURL(item.id)}
+                      />
+                      <span aria-hidden="true" className="continue-card-overlay">
+                        <span className="continue-play-circle">
+                          <Play fill="currentColor" size={15} />
+                        </span>
+                      </span>
+                      <span aria-hidden="true" className="continue-progress-bar">
+                        <span
+                          className="continue-progress-fill"
+                          style={{
+                            width: `${Math.min(96, Math.max(12, ((item.playbackPositionMs ?? 0) / 7200000) * 100))}%`,
+                          }}
+                        />
+                      </span>
+                    </span>
+                    <span className="continue-card-meta">
+                      <strong className="continue-name" title={item.name}>{item.name}</strong>
+                      <small className="continue-sub">{status}</small>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="library-filter-bar">
+          <div className="filter-group">
+            <button
+              className={typeFilter === 'all' ? 'filter-pill active' : 'filter-pill'}
+              onClick={() => setTypeFilter('all')}
+              type="button"
+            >
+              全部类型
+            </button>
+            <button
+              className={typeFilter === 'Movie' ? 'filter-pill active' : 'filter-pill'}
+              onClick={() => setTypeFilter('Movie')}
+              type="button"
+            >
+              电影
+            </button>
+            <button
+              className={typeFilter === 'Series' ? 'filter-pill active' : 'filter-pill'}
+              onClick={() => setTypeFilter('Series')}
+              type="button"
+            >
+              剧集
+            </button>
+            <span aria-hidden="true" className="filter-divider" />
+            <button
+              className={statusFilter === 'all' ? 'filter-pill active' : 'filter-pill'}
+              onClick={() => setStatusFilter('all')}
+              type="button"
+            >
+              全部状态
+            </button>
+            <button
+              className={statusFilter === 'in-progress' ? 'filter-pill active' : 'filter-pill'}
+              onClick={() => setStatusFilter('in-progress')}
+              type="button"
+            >
+              在看中
+            </button>
+            <button
+              className={statusFilter === 'unplayed' ? 'filter-pill active' : 'filter-pill'}
+              onClick={() => setStatusFilter('unplayed')}
+              type="button"
+            >
+              未看
+            </button>
+            <button
+              className={statusFilter === 'played' ? 'filter-pill active' : 'filter-pill'}
+              onClick={() => setStatusFilter('played')}
+              type="button"
+            >
+              已看
+            </button>
+          </div>
+
+          <div className="sort-select-wrap">
+            <ArrowDownUp aria-hidden="true" size={13} />
+            <button
+              className="sort-select-btn"
+              onClick={() => {
+                const cycle: Array<'default' | 'year-desc' | 'year-asc' | 'name-asc'> = [
+                  'default',
+                  'year-desc',
+                  'year-asc',
+                  'name-asc',
+                ]
+                const next = cycle[(cycle.indexOf(sortBy) + 1) % cycle.length]
+                setSortBy(next)
+              }}
+              type="button"
+            >
+              {sortBy === 'default'
+                ? '排序：默认推荐'
+                : sortBy === 'year-desc'
+                  ? '排序：最新年份'
+                  : sortBy === 'year-asc'
+                    ? '排序：经典上映'
+                    : '排序：名称 A-Z'}
+            </button>
+            {hasActiveFilters ? (
+              <button className="filter-reset-btn" onClick={resetFilters} title="重置所有筛选" type="button">
+                重置筛选
+              </button>
+            ) : null}
+          </div>
+        </div>
 
         <div className="library-results">
           {result.isLoading && items.length === 0 ? (
@@ -352,7 +577,13 @@ export function LibraryView() {
             </div>
           ) : null}
           {result.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>媒体内容读取失败</strong><span>{result.error.message}</span></div><button onClick={() => void result.refetch()} type="button">重试</button></div> : null}
-          {!result.isLoading && !result.isError && items.length === 0 ? <div className="empty-state"><BookOpen size={28} /><span>{submittedQuery ? '没有匹配的媒体' : '此媒体库暂无可浏览内容'}</span></div> : null}
+          {!result.isLoading && !result.isError && items.length === 0 ? (
+            <div className="empty-state">
+              <BookOpen size={28} />
+              <span>{hasActiveFilters ? '未找到符合筛选条件的媒体内容' : submittedQuery ? '没有匹配的媒体' : '此媒体库暂无可浏览内容'}</span>
+              {hasActiveFilters ? <button className="secondary-command" onClick={resetFilters} type="button">清除筛选条件</button> : null}
+            </div>
+          ) : null}
           <div className="library-poster-grid">
             {items.map((item) => <LibraryPosterCard item={item} key={item.id} onSelect={selectItem} selected={item.id === itemId} />)}
           </div>
@@ -550,7 +781,25 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
       <summary>更多信息</summary>
       <dl>
         {originalTitle ? <div><dt>原名</dt><dd>{originalTitle}</dd></div> : null}
-        <div><dt>TMDB 编号</dt><dd>{item.providerIds?.Tmdb || '未绑定'}</dd></div>
+        <div>
+          <dt>TMDB 编号</dt>
+          <dd>
+            {item.providerIds?.Tmdb ? (
+              <a
+                className="tmdb-link"
+                href={`https://www.themoviedb.org/${item.type === 'Series' ? 'tv' : 'movie'}/${item.providerIds.Tmdb}`}
+                rel="noopener noreferrer"
+                target="_blank"
+                title="在 The Movie Database 查看"
+              >
+                <span>{item.providerIds.Tmdb}</span>
+                <ExternalLink size={12} />
+              </a>
+            ) : (
+              '未绑定'
+            )}
+          </dd>
+        </div>
         <div><dt>媒体源</dt><dd>{item.type === 'Series' ? '由分集提供' : `${item.mediaSourceCount} 个`}</dd></div>
       </dl>
     </details>
