@@ -30,6 +30,10 @@ jobs:
         with:
           workspaces: desktop/src-tauri -> target
       - run: pnpm --dir desktop install --frozen-lockfile
+      - name: Align desktop package version with tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: python scripts/set-desktop-version.py "${GITHUB_REF_NAME#v}"
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -86,7 +90,7 @@ jobs:
             --arg sha256 "$sha" \
             --argjson sizeBytes "$size" \
             --arg publishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{versionCode:$versionCode,versionName:$versionName,minimumSupportedVersionCode:1,sha256:$sha256,sizeBytes:$sizeBytes,publishedAt:$publishedAt,notes:("Media Hub " + $versionName)}' > "$manifest_tmp"
+            '{versionCode:$versionCode,versionName:$versionName,minimumSupportedVersionCode:1,sha256:$sha256,sizeBytes:$sizeBytes,publishedAt:$publishedAt,notes:""}' > "$manifest_tmp"
           chmod 0444 "$manifest_tmp"
           mv -f "$exe_tmp" "$release_dir/$output"
           mv -f "$manifest_tmp" "$release_dir/desktop-latest.json"

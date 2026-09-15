@@ -9,6 +9,7 @@ import {
   installDesktopUpdate,
   isDesktopShell,
   isDesktopUpdateCancelled,
+  readStoredDesktopUpdate,
   rememberDismissedDesktopRelease,
   resolveDesktopUpdate,
 } from './desktopUpdate'
@@ -39,7 +40,9 @@ export function useDesktopUpdate(): DesktopUpdateState {
   const [installing, setInstalling] = useState(false)
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [dismissedCode, setDismissedCode] = useState<number | null>(null)
+  const [dismissedCode, setDismissedCode] = useState<number | null>(
+    () => readStoredDesktopUpdate().dismissedCode ?? null,
+  )
 
   const check = useCallback(async () => {
     if (!available) return

@@ -19,10 +19,11 @@ class MediaHubViewModelFactory(
     private val repository: MediaHubRepository,
     private val updateNotifier: AndroidUpdateNotifier = AndroidUpdateNotifier.None,
     private val evictItemCaches: (String) -> Unit = {},
+    private val updatePromptStore: AndroidUpdatePromptStore? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T = when {
-        modelClass.isAssignableFrom(AppViewModel::class.java) -> AppViewModel(repository, updateNotifier) as T
+        modelClass.isAssignableFrom(AppViewModel::class.java) -> AppViewModel(repository, updateNotifier, updatePromptStore) as T
         modelClass.isAssignableFrom(AuthViewModel::class.java) -> AuthViewModel(repository) as T
         modelClass.isAssignableFrom(SearchViewModel::class.java) -> SearchViewModel(repository) as T
         modelClass.isAssignableFrom(TransferViewModel::class.java) -> TransferViewModel(repository) as T

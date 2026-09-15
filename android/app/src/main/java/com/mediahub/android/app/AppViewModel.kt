@@ -100,6 +100,7 @@ data class AppUpdatePrompt(
 class AppViewModel(
     private val repository: MediaHubRepository,
     private val updateNotifier: AndroidUpdateNotifier = AndroidUpdateNotifier.None,
+    private val updatePromptStore: AndroidUpdatePromptStore? = null,
 ) : ViewModel() {
     private val _state = MutableStateFlow<AppState>(AppState.Loading)
     val state: StateFlow<AppState> = _state.asStateFlow()
@@ -113,7 +114,7 @@ class AppViewModel(
 
     private val _updatePrompt = MutableStateFlow<AppUpdatePrompt?>(null)
     val updatePrompt: StateFlow<AppUpdatePrompt?> = _updatePrompt.asStateFlow()
-    private var dismissedUpdateCode: Int? = null
+    private var dismissedUpdateCode: Int? = updatePromptStore?.dismissedVersionCode()?.takeIf { it > 0 }
 
     init {
         viewModelScope.launch {
@@ -121,7 +122,6 @@ class AppViewModel(
                 _route.value = navigation.reset()
                 _subscriptionDraft.value = null
                 _updatePrompt.value = null
-                dismissedUpdateCode = null
                 updateNotifier.cancel()
                 _state.value = AppState.Unauthenticated
             }
@@ -159,6 +159,7 @@ class AppViewModel(
             return
         }
         dismissedUpdateCode = prompt.release.versionCode
+        updatePromptStore?.rememberDismissed(prompt.release.versionCode)
         _updatePrompt.value = null
         updateNotifier.cancel()
     }
@@ -261,7 +262,6 @@ class AppViewModel(
             _route.value = navigation.reset()
             _subscriptionDraft.value = null
             _updatePrompt.value = null
-            dismissedUpdateCode = null
             updateNotifier.cancel()
             _state.value = AppState.Unauthenticated
         }

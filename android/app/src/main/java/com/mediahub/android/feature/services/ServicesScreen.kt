@@ -47,6 +47,7 @@ import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.QrCode
 import com.composables.icons.lucide.Server
 import com.mediahub.android.app.LocalTwoPane
+import com.mediahub.android.app.androidUpdateCardSummary
 import com.mediahub.android.core.designsystem.BadgeVariant
 import com.mediahub.android.core.designsystem.MediaHubBadge
 import com.mediahub.android.core.designsystem.MediaHubButton
@@ -511,7 +512,7 @@ private fun LazyListScope.servicesSectionItems(
                         MediaHubCard(insideMargin = PaddingValues(16.dp)) {
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 MediaHubText(
-                                    text = release?.let { "发现 ${it.versionName}，${it.notes}" } ?: "当前已是最新版本",
+                                    text = release?.let { androidUpdateCardSummary(it) } ?: "当前已是最新版本",
                                     color = MediaHubColors.TextMuted,
                                     fontSize = 12.sp,
                                 )

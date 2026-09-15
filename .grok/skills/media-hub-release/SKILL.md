@@ -52,8 +52,14 @@ Write the version into:
 
 - `api/openapi.yaml` → `info.version`
 - `android/app/build.gradle.kts` defaults `MEDIA_HUB_VERSION_NAME` / `MEDIA_HUB_VERSION_CODE` (local fallback only; CI derives from the tag)
+- `desktop/src-tauri/Cargo.toml` package version
+- `desktop/src-tauri/Cargo.lock` `media-hub-desktop` version
+- `desktop/src-tauri/tauri.conf.json` version
+- `desktop/package.json` version
 
 Leave `backend/cmd/server/main.go` `version` as `X.Y.Z-dev`. The image build sets `-X main.version=vX.Y.Z` from the tag.
+
+Desktop CI also runs `scripts/set-desktop-version.py` from the tag before `tauri-action`, so the DMG/EXE `CARGO_PKG_VERSION` matches `desktop-*-latest.json`. Do not publish a tagged desktop build from a stale Cargo version.
 
 ## 2. Verify
 

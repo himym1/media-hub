@@ -1,36 +1,29 @@
 import { useState, type ReactNode } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
 import type { DesktopRelease } from '../../shared/api/mediaHub'
-import { desktopInstallerFileName, desktopPlatformFromPath, formatDesktopUpdateSize, startDesktopInstallerDownload } from '../../shared/desktop/desktopUpdate'
+import { desktopInstallerFileName, desktopUpdateBody, desktopUpdateHeadline, formatDesktopUpdateSize, startDesktopInstallerDownload } from '../../shared/desktop/desktopUpdate'
 import type { DesktopUpdateState } from '../../shared/desktop/useDesktopUpdate'
 
 export function DesktopUpdateBanner({ update }: { update: DesktopUpdateState }) {
   if (!update.available || !update.prompt) return null
-  if (update.pendingRelaunch) {
-    return (
-      <div className="desktop-update-banner" role="status">
-        <p>
-          桌面端 {update.prompt.versionName} 已下载。请按 Command+Q 完全退出，再从「应用程序」打开 Media Hub。只关窗口，或从下载文件夹、安装盘启动，会继续用旧版。
-        </p>
-        <div className="desktop-update-actions">
-          <button className="secondary-command" onClick={update.dismiss} type="button">知道了</button>
-        </div>
-      </div>
-    )
-  }
   return (
     <div className="desktop-update-banner" role="status">
-      <p>
-        桌面端 {update.prompt.versionName} 已发布
-        {update.prompt.notes ? ` · ${update.prompt.notes}` : ''}
-        。{updateHint(update.nativeInstall, update.prompt.downloadPath)}，约 {formatDesktopUpdateSize(update.prompt.sizeBytes)}。
-      </p>
+      <div className="desktop-update-copy">
+        <strong>{desktopUpdateHeadline(update.prompt, update.pendingRelaunch)}</strong>
+        <p>{desktopUpdateBody(update.prompt, update.pendingRelaunch, update.nativeInstall)}</p>
+      </div>
       <div className="desktop-update-actions">
-        {update.required ? null : (
-          <button className="secondary-command" disabled={update.installing} onClick={update.dismiss} type="button">稍后</button>
+        {update.pendingRelaunch ? (
+          <button className="secondary-command" onClick={update.dismiss} type="button">知道了</button>
+        ) : (
+          <>
+            {update.required ? null : (
+              <button className="secondary-command" disabled={update.installing} onClick={update.dismiss} type="button">稍后</button>
+            )}
+            <UpdateAction installing={update.installing} nativeInstall={update.nativeInstall} onDownloaded={update.check} onInstall={update.install} release={update.prompt} />
+            {update.nativeInstall ? <SaveInstallerLink className="secondary-command" onDownloaded={update.check} release={update.prompt}>保存安装包</SaveInstallerLink> : null}
+          </>
         )}
-        <UpdateAction installing={update.installing} nativeInstall={update.nativeInstall} onDownloaded={update.check} onInstall={update.install} release={update.prompt} />
-        {update.nativeInstall ? <SaveInstallerLink className="secondary-command" onDownloaded={update.check} release={update.prompt}>保存安装包</SaveInstallerLink> : null}
       </div>
       {update.error ? <span className="form-error" role="alert">{update.error}</span> : null}
     </div>
@@ -40,7 +33,7 @@ export function DesktopUpdateBanner({ update }: { update: DesktopUpdateState }) 
 export function DesktopUpdateSettings({ update }: { update: DesktopUpdateState }) {
   if (!update.available) return null
   const label = update.pendingRelaunch
-    ? `已下载 ${update.release?.versionName}，请按 Command+Q 后从「应用程序」打开`
+    ? `已下载 ${update.release?.versionName}，请完全退出后再从「应用程序」打开`
     : update.release
     ? `发现 ${update.release.versionName}，约 ${formatDesktopUpdateSize(update.release.sizeBytes)}`
     : update.checking
@@ -143,7 +136,7 @@ function SaveInstallerLink({
           try {
             const fileName = startDesktopInstallerDownload(release)
             onDownloaded?.()
-            setStatus(`已保存到「下载」文件夹，请完全退出后再打开 ${fileName}`)
+            setStatus(`已保存 ${fileName}`)
           } catch (cause) {
             setStatus(cause instanceof Error ? cause.message : '无法下载桌面更新')
           }
@@ -157,13 +150,3 @@ function SaveInstallerLink({
   )
 }
 
-function updateHint(nativeInstall: boolean, downloadPath: string) {
-  if (desktopPlatformFromPath(downloadPath) === 'darwin') {
-    return nativeInstall
-      ? '下载后会打开安装盘，请把 Media Hub 拖到「应用程序」，再按 Command+Q 完全退出后从「应用程序」打开'
-      : '请把 Media Hub 拖到「应用程序」，再按 Command+Q 完全退出，从「应用程序」打开。只关窗口会继续用旧版'
-  }
-  return nativeInstall
-    ? '会自动安装并重新打开，大约半分钟'
-    : '请先完全退出 Media Hub，再打开约 3.1 MB 的安装包。若被拦截，点「更多信息 / 仍要运行」'
-}

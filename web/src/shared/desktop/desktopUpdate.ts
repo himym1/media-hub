@@ -134,6 +134,35 @@ export function formatDesktopUpdateSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+export function desktopReleaseBlurb(release: DesktopRelease): string | null {
+  const notes = release.notes.trim()
+  if (!notes || notes === `Media Hub ${release.versionName}`) return null
+  return notes
+}
+
+export function desktopUpdateHeadline(release: DesktopRelease, pendingRelaunch: boolean) {
+  return pendingRelaunch ? `${release.versionName} 已就绪` : `桌面端 ${release.versionName}`
+}
+
+export function desktopUpdateBody(
+  release: DesktopRelease,
+  pendingRelaunch: boolean,
+  nativeInstall: boolean,
+) {
+  if (pendingRelaunch) {
+    return '请完全退出，再从「应用程序」打开。只关窗口会继续用旧版。'
+  }
+  const size = formatDesktopUpdateSize(release.sizeBytes)
+  const blurb = desktopReleaseBlurb(release)
+  const lead = blurb ? `${blurb} · 约 ${size}` : `约 ${size}`
+  if (desktopPlatformFromPath(release.downloadPath) === 'darwin') {
+    return nativeInstall
+      ? `${lead}。装好后完全退出，从「应用程序」打开。`
+      : `${lead}。拖到「应用程序」后完全退出再打开。`
+  }
+  return nativeInstall ? `${lead}。安装后会重新打开。` : `${lead}。退出后再打开安装包。`
+}
+
 export function desktopUpdateErrorMessage(cause: unknown) {
   if (cause instanceof ApiError) {
     if (cause.status === 404 || cause.code === 'desktop_release_unavailable') {

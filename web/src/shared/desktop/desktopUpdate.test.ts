@@ -6,6 +6,9 @@ import {
   desktopInstallerPath,
   desktopInstallerFileName,
   desktopNativeInstallReady,
+  desktopReleaseBlurb,
+  desktopUpdateBody,
+  desktopUpdateHeadline,
   downloadDesktopInstaller,
   startDesktopInstallerDownload,
   desktopUpdateErrorMessage,
@@ -90,6 +93,21 @@ describe('desktopUpdate', () => {
     expect(desktopNativeInstallReady('0.20.50', 'windows')).toBe(true)
     expect(desktopNativeInstallReady('0.20.48', 'darwin')).toBe(true)
     expect(desktopNativeInstallReady(null, 'windows')).toBe(false)
+  })
+
+  it('hides boilerplate notes and keeps the banner short', () => {
+    expect(desktopReleaseBlurb(release)).toBeNull()
+    expect(desktopReleaseBlurb({ ...release, notes: '  ' })).toBeNull()
+    expect(desktopReleaseBlurb({ ...release, notes: '修复安装后仍提示更新' })).toBe('修复安装后仍提示更新')
+    expect(desktopUpdateHeadline(release, false)).toBe('桌面端 0.20.39')
+    expect(desktopUpdateHeadline(release, true)).toBe('0.20.39 已就绪')
+    expect(desktopUpdateBody(release, true, true)).toBe('请完全退出，再从「应用程序」打开。只关窗口会继续用旧版。')
+    expect(desktopUpdateBody(release, false, true)).toBe('约 18.0 MB。安装后会重新打开。')
+    expect(desktopUpdateBody({
+      ...release,
+      downloadPath: '/api/v1/client/desktop/releases/20039/dmg',
+      notes: '修复安装后仍提示更新',
+    }, false, true)).toBe('修复安装后仍提示更新 · 约 18.0 MB。装好后完全退出，从「应用程序」打开。')
   })
 
   it('formats installer size and hides raw URLs', () => {

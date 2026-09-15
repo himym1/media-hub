@@ -11,6 +11,27 @@ import java.util.Locale
 internal fun newerAndroidRelease(currentVersionCode: Int, latest: AndroidRelease): AndroidRelease? =
     latest.takeIf { it.versionCode > currentVersionCode }
 
+internal fun androidReleaseBlurb(notes: String, versionName: String): String? {
+    val trimmed = notes.trim()
+    if (trimmed.isEmpty() || trimmed == "Media Hub $versionName") return null
+    return trimmed
+}
+
+internal fun androidUpdateCardSummary(release: AndroidRelease): String {
+    val blurb = androidReleaseBlurb(release.notes, release.versionName)
+    return if (blurb == null) "发现 ${release.versionName}" else "发现 ${release.versionName} · $blurb"
+}
+
+internal fun androidUpdatePromptBody(prompt: AppUpdatePrompt): String {
+    prompt.errorMessage?.takeIf { it.isNotBlank() }?.let { return it }
+    val release = prompt.release
+    return when {
+        prompt.downloading -> formatUpdateProgress(prompt.downloadedBytes, release.sizeBytes)
+        prompt.downloadedPath != null -> "下载完成，安装后即可使用"
+        else -> "安装包 ${formatUpdateMegabytes(release.sizeBytes)}"
+    }
+}
+
 internal fun androidUpdateFile(context: Context, versionCode: Int): File {
     val directory = File(context.cacheDir, "updates").apply { mkdirs() }
     return File(directory, "media-hub-$versionCode.apk")
