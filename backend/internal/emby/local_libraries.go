@@ -174,15 +174,27 @@ func libraryAllowed(libraries []Library, libraryID string) bool {
 }
 
 func catalogItems(items []baseItem) []baseItem {
+	return catalogItemsOfTypes(items, "Movie", "Series")
+}
+
+func catalogAdultItems(items []baseItem) []baseItem {
+	return catalogItemsOfTypes(items, "Movie", "Series", "Video")
+}
+
+func catalogItemsOfTypes(items []baseItem, allowed ...string) []baseItem {
+	ok := make(map[string]struct{}, len(allowed))
+	for _, itemType := range allowed {
+		ok[itemType] = struct{}{}
+	}
 	filtered := make([]baseItem, 0, len(items))
 	for _, item := range items {
 		if item.ID == "" || item.Name == "" {
 			continue
 		}
-		switch item.Type {
-		case "Movie", "Series":
-			filtered = append(filtered, item)
+		if _, allowedType := ok[item.Type]; !allowedType {
+			continue
 		}
+		filtered = append(filtered, item)
 	}
 	return filtered
 }

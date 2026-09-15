@@ -20,10 +20,21 @@ func adultLibrary() Library {
 	return Library{ID: adultLibraryID, Name: adultLibraryName, CollectionType: "movies"}
 }
 
-func isAdultLibraryName(name string) bool {
+func compactLibraryName(name string) string {
 	compact := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), " ", ""))
 	compact = strings.ReplaceAll(compact, "-", "")
 	compact = strings.ReplaceAll(compact, "_", "")
+	return compact
+}
+
+func isAdultLibraryName(name string) bool {
+	compact := compactLibraryName(name)
+	if compact == "" {
+		return false
+	}
+	if compact == "av" {
+		return true
+	}
 	for _, marker := range []string{"成人", "情色", "里番", "十八禁", "adult", "xxx", "porn", "hentai", "jav", "r18", "18+", "nc17", "nsfw"} {
 		if strings.Contains(compact, marker) {
 			return true
@@ -60,7 +71,7 @@ func isAdultRating(value string) bool {
 	compact := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), " ", ""))
 	compact = strings.ReplaceAll(compact, "-", "")
 	switch compact {
-	case "xxx", "ao", "x", "r18", "r18+", "18", "18+", "nc17", "nc-17":
+	case "xxx", "ao", "x", "r18", "r18+", "18+":
 		return true
 	default:
 		return strings.Contains(compact, "xxx") || strings.Contains(compact, "r18")
@@ -130,37 +141,42 @@ func (c *Client) browseAdultItems(ctx context.Context, configuration clientConfi
 		if err != nil {
 			continue
 		}
-		appendUnique(catalogItems(items))
+		appendUnique(catalogAdultItems(items))
+	}
+	fromFolders := make(map[string]struct{}, len(seen))
+	for id := range seen {
+		fromFolders[id] = struct{}{}
 	}
 	tagged, err := c.listTaggedAdultItems(ctx, configuration)
 	if err == nil {
-		appendUnique(catalogItems(tagged))
-	}
-	visible := make([]baseItem, 0, len(collected))
-	for _, item := range collected {
-		ok, visibleErr := c.catalogItemVisible(ctx, configuration, item)
-		if visibleErr != nil || !ok {
-			continue
+		for _, item := range catalogAdultItems(tagged) {
+			if _, exists := fromFolders[item.ID]; exists {
+				continue
+			}
+			ok, visibleErr := c.catalogItemVisible(ctx, configuration, item)
+			if visibleErr != nil || !ok {
+				continue
+			}
+			appendUnique([]baseItem{item})
 		}
-		visible = append(visible, item)
 	}
-	sort.SliceStable(visible, func(i, j int) bool {
-		return strings.ToLower(visible[i].Name) < strings.ToLower(visible[j].Name)
+	sort.SliceStable(collected, func(i, j int) bool {
+		return strings.ToLower(collected[i].Name) < strings.ToLower(collected[j].Name)
 	})
-	if offset > len(visible) {
-		offset = len(visible)
+	if offset > len(collected) {
+		offset = len(collected)
 	}
 	end := offset + limit
-	if end > len(visible) {
-		end = len(visible)
+	if end > len(collected) {
+		end = len(collected)
 	}
-	return publicItems(itemResponse{Items: visible[offset:end], TotalRecordCount: len(visible)}), nil
+	return publicItems(itemResponse{Items: collected[offset:end], TotalRecordCount: len(collected)}), nil
 }
 
 func (c *Client) listFolderCatalog(ctx context.Context, configuration clientConfig, folderID string, withUser bool) ([]baseItem, error) {
 	query := url.Values{
 		"Fields":           {"OfficialRating,Genres,ProviderIds,UserData,MediaSources,Path"},
-		"IncludeItemTypes": {"Movie,Series"},
+		"IncludeItemTypes": {"Movie,Series,Video"},
 		"Limit":            {"10000"},
 		"ParentId":         {folderID},
 		"Recursive":        {"true"},
@@ -181,7 +197,7 @@ func (c *Client) listFolderCatalog(ctx context.Context, configuration clientConf
 func (c *Client) listTaggedAdultItems(ctx context.Context, configuration clientConfig) ([]baseItem, error) {
 	query := url.Values{
 		"Fields":           {"OfficialRating,Genres,ProviderIds,UserData,MediaSources,Path"},
-		"IncludeItemTypes": {"Movie,Series"},
+		"IncludeItemTypes": {"Movie,Series,Video"},
 		"Limit":            {"10000"},
 		"Recursive":        {"true"},
 		"SortBy":           {"SortName"},
@@ -204,7 +220,7 @@ func (c *Client) listTaggedAdultItems(ctx context.Context, configuration clientC
 func (c *Client) appendAdultSearch(ctx context.Context, configuration clientConfig, queryText string, appendUnique func([]baseItem, bool)) {
 	query := url.Values{
 		"Fields":           {"OfficialRating,Genres,ProviderIds,MediaSources,Path"},
-		"IncludeItemTypes": {"Movie,Series"},
+		"IncludeItemTypes": {"Movie,Series,Video"},
 		"Limit":            {"100"},
 		"Recursive":        {"true"},
 		"SearchTerm":       {queryText},

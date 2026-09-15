@@ -10,16 +10,22 @@ import (
 )
 
 func TestAdultLibraryNameAndItemMarkers(t *testing.T) {
-	if !isAdultLibraryName("成人电影") || !isAdultLibraryName("Adult Movies") || isAdultLibraryName("英美电影") {
+	if !isAdultLibraryName("成人电影") || !isAdultLibraryName("Adult Movies") || !isAdultLibraryName("av") || isAdultLibraryName("英美电影") {
 		t.Fatal("library name markers")
+	}
+	if isAdultLibraryName("avatar") || isAdultLibraryName("travel") || isAdultLibraryName("brave") {
+		t.Fatal("bare av matched inside unrelated names")
 	}
 	if !isAdultItem(baseItem{OfficialRating: "XXX"}) || !isAdultItem(baseItem{Genres: []string{"情色"}}) {
 		t.Fatal("item markers")
 	}
+	if isAdultItem(baseItem{OfficialRating: "NC-17", Genres: []string{"剧情"}, Path: "/media/links/英美电影/Title.mkv"}) {
+		t.Fatal("nc-17 mainstream item treated as adult")
+	}
 	if isAdultItem(baseItem{OfficialRating: "R", Genres: []string{"剧情"}, Path: "/media/links/英美电影/Title.mkv"}) {
 		t.Fatal("mainstream item treated as adult")
 	}
-	if !isAdultItem(baseItem{Path: "/volume4/media/成人/Title.mkv"}) {
+	if !isAdultItem(baseItem{Path: "/volume4/media/成人/Title.mkv"}) || !isAdultItem(baseItem{Path: "/media2/av/Title.mkv"}) {
 		t.Fatal("adult path ignored")
 	}
 }
@@ -103,6 +109,7 @@ func TestBrowseMovesAdultItemsIntoAggregateLibrary(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"Items": []map[string]any{
 						{"Id": "hidden-1", "Name": "Hidden", "Type": "Movie", "Path": "/volume4/media/成人/Hidden.mkv"},
+						{"Id": "hidden-video", "Name": "Clip", "Type": "Video", "Path": "/media2/av/Clip.mp4"},
 					},
 				})
 			case "":
@@ -131,14 +138,14 @@ func TestBrowseMovesAdultItemsIntoAggregateLibrary(t *testing.T) {
 		t.Fatalf("regular browse=%#v err=%v", regular, err)
 	}
 	adult, err := client.BrowseItems(context.Background(), adultLibraryID, 0, 10)
-	if err != nil || adult.Total != 2 {
+	if err != nil || adult.Total != 3 {
 		t.Fatalf("adult browse=%#v err=%v", adult, err)
 	}
 	ids := map[string]bool{}
 	for _, item := range adult.Items {
 		ids[item.ID] = true
 	}
-	if !ids["hidden-1"] || !ids["pt-adult"] {
+	if !ids["hidden-1"] || !ids["pt-adult"] || !ids["hidden-video"] {
 		t.Fatalf("adult ids=%v", ids)
 	}
 }
