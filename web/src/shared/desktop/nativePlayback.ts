@@ -28,6 +28,7 @@ export type NativeStatus = {
   cursorHover?: boolean
   mouseX?: number
   mouseY?: number
+  fullscreen?: boolean
 }
 
 type TauriInvoke = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>

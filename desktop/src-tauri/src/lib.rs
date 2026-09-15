@@ -175,6 +175,7 @@ pub(crate) fn mpv_args(
     if let Some(geometry) = geometry.filter(|value| !value.is_empty()) {
         args.push(format!("--geometry={geometry}"));
         args.push("--ontop=yes".to_string());
+        args.push("--macos-fs-animation=no".to_string());
     }
     if let Some(ipc) = ipc {
         args.push(format!("--input-ipc-server={}", ipc.display()));
@@ -339,6 +340,7 @@ mod tests {
         let args = mpv_args("片", 0, None, None, None, None, None, Some("800x450+110+60"));
         assert!(args.iter().any(|arg| arg == "--geometry=800x450+110+60"));
         assert!(args.iter().any(|arg| arg == "--ontop=yes"));
+        assert!(args.iter().any(|arg| arg == "--macos-fs-animation=no"));
         assert!(args.iter().all(|arg| !arg.starts_with("--wid=")));
     }
 

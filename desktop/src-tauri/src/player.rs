@@ -23,6 +23,8 @@ pub const PLAYER_LABEL: &str = "player";
 #[derive(Default)]
 pub struct PlayerState {
     child: Mutex<Option<Child>>,
+    windowed_fullscreen: AtomicBool,
+    last_geometry: Mutex<Option<String>>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -46,6 +48,7 @@ pub struct NativeStatus {
     pub cursor_hover: bool,
     pub mouse_x: f64,
     pub mouse_y: f64,
+    pub fullscreen: bool,
 }
 
 fn parked_origin() -> PhysicalPosition<i32> {
@@ -169,6 +172,18 @@ fn surface_window(app: &AppHandle) -> Result<Window, String> {
 
 fn host_embed_supported() -> bool {
     cfg!(windows)
+}
+
+pub(crate) fn should_apply_windowed_layout(fullscreen: bool) -> bool {
+    !fullscreen
+}
+
+pub(crate) fn windowed_fullscreen_command(enable: bool) -> Vec<serde_json::Value> {
+    vec![
+        serde_json::json!("set_property"),
+        serde_json::json!("fullscreen"),
+        serde_json::json!(enable),
+    ]
 }
 
 pub(crate) fn window_geometry(scale: f64, origin_x: i32, origin_y: i32, bounds: &EmbedBounds) -> String {
@@ -375,6 +390,7 @@ fn spawn_mpv(
     state: &PlayerState,
 ) -> Result<(), String> {
     stop_child(state);
+    state.windowed_fullscreen.store(false, Ordering::SeqCst);
     if !cfg!(windows) {
         let _ = std::fs::remove_file(ipc_path());
     }
@@ -670,7 +686,11 @@ pub fn attach_native_subtitle(
 }
 
 #[tauri::command]
-pub fn layout_native(app: AppHandle, bounds: EmbedBounds) -> Result<(), String> {
+pub fn layout_native(
+    app: AppHandle,
+    state: tauri::State<PlayerState>,
+    bounds: EmbedBounds,
+) -> Result<(), String> {
     if host_embed_supported() {
         let Ok(surface) = surface_window(&app) else {
             return Ok(());
@@ -679,8 +699,14 @@ pub fn layout_native(app: AppHandle, bounds: EmbedBounds) -> Result<(), String> 
         let _ = surface.set_ignore_cursor_events(true);
         return Ok(());
     }
+    if !should_apply_windowed_layout(state.windowed_fullscreen.load(Ordering::SeqCst)) {
+        return Ok(());
+    }
     let host = host_window(&app)?;
     let geometry = windowed_geometry(&host, &bounds)?;
+    if let Ok(mut last) = state.last_geometry.lock() {
+        *last = Some(geometry.clone());
+    }
     std::thread::spawn(move || {
         let _ = ipc_command(&[
             serde_json::json!("set_property"),
@@ -693,6 +719,7 @@ pub fn layout_native(app: AppHandle, bounds: EmbedBounds) -> Result<(), String> 
 
 #[tauri::command]
 pub fn stop_native(app: AppHandle, state: tauri::State<PlayerState>) -> Result<(), String> {
+    state.windowed_fullscreen.store(false, Ordering::SeqCst);
     stop_child(&state);
     if let Ok(surface) = surface_window(&app) {
         let _ = park_surface(&surface);
@@ -722,12 +749,35 @@ pub async fn native_control(action: String, value: Option<f64>, mode: Option<Str
 }
 
 #[tauri::command]
-pub fn toggle_native_window(app: AppHandle) -> Result<(), String> {
-    let window = host_window(&app)?;
-    let fullscreen = window.is_fullscreen().unwrap_or(false);
-    window
-        .set_fullscreen(!fullscreen)
-        .map_err(|_| "无法切换全屏。".to_string())
+pub fn toggle_native_window(app: AppHandle, state: tauri::State<PlayerState>) -> Result<(), String> {
+    if host_embed_supported() {
+        let window = host_window(&app)?;
+        let fullscreen = window.is_fullscreen().unwrap_or(false);
+        window
+            .set_fullscreen(!fullscreen)
+            .map_err(|_| "无法切换全屏。".to_string())?;
+        return Ok(());
+    }
+    let next = !state.windowed_fullscreen.load(Ordering::SeqCst);
+    state.windowed_fullscreen.store(next, Ordering::SeqCst);
+    let geometry = state
+        .last_geometry
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone());
+    std::thread::spawn(move || {
+        let _ = ipc_command(&windowed_fullscreen_command(next));
+        if !next {
+            if let Some(geometry) = geometry {
+                let _ = ipc_command(&[
+                    serde_json::json!("set_property"),
+                    serde_json::json!("geometry"),
+                    serde_json::json!(geometry),
+                ]);
+            }
+        }
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -798,6 +848,7 @@ fn idle_native_status() -> NativeStatus {
         cursor_hover: false,
         mouse_x: 0.0,
         mouse_y: 0.0,
+        fullscreen: false,
     }
 }
 
@@ -813,6 +864,7 @@ fn read_native_status() -> NativeStatus {
         cursor_hover: pos.hover,
         mouse_x: pos.x,
         mouse_y: pos.y,
+        fullscreen: ipc_bool("fullscreen"),
     }
 }
 
@@ -837,6 +889,20 @@ mod tests {
         };
         assert_eq!(window_geometry(2.0, 200, 80, &bounds), "800x450+110+60");
         assert_eq!(window_geometry(1.0, 24, 48, &bounds), "800x450+34+68");
+    }
+
+    #[test]
+    fn windowed_fullscreen_skips_layout_and_only_tells_mpv() {
+        assert!(should_apply_windowed_layout(false));
+        assert!(!should_apply_windowed_layout(true));
+        assert_eq!(
+            windowed_fullscreen_command(true),
+            vec![
+                serde_json::json!("set_property"),
+                serde_json::json!("fullscreen"),
+                serde_json::json!(true),
+            ]
+        );
     }
 
     #[test]

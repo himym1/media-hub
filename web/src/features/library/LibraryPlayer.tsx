@@ -96,6 +96,8 @@ export function LibraryPlayer({
   const [allowAutoHide, setAllowAutoHide] = useState(false)
   const [silentAudio, setSilentAudio] = useState(false)
   const [nativeActive, setNativeActive] = useState(false)
+  const [nativeFullscreen, setNativeFullscreen] = useState(false)
+  const nativeFullscreenRef = useRef(false)
   const [nativePointerReady, setNativePointerReady] = useState(false)
   const [subtitleHint, setSubtitleHint] = useState<string | null>(null)
   const [aspect, setAspect] = useState<PlayerAspectId>('fit')
@@ -197,7 +199,12 @@ export function LibraryPlayer({
 
   const togglePresentation = useCallback(() => {
     if (canPlayNatively()) {
-      void toggleNativeWindow().catch(() => undefined)
+      nativeFullscreenRef.current = !nativeFullscreenRef.current
+      setNativeFullscreen(nativeFullscreenRef.current)
+      void toggleNativeWindow().catch(() => {
+        nativeFullscreenRef.current = !nativeFullscreenRef.current
+        setNativeFullscreen(nativeFullscreenRef.current)
+      })
       return
     }
     toggleFullscreen()
@@ -221,6 +228,10 @@ export function LibraryPlayer({
       const video = videoRef.current
       if (event.key === 'Escape') {
         event.preventDefault()
+        if (nativeActive && nativeFullscreenRef.current) {
+          togglePresentation()
+          return
+        }
         onClose()
         return
       }
@@ -277,6 +288,8 @@ export function LibraryPlayer({
     setChromeVisible(true)
     setChromePinned(false)
     setNativeActive(false)
+    setNativeFullscreen(false)
+    nativeFullscreenRef.current = false
     setSubtitleHint(null)
     setAspect('fit')
     setPictureZoom(1)
@@ -407,6 +420,7 @@ export function LibraryPlayer({
       }
     })()
     const relayout = () => {
+      if (nativeFullscreenRef.current) return
       const bounds = nativeSurfaceBounds()
       if (bounds) void layoutNatively(bounds).catch(() => undefined)
     }
@@ -457,10 +471,10 @@ export function LibraryPlayer({
   }, [itemId, nativeActive])
 
   useEffect(() => {
-    if (!nativeActive) return
+    if (!nativeActive || nativeFullscreen) return
     const bounds = nativeSurfaceBounds()
     if (bounds) void layoutNatively(bounds).catch(() => undefined)
-  }, [chromeVisible, itemId, nativeActive])
+  }, [chromeVisible, itemId, nativeActive, nativeFullscreen])
 
   useEffect(() => {
     if (error || silentAudio || nativeActive) return
