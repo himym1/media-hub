@@ -149,6 +149,7 @@ pub(crate) fn mpv_args(
     ipc: Option<&Path>,
     input_conf: Option<&Path>,
     sub_file: Option<&Path>,
+    geometry: Option<&str>,
 ) -> Vec<String> {
     let mut args = vec![
         "--force-window=yes".to_string(),
@@ -170,6 +171,10 @@ pub(crate) fn mpv_args(
     }
     if let Some(wid) = wid {
         args.push(format!("--wid={wid}"));
+    }
+    if let Some(geometry) = geometry.filter(|value| !value.is_empty()) {
+        args.push(format!("--geometry={geometry}"));
+        args.push("--ontop=yes".to_string());
     }
     if let Some(ipc) = ipc {
         args.push(format!("--input-ipc-server={}", ipc.display()));
@@ -309,7 +314,7 @@ mod tests {
     #[test]
     fn mpv_args_keep_comma_user_agent_out_of_header_lists() {
         let agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
-        let args = mpv_args("范海辛", 0, Some(agent), Some(42), None, None, None);
+        let args = mpv_args("范海辛", 0, Some(agent), Some(42), None, None, None, None);
         assert!(args.iter().any(|arg| arg == "--osc=no"));
         assert!(args.iter().any(|arg| arg == "--cache=yes"));
         assert!(args.iter().any(|arg| arg == "--network-timeout=20"));
@@ -322,11 +327,19 @@ mod tests {
     #[test]
     fn mpv_args_attach_external_subtitle() {
         let path = PathBuf::from(r"C:\Temp\media-hub-sub.ass");
-        let args = mpv_args("片", 0, None, None, None, None, Some(&path));
+        let args = mpv_args("片", 0, None, None, None, None, Some(&path), None);
         assert!(args.iter().any(|arg| arg == &format!("--sub-file={}", path.display())));
         assert!(args.iter().any(|arg| arg == "--sid=auto"));
         assert!(args.iter().any(|arg| arg == "--sub-visibility=yes"));
         assert!(args.iter().any(|arg| arg == "--subs-with-matching-audio=no"));
+    }
+
+    #[test]
+    fn mpv_args_windowed_geometry_skips_wid() {
+        let args = mpv_args("片", 0, None, None, None, None, None, Some("800x450+110+60"));
+        assert!(args.iter().any(|arg| arg == "--geometry=800x450+110+60"));
+        assert!(args.iter().any(|arg| arg == "--ontop=yes"));
+        assert!(args.iter().all(|arg| !arg.starts_with("--wid=")));
     }
 
     #[test]

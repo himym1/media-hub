@@ -14,7 +14,7 @@ use tauri::{
 
 use crate::{
     command_path_with_extras, decode_subtitle_base64, is_supported_playback_url, mpv_args,
-    resolve_mpv, sanitized_user_agent, wait_child_started, write_subtitle_temp,
+    resolve_mpv, sanitized_user_agent, write_subtitle_temp,
 };
 
 pub const SURFACE_LABEL: &str = "mpv-surface";
@@ -165,6 +165,34 @@ fn teardown_player_window(app: &AppHandle, state: &PlayerState) {
 fn surface_window(app: &AppHandle) -> Result<Window, String> {
     app.get_window(SURFACE_LABEL)
         .ok_or_else(|| "找不到内嵌播放窗口。".into())
+}
+
+fn host_embed_supported() -> bool {
+    cfg!(windows)
+}
+
+pub(crate) fn window_geometry(scale: f64, origin_x: i32, origin_y: i32, bounds: &EmbedBounds) -> String {
+    let scale = if scale > 0.0 { scale } else { 1.0 };
+    let x = (origin_x as f64) / scale + bounds.x;
+    let y = (origin_y as f64) / scale + bounds.y;
+    format!(
+        "{}x{}{:+}{:+}",
+        bounds.width.max(8.0).round() as u32,
+        bounds.height.max(8.0).round() as u32,
+        x.round() as i32,
+        y.round() as i32,
+    )
+}
+
+fn windowed_geometry(host: &WebviewWindow, bounds: &EmbedBounds) -> Result<String, String> {
+    if bounds.width < 8.0 || bounds.height < 8.0 {
+        return Err("播放区域太小。".into());
+    }
+    let scale = host.scale_factor().unwrap_or(1.0);
+    let origin = host
+        .inner_position()
+        .map_err(|_| "无法定位播放窗口。".to_string())?;
+    Ok(window_geometry(scale, origin.x, origin.y, bounds))
 }
 
 fn apply_bounds(main: &WebviewWindow, surface: &Window, bounds: &EmbedBounds) -> Result<(), String> {
@@ -335,13 +363,14 @@ fn wait_child_exit(mut child: Child, timeout: Duration) {
     let _ = rx.recv_timeout(timeout);
 }
 
-fn spawn_embedded(
+fn spawn_mpv(
     mpv: &Path,
     url: &str,
     title: &str,
     start_position_ms: u64,
     user_agent: Option<&str>,
-    wid: i64,
+    wid: Option<i64>,
+    geometry: Option<&str>,
     sub_file: Option<&Path>,
     state: &PlayerState,
 ) -> Result<(), String> {
@@ -356,10 +385,11 @@ fn spawn_embedded(
         title,
         start_position_ms,
         user_agent,
-        Some(wid),
+        wid,
         Some(&ipc),
         Some(&input),
         sub_file,
+        geometry,
     ))
     .arg(url)
     .stdin(Stdio::null())
@@ -368,8 +398,7 @@ fn spawn_embedded(
     if let Some(path) = command_path_with_extras() {
         cmd.env("PATH", path);
     }
-    let mut child = cmd.spawn().map_err(|_| "无法启动播放器。".to_string())?;
-    wait_child_started(&mut child, Duration::from_millis(80))?;
+    let child = cmd.spawn().map_err(|_| "无法启动播放器。".to_string())?;
     *state.child.lock().map_err(|_| "无法记录播放器。".to_string())? = Some(child);
     if sub_file.is_some() {
         std::thread::spawn(select_external_subtitle);
@@ -576,25 +605,40 @@ pub fn play_native(
         None => None,
     };
     let host = host_window(&app)?;
-    let surface = ensure_surface(&app)?;
-    apply_bounds(&host, &surface, &bounds)?;
-    surface.show().map_err(|_| "无法打开播放画面。".to_string())?;
-    // Keep the webview on top for mouse-move / double-click; mpv only paints.
-    let _ = surface.set_ignore_cursor_events(true);
-    let wid = surface_wid(&surface)?;
-    spawn_embedded(
-        &mpv,
-        &url,
-        &title,
-        start_position_ms,
-        user_agent.as_deref().and_then(sanitized_user_agent),
-        wid,
-        sub_path.as_deref(),
-        &state,
-    )?;
-    // Dedicated player stays windowed; only the old in-main overlay needs fullscreen.
-    if app.get_webview_window(PLAYER_LABEL).is_none() {
-        let _ = host.set_fullscreen(true);
+    let agent = user_agent.as_deref().and_then(sanitized_user_agent);
+    if host_embed_supported() {
+        let surface = ensure_surface(&app)?;
+        apply_bounds(&host, &surface, &bounds)?;
+        surface.show().map_err(|_| "无法打开播放画面。".to_string())?;
+        let _ = surface.set_ignore_cursor_events(true);
+        let wid = surface_wid(&surface)?;
+        spawn_mpv(
+            &mpv,
+            &url,
+            &title,
+            start_position_ms,
+            agent,
+            Some(wid),
+            None,
+            sub_path.as_deref(),
+            &state,
+        )?;
+        if app.get_webview_window(PLAYER_LABEL).is_none() {
+            let _ = host.set_fullscreen(true);
+        }
+    } else {
+        let geometry = windowed_geometry(&host, &bounds)?;
+        spawn_mpv(
+            &mpv,
+            &url,
+            &title,
+            start_position_ms,
+            agent,
+            None,
+            Some(&geometry),
+            sub_path.as_deref(),
+            &state,
+        )?;
     }
     let _ = host.set_focus();
     Ok(())
@@ -627,11 +671,23 @@ pub fn attach_native_subtitle(
 
 #[tauri::command]
 pub fn layout_native(app: AppHandle, bounds: EmbedBounds) -> Result<(), String> {
-    let Ok(surface) = surface_window(&app) else {
+    if host_embed_supported() {
+        let Ok(surface) = surface_window(&app) else {
+            return Ok(());
+        };
+        apply_bounds(&host_window(&app)?, &surface, &bounds)?;
+        let _ = surface.set_ignore_cursor_events(true);
         return Ok(());
-    };
-    apply_bounds(&host_window(&app)?, &surface, &bounds)?;
-    let _ = surface.set_ignore_cursor_events(true);
+    }
+    let host = host_window(&app)?;
+    let geometry = windowed_geometry(&host, &bounds)?;
+    std::thread::spawn(move || {
+        let _ = ipc_command(&[
+            serde_json::json!("set_property"),
+            serde_json::json!("geometry"),
+            serde_json::json!(geometry),
+        ]);
+    });
     Ok(())
 }
 
@@ -769,6 +825,18 @@ mod tests {
         let origin = parked_origin();
         assert!(origin.x <= -10_000);
         assert!(origin.y <= -10_000);
+    }
+
+    #[test]
+    fn window_geometry_uses_logical_points() {
+        let bounds = EmbedBounds {
+            x: 10.0,
+            y: 20.0,
+            width: 800.0,
+            height: 450.0,
+        };
+        assert_eq!(window_geometry(2.0, 200, 80, &bounds), "800x450+110+60");
+        assert_eq!(window_geometry(1.0, 24, 48, &bounds), "800x450+34+68");
     }
 
     #[test]

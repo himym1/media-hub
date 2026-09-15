@@ -42,7 +42,7 @@ import {
   type EmbyItemDetail,
   type EmbyRemoteSubtitle,
 } from '../../shared/api/mediaHub'
-import { canPlayNatively, openPlayerWindow } from '../../shared/desktop/nativePlayback'
+import { canPlayNatively } from '../../shared/desktop/nativePlayback'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
 import { LibraryEpisodes } from './LibraryEpisodes'
@@ -178,11 +178,8 @@ export function LibraryView() {
   }
   const startPlay = (target: Pick<EmbyEpisode, 'id' | 'name' | 'externalUrl'>) => {
     if (!inPagePlayback) return
-    const seriesId = detail.data?.type === 'Series' ? detail.data.id : undefined
-    void openPlayerWindow({ playId: target.id, title: target.name, seriesId }).catch(() => {
-      setPlayId(target.id)
-      commitUrl({ play: target.id })
-    })
+    setPlayId(target.id)
+    commitUrl({ play: target.id })
   }
   const closePlay = () => {
     setPlayId(null)
