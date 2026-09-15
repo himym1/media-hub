@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Captions, ChevronLeft, ChevronRight, CircleAlert, Film, RefreshCw, Search, Trash2, X } from 'lucide-react'
+import { BookOpen, Captions, ChevronLeft, ChevronRight, CircleAlert, Film, Play, RefreshCw, Search, Star, Trash2, X } from 'lucide-react'
 import {
   deleteEmbyItem,
   downloadEmbyRemoteSubtitle,
@@ -251,63 +251,177 @@ export function LibraryView() {
       {mutationError ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{mutationError.message}</span></div> : null}
 
       <div className="library-browse">
-      {hasShared ? (
-        <div className="library-scope" role="tablist" aria-label="媒体库来源">
-          <button aria-selected={scope === 'mine'} className={scope === 'mine' ? 'library-scope-button selected' : 'library-scope-button'} onClick={() => selectScope('mine')} role="tab" type="button">我的库</button>
-          <button aria-selected={scope === 'shared'} className={scope === 'shared' ? 'library-scope-button selected' : 'library-scope-button'} onClick={() => selectScope('shared')} role="tab" type="button">共享库</button>
-        </div>
-      ) : null}
-
-      <nav className="library-selector" aria-label={scope === 'shared' ? '共享 Emby 媒体库' : '我的 Emby 媒体库'}>
-        {scopeLibraries.map((library) => {
-          const typeLabel = libraryCollectionLabel(library.collectionType)
-          const name = libraryDisplayName(library.name)
-          return (
-            <button aria-pressed={library.id === libraryId} className={library.id === libraryId ? 'library-button selected' : 'library-button'} key={library.id} onClick={() => selectLibrary(library.id)} type="button">
-              <span><strong>{name}</strong>{typeLabel.toLocaleLowerCase() !== name.trim().toLocaleLowerCase() ? <small>{typeLabel}</small> : null}</span>
-            </button>
-          )
-        })}
-      </nav>
-
-      <div className="library-toolbar">
-        <form className="library-search" onSubmit={submitSearch}>
-          <Search size={19} aria-hidden="true" />
-          <label className="sr-only" htmlFor="library-query">搜索 Emby 媒体</label>
-          <input
-            autoComplete="off"
-            id="library-query"
-            maxLength={120}
-            name="library-query"
-            onChange={(event) => setQueryText(event.target.value)}
-            placeholder={scope === 'shared' ? '搜索共享库…' : '搜索电影或剧集…'}
-            type="search"
-            value={queryText}
-          />
-          {queryText ? (
-            <button aria-label="清空搜索内容" className="search-clear-button" onClick={clearSearch} type="button">
-              <X aria-hidden="true" size={16} />
-            </button>
-          ) : null}
-          <button disabled={!queryText.trim()} type="submit">搜索</button>
-        </form>
-        {selectedLibrary && !submittedQuery && !isSharedEmbyId(selectedLibrary.id) ? <button className="secondary-command" disabled={refreshLibrary.isPending} onClick={() => refreshLibrary.mutate(selectedLibrary.id)} type="button"><RefreshCw size={16} />{refreshLibrary.isPending ? '已提交…' : '刷新此库'}</button> : null}
-      </div>
-
-        <div className="library-results">
-          <div className="library-results-heading">
-            <div>
-              <strong>{submittedQuery ? `“${submittedQuery}”的结果` : libraryDisplayName(selectedLibrary?.name ?? '媒体内容')}</strong>
-              <span>{total} 项</span>
-            </div>
-            {!submittedQuery && total > pageSize ? (
-              <div className="library-pagination">
-                <IconButton label="上一页" disabled={page === 0} onClick={() => changePage(Math.max(0, page - 1))} subtle><ChevronLeft size={17} /></IconButton>
-                <span>{page + 1} / {Math.max(1, Math.ceil(total / pageSize))}</span>
-                <IconButton label="下一页" disabled={(page + 1) * pageSize >= total} onClick={() => changePage(page + 1)} subtle><ChevronRight size={17} /></IconButton>
+        <div className="library-header-bar">
+          <div className="library-nav-cluster">
+            {hasShared ? (
+              <div aria-label="媒体库来源" className="library-scope-switch" role="tablist">
+                <button
+                  aria-selected={scope === 'mine'}
+                  className={scope === 'mine' ? 'scope-switch-btn active' : 'scope-switch-btn'}
+                  onClick={() => selectScope('mine')}
+                  role="tab"
+                  type="button"
+                >
+                  我的库
+                </button>
+                <button
+                  aria-selected={scope === 'shared'}
+                  className={scope === 'shared' ? 'scope-switch-btn active' : 'scope-switch-btn'}
+                  onClick={() => selectScope('shared')}
+                  role="tab"
+                  type="button"
+                >
+                  共享库
+                </button>
               </div>
             ) : null}
+
+            <nav aria-label={scope === 'shared' ? '共享 Emby 媒体库' : '我的 Emby 媒体库'} className="library-tabs">
+              {scopeLibraries.map((library) => {
+                const typeLabel = libraryCollectionLabel(library.collectionType)
+                const name = libraryDisplayName(library.name)
+                const isSelected = library.id === libraryId
+                return (
+                  <button
+                    aria-pressed={isSelected}
+                    className={isSelected ? 'library-tab-pill active' : 'library-tab-pill'}
+                    key={library.id}
+                    onClick={() => selectLibrary(library.id)}
+                    type="button"
+                  >
+                    <span className="tab-name">{name}</span>
+                    {typeLabel.toLocaleLowerCase() !== name.trim().toLocaleLowerCase() ? (
+                      <span className="tab-type">{typeLabel}</span>
+                    ) : null}
+                  </button>
+                )
+              })}
+            </nav>
           </div>
+
+          <div className="library-action-cluster">
+            <form className="library-inline-search" onSubmit={submitSearch}>
+              <Search aria-hidden="true" className="search-icon" size={15} />
+              <label className="sr-only" htmlFor="library-query">搜索 Emby 媒体</label>
+              <input
+                autoComplete="off"
+                id="library-query"
+                maxLength={120}
+                name="library-query"
+                onChange={(event) => setQueryText(event.target.value)}
+                placeholder={scope === 'shared' ? '搜索共享库…' : '搜索…'}
+                type="search"
+                value={queryText}
+              />
+              {queryText ? (
+                <button aria-label="清空搜索内容" className="search-clear-btn" onClick={clearSearch} type="button">
+                  <X aria-hidden="true" size={14} />
+                </button>
+              ) : null}
+              {queryText.trim() ? (
+                <button className="search-submit-btn" type="submit">搜</button>
+              ) : null}
+            </form>
+
+            <div className="library-meta-actions">
+              <span className="library-count-tag">{total} 部</span>
+              {selectedLibrary && !submittedQuery && !isSharedEmbyId(selectedLibrary.id) ? (
+                <button
+                  className="library-refresh-btn"
+                  disabled={refreshLibrary.isPending}
+                  onClick={() => refreshLibrary.mutate(selectedLibrary.id)}
+                  title="刷新当前媒体库元数据"
+                  type="button"
+                >
+                  <RefreshCw className={refreshLibrary.isPending ? 'spin' : ''} size={14} />
+                  <span>{refreshLibrary.isPending ? '刷新中' : '刷新'}</span>
+                </button>
+              ) : null}
+              {!submittedQuery && total > pageSize ? (
+                <div className="library-mini-pagination">
+                  <IconButton
+                    disabled={page === 0}
+                    label="上一页"
+                    onClick={() => changePage(Math.max(0, page - 1))}
+                    subtle
+                  >
+                    <ChevronLeft size={16} />
+                  </IconButton>
+                  <span className="page-indicator">
+                    {page + 1}/{Math.max(1, Math.ceil(total / pageSize))}
+                  </span>
+                  <IconButton
+                    disabled={(page + 1) * pageSize >= total}
+                    label="下一页"
+                    onClick={() => changePage(page + 1)}
+                    subtle
+                  >
+                    <ChevronRight size={16} />
+                  </IconButton>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {submittedQuery ? (
+          <div className="search-active-pill">
+            <span>正在显示“<strong>{submittedQuery}</strong>”的搜索结果（共 {total} 部）</span>
+            <button className="search-active-clear" onClick={clearSearch} type="button">
+              <X size={14} />
+              清除搜索
+            </button>
+          </div>
+        ) : null}
+
+        {!submittedQuery && page === 0 && items.length > 0 ? (
+          <div className="library-hero-spotlight">
+            <div
+              className="spotlight-backdrop"
+              style={{ backgroundImage: `url(${embyPrimaryImageURL(items[0].id)})` }}
+            />
+            <div className="spotlight-vignette" />
+            <div className="spotlight-content">
+              <div className="spotlight-poster-wrap">
+                <img
+                  alt=""
+                  className="spotlight-poster"
+                  decoding="async"
+                  height={150}
+                  src={embyPrimaryImageURL(items[0].id)}
+                  width={100}
+                />
+              </div>
+              <div className="spotlight-body">
+                <div className="spotlight-badges">
+                  <span className="spotlight-tag">
+                    {selectedLibrary ? libraryDisplayName(selectedLibrary.name) : '精选推荐'}
+                  </span>
+                  <span className="spotlight-tag">{mediaTypeLabel(items[0].type)}</span>
+                  {items[0].played ? (
+                    <span className="spotlight-status played">已看完</span>
+                  ) : (items[0].playbackPositionMs ?? 0) >= 30_000 ? (
+                    <span className="spotlight-status in-progress">正在观看</span>
+                  ) : null}
+                  {items[0].year ? <span className="spotlight-year">{items[0].year}</span> : null}
+                </div>
+                <h2 className="spotlight-title">{items[0].name}</h2>
+                <div className="spotlight-actions">
+                  <button
+                    className="spotlight-play-btn"
+                    onClick={() => selectItem(items[0].id)}
+                    type="button"
+                  >
+                    <Play fill="currentColor" size={14} />
+                    立即查看与播放
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="library-results">
           {result.isLoading && items.length === 0 ? (
             <div aria-label="正在加载媒体海报" className="library-poster-grid" role="status">
               {Array.from({ length: 12 }).map((_, i) => (
@@ -321,13 +435,13 @@ export function LibraryView() {
           {result.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>媒体内容读取失败</strong><span>{result.error.message}</span></div><button onClick={() => void result.refetch()} type="button">重试</button></div> : null}
           {!result.isLoading && !result.isError && items.length === 0 ? <div className="empty-state"><BookOpen size={28} /><span>{submittedQuery ? '没有匹配的媒体' : '此媒体库暂无可浏览内容'}</span></div> : null}
           <div className="library-poster-grid">
-            {items.map((item) => <LibraryPosterCard item={item} key={item.id} selected={item.id === itemId} onSelect={selectItem} />)}
+            {items.map((item) => <LibraryPosterCard item={item} key={item.id} onSelect={selectItem} selected={item.id === itemId} />)}
           </div>
           {!submittedQuery && total > pageSize ? (
             <div aria-label="底部页面导航" className="library-pagination library-pagination-bottom">
-              <IconButton label="上一页" disabled={page === 0} onClick={() => changePage(Math.max(0, page - 1))} subtle><ChevronLeft size={17} /></IconButton>
+              <IconButton disabled={page === 0} label="上一页" onClick={() => changePage(Math.max(0, page - 1))} subtle><ChevronLeft size={17} /></IconButton>
               <span>{page + 1} / {Math.max(1, Math.ceil(total / pageSize))}</span>
-              <IconButton label="下一页" disabled={(page + 1) * pageSize >= total} onClick={() => changePage(page + 1)} subtle><ChevronRight size={17} /></IconButton>
+              <IconButton disabled={(page + 1) * pageSize >= total} label="下一页" onClick={() => changePage(page + 1)} subtle><ChevronRight size={17} /></IconButton>
             </div>
           ) : null}
         </div>
@@ -360,7 +474,10 @@ export function LibraryView() {
 
 function LibraryPosterCard({ item, selected, onSelect }: { item: EmbyItem; selected: boolean; onSelect: (id: string) => void }) {
   const [failed, setFailed] = useState(false)
-  const status = item.played || (item.playbackPositionMs ?? 0) >= 30_000 ? playbackStatus(item) : ''
+  const isPlayed = Boolean(item.played)
+  const isProgress = (item.playbackPositionMs ?? 0) >= 30_000 && !isPlayed
+  const status = isPlayed || isProgress ? playbackStatus(item) : ''
+
   return (
     <button aria-pressed={selected} className={selected ? 'library-poster-card selected' : 'library-poster-card'} onClick={() => onSelect(item.id)} type="button">
       <span className="library-poster-frame">
@@ -375,13 +492,24 @@ function LibraryPosterCard({ item, selected, onSelect }: { item: EmbyItem; selec
             width={160}
           />
         ) : (
-          <span className="library-poster-fallback" aria-hidden="true"><Film size={28} /></span>
+          <span aria-hidden="true" className="library-poster-fallback"><Film size={28} /></span>
         )}
-        {status ? <span className={item.played ? 'library-poster-badge played' : 'library-poster-badge'}>{status}</span> : null}
+        <div aria-hidden="true" className="poster-vignette" />
+        <div aria-hidden="true" className="poster-hover-overlay">
+          <span className="poster-play-icon"><Play fill="currentColor" size={18} /></span>
+        </div>
+        {status ? (
+          <span className={isPlayed ? 'library-poster-badge played' : 'library-poster-badge in-progress'}>
+            {status}
+          </span>
+        ) : null}
       </span>
       <span className="library-poster-meta">
-        <strong>{item.name}</strong>
-        <small>{mediaTypeLabel(item.type)}{item.year ? ` · ${item.year}` : ''}</small>
+        <strong className="poster-title">{item.name}</strong>
+        <span className="poster-subtitle">
+          <span className="poster-type">{mediaTypeLabel(item.type)}</span>
+          {item.year ? <span className="poster-year">· {item.year}</span> : null}
+        </span>
       </span>
     </button>
   )
@@ -435,27 +563,47 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
   const canSearchSubtitles = item.type !== 'Series'
 
   return <>
+    <div
+      aria-hidden="true"
+      className="detail-ambient-backdrop"
+      style={{ backgroundImage: `url(${embyPrimaryImageURL(item.id)})` }}
+    />
     <div className="library-detail-hero">
       <div className="library-detail-poster">
         {!posterFailed ? (
           <>
-            <div className="detail-poster-backdrop" style={{ backgroundImage: `url(${embyPrimaryImageURL(item.id)})` }} aria-hidden="true" />
-            <div className="detail-poster-vignette" aria-hidden="true" />
+            <div aria-hidden="true" className="detail-poster-backdrop" style={{ backgroundImage: `url(${embyPrimaryImageURL(item.id)})` }} />
+            <div aria-hidden="true" className="detail-poster-vignette" />
             <img alt="" className="detail-poster-foreground" decoding="async" height={360} onError={() => setPosterFailed(true)} src={embyPrimaryImageURL(item.id)} width={240} />
           </>
         ) : (
-          <span className="library-poster-fallback" aria-hidden="true"><Film size={36} /></span>
+          <span aria-hidden="true" className="library-poster-fallback"><Film size={36} /></span>
         )}
       </div>
       <div className="library-detail-hero-copy">
         <div className="library-detail-heading">
-          <div><h2>{item.name}</h2></div>
+          <div>
+            <h2>{item.name}</h2>
+            {originalTitle ? <span className="original-title">{originalTitle}</span> : null}
+          </div>
           <span className="media-type-chip">{mediaTypeLabel(item.type)}</span>
         </div>
         <dl className="library-facts compact">
           <div><dt>年份</dt><dd>{item.year || '未知'}</dd></div>
           <div><dt>时长</dt><dd>{item.runtimeMinutes ? `${item.runtimeMinutes} 分钟` : '未提供'}</dd></div>
-          <div><dt>评分</dt><dd>{item.communityRating ? item.communityRating.toFixed(1) : '未提供'}</dd></div>
+          <div>
+            <dt>评分</dt>
+            <dd className="rating-cell">
+              {item.communityRating ? (
+                <>
+                  <Star className="rating-star" size={14} />
+                  <span>{item.communityRating.toFixed(1)}</span>
+                </>
+              ) : (
+                '未提供'
+              )}
+            </dd>
+          </div>
           <div><dt>进度</dt><dd>{playbackStatus(item)}</dd></div>
           {shared || item.type === 'Series' ? null : (
             <div>

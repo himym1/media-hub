@@ -17,7 +17,8 @@ export function LibraryEpisodes({ seriesId, seriesTitle, inPagePlayback, onPlay 
     queryKey: ['emby-episodes', seriesId],
     queryFn: () => getEmbyEpisodes(seriesId),
   })
-  const items = episodes.data?.items ?? []
+  const rawItems = episodes.data?.items
+  const items = useMemo(() => rawItems ?? [], [rawItems])
 
   const upNextEpisode = useMemo(() => {
     if (items.length === 0) return null

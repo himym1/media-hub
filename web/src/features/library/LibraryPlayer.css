@@ -250,7 +250,7 @@
   border-radius: 999px;
   background: linear-gradient(
     90deg,
-    var(--accent, #d7f36a) 0 var(--seek-progress, 0%),
+    var(--accent, #34d399) 0 var(--seek-progress, 0%),
     rgba(255, 255, 255, 0.28) var(--seek-progress, 0%) 100%
   );
 }
@@ -275,7 +275,7 @@
 .library-player-seek input[type='range']::-moz-range-progress {
   height: 4px;
   border-radius: 999px;
-  background: var(--accent, #d7f36a);
+  background: var(--accent, #34d399);
 }
 
 .library-player-seek input[type='range']::-moz-range-thumb {
@@ -323,21 +323,21 @@
 }
 
 .library-player-icon-action.active {
-  color: var(--accent-ink, #101214);
-  border-color: var(--accent, #d7f36a);
-  background: var(--accent, #d7f36a);
+  color: var(--accent-ink, #022c22);
+  border-color: var(--accent, #34d399);
+  background: var(--accent, #34d399);
 }
 
 .library-player-next {
   margin-left: auto;
-  color: var(--accent-ink, #101214);
-  border-color: var(--accent, #d7f36a);
-  background: var(--accent, #d7f36a);
+  color: var(--accent-ink, #022c22);
+  border-color: var(--accent, #34d399);
+  background: var(--accent, #34d399);
   font-weight: 650;
 }
 
 .library-player-next:hover {
-  background: var(--accent-strong, #e4ff7a);
+  background: var(--accent-strong, #6ee7b7);
   border-color: var(--accent-strong, #e4ff7a);
 }
 
@@ -428,7 +428,7 @@
 }
 
 .library-player-note a {
-  color: var(--accent, #d7f36a);
+  color: var(--accent, #34d399);
 }
 
 @media (max-width: 720px) {
