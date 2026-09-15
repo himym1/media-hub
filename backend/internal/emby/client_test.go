@@ -93,7 +93,8 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read libraries: %v", err)
 	}
-	if len(libraries) != 1 || libraries[0].ID != "library-1" || libraries[0].CollectionType != "movies" {
+	if len(libraries) != 2 || libraries[0].ID != "library-1" || libraries[0].CollectionType != "movies" ||
+		libraries[1].ID != adultLibraryID {
 		t.Fatalf("unexpected libraries: %#v", libraries)
 	}
 
@@ -342,8 +343,9 @@ func TestLibrariesFallsBackToConfiguredFoldersWhenViewsFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read libraries: %v", err)
 	}
-	if len(libraries) != 2 || libraries[0].ID != "library-movies" || libraries[0].Name != "115电影" ||
-		libraries[1].ID != "library-shows" || libraries[1].Name != "115电视剧" {
+	if len(libraries) != 3 || libraries[0].ID != "library-movies" || libraries[0].Name != "115电影" ||
+		libraries[1].ID != "library-shows" || libraries[1].Name != "115电视剧" ||
+		libraries[2].ID != adultLibraryID {
 		t.Fatalf("unexpected libraries: %#v", libraries)
 	}
 }

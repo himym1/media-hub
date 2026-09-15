@@ -61,6 +61,7 @@ type Client struct {
 	libraryClient    *http.Client
 	sessionToken     string
 	localLibraries   []Library
+	adultFolderIDs   []string
 	localLibrariesAt time.Time
 }
 
@@ -132,6 +133,7 @@ type baseItem struct {
 	ParentIndexNumber int               `json:"ParentIndexNumber"`
 	IndexNumber       int               `json:"IndexNumber"`
 	CommunityRating   float64           `json:"CommunityRating"`
+	OfficialRating    string            `json:"OfficialRating"`
 	RunTimeTicks      int64             `json:"RunTimeTicks"`
 	Genres            []string          `json:"Genres"`
 	MediaSources      []mediaSource     `json:"MediaSources"`
@@ -388,13 +390,17 @@ func (c *Client) SearchItems(ctx context.Context, queryText string, limit int) (
 		}
 	}
 	for _, library := range c.listLocalLibraries(ctx, configuration) {
+		if isAdultLibraryID(library.ID) {
+			continue
+		}
 		query.Set("ParentId", library.ID)
 		var libraryResponse itemResponse
 		if err := c.getJSON(ctx, configuration, "Items", query, true, &libraryResponse); err != nil {
 			return SearchResult{}, err
 		}
-		appendUnique(libraryResponse.Items, isConfiguredLibrary(configuration, library.ID))
+		appendUnique(excludeAdultItems(libraryResponse.Items), isConfiguredLibrary(configuration, library.ID))
 	}
+	c.appendAdultSearch(ctx, configuration, queryText, appendUnique)
 	seriesIDs := make(map[string]struct{})
 	for _, item := range cloud {
 		if item.Type != "Series" || item.ID == "" {
@@ -458,8 +464,11 @@ func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limi
 	if limit < 1 || limit > 100 {
 		limit = 50
 	}
+	if isAdultLibraryID(libraryID) {
+		return c.browseAdultItems(ctx, configuration, offset, limit)
+	}
 	query := url.Values{
-		"Fields":           {"ProviderIds,UserData,MediaSources,Path"},
+		"Fields":           {"OfficialRating,Genres,ProviderIds,UserData,MediaSources,Path"},
 		"IncludeItemTypes": {"Movie,Series"},
 		"Limit":            {"10000"},
 		"ParentId":         {libraryID},
@@ -485,6 +494,7 @@ func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limi
 	} else {
 		filtered = catalogItems(response.Items)
 	}
+	filtered = excludeAdultItems(filtered)
 	if offset > len(filtered) {
 		offset = len(filtered)
 	}
@@ -505,7 +515,7 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 		return ItemDetail{}, ErrUpstreamResponse
 	}
 	query := url.Values{
-		"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,ParentId,Path,ProviderIds,RunTimeTicks,SeriesName,UserData"},
+		"Fields": {"CommunityRating,Genres,OfficialRating,MediaSources,OriginalTitle,Overview,ParentId,Path,ProviderIds,RunTimeTicks,SeriesName,UserData"},
 	}
 	endpointPath := path.Join("Items", itemID)
 	if configuration.userID != "" {
@@ -760,6 +770,15 @@ func (c *Client) FindPlayableItem(ctx context.Context, title, mediaType string, 
 }
 
 func (c *Client) RefreshLibrary(ctx context.Context, libraryID string) error {
+	if isAdultLibraryID(libraryID) {
+		_ = c.listLocalLibraries(ctx, c.configuration())
+		for _, folderID := range c.cachedAdultFolderIDs() {
+			if err := c.refreshItem(ctx, folderID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	return c.refreshItem(ctx, libraryID)
 }
 

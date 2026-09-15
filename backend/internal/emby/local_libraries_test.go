@@ -41,11 +41,12 @@ func TestLibrariesListsLocalViewsAfterConfigured115(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(libraries) != 4 ||
+	if len(libraries) != 5 ||
 		libraries[0].ID != "library-movies" || libraries[0].Name != "115电影" ||
 		libraries[1].ID != "library-shows" || libraries[1].Name != "115电视剧" ||
 		libraries[2].ID != "pt-movies" || libraries[2].Name != "英美电影" ||
-		libraries[3].ID != "pt-shows" || libraries[3].Name != "美剧" {
+		libraries[3].ID != "pt-shows" || libraries[3].Name != "美剧" ||
+		libraries[4].ID != adultLibraryID || libraries[4].Name != adultLibraryName {
 		t.Fatalf("libraries=%#v", libraries)
 	}
 }

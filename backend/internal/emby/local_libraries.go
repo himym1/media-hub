@@ -24,13 +24,20 @@ func (c *Client) listLocalLibraries(ctx context.Context, configuration clientCon
 	}
 	views, err := c.readEmbyViews(ctx, configuration)
 	if err != nil {
-		libraries := configuredLibraries(configuration)
-		c.storeLocalLibraries(libraries)
-		return libraries
+		views = nil
 	}
-	libraries := mergeLocalLibraries(configuration, views)
-	c.storeLocalLibraries(libraries)
+	folders, _ := c.readEmbyMediaFolders(ctx, configuration)
+	libraries, adultIDs := mergeLocalLibraries(configuration, views, folders)
+	c.storeLocalLibraries(libraries, adultIDs)
 	return libraries
+}
+
+func (c *Client) readEmbyMediaFolders(ctx context.Context, configuration clientConfig) ([]baseItem, error) {
+	var response itemResponse
+	if err := c.getJSON(ctx, configuration, "Library/MediaFolders", nil, true, &response); err != nil {
+		return nil, err
+	}
+	return response.Items, nil
 }
 
 func (c *Client) readEmbyViews(ctx context.Context, configuration clientConfig) ([]baseItem, error) {
@@ -54,15 +61,17 @@ func (c *Client) cachedLocalLibraries() ([]Library, bool) {
 	return append([]Library(nil), c.localLibraries...), true
 }
 
-func (c *Client) storeLocalLibraries(libraries []Library) {
+func (c *Client) storeLocalLibraries(libraries []Library, adultIDs []string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.localLibraries = append([]Library(nil), libraries...)
+	c.adultFolderIDs = append([]string(nil), adultIDs...)
 	c.localLibrariesAt = time.Now()
 }
 
 func (c *Client) clearLocalLibraries() {
 	c.localLibraries = nil
+	c.adultFolderIDs = nil
 	c.localLibrariesAt = time.Time{}
 }
 
@@ -81,14 +90,27 @@ func configuredLibraries(configuration clientConfig) []Library {
 	return libraries
 }
 
-func mergeLocalLibraries(configuration clientConfig, views []baseItem) []Library {
+func mergeLocalLibraries(configuration clientConfig, views, folders []baseItem) ([]Library, []string) {
 	libraries := configuredLibraries(configuration)
-	seen := make(map[string]struct{}, len(libraries)+len(views))
+	seen := make(map[string]struct{}, len(libraries)+len(views)+len(folders))
+	adultSeen := make(map[string]struct{})
+	adultIDs := make([]string, 0)
+	collectAdult := func(item baseItem) {
+		if !isAdultFolder(item) {
+			return
+		}
+		if _, exists := adultSeen[item.ID]; exists {
+			return
+		}
+		adultSeen[item.ID] = struct{}{}
+		adultIDs = append(adultIDs, item.ID)
+	}
 	for _, library := range libraries {
 		seen[library.ID] = struct{}{}
 	}
 	for _, item := range views {
-		if !isBrowsableLocalView(item) {
+		collectAdult(item)
+		if isAdultFolder(item) || !isBrowsableLocalView(item) {
 			continue
 		}
 		if _, exists := seen[item.ID]; exists {
@@ -101,7 +123,11 @@ func mergeLocalLibraries(configuration clientConfig, views []baseItem) []Library
 			CollectionType: strings.TrimSpace(item.CollectionType),
 		})
 	}
-	return libraries
+	for _, item := range folders {
+		collectAdult(item)
+	}
+	libraries = append(libraries, adultLibrary())
+	return libraries, adultIDs
 }
 
 func isBrowsableLocalView(item baseItem) bool {
