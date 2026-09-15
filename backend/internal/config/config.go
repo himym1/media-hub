@@ -23,6 +23,7 @@ type Config struct {
 	ProbeTimeout           time.Duration
 	SearchTimeout          time.Duration
 	SourceProxyURL         *url.URL
+	AssrtFileProxyURL      *url.URL
 	FixtureMode            bool
 	SecureCookies          bool
 	BootstrapAdminPassword string
@@ -182,6 +183,10 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 			return Config{}, err
 		}
 	}
+	assrtFileProxyURL, err := proxyURLValue(lookup, "MEDIA_HUB_ASSRT_FILE_PROXY_URL")
+	if err != nil {
+		return Config{}, err
+	}
 	fixtureMode, err := boolValue(lookup, "MEDIA_HUB_ENABLE_FIXTURES", false)
 	if err != nil {
 		return Config{}, err
@@ -335,6 +340,7 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		ProbeTimeout:           probeTimeout,
 		SearchTimeout:          searchTimeout,
 		SourceProxyURL:         sourceProxyURL,
+		AssrtFileProxyURL:      assrtFileProxyURL,
 		FixtureMode:            fixtureMode,
 		SecureCookies:          secureCookies,
 		BootstrapAdminPassword: adminPassword,

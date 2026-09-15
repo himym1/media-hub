@@ -88,18 +88,45 @@ func TestAssrtTransportFallsBackToOfficialWhenMirrorFails(t *testing.T) {
 	}
 }
 
-func TestAssrtFileDownloadsIgnoreSourceProxy(t *testing.T) {
-	proxyURL, err := url.Parse("http://127.0.0.1:9")
+func TestAssrtFileDownloadsUseFileProxy(t *testing.T) {
+	fileProxyURL, err := url.Parse("http://127.0.0.1:9")
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := newAssrtHTTPClient(time.Second, proxyURL)
+	client := newAssrtHTTPClient(time.Second, fileProxyURL)
 	transport, ok := client.Transport.(*assrtTransport)
 	if !ok {
 		t.Fatal("expected assrt transport")
 	}
-	if transport.files != transport.primary || transport.filesMirror != transport.mirror {
-		t.Fatal("Assrt file downloads must not use the source proxy")
+	if proxyHost(transport.primary) != "" || proxyHost(transport.mirror) != "" {
+		t.Fatal("Assrt API must stay direct")
+	}
+	if proxyHost(transport.files) != "127.0.0.1:9" || proxyHost(transport.filesMirror) != "127.0.0.1:9" {
+		t.Fatal("Assrt file downloads must use the file proxy")
+	}
+}
+
+func TestAssrtTransportPrefersOfficialFileHost(t *testing.T) {
+	var hosts []string
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ok.Close()
+	transport := &assrtTransport{
+		files:       recordingTripper{hosts: &hosts, next: rewriteHost(ok.URL)},
+		filesMirror: recordingTripper{hosts: &hosts, next: failingRoundTripper{}},
+	}
+	request, err := http.NewRequest(http.MethodGet, "http://file1.assrt.net/x.ass", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := transport.RoundTrip(request)
+	if err != nil || response.StatusCode != http.StatusOK {
+		t.Fatalf("status=%v err=%v", response, err)
+	}
+	response.Body.Close()
+	if len(hosts) != 1 || hosts[0] != "file1.assrt.net" {
+		t.Fatalf("hosts=%v", hosts)
 	}
 }
 
@@ -181,6 +208,22 @@ func rewriteHost(raw string) http.RoundTripper {
 		panic(err)
 	}
 	return hostRewrite{base: http.DefaultTransport, host: target.Host, scheme: target.Scheme}
+}
+
+func proxyHost(rt http.RoundTripper) string {
+	transport, ok := rt.(*http.Transport)
+	if !ok || transport.Proxy == nil {
+		return ""
+	}
+	request, err := http.NewRequest(http.MethodGet, "http://file1.assrt.net/x", nil)
+	if err != nil {
+		return ""
+	}
+	proxyURL, err := transport.Proxy(request)
+	if err != nil || proxyURL == nil {
+		return ""
+	}
+	return proxyURL.Host
 }
 
 type hostRewrite struct {

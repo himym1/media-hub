@@ -17,6 +17,7 @@ import (
 const (
 	assrtIDPrefix     = "assrt:"
 	assrtSearchBudget = 12 * time.Second
+	attachAssrtTries  = 4
 )
 
 type Emby interface {
@@ -99,19 +100,43 @@ func (s *Service) AttachChinese(ctx context.Context, itemID string) (string, err
 	if target, targetErr := s.emby.SubtitleTarget(ctx, itemID); targetErr == nil {
 		mediaPath = target.Path
 	}
-	picked, ok := PickChinese(hits, mediaPath)
-	if !ok {
+	ranked := rankChinese(hits, mediaPath)
+	if len(ranked) == 0 {
 		return AttachMissing, nil
 	}
-	if err := s.Download(ctx, itemID, picked.ID); err != nil {
-		return AttachMissing, err
-	}
-	if target, targetErr := s.emby.SubtitleTarget(ctx, itemID); targetErr == nil {
-		if mediaPath, pathErr := strm.ResolveLibraryFile(s.mountPath(), target.Path); pathErr == nil {
-			_ = strm.PromoteExternalSidecar(mediaPath)
+	var last error
+	for index, picked := range ranked {
+		if index >= attachAssrtTries {
+			break
 		}
+		if err := s.Download(ctx, itemID, picked.ID); err != nil {
+			last = err
+			if !retryableSubtitleDownload(err) {
+				return AttachMissing, err
+			}
+			continue
+		}
+		if target, targetErr := s.emby.SubtitleTarget(ctx, itemID); targetErr == nil {
+			if mediaPath, pathErr := strm.ResolveLibraryFile(s.mountPath(), target.Path); pathErr == nil {
+				_ = strm.PromoteExternalSidecar(mediaPath)
+			}
+		}
+		return AttachAdded, nil
 	}
-	return AttachAdded, nil
+	if last != nil {
+		return AttachMissing, last
+	}
+	return AttachMissing, nil
+}
+
+func retryableSubtitleDownload(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, assrt.ErrUnauthorized) || errors.Is(err, assrt.ErrNotConfigured) {
+		return false
+	}
+	return true
 }
 
 func (s *Service) mountPath() string {

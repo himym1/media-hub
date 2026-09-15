@@ -71,11 +71,11 @@ func NewClient(baseURL, token string, timeout time.Duration) *Client {
 	return NewClientWithProxy(baseURL, token, timeout, nil)
 }
 
-func NewClientWithProxy(baseURL, token string, timeout time.Duration, proxyURL *url.URL) *Client {
+func NewClientWithProxy(baseURL, token string, timeout time.Duration, fileProxyURL *url.URL) *Client {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	client := &Client{client: newAssrtHTTPClient(timeout, proxyURL)}
+	client := &Client{client: newAssrtHTTPClient(timeout, fileProxyURL)}
 	client.Configure(baseURL, token)
 	return client
 }

@@ -1,6 +1,8 @@
 package subtitles
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -287,6 +289,59 @@ func TestAttachChineseDownloadsBestHit(t *testing.T) {
 	status, err := service.AttachChinese(context.Background(), "item-1")
 	if err != nil || status != AttachAdded || stub.downloaded != "chi-1" {
 		t.Fatalf("status=%q downloaded=%q err=%v", status, stub.downloaded, err)
+	}
+}
+
+func TestAttachChineseSkipsUnsupportedAssrtPack(t *testing.T) {
+	mount := t.TempDir()
+	mediaDir := filepath.Join(mount, "电影")
+	if err := os.MkdirAll(mediaDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mediaDir, "Movie.strm"), []byte("https://example/115/url/x"), 0o664); err != nil {
+		t.Fatal(err)
+	}
+	var junk bytes.Buffer
+	writer := zip.NewWriter(&junk)
+	entry, err := writer.Create("share.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write([]byte("通过网盘分享的文件")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/v1/sub/search":
+			_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[{"id":1,"native_name":"蜘蛛侠：英雄归来 简体","lang":{"desc":"简","langlist":{"langchs":true}}},{"id":2,"native_name":"蜘蛛侠：英雄归来","subtype":"Subrip(srt)","lang":{"desc":"简","langlist":{"langchs":true}}}]}}`))
+		case "/v1/sub/detail":
+			if request.URL.Query().Get("id") == "1" {
+				_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[{"id":1,"native_name":"junk","url":"http://` + request.Host + `/junk.zip"}]}}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"status":0,"sub":{"subs":[{"id":2,"native_name":"ok","url":"http://` + request.Host + `/ok.srt"}]}}`))
+		case "/junk.zip":
+			_, _ = w.Write(junk.Bytes())
+		case "/ok.srt":
+			_, _ = w.Write([]byte("1\n00:00:01,000 --> 00:00:02,000\n你好\n"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	stub := &embyStub{target: emby.SubtitleTarget{
+		ID: "item-1", Name: "蜘蛛侠：英雄归来", Path: "/media3/115-strm/电影/Movie.strm",
+	}}
+	service := New(stub, assrt.NewClient(server.URL, "token", time.Second), func() string { return mount })
+	status, err := service.AttachChinese(context.Background(), "item-1")
+	if err != nil || status != AttachAdded {
+		t.Fatalf("status=%q err=%v", status, err)
+	}
+	if _, err := os.Stat(filepath.Join(mediaDir, "Movie.chi.srt")); err != nil {
+		t.Fatal(err)
 	}
 }
 

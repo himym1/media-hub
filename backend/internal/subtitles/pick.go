@@ -1,6 +1,7 @@
 package subtitles
 
 import (
+	"sort"
 	"strings"
 
 	"media-hub/backend/internal/assrt"
@@ -14,19 +15,34 @@ const (
 )
 
 func PickChinese(items []emby.RemoteSubtitle, mediaPath string) (emby.RemoteSubtitle, bool) {
-	bestScore := -1
-	var best emby.RemoteSubtitle
-	found := false
+	ranked := rankChinese(items, mediaPath)
+	if len(ranked) == 0 {
+		return emby.RemoteSubtitle{}, false
+	}
+	return ranked[0], true
+}
+
+func rankChinese(items []emby.RemoteSubtitle, mediaPath string) []emby.RemoteSubtitle {
+	type scored struct {
+		item  emby.RemoteSubtitle
+		score int
+	}
+	ranked := make([]scored, 0, len(items))
 	for _, item := range items {
 		score := scoreChinese(item, mediaPath)
 		if score < 0 {
 			continue
 		}
-		if !found || score > bestScore {
-			best, bestScore, found = item, score, true
-		}
+		ranked = append(ranked, scored{item: item, score: score})
 	}
-	return best, found
+	sort.SliceStable(ranked, func(i, j int) bool {
+		return ranked[i].score > ranked[j].score
+	})
+	out := make([]emby.RemoteSubtitle, len(ranked))
+	for i, item := range ranked {
+		out[i] = item.item
+	}
+	return out
 }
 
 func scoreChinese(item emby.RemoteSubtitle, mediaPath string) int {

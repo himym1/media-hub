@@ -10,18 +10,20 @@ import (
 	"time"
 )
 
-func newAssrtHTTPClient(timeout time.Duration, proxyURL *url.URL) *http.Client {
+func newAssrtHTTPClient(timeout time.Duration, fileProxyURL *url.URL) *http.Client {
 	direct := assrtBaseTransport(nil)
 	mirror := direct.Clone()
 	mirror.TLSClientConfig = makedieTLS()
-	_ = proxyURL
+	files := assrtBaseTransport(fileProxyURL)
+	filesMirror := files.Clone()
+	filesMirror.TLSClientConfig = makedieTLS()
 	return &http.Client{
 		Timeout: timeout,
 		Transport: &assrtTransport{
 			primary:     direct,
 			mirror:      mirror,
-			files:       direct,
-			filesMirror: mirror,
+			files:       files,
+			filesMirror: filesMirror,
 		},
 		CheckRedirect: rejectFailedAssrtDownload,
 	}
@@ -59,12 +61,39 @@ type assrtTransport struct {
 
 func (t *assrtTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request.URL != nil && (isAssrtFileHost(request.URL.Hostname()) || isAssrtFileHost(assrtHost(request.URL.Hostname()))) {
-		return t.roundTripPreferMirror(request, firstTripper(t.filesMirror, t.mirror), firstTripper(t.files, t.primary))
+		if isMakedieHost(request.URL.Hostname()) {
+			return firstTripper(t.filesMirror, t.mirror).RoundTrip(request)
+		}
+		return t.roundTripPreferOfficial(request, firstTripper(t.files, t.primary), firstTripper(t.filesMirror, t.mirror))
 	}
 	if request.URL != nil && isMakedieHost(request.URL.Hostname()) {
 		return firstTripper(t.mirror, t.primary).RoundTrip(request)
 	}
 	return t.roundTripPreferMirror(request, t.mirror, t.primary)
+}
+
+func (t *assrtTransport) roundTripPreferOfficial(request *http.Request, official, mirror http.RoundTripper) (*http.Response, error) {
+	var officialErr error
+	if official != nil {
+		response, err := official.RoundTrip(request)
+		if !shouldFallbackFromMirror(response, err) {
+			return response, err
+		}
+		if response != nil {
+			response.Body.Close()
+		}
+		officialErr = err
+	}
+	if request.URL == nil || !isAssrtHost(request.URL.Hostname()) || mirror == nil || mirror == official {
+		if officialErr != nil {
+			return nil, officialErr
+		}
+		return nil, ErrUpstreamResponse
+	}
+	clone := request.Clone(request.Context())
+	rewriteAssrtURLToMakedie(clone.URL)
+	clone.Host = clone.URL.Host
+	return mirror.RoundTrip(clone)
 }
 
 func (t *assrtTransport) roundTripPreferMirror(request *http.Request, mirror, official http.RoundTripper) (*http.Response, error) {

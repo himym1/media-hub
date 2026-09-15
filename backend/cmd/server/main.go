@@ -136,7 +136,7 @@ func run(logger *slog.Logger) error {
 	if configuration.SearchTimeout > assrtTimeout {
 		assrtTimeout = configuration.SearchTimeout
 	}
-	assrtClient := assrt.NewClientWithProxy(configuration.Assrt.BaseURL, configuration.Assrt.Token, assrtTimeout, configuration.SourceProxyURL)
+	assrtClient := assrt.NewClientWithProxy(configuration.Assrt.BaseURL, configuration.Assrt.Token, assrtTimeout, configuration.AssrtFileProxyURL)
 	wecomTimeout := configuration.ProbeTimeout
 	if wecomTimeout < 10*time.Second {
 		wecomTimeout = 10 * time.Second

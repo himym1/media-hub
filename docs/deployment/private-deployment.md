@@ -53,7 +53,7 @@ Media Hub 以一个镜像部署：Go API 同源提供 Web 静态资源，SQLite 
    MEDIA_HUB_MIKAN_EGRESS_SSH_USER=root
    ```
 
-   `install-layout.sh` 会安装覆盖文件并创建 mode `0700` 的 `tunnel/`。把专用 SSH 私钥安装为 `tunnel/id_ed25519`、mode `0600`，不要输出或提交它。覆盖文件在 Media Hub 默认网络中运行 `mikan-egress`，并等待隧道健康后启动 Media Hub，因此不依赖其他 Compose 项目或外部网络。代理必须是无凭据的 HTTP(S) URL；不要把全局 `HTTP_PROXY` / `HTTPS_PROXY` 注入 Media Hub。
+   `install-layout.sh` 会安装覆盖文件并创建 mode `0700` 的 `tunnel/`。把专用 SSH 私钥安装为 `tunnel/id_ed25519`、mode `0600`，不要输出或提交它。覆盖文件在 Media Hub 默认网络中运行 `mikan-egress`，并等待隧道健康后启动 Media Hub，因此不依赖其他 Compose 项目或外部网络。代理必须是无凭据的 HTTP(S) URL；不要把全局 `HTTP_PROXY` / `HTTPS_PROXY` 注入 Media Hub。Assrt 搜索走直连；字幕文件站若从容器直连会被重置，需要单独的 `MEDIA_HUB_ASSRT_FILE_PROXY_URL`（容器能访问的 HTTP 混合端口，例如 Clash `:7890`），不要复用 `mikan-egress`。
 
    内置 STRM（`workflow.syncMode=builtin`）需要把 Emby 正在扫描的 STRM 根目录挂进 Media Hub。生产 NAS 已确认：
 

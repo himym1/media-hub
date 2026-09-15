@@ -34,6 +34,7 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 		"MEDIA_HUB_SOURCE_FRAME_TOKEN":       "frame-test-value",
 		"MEDIA_HUB_ANDROID_RELEASE_DIR":      "/srv/media-hub/releases",
 		"MEDIA_HUB_SOURCE_PROXY_URL":         "http://source-egress:17898",
+		"MEDIA_HUB_ASSRT_FILE_PROXY_URL":     "http://file-proxy.local:7890",
 	}
 
 	loaded, err := load(func(key string) (string, bool) {
@@ -52,6 +53,9 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 	}
 	if loaded.SourceProxyURL == nil || loaded.SourceProxyURL.String() != "http://source-egress:17898" {
 		t.Fatal("unexpected source proxy configuration")
+	}
+	if loaded.AssrtFileProxyURL == nil || loaded.AssrtFileProxyURL.String() != "http://file-proxy.local:7890" {
+		t.Fatal("unexpected Assrt file proxy configuration")
 	}
 	if loaded.BootstrapAdminPassword == "" {
 		t.Fatal("bootstrap administrator password was not loaded")
@@ -93,7 +97,7 @@ func TestLoadParsesSearchTimeout(t *testing.T) {
 }
 
 func TestLoadRejectsInvalidSourceProxyURL(t *testing.T) {
-	for _, key := range []string{"MEDIA_HUB_SOURCE_PROXY_URL", "MEDIA_HUB_MIKAN_PROXY_URL"} {
+	for _, key := range []string{"MEDIA_HUB_SOURCE_PROXY_URL", "MEDIA_HUB_MIKAN_PROXY_URL", "MEDIA_HUB_ASSRT_FILE_PROXY_URL"} {
 		for _, raw := range []string{
 			"socks5://proxy.local:1080",
 			"http://user:password@proxy.local:8080",
