@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -728,10 +729,14 @@ func TestOfflineFolderFailsWhenVideosNeverArrive(t *testing.T) {
 type subtitleAttachStub struct {
 	ids    []string
 	status string
+	err    error
 }
 
 func (s *subtitleAttachStub) AttachChinese(_ context.Context, itemID string) (string, error) {
 	s.ids = append(s.ids, itemID)
+	if s.err != nil {
+		return "", s.err
+	}
 	if s.status == "" {
 		return "attached", nil
 	}
@@ -739,6 +744,30 @@ func (s *subtitleAttachStub) AttachChinese(_ context.Context, itemID string) (st
 }
 
 func TestMovieIndexAttachesChineseSubtitles(t *testing.T) {
+	attacher := &subtitleAttachStub{}
+	service, dataStore, admin := newSubtitleIndexService(t, attacher)
+	runSubtitleIndexJob(t, service, dataStore, admin, "job-attach-subs", "request_attach_subs")
+	if len(attacher.ids) != 1 || attacher.ids[0] != "emby-item" {
+		t.Fatalf("attached ids=%v", attacher.ids)
+	}
+	assertTransferEvent(t, service, admin.ID, "job-attach-subs", "已自动挂载中文字幕（1）")
+}
+
+func TestMovieIndexRecordsSubtitleAttachFailure(t *testing.T) {
+	service, dataStore, admin := newSubtitleIndexService(t, &subtitleAttachStub{
+		err: errors.New("Assrt download failed https://example.com/sub?token=secret"),
+	})
+	runSubtitleIndexJob(t, service, dataStore, admin, "job-attach-fail", "request_attach_fail")
+	detail := assertTransferEvent(t, service, admin.ID, "job-attach-fail", "自动挂载中文字幕失败：Assrt download failed")
+	for _, event := range detail.Events {
+		if strings.Contains(event.Message, "example.com") || strings.Contains(event.Message, "token=") {
+			t.Fatalf("event leaked secret: %q", event.Message)
+		}
+	}
+}
+
+func newSubtitleIndexService(t *testing.T, attacher *subtitleAttachStub) (*Service, *store.Store, store.AdminUser) {
+	t.Helper()
 	ctx := context.Background()
 	embyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("X-Emby-Token") != "emby-key" {
@@ -751,12 +780,12 @@ func TestMovieIndexAttachesChineseSubtitles(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
-	defer embyServer.Close()
+	t.Cleanup(embyServer.Close)
 	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer dataStore.Close()
+	t.Cleanup(func() { _ = dataStore.Close() })
 	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
 		t.Fatal(err)
 	}
@@ -777,10 +806,15 @@ func TestMovieIndexAttachesChineseSubtitles(t *testing.T) {
 		},
 		nil, nil, nil,
 	)
-	attacher := &subtitleAttachStub{}
 	service.UseSubtitles(attacher)
+	return service, dataStore, admin
+}
+
+func runSubtitleIndexJob(t *testing.T, service *Service, dataStore *store.Store, admin store.AdminUser, jobID, idempotency string) {
+	t.Helper()
+	ctx := context.Background()
 	job := store.TransferJob{
-		ID: "job-attach-subs", UserID: admin.ID, IdempotencyKey: "request_attach_subs",
+		ID: jobID, UserID: admin.ID, IdempotencyKey: idempotency,
 		RequestHash: []byte("hash"), SelectionToken: "encrypted", SourceID: "sidhub",
 		CandidateID: "candidate", Title: "Movie", Year: 2026, MediaType: "movie", TMDBID: "123",
 		State: "queued", CreatedAt: 1, UpdatedAt: 1,
@@ -800,20 +834,26 @@ func TestMovieIndexAttachesChineseSubtitles(t *testing.T) {
 	if err := service.processJob(ctx, loaded); err != nil {
 		t.Fatal(err)
 	}
-	if len(attacher.ids) != 1 || attacher.ids[0] != "emby-item" {
-		t.Fatalf("attached ids=%v", attacher.ids)
-	}
-	detail, err := service.Get(ctx, admin.ID, job.ID)
+}
+
+func assertTransferEvent(t *testing.T, service *Service, userID int64, jobID, message string) JobDetail {
+	t.Helper()
+	detail, err := service.Get(context.Background(), userID, jobID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
 	for _, event := range detail.Events {
-		if event.Message == "已自动挂载中文字幕（1）" {
-			found = true
+		if event.Message == message {
+			return detail
 		}
 	}
-	if !found {
-		t.Fatalf("events=%#v", detail.Events)
+	t.Fatalf("missing %q in events=%#v", message, detail.Events)
+	return detail
+}
+
+func TestSanitizeSubtitleErrorStripsURLs(t *testing.T) {
+	got := sanitizeSubtitleError(errors.New("download failed https://assrt.net/v1/sub?token=abc pickcode=xyz"))
+	if got != "download failed" {
+		t.Fatalf("got %q", got)
 	}
 }

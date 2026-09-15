@@ -486,13 +486,23 @@ func (s *Service) pollEmbyIndex(ctx context.Context, job store.TransferJob) erro
 
 func (s *Service) attachLibrarySubtitles(ctx context.Context, job *store.TransferJob) {
 	attacher := s.subtitleAttacher()
-	if attacher == nil || strings.TrimSpace(job.EmbyItemID) == "" {
+	if attacher == nil {
+		_ = s.save(ctx, job, "indexing_emby", "自动挂载中文字幕未接入，已跳过")
+		return
+	}
+	if strings.TrimSpace(job.EmbyItemID) == "" {
+		_ = s.save(ctx, job, "indexing_emby", "未关联 Emby 条目，跳过字幕挂载")
 		return
 	}
 	ids := []string{job.EmbyItemID}
 	if job.MediaType == "series" && s.emby != nil {
 		episodes, err := s.emby.Episodes(ctx, job.EmbyItemID)
-		if err != nil || len(episodes) == 0 {
+		if err != nil {
+			_ = s.save(ctx, job, "indexing_emby", "无法读取剧集列表，跳过字幕挂载："+sanitizeSubtitleError(err))
+			return
+		}
+		if len(episodes) == 0 {
+			_ = s.save(ctx, job, "indexing_emby", "剧集没有分集，跳过字幕挂载")
 			return
 		}
 		ids = make([]string, 0, len(episodes))
@@ -505,10 +515,18 @@ func (s *Service) attachLibrarySubtitles(ctx context.Context, job *store.Transfe
 	attachCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	downloaded := 0
+	existed := 0
 	missing := 0
+	failed := 0
+	firstErr := ""
 	for _, id := range ids {
 		status, err := attacher.AttachChinese(attachCtx, id)
 		if err != nil {
+			failed++
+			if firstErr == "" {
+				firstErr = sanitizeSubtitleError(err)
+			}
+			slog.Default().Warn("attach chinese subtitle failed", "job_id", job.ID, "item_id", id, "error", err)
 			continue
 		}
 		switch status {
@@ -516,15 +534,48 @@ func (s *Service) attachLibrarySubtitles(ctx context.Context, job *store.Transfe
 			downloaded++
 		case "missing":
 			missing++
+		case "existed":
+			existed++
 		}
 	}
-	if downloaded > 0 {
+	switch {
+	case downloaded > 0:
 		_ = s.save(ctx, job, "indexing_emby", fmt.Sprintf("已自动挂载中文字幕（%d）", downloaded))
-		return
-	}
-	if missing > 0 {
+	case failed > 0:
+		_ = s.save(ctx, job, "indexing_emby", "自动挂载中文字幕失败："+firstErr)
+	case missing > 0:
 		_ = s.save(ctx, job, "indexing_emby", "未找到可用中文字幕，可稍后在媒体库补")
+	case existed > 0:
+		_ = s.save(ctx, job, "indexing_emby", "已有中文字幕，未重复下载")
 	}
+}
+
+func sanitizeSubtitleError(err error) string {
+	if err == nil {
+		return "未知错误"
+	}
+	message := strings.TrimSpace(err.Error())
+	message = strings.Join(strings.Fields(message), " ")
+	if message == "" {
+		return "未知错误"
+	}
+	fields := strings.Fields(message)
+	kept := fields[:0]
+	for _, field := range fields {
+		if strings.Contains(field, "://") || strings.Contains(field, "token=") || strings.Contains(field, "pickcode=") {
+			continue
+		}
+		kept = append(kept, field)
+	}
+	if len(kept) == 0 {
+		return "上游请求失败"
+	}
+	message = strings.Join(kept, " ")
+	runes := []rune(message)
+	if len(runes) > 80 {
+		return string(runes[:80])
+	}
+	return message
 }
 
 func (s *Service) findIndexedLibraryItem(ctx context.Context, job store.TransferJob) (emby.Item, bool, error) {

@@ -292,7 +292,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
             ) : null}
           </form>
 
-          {selected ? <div className="subscription-runs"><div className="section-heading"><div><h2>运行历史<span>{runs.data?.runs.length ?? 0}</span></h2></div></div>{runs.data?.runs.map((run) => <div className="subscription-run" key={run.id}><span className={`run-state ${run.state}`} /> <div><strong>{runLabels[run.state]}</strong><small>{run.message || '无补充信息'} · {formatTime(run.startedAt)}</small></div>{run.transferJobId ? <code>{run.transferJobId.slice(0, 8)}</code> : null}</div>)}{!runs.isLoading && runs.data?.runs.length === 0 ? <div className="empty-inline">还没有运行记录</div> : null}</div> : null}
+          {selected ? <div className="subscription-runs"><div className="section-heading"><div><h2>运行历史<span>{runs.data?.runs.length ?? 0}</span></h2></div></div>{runs.data?.runs.map((run) => <div className="subscription-run" key={run.id}><span className={`run-state ${run.state}`} /> <div><strong>{runLabels[run.state]}</strong><small>{run.message || '无补充信息'} · {formatTime(run.startedAt)}</small></div>{run.transferJobId ? <a aria-label={`查看转存任务 ${run.transferJobId.slice(0, 8)}`} className="subscription-run-job" href={`?view=transfers&task=${run.transferJobId}`} title={`查看转存任务 ${run.transferJobId}`}><code>{run.transferJobId.slice(0, 8)}</code></a> : null}</div>)}{!runs.isLoading && runs.data?.runs.length === 0 ? <div className="empty-inline">还没有运行记录</div> : null}</div> : null}
         </div>
       </div>
     </section>

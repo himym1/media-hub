@@ -171,10 +171,11 @@ export function SettingsView({ desktopUpdate, integrations, onDirtyChange, onLog
     void desktopUpdate.check()
   }
 
+  const checkUpdate = desktopUpdate.check
   useEffect(() => {
     if (section !== 'account') return
-    void desktopUpdate.check()
-  }, [desktopUpdate.check, section])
+    void checkUpdate()
+  }, [checkUpdate, section])
 
   return (
     <section className="workspace-view settings-view">

@@ -21,6 +21,7 @@ var sourceAlias = map[string]string{
 	"webdl": "webdl", "web-dl": "webdl", "web.dl": "webdl", "web_dl": "webdl",
 	"webrip": "webrip", "web-rip": "webrip", "web.rip": "webrip",
 	"bluray": "bluray", "blu-ray": "bluray", "blu.ray": "bluray", "bdrip": "bluray", "bd-rip": "bluray",
+	"dvdrip": "dvd", "dvd-rip": "dvd", "dvd.rip": "dvd",
 	"hdtv": "hdtv", "uhdtv": "uhdtv", "remux": "remux",
 }
 

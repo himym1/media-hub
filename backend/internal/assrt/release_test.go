@@ -34,6 +34,15 @@ func TestScoreHitPrefersMatchingRelease(t *testing.T) {
 	}
 }
 
+func TestScoreHitPenalizesDvdRipOnBluray(t *testing.T) {
+	target := SearchTarget{FileName: "Dagon.2001.1080p.BluRay.x264-ENCOUNTERS.strm"}
+	bluray := ScoreHit(Hit{Name: "Dagon.2001.1080p.BluRay.Chs"}, target)
+	dvd := ScoreHit(Hit{Name: "Dagon.2001.DVDRip.chs"}, target)
+	if bluray <= dvd {
+		t.Fatalf("bluray=%d dvd=%d", bluray, dvd)
+	}
+}
+
 func TestScoreHitRewardsReleaseGroup(t *testing.T) {
 	target := SearchTarget{FileName: "[LoliHouse] Signal S01E01 WEB-DL 1080p.strm"}
 	matched := ScoreHit(Hit{Name: "[LoliHouse] 信号 WEB-DL"}, target)

@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Film, LayoutGrid, LibraryBig, ListPlus, ListTodo, LogOut, Settings2, TerminalSquare } from 'lucide-react'
+import { Film, LayoutGrid, LibraryBig, ListPlus, ListTodo, LogOut, Search, Settings2, TerminalSquare } from 'lucide-react'
 import { getSystemOverview, listTransfers, type Candidate } from '../../shared/api/mediaHub'
 import { useDesktopUpdate } from '../../shared/desktop/useDesktopUpdate'
 import { commitUrl } from '../../shared/navigation/urlState'
+import { useToast } from '../../shared/ui/ToastContext'
+import { ToastProvider } from '../../shared/ui/ToastProvider'
+import { CommandPalette } from '../command/CommandPalette'
+import { ShortcutsModal } from '../command/ShortcutsModal'
 import { LibraryView } from '../library/LibraryView'
 import { PlayerShell } from '../library/PlayerShell'
 import { isPlayerView } from '../library/playerRoute'
@@ -51,13 +55,20 @@ function viewFromLocation(): WorkspaceView {
 
 export function SearchWorkspace(props: SearchWorkspaceProps) {
   if (isPlayerView()) return <PlayerShell />
-  return <WorkspaceShell {...props} />
+  return (
+    <ToastProvider>
+      <WorkspaceShell {...props} />
+    </ToastProvider>
+  )
 }
 
 function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
   const desktopUpdate = useDesktopUpdate()
+  const { showToast } = useToast()
   const [activeView, setActiveView] = useState<WorkspaceView>(viewFromLocation)
   const [draftSubscription, setDraftSubscription] = useState<Candidate | null>(null)
+  const [commandOpen, setCommandOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [providerSettingsDirty, setProviderSettingsDirty] = useState(false)
   const providerDirtyUrl = useRef<string | null>(null)
   const updateProviderDirty = useCallback((dirty: boolean) => {
@@ -65,6 +76,48 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
     if (!dirty) providerDirtyUrl.current = null
     setProviderSettingsDirty(dirty)
   }, [])
+
+  const handleGlobalSearch = useCallback((searchQuery: string) => {
+    commitUrl({
+      view: 'discover',
+      q: searchQuery,
+      task: null,
+      archive: null,
+      library: null,
+      media: null,
+      settings: null,
+    })
+    setActiveView('发现')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCommandOpen((prev) => !prev)
+        return
+      }
+      if (e.key === '/' && !commandOpen && !shortcutsOpen) {
+        const target = e.target as HTMLElement | null
+        if (target && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) && !target.isContentEditable) {
+          e.preventDefault()
+          setCommandOpen(true)
+          return
+        }
+      }
+      if ((e.key === '?' || (e.shiftKey && e.key === '/')) && !commandOpen && !shortcutsOpen) {
+        const target = e.target as HTMLElement | null
+        if (target && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) && !target.isContentEditable) {
+          e.preventDefault()
+          setShortcutsOpen(true)
+          return
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [commandOpen, shortcutsOpen])
 
   useEffect(() => {
     const onPopState = () => {
@@ -175,15 +228,27 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
       <main className="main-content" id="main-content" tabIndex={-1}>
         <header className="topbar">
           <div className="topbar-title"><span>Media Hub</span><strong>{activeView === '服务' ? '系统设置' : activeView}</strong></div>
-          <div className={`system-dot ${connectionState}`}><span />{connectionLabel}</div>
-          <a
-            aria-label="系统设置"
-            className={systemActive ? 'topbar-system-link active' : 'topbar-system-link'}
-            href="?view=settings"
-            onClick={(event) => handleNav(event, '服务')}
+          <button
+            aria-label="打开命令面板 (快捷键 ⌘K)"
+            className="command-trigger-btn"
+            onClick={() => setCommandOpen(true)}
+            type="button"
           >
-            <Settings2 size={18} />
-          </a>
+            <Search size={14} />
+            <span className="command-trigger-label">搜索影视或快捷跳转...</span>
+            <kbd className="command-trigger-kbd">⌘K</kbd>
+          </button>
+          <div className="topbar-right">
+            <div className={`system-dot ${connectionState}`}><span />{connectionLabel}</div>
+            <a
+              aria-label="系统设置"
+              className={systemActive ? 'topbar-system-link active' : 'topbar-system-link'}
+              href="?view=settings"
+              onClick={(event) => handleNav(event, '服务')}
+            >
+              <Settings2 size={18} />
+            </a>
+          </div>
         </header>
 
         {systemActive ? (
@@ -198,9 +263,19 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
             <DiscoveryView
               integrations={integrations}
               integrationsLoading={overview.isLoading && integrations.length === 0}
-              onRefreshIntegrations={() => void overview.refetch()}
-              onTransferCreated={() => navigate('任务')}
-              onSubscribe={(candidate) => { setDraftSubscription(candidate); navigate('订阅') }}
+              onRefreshIntegrations={() => {
+                void overview.refetch()
+                showToast('已重新探测服务连通性', 'info')
+              }}
+              onTransferCreated={() => {
+                showToast('已成功创建转存任务并加入流水线', 'success')
+                navigate('任务')
+              }}
+              onSubscribe={(candidate) => {
+                showToast(`已将《${candidate.title}》载入追番配置`, 'info')
+                setDraftSubscription(candidate)
+                navigate('订阅')
+              }}
             />
           </div>
           <div aria-hidden={activeView !== '任务'} className="page-pane" hidden={activeView !== '任务'}>
@@ -219,6 +294,25 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
             <SettingsView desktopUpdate={desktopUpdate} integrations={integrations} onDirtyChange={updateProviderDirty} onLogout={guardedLogout} onRefresh={() => void overview.refetch()} />
           </div>
         </div>
+
+        <CommandPalette
+          isOpen={commandOpen}
+          onClose={() => setCommandOpen(false)}
+          onLogout={guardedLogout}
+          onNavigate={(view) => {
+            navigate(view)
+          }}
+          onOpenShortcuts={() => setShortcutsOpen(true)}
+          onRefreshIntegrations={() => {
+            void overview.refetch()
+            showToast('已重新探测服务集成连通性', 'success')
+          }}
+          onSearch={handleGlobalSearch}
+        />
+        <ShortcutsModal
+          isOpen={shortcutsOpen}
+          onClose={() => setShortcutsOpen(false)}
+        />
       </main>
 
       <nav className="mobile-nav" aria-label="移动端主导航">

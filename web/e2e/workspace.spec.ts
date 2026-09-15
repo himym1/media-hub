@@ -353,3 +353,48 @@ test('all workspace destinations meet the accessibility gate', async ({ page }, 
     }
   }
 })
+
+test('command palette is accessible, keyboard-operable and navigates destinations', async ({ page }, testInfo) => {
+  await installApiFixtures(page)
+  await page.goto('/?view=discover')
+
+  if (testInfo.project.name === 'desktop') {
+    const trigger = page.getByRole('button', { name: /打开命令面板/ })
+    await expect(trigger).toBeVisible()
+    await trigger.click()
+  } else {
+    await page.keyboard.press('Control+k')
+  }
+
+  const dialog = page.getByRole('dialog', { name: '全局命令面板' })
+  await expect(dialog).toBeVisible()
+  const searchInput = dialog.getByLabel('搜索影视或键入操作指令')
+  await expect(searchInput).toBeFocused()
+
+  await expectNoSeriousAccessibilityViolations(page)
+
+  await searchInput.fill('任务')
+  const taskOption = dialog.getByRole('option', { name: /传输与转存任务/ })
+  await expect(taskOption).toBeVisible()
+  await page.keyboard.press('Enter')
+
+  await expect(dialog).not.toBeVisible()
+  await expect(page.getByRole('heading', { name: '任务', level: 1 })).toBeVisible()
+})
+
+test('shortcuts modal opens on question mark and is accessible', async ({ page }) => {
+  await installApiFixtures(page)
+  await page.goto('/?view=discover')
+
+  await page.keyboard.press('?')
+  const dialog = page.getByRole('dialog', { name: '键盘快捷键指南' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('heading', { name: '键盘快捷键速查' })).toBeVisible()
+
+  await expectNoSeriousAccessibilityViolations(page)
+
+  await page.keyboard.press('Escape')
+  await expect(dialog).not.toBeVisible()
+})
+
+

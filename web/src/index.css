@@ -53,3 +53,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   transform: translateY(-150%);
 }
 .skip-link:focus { transform: translateY(0); }
+
+/* Sleek custom scrollbars for dark UI */
+*::-webkit-scrollbar { width: 7px; height: 7px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #283038; border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: #3a4550; }

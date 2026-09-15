@@ -3,6 +3,7 @@ package subtitles
 import (
 	"strings"
 
+	"media-hub/backend/internal/assrt"
 	"media-hub/backend/internal/emby"
 )
 
@@ -12,12 +13,12 @@ const (
 	AttachMissing = "missing"
 )
 
-func PickChinese(items []emby.RemoteSubtitle) (emby.RemoteSubtitle, bool) {
+func PickChinese(items []emby.RemoteSubtitle, mediaPath string) (emby.RemoteSubtitle, bool) {
 	bestScore := -1
 	var best emby.RemoteSubtitle
 	found := false
 	for _, item := range items {
-		score := scoreChinese(item)
+		score := scoreChinese(item, mediaPath)
 		if score < 0 {
 			continue
 		}
@@ -28,7 +29,7 @@ func PickChinese(items []emby.RemoteSubtitle) (emby.RemoteSubtitle, bool) {
 	return best, found
 }
 
-func scoreChinese(item emby.RemoteSubtitle) int {
+func scoreChinese(item emby.RemoteSubtitle, mediaPath string) int {
 	text := strings.ToLower(strings.TrimSpace(item.Name + " " + item.Comment + " " + item.Language))
 	if text == "" {
 		return 0
@@ -55,6 +56,12 @@ func scoreChinese(item emby.RemoteSubtitle) int {
 	}
 	if item.DownloadCount > 0 {
 		score += min(item.DownloadCount, 100) / 20
+	}
+	if mediaPath != "" {
+		score += assrt.ScoreReleases(
+			assrt.ParseRelease(mediaPath),
+			assrt.ParseRelease(item.Name+" "+item.Comment),
+		)
 	}
 	return score
 }

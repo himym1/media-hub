@@ -95,7 +95,11 @@ func (s *Service) AttachChinese(ctx context.Context, itemID string) (string, err
 	if err != nil {
 		return AttachMissing, err
 	}
-	picked, ok := PickChinese(hits)
+	mediaPath := ""
+	if target, targetErr := s.emby.SubtitleTarget(ctx, itemID); targetErr == nil {
+		mediaPath = target.Path
+	}
+	picked, ok := PickChinese(hits, mediaPath)
 	if !ok {
 		return AttachMissing, nil
 	}

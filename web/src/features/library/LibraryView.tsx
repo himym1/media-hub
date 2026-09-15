@@ -308,12 +308,28 @@ export function LibraryView() {
               </div>
             ) : null}
           </div>
-          {result.isLoading && items.length === 0 ? <div className="result-loading"><div /><div /><div /></div> : null}
+          {result.isLoading && items.length === 0 ? (
+            <div aria-label="正在加载媒体海报" className="library-poster-grid" role="status">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div className="library-poster-skeleton" key={i}>
+                  <div className="skeleton-poster-frame" />
+                  <div className="skeleton-poster-title" />
+                </div>
+              ))}
+            </div>
+          ) : null}
           {result.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>媒体内容读取失败</strong><span>{result.error.message}</span></div><button onClick={() => void result.refetch()} type="button">重试</button></div> : null}
           {!result.isLoading && !result.isError && items.length === 0 ? <div className="empty-state"><BookOpen size={28} /><span>{submittedQuery ? '没有匹配的媒体' : '此媒体库暂无可浏览内容'}</span></div> : null}
           <div className="library-poster-grid">
             {items.map((item) => <LibraryPosterCard item={item} key={item.id} selected={item.id === itemId} onSelect={selectItem} />)}
           </div>
+          {!submittedQuery && total > pageSize ? (
+            <div aria-label="底部页面导航" className="library-pagination library-pagination-bottom">
+              <IconButton label="上一页" disabled={page === 0} onClick={() => changePage(Math.max(0, page - 1))} subtle><ChevronLeft size={17} /></IconButton>
+              <span>{page + 1} / {Math.max(1, Math.ceil(total / pageSize))}</span>
+              <IconButton label="下一页" disabled={(page + 1) * pageSize >= total} onClick={() => changePage(page + 1)} subtle><ChevronRight size={17} /></IconButton>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -422,7 +438,11 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
     <div className="library-detail-hero">
       <div className="library-detail-poster">
         {!posterFailed ? (
-          <img alt="" decoding="async" height={360} onError={() => setPosterFailed(true)} src={embyPrimaryImageURL(item.id)} width={240} />
+          <>
+            <div className="detail-poster-backdrop" style={{ backgroundImage: `url(${embyPrimaryImageURL(item.id)})` }} aria-hidden="true" />
+            <div className="detail-poster-vignette" aria-hidden="true" />
+            <img alt="" className="detail-poster-foreground" decoding="async" height={360} onError={() => setPosterFailed(true)} src={embyPrimaryImageURL(item.id)} width={240} />
+          </>
         ) : (
           <span className="library-poster-fallback" aria-hidden="true"><Film size={36} /></span>
         )}

@@ -52,6 +52,7 @@ export function TransferQueue({ query }: TransferQueueProps) {
   const [showArchived, setShowArchived] = useState(archivedFromLocation)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deletedIDs, setDeletedIDs] = useState<string[]>([])
+  const [statusFilter, setStatusFilter] = useState<'all' | 'running' | 'completed' | 'issues'>('all')
   const archivedQuery = useQuery({
     queryKey: ['transfers', 'archived'],
     queryFn: () => listTransfers(100, true),
@@ -64,6 +65,16 @@ export function TransferQueue({ query }: TransferQueueProps) {
   )
   const activeJobs = jobs.filter((job) => runningStates.has(job.state) || job.state === 'needs_attention')
   const historyJobs = jobs.filter((job) => !activeJobs.includes(job))
+
+  const displayJobs = useMemo(() => {
+    if (showArchived) return jobs
+    if (statusFilter === 'running') return jobs.filter((job) => runningStates.has(job.state))
+    if (statusFilter === 'completed') return jobs.filter((job) => job.state === 'completed')
+    if (statusFilter === 'issues') return jobs.filter((job) => job.state === 'failed' || job.state === 'needs_attention')
+    return jobs
+  }, [jobs, showArchived, statusFilter])
+  const displayActiveJobs = useMemo(() => displayJobs.filter((job) => activeJobs.includes(job)), [displayJobs, activeJobs])
+  const displayHistoryJobs = useMemo(() => displayJobs.filter((job) => historyJobs.includes(job)), [displayJobs, historyJobs])
 
   useEffect(() => {
     const restoreTask = () => {
@@ -177,9 +188,49 @@ export function TransferQueue({ query }: TransferQueueProps) {
       {jobs.length > 0 ? (
         <div className="task-layout">
           <div className="task-list">
+            {!showArchived && (
+              <div aria-label="按状态过滤任务" className="task-filter-bar" role="group">
+                <button
+                  aria-pressed={statusFilter === 'all'}
+                  className={statusFilter === 'all' ? 'filter-chip active' : 'filter-chip'}
+                  onClick={() => setStatusFilter('all')}
+                  type="button"
+                >
+                  全部 ({jobs.length})
+                </button>
+                {activeJobs.length > 0 ? (
+                  <button
+                    aria-pressed={statusFilter === 'running'}
+                    className={statusFilter === 'running' ? 'filter-chip active' : 'filter-chip'}
+                    onClick={() => setStatusFilter('running')}
+                    type="button"
+                  >
+                    进行中 ({activeJobs.length})
+                  </button>
+                ) : null}
+                <button
+                  aria-pressed={statusFilter === 'completed'}
+                  className={statusFilter === 'completed' ? 'filter-chip active' : 'filter-chip'}
+                  onClick={() => setStatusFilter('completed')}
+                  type="button"
+                >
+                  已完成
+                </button>
+                {jobs.some((j) => j.state === 'failed' || j.state === 'needs_attention') ? (
+                  <button
+                    aria-pressed={statusFilter === 'issues'}
+                    className={statusFilter === 'issues' ? 'filter-chip active' : 'filter-chip'}
+                    onClick={() => setStatusFilter('issues')}
+                    type="button"
+                  >
+                    需关注
+                  </button>
+                ) : null}
+              </div>
+            )}
             {showArchived ? <TaskGroup label="已归档" jobs={jobs} selectedID={selectedID} onSelect={selectTask} /> : <>
-              <TaskGroup label="进行中" jobs={activeJobs} selectedID={selectedID} onSelect={selectTask} />
-              <TaskGroup label="历史记录" jobs={historyJobs} selectedID={selectedID} onSelect={selectTask} />
+              <TaskGroup label="进行中" jobs={displayActiveJobs} selectedID={selectedID} onSelect={selectTask} />
+              <TaskGroup label="历史记录" jobs={displayHistoryJobs} selectedID={selectedID} onSelect={selectTask} />
             </>}
           </div>
 
@@ -187,6 +238,15 @@ export function TransferQueue({ query }: TransferQueueProps) {
             {detail.isLoading && !detail.data ? <div className="status-loading">正在读取…</div> : null}
             {detail.data ? <>
               <div className="task-detail-heading"><div><h2>{detail.data.title}</h2></div><span className={`state-chip ${detail.data.state}`}>{stateLabel[detail.data.state]}</span></div>
+              <div aria-label="工作流阶段" className="task-pipeline">
+                {getPipelineStages(detail.data.state).map((stage, idx) => (
+                  <div className={`pipeline-step ${stage.status}`} key={stage.id}>
+                    <span className="step-circle">{stage.status === 'completed' ? '✓' : idx + 1}</span>
+                    <span className="step-text">{stage.label}</span>
+                    {idx < 3 ? <span aria-hidden="true" className="step-divider" /> : null}
+                  </div>
+                ))}
+              </div>
               {detail.data.errorMessage ? <div className="task-error" role="alert"><CircleAlert size={17} /><span>{detail.data.errorMessage}</span></div> : null}
               <dl className="task-facts"><div><dt>类型</dt><dd>{detail.data.mediaType === 'movie' ? '电影' : '剧集'}</dd></div><div><dt>来源</dt><dd>{detail.data.source}</dd></div><div><dt>创建</dt><dd>{timeFormatter.format(new Date(detail.data.createdAt))}</dd></div></dl>
               <div className="task-progress-heading"><strong>最近进度</strong><span>{detail.data.events.length} 条记录</span></div>
@@ -196,7 +256,12 @@ export function TransferQueue({ query }: TransferQueueProps) {
               {detail.data.retryable ? <button className="secondary-action" disabled={retry.isPending} onClick={() => retry.mutate(detail.data.id)} type="button"><RotateCcw size={16} />{retry.isPending ? '正在重试…' : '重试任务'}</button> : null}
               {archive.error ? <div className="task-error" role="alert"><CircleAlert size={17} /><span>{archive.error.message}</span></div> : null}
               {remove.error ? <div className="task-error" role="alert"><CircleAlert size={17} /><span>{remove.error.message}</span></div> : null}
-              {detail.data.state === 'completed' ? <button className="secondary-action" disabled={archive.isPending} onClick={() => archive.mutate({ id: detail.data.id, archived: !showArchived })} type="button">{showArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}{archive.isPending ? '正在处理…' : showArchived ? '恢复到任务列表' : '归档任务'}</button> : null}
+              {detail.data.state === 'completed' ? (
+                <div className="task-action-row">
+                  <a className="secondary-action" href="?view=library">前往媒体库</a>
+                  <button className="secondary-action" disabled={archive.isPending} onClick={() => archive.mutate({ id: detail.data.id, archived: !showArchived })} type="button">{showArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}{archive.isPending ? '正在处理…' : showArchived ? '恢复到任务列表' : '归档任务'}</button>
+                </div>
+              ) : null}
               {detail.data.state === 'failed' || detail.data.state === 'needs_attention' ? (
                 confirmingDelete ? (
                   <div className="inline-delete-confirm">
@@ -238,4 +303,64 @@ function transferTitle(job: TransferJob) {
   if (!job.episodeStart) return `${job.title} · S${job.season}`
   const episodes = job.episodeStart === job.episodeEnd ? `${job.episodeStart}` : `${job.episodeStart}-${job.episodeEnd}`
   return `${job.title} · S${job.season}E${episodes}`
+}
+
+type PipelineStage = {
+  id: string
+  label: string
+  status: 'completed' | 'active' | 'failed' | 'pending'
+}
+
+function getPipelineStages(state: TransferState): PipelineStage[] {
+  let s1: PipelineStage['status'] = 'pending'
+  let s2: PipelineStage['status'] = 'pending'
+  let s3: PipelineStage['status'] = 'pending'
+  let s4: PipelineStage['status'] = 'pending'
+
+  switch (state) {
+    case 'queued':
+    case 'transferring':
+    case 'retry_wait':
+      s1 = 'active'
+      break
+    case 'transferred':
+      s1 = 'completed'
+      s2 = 'active'
+      break
+    case 'submitting_sync':
+    case 'syncing':
+      s1 = 'completed'
+      s2 = 'active'
+      break
+    case 'refreshing_emby':
+    case 'indexing_emby':
+      s1 = 'completed'
+      s2 = 'completed'
+      s3 = 'active'
+      break
+    case 'verifying_playback':
+      s1 = 'completed'
+      s2 = 'completed'
+      s3 = 'completed'
+      s4 = 'active'
+      break
+    case 'completed':
+      s1 = 'completed'
+      s2 = 'completed'
+      s3 = 'completed'
+      s4 = 'completed'
+      break
+    case 'failed':
+    case 'needs_attention':
+      s1 = 'completed'
+      s2 = 'failed'
+      break
+  }
+
+  return [
+    { id: 't1', label: '115 转存', status: s1 },
+    { id: 't2', label: 'STRM 生成', status: s2 },
+    { id: 't3', label: 'Emby 刮削', status: s3 },
+    { id: 't4', label: '可用验证', status: s4 },
+  ]
 }
