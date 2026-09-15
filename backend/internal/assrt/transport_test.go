@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 )
 
 func TestAssrtFileHostDetection(t *testing.T) {
@@ -84,6 +85,21 @@ func TestAssrtTransportFallsBackToOfficialWhenMirrorFails(t *testing.T) {
 	response.Body.Close()
 	if len(hosts) < 2 || hosts[0] != "api.makedie.me" || hosts[1] != "api.assrt.net" {
 		t.Fatalf("hosts=%v", hosts)
+	}
+}
+
+func TestAssrtFileDownloadsIgnoreSourceProxy(t *testing.T) {
+	proxyURL, err := url.Parse("http://127.0.0.1:9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := newAssrtHTTPClient(time.Second, proxyURL)
+	transport, ok := client.Transport.(*assrtTransport)
+	if !ok {
+		t.Fatal("expected assrt transport")
+	}
+	if transport.files != transport.primary || transport.filesMirror != transport.mirror {
+		t.Fatal("Assrt file downloads must not use the source proxy")
 	}
 }
 

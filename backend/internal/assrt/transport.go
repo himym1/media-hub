@@ -14,20 +14,14 @@ func newAssrtHTTPClient(timeout time.Duration, proxyURL *url.URL) *http.Client {
 	direct := assrtBaseTransport(nil)
 	mirror := direct.Clone()
 	mirror.TLSClientConfig = makedieTLS()
-	files := direct
-	filesMirror := mirror
-	if proxyURL != nil {
-		files = assrtBaseTransport(proxyURL)
-		filesMirror = files.Clone()
-		filesMirror.TLSClientConfig = makedieTLS()
-	}
+	_ = proxyURL
 	return &http.Client{
 		Timeout: timeout,
 		Transport: &assrtTransport{
 			primary:     direct,
 			mirror:      mirror,
-			files:       files,
-			filesMirror: filesMirror,
+			files:       direct,
+			filesMirror: mirror,
 		},
 		CheckRedirect: rejectFailedAssrtDownload,
 	}
