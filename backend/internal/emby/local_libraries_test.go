@@ -255,7 +255,7 @@ func TestDeletePreviewMarksLocalFilesAsNotCloudKept(t *testing.T) {
 	}
 }
 
-func TestResolveEmbyItemRejectsLocalLibraryFiles(t *testing.T) {
+func TestResolveEmbyItemAcceptsLocalLibraryFiles(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/Users/user-1/Items/pt-1" {
 			w.WriteHeader(http.StatusNotFound)
@@ -269,10 +269,10 @@ func TestResolveEmbyItemRejectsLocalLibraryFiles(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := NewClient(server.URL, "emby-key", time.Second, "user-1").ResolveEmbyItem(
+	media, err := NewClient(server.URL, "emby-key", time.Second, "user-1").ResolveEmbyItem(
 		context.Background(), playback.EmbyItemTarget{ItemID: "pt-1"}, "player-ua",
 	)
-	if !errors.Is(err, playback.ErrNotFound) && !errors.Is(err, playback.ErrUnavailable) {
-		t.Fatalf("error=%v", err)
+	if err != nil || media.Local == nil || media.Local.ItemID != "pt-1" || media.Local.MediaSourceID != "source-1" || media.PickCode != "" {
+		t.Fatalf("media=%#v err=%v", media, err)
 	}
 }

@@ -121,6 +121,13 @@ func (h *Hub) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTarge
 	return h.Local.ResolveEmbyItem(ctx, target, playbackUserAgent)
 }
 
+func (h *Hub) LocalStreamURL(ref playback.LocalRef) (string, error) {
+	if h.Local == nil {
+		return "", playback.ErrSourceNotConfigured
+	}
+	return h.Local.LocalStreamURL(ref)
+}
+
 func (h *Hub) ReportPlayback(ctx context.Context, reference string, event playback.SessionEvent) error {
 	if h.Local != nil {
 		return h.Local.ReportPlayback(ctx, reference, event)

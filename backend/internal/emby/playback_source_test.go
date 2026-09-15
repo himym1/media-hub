@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync"
 	"testing"
 	"time"
@@ -355,6 +356,23 @@ func TestResolveEmbyItemReadsPickCodeFromStrmScheme(t *testing.T) {
 	}
 	if media.PickCode != "abcd1234" {
 		t.Fatalf("media=%#v", media)
+	}
+}
+
+func TestLocalStreamURLUsesLibraryHostWithoutPlaybackFacade(t *testing.T) {
+	client := NewConfiguredClient(RuntimeConfig{
+		BaseURL: "http://192.168.1.8:8096", APIKey: "emby-key", PlaybackBaseURL: "http://qms.local:8095",
+	}, time.Second)
+	location, err := client.LocalStreamURL(playback.LocalRef{ItemID: "pt-1", MediaSourceID: "source-1", Container: "mkv"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(location)
+	if err != nil || parsed.Scheme != "http" || parsed.Host != "192.168.1.8:8096" || parsed.Path != "/Videos/pt-1/stream.mkv" {
+		t.Fatalf("location=%q", location)
+	}
+	if parsed.Query().Get("Static") != "true" || parsed.Query().Get("MediaSourceId") != "source-1" || parsed.Query().Get("api_key") != "emby-key" {
+		t.Fatalf("query=%q", parsed.RawQuery)
 	}
 }
 

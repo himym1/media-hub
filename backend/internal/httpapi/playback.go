@@ -57,6 +57,20 @@ func (h *handler) createEmbyPlayback(w http.ResponseWriter, r *http.Request) {
 	writePlaybackResult(w, value, err)
 }
 
+func (h *handler) redirectEmbyStream(w http.ResponseWriter, r *http.Request) {
+	if h.dependencies.Playback == nil {
+		writePlaybackProblem(w, playback.ErrUnavailable)
+		return
+	}
+	location, err := h.dependencies.Playback.RedirectEmby(r.Context(), r.URL.Query().Get("ticket"))
+	if err != nil {
+		writePlaybackProblem(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	http.Redirect(w, r, location, http.StatusFound)
+}
+
 func (h *handler) reportPlaybackSession(w http.ResponseWriter, r *http.Request) {
 	if h.dependencies.Playback == nil {
 		writePlaybackProblem(w, playback.ErrUnavailable)

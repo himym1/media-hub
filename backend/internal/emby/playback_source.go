@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"media-hub/backend/internal/playback"
@@ -44,13 +45,27 @@ func (c *Client) ResolveEmbyItem(ctx context.Context, target playback.EmbyItemTa
 	if item.ID != target.ItemID || item.Name == "" || !isPlayableItemType(item.Type) {
 		return playback.SourceMedia{}, playback.ErrNotFound
 	}
-	sources := cloudSourcesForItem(item)
-	if len(sources) == 0 {
-		return playback.SourceMedia{}, playback.ErrNotFound
-	}
 	playSessionID, err := randomPlaybackID()
 	if err != nil {
 		return playback.SourceMedia{}, playback.ErrUnavailable
+	}
+	sources := cloudSourcesForItem(item)
+	if len(sources) == 0 {
+		local, ok := localSourceForItem(item)
+		if !ok {
+			return playback.SourceMedia{}, playback.ErrNotFound
+		}
+		session, sessionErr := c.playbackSession(target.ItemID, local.ID, playSessionID)
+		if sessionErr != nil {
+			return playback.SourceMedia{}, playback.ErrUnavailable
+		}
+		return playback.SourceMedia{
+			Name: item.Name, Session: session,
+			StartPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
+			Local: &playback.LocalRef{
+				ItemID: target.ItemID, MediaSourceID: local.ID, Container: local.Container,
+			},
+		}, nil
 	}
 	var lastResolveErr error
 	for _, source := range sources {
@@ -92,6 +107,73 @@ func cloudSourcesForItem(item baseItem) []mediaSource {
 		return []mediaSource{{ID: item.ID, Path: item.Path, Container: "strm"}}
 	}
 	return nil
+}
+
+func localSourceForItem(item baseItem) (mediaSource, bool) {
+	for _, source := range item.MediaSources {
+		if isLocalPlayableSource(source, item) {
+			return source, true
+		}
+	}
+	if isLocalPlayableSource(mediaSource{ID: item.ID, Path: item.Path, Container: strings.TrimPrefix(strings.ToLower(filepath.Ext(item.Path)), ".")}, item) {
+		return mediaSource{ID: item.ID, Path: item.Path, Container: strings.TrimPrefix(strings.ToLower(filepath.Ext(item.Path)), ".")}, true
+	}
+	return mediaSource{}, false
+}
+
+func isLocalPlayableSource(source mediaSource, item baseItem) bool {
+	if !validEmbyIdentifier(source.ID) {
+		return false
+	}
+	if is115Source(source) || is115Item(item) || isStrmSource(source) || isStrmPath(item.Path) {
+		return false
+	}
+	if hasForeignURL(source.Path) || hasForeignURL(source.DirectStreamURL) || hasForeignURL(item.Path) {
+		return false
+	}
+	return isLocalVideoName(source.Path) || isLocalVideoName(item.Path) || isLocalVideoContainer(source.Container)
+}
+
+func isLocalVideoContainer(value string) bool {
+	switch strings.ToLower(strings.Trim(strings.TrimSpace(value), ".")) {
+	case "mp4", "mkv", "m4v", "mov", "webm", "avi", "ts", "m2ts", "wmv":
+		return true
+	default:
+		return false
+	}
+}
+
+func isLocalVideoName(value string) bool {
+	switch strings.ToLower(filepath.Ext(strings.TrimSpace(value))) {
+	case ".mp4", ".mkv", ".m4v", ".mov", ".webm", ".avi", ".ts", ".m2ts", ".wmv":
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *Client) LocalStreamURL(ref playback.LocalRef) (string, error) {
+	configuration := c.configuration()
+	if err := validateAuthenticated(configuration); err != nil {
+		return "", normalizePlaybackError(err)
+	}
+	if !validEmbyIdentifier(ref.ItemID) || !validEmbyIdentifier(ref.MediaSourceID) {
+		return "", playback.ErrInvalidRequest
+	}
+	root := configuration.baseURL
+	if root == "" {
+		return "", playback.ErrSourceNotConfigured
+	}
+	endpointPath := path.Join("Videos", ref.ItemID, "stream"+playback.StreamExtension(ref.Container, ""))
+	location, err := endpointURL(root, endpointPath, url.Values{
+		"Static":        {"true"},
+		"MediaSourceId": {ref.MediaSourceID},
+		"api_key":       {configuration.apiKey},
+	})
+	if err != nil {
+		return "", playback.ErrUnavailable
+	}
+	return location, nil
 }
 
 func isPlayableItemType(itemType string) bool {

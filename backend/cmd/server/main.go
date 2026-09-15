@@ -113,6 +113,8 @@ func run(logger *slog.Logger) error {
 		dataStore, securePayloadCodec, drive115Client, configuration.ProbeTimeout,
 	)
 	drive115CommandService := drive115.NewCommandService(dataStore, securePayloadCodec)
+	playbackService := playback.NewService(drive115AuthService, embyHub)
+	playbackService.ConfigurePublicBase(configuration.Workflow.StrmBaseURL)
 	if admin, exists, err := dataStore.Admin(startupContext); err != nil {
 		return fmt.Errorf("read administrator for 115 authorization: %w", err)
 	} else if exists {
@@ -199,6 +201,7 @@ func run(logger *slog.Logger) error {
 			moviePilotClient.Configure(value.MoviePilot.BaseURL, value.MoviePilot.APIToken)
 			wecomClient.ConfigureDelivery(value.WeCom)
 			workflowService.Configure(value.Workflow)
+			playbackService.ConfigurePublicBase(value.Workflow.StrmBaseURL)
 			runtimeSources := searchSourcesFromSettings(value, configuration.SearchTimeout, configuration.FixtureMode, drive115AuthService, configuration.SourceProxyURL, moviePilotClient)
 			searchService.Configure(tmdbClient, runtimeSources...)
 			normalized := settings.NormalizeCheckIn(value.CheckIn)
@@ -294,7 +297,7 @@ func run(logger *slog.Logger) error {
 		Handler: httpapi.NewRouter(version, httpapi.Dependencies{
 			Auth: authService, Overview: overview, Search: searchService, Discovery: tmdbClient,
 			Emby: embyHub, RemoteSubtitles: subtitleService, EmbyPosterCache: posterCache, Drive115: drive115AuthService, Drive115Auth: drive115AuthService, Drive115Commands: drive115CommandService,
-			Playback: playback.NewService(drive115AuthService, embyHub),
+			Playback: playbackService,
 			Workflow: workflowService, Subscriptions: subscriptionService, Statistics: statisticsService, LocalUploads: localUploadService, Archive: archiveService, AndroidReleases: androidReleaseService, DesktopReleases: desktopReleaseService, SourceCheckIns: checkinService,
 			Settings: settingsService, WeComTester: wecomClient, STRM: strmCoordinator,
 			SecureCookies: configuration.SecureCookies,

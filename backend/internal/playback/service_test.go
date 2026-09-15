@@ -3,6 +3,7 @@ package playback
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -45,6 +46,13 @@ func (s *embyResolverStub) ResolveEmbyItem(_ context.Context, target EmbyItemTar
 	s.target = target
 	s.ua = userAgent
 	return s.media, s.err
+}
+
+func (s *embyResolverStub) LocalStreamURL(ref LocalRef) (string, error) {
+	if s.err != nil {
+		return "", s.err
+	}
+	return "http://192.168.1.8:8096/Videos/" + ref.ItemID + "/stream.mkv?Static=true&MediaSourceId=" + ref.MediaSourceID, nil
 }
 
 type sessionReporterStub struct {
@@ -243,6 +251,48 @@ func TestPlaybackUserAgentDefaultsAndForwards(t *testing.T) {
 	}
 	if emby.ua != web || drive.ua != web || value.UserAgent != web {
 		t.Fatalf("emby ua descriptor=%#v emby=%q drive=%q", value, emby.ua, drive.ua)
+	}
+}
+
+func TestCreateEmbyItemIssuesPublicTicketForLocalLibrary(t *testing.T) {
+	emby := &embyResolverStub{media: SourceMedia{
+		Name: "Local",
+		Local: &LocalRef{ItemID: "pt-1", MediaSourceID: "source-1", Container: "mkv"},
+	}}
+	service := NewService(nil, emby)
+	service.ConfigurePublicBase("https://media.example")
+	value, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "pt-1"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(value.StreamURL)
+	if err != nil || parsed.Scheme != "https" || parsed.Host != "media.example" || parsed.Path != "/emby/url/video.mkv" || !validSessionID(parsed.Query().Get("ticket")) {
+		t.Fatalf("stream=%q", value.StreamURL)
+	}
+	if value.ExpiresAt == nil {
+		t.Fatal("expected ticket expiry")
+	}
+	location, err := service.RedirectEmby(context.Background(), parsed.Query().Get("ticket"))
+	if err != nil || !strings.Contains(location, "/Videos/pt-1/stream.mkv") || strings.Contains(location, "ticket=") {
+		t.Fatalf("location=%q err=%v", location, err)
+	}
+}
+
+func TestCreateEmbyItemLocalRequiresPublicHTTPSBase(t *testing.T) {
+	emby := &embyResolverStub{media: SourceMedia{
+		Name: "Local",
+		Local: &LocalRef{ItemID: "pt-1", MediaSourceID: "source-1", Container: "mkv"},
+	}}
+	service := NewService(nil, emby)
+	if _, err := service.CreateEmbyItem(context.Background(), 1, EmbyItemTarget{ItemID: "pt-1"}, ""); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestRedirectEmbyRejectsUnknownTicket(t *testing.T) {
+	service := NewService(nil, &embyResolverStub{})
+	if _, err := service.RedirectEmby(context.Background(), strings.Repeat("ab", 24)); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("error=%v", err)
 	}
 }
 

@@ -23,6 +23,7 @@ var (
 const (
 	PlayerUserAgent = "Mozilla/5.0 (Linux; Android 8.0; MediaHubPlayer) AppleWebKit/537.36 Chrome/122.0 Mobile Safari/537.36"
 	sessionTTL      = 24 * time.Hour
+	embyTicketTTL   = 50 * time.Minute
 )
 
 type Drive115Target struct {
@@ -39,8 +40,15 @@ type Drive115Resolver interface {
 	ResolvePickCode(context.Context, string, string, string) (SourceMedia, error)
 }
 
+type LocalRef struct {
+	ItemID        string
+	MediaSourceID string
+	Container     string
+}
+
 type EmbyResolver interface {
 	ResolveEmbyItem(context.Context, EmbyItemTarget, string) (SourceMedia, error)
+	LocalStreamURL(LocalRef) (string, error)
 }
 
 type SessionEventType string
@@ -73,6 +81,7 @@ type SourceMedia struct {
 	ExpiresAt       *time.Time
 	Session         *SourceSession
 	StartPositionMS int64
+	Local           *LocalRef
 }
 
 type Descriptor struct {
@@ -92,16 +101,38 @@ type playbackSession struct {
 	stopped   bool
 }
 
+type embyTicket struct {
+	ref       LocalRef
+	expiresAt time.Time
+}
+
 type Service struct {
-	drive115 Drive115Resolver
-	emby     EmbyResolver
-	now      func() time.Time
-	mutex    sync.Mutex
-	sessions map[string]*playbackSession
+	drive115   Drive115Resolver
+	emby       EmbyResolver
+	now        func() time.Time
+	mutex      sync.Mutex
+	sessions   map[string]*playbackSession
+	publicBase string
+	tickets    map[string]embyTicket
 }
 
 func NewService(drive115 Drive115Resolver, emby EmbyResolver) *Service {
-	return &Service{drive115: drive115, emby: emby, now: time.Now, sessions: make(map[string]*playbackSession)}
+	return &Service{drive115: drive115, emby: emby, now: time.Now, sessions: make(map[string]*playbackSession), tickets: map[string]embyTicket{}}
+}
+
+func (s *Service) ConfigurePublicBase(baseURL string) {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
+		baseURL = ""
+	} else {
+		baseURL = strings.TrimRight(parsed.String(), "/")
+	}
+	if s == nil {
+		return
+	}
+	s.mutex.Lock()
+	s.publicBase = baseURL
+	s.mutex.Unlock()
 }
 
 func ResolvePlaybackUserAgent(value string) (string, error) {
@@ -159,7 +190,14 @@ func (s *Service) CreateEmbyItem(ctx context.Context, userID int64, target EmbyI
 	if err != nil {
 		return Descriptor{}, err
 	}
-	if code := validPickCode(media.PickCode); code != "" {
+	if media.Local != nil {
+		streamURL, expiresAt, issueErr := s.issueEmbyTicket(*media.Local, media.Name)
+		if issueErr != nil {
+			return Descriptor{}, issueErr
+		}
+		media.URL = streamURL
+		media.ExpiresAt = expiresAt
+	} else if code := validPickCode(media.PickCode); code != "" {
 		if s.drive115 == nil {
 			return Descriptor{}, ErrUnavailable
 		}
@@ -222,6 +260,92 @@ func (s *Service) Report(ctx context.Context, userID int64, sessionID string, ev
 		s.mutex.Unlock()
 	}
 	return nil
+}
+
+func (s *Service) RedirectEmby(_ context.Context, ticket string) (string, error) {
+	if s == nil || s.emby == nil {
+		return "", ErrUnavailable
+	}
+	ticket = strings.TrimSpace(ticket)
+	if !validSessionID(ticket) {
+		return "", ErrInvalidRequest
+	}
+	s.mutex.Lock()
+	item, ok := s.tickets[ticket]
+	if ok && !s.now().Before(item.expiresAt) {
+		delete(s.tickets, ticket)
+		ok = false
+	}
+	s.mutex.Unlock()
+	if !ok {
+		return "", ErrNotFound
+	}
+	location, err := s.emby.LocalStreamURL(item.ref)
+	if err != nil {
+		return "", err
+	}
+	parsed, err := url.Parse(strings.TrimSpace(location))
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", ErrUnavailable
+	}
+	return parsed.String(), nil
+}
+
+func (s *Service) issueEmbyTicket(ref LocalRef, name string) (string, *time.Time, error) {
+	s.mutex.Lock()
+	base := s.publicBase
+	s.mutex.Unlock()
+	if base == "" {
+		return "", nil, ErrUnavailable
+	}
+	if !opaqueID(ref.ItemID) || !opaqueID(ref.MediaSourceID) {
+		return "", nil, ErrInvalidRequest
+	}
+	value := make([]byte, 24)
+	if _, err := rand.Read(value); err != nil {
+		return "", nil, ErrUnavailable
+	}
+	ticket := hex.EncodeToString(value)
+	expires := s.now().Add(embyTicketTTL)
+	s.mutex.Lock()
+	now := s.now()
+	for id, item := range s.tickets {
+		if !now.Before(item.expiresAt) {
+			delete(s.tickets, id)
+		}
+	}
+	s.tickets[ticket] = embyTicket{ref: ref, expiresAt: expires}
+	s.mutex.Unlock()
+	streamURL, err := publicEmbyStreamURL(base, name, ref.Container, ticket)
+	if err != nil {
+		return "", nil, err
+	}
+	return streamURL, &expires, nil
+}
+
+func publicEmbyStreamURL(base, name, container, ticket string) (string, error) {
+	parsed, err := url.Parse(base)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return "", ErrUnavailable
+	}
+	parsed.Path = strings.TrimSuffix(parsed.Path, "/") + "/emby/url/video" + StreamExtension(container, name)
+	query := parsed.Query()
+	query.Set("ticket", ticket)
+	parsed.RawQuery = query.Encode()
+	parsed.Fragment = ""
+	return parsed.String(), nil
+}
+
+func StreamExtension(container, name string) string {
+	for _, value := range []string{container, filepath.Ext(name)} {
+		ext := strings.ToLower(strings.Trim(strings.TrimSpace(value), "."))
+		switch ext {
+		case "mp4", "mkv", "m4v", "mov", "webm", "avi", "ts", "m2ts", "wmv":
+			return "." + ext
+		}
+	}
+	return ".mkv"
 }
 
 func (s *Service) createSession(userID int64, source SourceSession) (string, error) {

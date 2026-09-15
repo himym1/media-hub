@@ -110,6 +110,7 @@ type Drive115CommandService interface {
 type PlaybackService interface {
 	CreateDrive115(context.Context, playback.Drive115Target, string) (playback.Descriptor, error)
 	CreateEmbyItem(context.Context, int64, playback.EmbyItemTarget, string) (playback.Descriptor, error)
+	RedirectEmby(context.Context, string) (string, error)
 	Report(context.Context, int64, string, playback.SessionEvent) error
 }
 
@@ -242,6 +243,7 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/integrations/strm/status", h.protected(h.getSTRMStatus))
 	mux.Handle("POST /api/v1/integrations/strm/sync", h.protected(h.syncSTRMLibrary))
 	mux.HandleFunc("GET /115/url/{name}", h.redirectSTRM)
+	mux.HandleFunc("GET /emby/url/{name}", h.redirectEmbyStream)
 	mux.Handle("GET /api/v1/integrations/emby/libraries", h.protected(h.getEmbyLibraries))
 	mux.Handle("GET /api/v1/integrations/emby/items", h.protected(h.searchEmbyItems))
 	mux.Handle("GET /api/v1/integrations/emby/libraries/{id}/items", h.protected(h.browseEmbyLibraryItems))

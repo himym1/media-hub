@@ -43,6 +43,13 @@ func (stub *playbackStub) CreateEmbyItem(_ context.Context, userID int64, target
 	return value, nil
 }
 
+func (stub *playbackStub) RedirectEmby(_ context.Context, ticket string) (string, error) {
+	if strings.TrimSpace(ticket) == "" {
+		return "", playback.ErrInvalidRequest
+	}
+	return "http://192.168.1.8:8096/Videos/item-1/stream.mkv?Static=true", nil
+}
+
 func (stub *playbackStub) Report(_ context.Context, userID int64, sessionID string, event playback.SessionEvent) error {
 	stub.userID = userID
 	stub.sessionID = sessionID
@@ -194,6 +201,28 @@ func TestCreateEmbyDescriptorUsesSeparatePlaybackFacadeEndToEnd(t *testing.T) {
 	}
 	if descriptor.StreamURL != "https://cdn.example/movie.mkv?temporary=1" || descriptor.UserAgent != playback.PlayerUserAgent || descriptor.StartPositionMS != 42_000 || len(descriptor.SessionID) != 48 {
 		t.Fatalf("descriptor=%#v", descriptor)
+	}
+}
+
+func TestEmbyStreamRedirectIsPublicAndDoesNotProxyBytes(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	NewRouter("test-version", Dependencies{Playback: &playbackStub{}}).
+		ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/emby/url/video.mkv?ticket="+strings.Repeat("ab", 24), nil))
+	if recorder.Code != http.StatusFound {
+		t.Fatalf("status=%d", recorder.Code)
+	}
+	location := recorder.Header().Get("Location")
+	if !strings.HasPrefix(location, "http://192.168.1.8:8096/Videos/") || strings.Contains(location, "ticket=") {
+		t.Fatalf("location=%q", location)
+	}
+}
+
+func TestEmbyStreamRedirectRejectsMissingTicket(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	NewRouter("test-version", Dependencies{Playback: &playbackStub{}}).
+		ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/emby/url/video.mkv", nil))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 

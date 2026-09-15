@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.21.5
+  version: 0.21.6
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -33,6 +33,36 @@ paths:
             Location:
               schema: { type: string, format: uri }
         '400':
+          $ref: '#/components/responses/ProblemResponse'
+        '502':
+          $ref: '#/components/responses/ProblemResponse'
+        '503':
+          $ref: '#/components/responses/ProblemResponse'
+  /emby/url/{name}:
+    servers:
+      - url: /
+    get:
+      operationId: redirectEmbyLocalPlayback
+      summary: Redirect a short-lived ticket to the local Emby stream without proxying media bytes
+      security: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 256 }
+        - name: ticket
+          in: query
+          required: true
+          schema: { type: string, minLength: 48, maxLength: 48 }
+      responses:
+        '302':
+          description: Temporary redirect to the Emby local stream URL
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        '400':
+          $ref: '#/components/responses/ProblemResponse'
+        '404':
           $ref: '#/components/responses/ProblemResponse'
         '502':
           $ref: '#/components/responses/ProblemResponse'
