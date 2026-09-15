@@ -128,6 +128,25 @@ func TestSearchUsesEmbyForLocalLibraryFiles(t *testing.T) {
 	}
 }
 
+func TestSearchSkipsEmbyForAdultLibraryPaths(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("Assrt should not be queried for adult library files")
+	}))
+	defer server.Close()
+	stub := &embyStub{
+		target: emby.SubtitleTarget{
+			ID: "adult-1", Type: "Movie", Name: "Local",
+			Path: "/media2/av/local.mp4",
+		},
+		embyHits: []emby.RemoteSubtitle{{ID: "opensubtitles-1", Name: "chi.srt", Language: "chi"}},
+	}
+	service := New(stub, assrt.NewClient(server.URL, "token", time.Second), func() string { return "/media" })
+	hits, err := service.Search(context.Background(), "adult-1", "chi")
+	if err != nil || len(hits) != 0 || stub.embyCalls != 0 {
+		t.Fatalf("hits=%#v err=%v embyCalls=%d", hits, err, stub.embyCalls)
+	}
+}
+
 func TestCanWriteAssrtSidecarRejectsLocalLibraryPaths(t *testing.T) {
 	if canWriteAssrtSidecar("/media", "/media/links/电影/Local.mkv") {
 		t.Fatal("local mkv should not use Assrt sidecar writes")

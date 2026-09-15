@@ -12,6 +12,7 @@ import (
 	"media-hub/backend/internal/assrt"
 	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/strm"
+	"media-hub/backend/internal/subtitlecat"
 )
 
 const (
@@ -28,19 +29,36 @@ type Emby interface {
 }
 
 type Service struct {
-	emby  Emby
-	assrt *assrt.Client
-	mount func() string
+	emby        Emby
+	assrt       *assrt.Client
+	subtitlecat *subtitlecat.Client
+	mount       func() string
+	pathMap     func() []strm.PathMapping
 }
 
 func New(embyClient Emby, assrtClient *assrt.Client, mount func() string) *Service {
 	return &Service{emby: embyClient, assrt: assrtClient, mount: mount}
 }
 
+func (s *Service) UseSubtitlecat(client *subtitlecat.Client) {
+	if s == nil {
+		return
+	}
+	s.subtitlecat = client
+}
+
+func (s *Service) UseLibraryPaths(pathMap func() []strm.PathMapping) {
+	if s == nil {
+		return
+	}
+	s.pathMap = pathMap
+}
+
 func (s *Service) Search(ctx context.Context, itemID, language string) ([]emby.RemoteSubtitle, error) {
 	if s.emby == nil {
 		return nil, emby.ErrNotConfigured
 	}
+	target, targetErr := s.emby.SubtitleTarget(ctx, itemID)
 	if chineseLanguage(language) && s.assrt != nil && s.assrt.Configured() && s.canWriteAssrtSidecar(ctx, itemID) {
 		hits, err := s.searchAssrt(ctx, itemID)
 		if err == nil {
@@ -50,11 +68,26 @@ func (s *Service) Search(ctx context.Context, itemID, language string) ([]emby.R
 			return nil, err
 		}
 	}
+	if targetErr == nil && !looksLike115LibraryPath(target.Path) && s.subtitlecat != nil && s.subtitlecat.Configured() {
+		hits, err := s.searchSubtitlecat(ctx, target)
+		if err == nil && (len(hits) > 0 || emby.LooksLikeAdultPath(target.Path)) {
+			return hits, nil
+		}
+		if err != nil && (emby.LooksLikeAdultPath(target.Path) || !fallbackToEmby(err)) {
+			if emby.LooksLikeAdultPath(target.Path) {
+				return hits, err
+			}
+			return nil, err
+		}
+	}
+	if targetErr == nil && emby.LooksLikeAdultPath(target.Path) {
+		return []emby.RemoteSubtitle{}, nil
+	}
 	return s.emby.SearchRemoteSubtitles(ctx, itemID, language)
 }
 
 func fallbackToEmby(err error) bool {
-	if errors.Is(err, assrt.ErrUnauthorized) || errors.Is(err, assrt.ErrUpstreamResponse) || errors.Is(err, assrt.ErrNotConfigured) || errors.Is(err, context.DeadlineExceeded) {
+	if errors.Is(err, assrt.ErrUnauthorized) || errors.Is(err, assrt.ErrUpstreamResponse) || errors.Is(err, assrt.ErrNotConfigured) || errors.Is(err, subtitlecat.ErrUpstreamResponse) || errors.Is(err, subtitlecat.ErrNotConfigured) || errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
 	var timeout net.Error
@@ -73,7 +106,7 @@ func (s *Service) Local(ctx context.Context, itemID string) (strm.Sidecar, error
 	if s.mount != nil {
 		mount = s.mount()
 	}
-	mediaPath, err := strm.ResolveLibraryFile(mount, target.Path)
+	mediaPath, err := strm.ResolveMediaFile(mount, s.libraryPaths(), target.Path)
 	if err != nil {
 		return strm.Sidecar{}, strm.ErrSidecarNotFound
 	}
@@ -86,7 +119,7 @@ func (s *Service) AttachChinese(ctx context.Context, itemID string) (string, err
 	}
 	if _, err := s.Local(ctx, itemID); err == nil {
 		if target, targetErr := s.emby.SubtitleTarget(ctx, itemID); targetErr == nil {
-			if mediaPath, pathErr := strm.ResolveLibraryFile(s.mountPath(), target.Path); pathErr == nil {
+			if mediaPath, pathErr := strm.ResolveMediaFile(s.mountPath(), s.libraryPaths(), target.Path); pathErr == nil {
 				_ = strm.PromoteExternalSidecar(mediaPath)
 			}
 		}
@@ -117,7 +150,7 @@ func (s *Service) AttachChinese(ctx context.Context, itemID string) (string, err
 			continue
 		}
 		if target, targetErr := s.emby.SubtitleTarget(ctx, itemID); targetErr == nil {
-			if mediaPath, pathErr := strm.ResolveLibraryFile(s.mountPath(), target.Path); pathErr == nil {
+			if mediaPath, pathErr := strm.ResolveMediaFile(s.mountPath(), s.libraryPaths(), target.Path); pathErr == nil {
 				_ = strm.PromoteExternalSidecar(mediaPath)
 			}
 		}
@@ -149,6 +182,9 @@ func (s *Service) mountPath() string {
 func (s *Service) Download(ctx context.Context, itemID, subtitleID string) error {
 	if strings.HasPrefix(subtitleID, assrtIDPrefix) {
 		return s.downloadAssrt(ctx, itemID, strings.TrimPrefix(subtitleID, assrtIDPrefix))
+	}
+	if strings.HasPrefix(subtitleID, subtitlecat.IDPrefix) {
+		return s.downloadSubtitlecat(ctx, itemID, subtitleID)
 	}
 	if s.emby == nil {
 		return emby.ErrNotConfigured
@@ -225,7 +261,7 @@ func (s *Service) downloadAssrt(ctx context.Context, itemID, rawID string) error
 	if !canWriteAssrtSidecar(mount, target.Path) {
 		return errors.New("Assrt sidecar is unavailable for local library files")
 	}
-	mediaPath, err := strm.ResolveLibraryFile(mount, target.Path)
+	mediaPath, err := strm.ResolveMediaFile(mount, s.libraryPaths(), target.Path)
 	if err != nil {
 		return err
 	}
@@ -256,11 +292,92 @@ func (s *Service) RemoveLocal(ctx context.Context, itemID string) error {
 	if s.mount != nil {
 		mount = s.mount()
 	}
-	mediaPath, err := strm.ResolveLibraryFile(mount, target.Path)
+	mediaPath, err := strm.ResolveMediaFile(mount, s.libraryPaths(), target.Path)
 	if err != nil {
 		return nil
 	}
 	return strm.RemoveSidecars(mediaPath)
+}
+
+func (s *Service) searchSubtitlecat(ctx context.Context, target emby.SubtitleTarget) ([]emby.RemoteSubtitle, error) {
+	query := subtitlecat.SearchQuery(target.Name, target.OriginalTitle, target.Path)
+	if query == "" {
+		return nil, nil
+	}
+	hits, err := s.subtitlecat.Search(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]emby.RemoteSubtitle, 0, len(hits))
+	for _, hit := range hits {
+		results = append(results, emby.RemoteSubtitle{
+			ID:           hit.ID,
+			Name:         hit.Name,
+			Language:     publicSubtitleLanguage(hit.Language),
+			Format:       hit.Format,
+			ProviderName: "Subtitlecat",
+		})
+	}
+	return results, nil
+}
+
+func (s *Service) downloadSubtitlecat(ctx context.Context, itemID, subtitleID string) error {
+	if s.subtitlecat == nil || !s.subtitlecat.Configured() {
+		return subtitlecat.ErrNotConfigured
+	}
+	target, err := s.emby.SubtitleTarget(ctx, itemID)
+	if err != nil {
+		return err
+	}
+	if looksLike115LibraryPath(target.Path) {
+		return errors.New("Subtitlecat sidecar is reserved for local library files")
+	}
+	mediaPath, err := strm.ResolveMediaFile(s.mountPath(), s.libraryPaths(), target.Path)
+	if err != nil {
+		return err
+	}
+	name, body, err := s.subtitlecat.Download(ctx, subtitleID)
+	if err != nil {
+		return err
+	}
+	if _, err := strm.WriteSidecar(mediaPath, sidecarLanguage(name), name, body); err != nil {
+		return err
+	}
+	return s.emby.RefreshItem(ctx, itemID)
+}
+
+func (s *Service) libraryPaths() []strm.PathMapping {
+	if s == nil || s.pathMap == nil {
+		return nil
+	}
+	return s.pathMap()
+}
+
+func publicSubtitleLanguage(language string) string {
+	switch strings.ToLower(language) {
+	case "zh-cn", "zh", "zh-tw":
+		return "chi"
+	case "ja":
+		return "jpn"
+	case "en":
+		return "eng"
+	default:
+		return language
+	}
+}
+
+func sidecarLanguage(name string) string {
+	lower := strings.ToLower(name)
+	switch {
+	case strings.Contains(lower, "zh-cn"), strings.Contains(lower, "zh-tw"), strings.Contains(lower, "-zh."):
+		return "chi"
+	case strings.Contains(lower, "-ja."), strings.Contains(lower, "-jp."):
+		return "jpn"
+	case strings.Contains(lower, "-en."):
+		return "eng"
+	default:
+		return "chi"
+	}
 }
 
 func sortRemoteSubtitles(items []emby.RemoteSubtitle, scores map[string]int) {

@@ -45,6 +45,7 @@ const providerSettings = {
   drive115: { clientId: '' },
   tmdb: { baseUrl: 'https://api.themoviedb.org/3', accessToken: { configured: true } },
   assrt: { baseUrl: 'https://api.assrt.net', token: { configured: false } },
+  moviePilot: { baseUrl: '', apiToken: { configured: false } },
   wecom: { baseUrl: 'https://qyapi.weixin.qq.com', corpId: '', secret: { configured: false }, sendMode: 'app', agentId: 0, toUser: '@all', chatId: '' },
   workflow: {
     syncMode: 'builtin',

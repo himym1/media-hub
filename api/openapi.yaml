@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.21.3
+  version: 0.21.4
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -1882,7 +1882,7 @@ components:
         token: { $ref: '#/components/schemas/SecretUpdate' }
     ProviderSettings:
       type: object
-      required: [qmediaSync, emby, drive115, tmdb, assrt, wecom, workflow, checkIn, sources]
+      required: [qmediaSync, emby, drive115, tmdb, assrt, moviePilot, wecom, workflow, checkIn, sources]
       properties:
         qmediaSync:
           type: object
@@ -1915,6 +1915,12 @@ components:
           properties:
             baseUrl: { type: string }
             token: { $ref: '#/components/schemas/SecretStatus' }
+        moviePilot:
+          type: object
+          required: [baseUrl, apiToken]
+          properties:
+            baseUrl: { type: string }
+            apiToken: { $ref: '#/components/schemas/SecretStatus' }
         wecom:
           type: object
           required: [baseUrl, corpId, secret, sendMode, agentId, toUser, chatId]
@@ -1968,6 +1974,12 @@ components:
           properties:
             baseUrl: { type: string, maxLength: 2048 }
             token: { $ref: '#/components/schemas/SecretUpdate' }
+        moviePilot:
+          type: object
+          required: [baseUrl, apiToken]
+          properties:
+            baseUrl: { type: string, maxLength: 2048 }
+            apiToken: { $ref: '#/components/schemas/SecretUpdate' }
         wecom:
           type: object
           required: [baseUrl, corpId, secret, chatId]
@@ -2068,7 +2080,7 @@ components:
           $ref: '#/components/schemas/ReleaseFacts'
         transferState:
           type: string
-          enum: [available, identity_required, unavailable]
+          enum: [available, downloadable, identity_required, unavailable]
         transferToken:
           type: string
           description: Short-lived opaque token required to create a transfer job.
@@ -2647,6 +2659,7 @@ components:
       enum:
         - queued
         - transferring
+        - downloading
         - retry_wait
         - transferred
         - submitting_sync

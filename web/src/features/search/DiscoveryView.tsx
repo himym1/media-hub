@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, CircleAlert, Film, FolderInput, HardDrive, RefreshCw, Search, Star, Tv, Volume2, X } from 'lucide-react'
+import { BellPlus, CircleAlert, Download, Film, FolderInput, HardDrive, RefreshCw, Search, Star, Tv, Volume2, X } from 'lucide-react'
 import {
   createTransfer,
   getDiscoveryCatalog,
@@ -109,7 +109,7 @@ export function DiscoveryView({
   const [queuedTransferIds, setQueuedTransferIds] = useState<string[]>([])
   const transfer = useMutation({
     mutationFn: (candidate: Candidate) => {
-      if (!candidate.transferToken) throw new Error('当前资源不能转存')
+      if (!candidate.transferToken) throw new Error(isDownloadable(candidate) ? '当前资源不能下载' : '当前资源不能转存')
       return createTransfer(candidate.transferToken, crypto.randomUUID())
     },
     onSuccess: async (_data, candidate) => {
@@ -317,7 +317,7 @@ export function DiscoveryView({
           )}
           <button disabled={!query.trim() || search.isFetching} type="submit">{search.isFetching ? '查找中…' : '搜索'}</button>
         </form>
-        <div className="search-meta"><span>{sourceIntegration?.detail ?? '资源源尚未配置'}</span>{submittedQuery ? <><span>·</span><span>{search.data?.partial ? '部分结果' : '已列出可转存版本'}</span></> : null}</div>
+        <div className="search-meta"><span>{sourceIntegration?.detail ?? '资源源尚未配置'}</span>{submittedQuery ? <><span>·</span><span>{search.data?.partial ? '部分结果' : '已列出可获取版本'}</span></> : null}</div>
       </section>
 
       {!submittedQuery ? (
@@ -358,7 +358,7 @@ export function DiscoveryView({
               label={`${selectedGenre.name}片`}
               loading={genreBrowse.isFetching && !genreBrowse.data?.items.length}
               onSelect={openDiscoveryItem}
-              subtitle="点选后直接列出可转存版本"
+              subtitle="点选后直接列出可获取版本"
             />
           ) : null}
 
@@ -367,7 +367,7 @@ export function DiscoveryView({
             items={topRatedMovies.data?.items ?? []}
             label="高分电影"
             onSelect={openDiscoveryItem}
-            subtitle="TMDB 评分靠前 · 点选直接列出可转存版本"
+            subtitle="TMDB 评分靠前 · 点选直接列出可获取版本"
           />
 
           <DiscoveryPosterBand
@@ -375,7 +375,7 @@ export function DiscoveryView({
             items={popularSeries.data?.items ?? []}
             label="热门剧集"
             onSelect={openDiscoveryItem}
-            subtitle="TMDB 热度靠前 · 点选直接列出可转存版本"
+            subtitle="TMDB 热度靠前 · 点选直接列出可获取版本"
           />
 
           {trending.data?.items.length ? (
@@ -383,7 +383,7 @@ export function DiscoveryView({
               items={trending.data.items}
               label="本周热门"
               onSelect={openDiscoveryItem}
-              subtitle="点选后直接列出可转存版本"
+              subtitle="点选后直接列出可获取版本"
             />
           ) : null}
         </div>
@@ -448,11 +448,11 @@ export function DiscoveryView({
               </div>
             ) : null}
             {search.isLoading ? <div className="result-loading"><div /><div /><div /></div> : null}
-            {search.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>暂时无法列出可转存版本</strong><span>{search.error.message}</span></div><button onClick={() => void search.refetch()} type="button">重试</button></div> : null}
+            {search.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>暂时无法列出可获取版本</strong><span>{search.error.message}</span></div><button onClick={() => void search.refetch()} type="button">重试</button></div> : null}
             {!search.isLoading && !search.isError && rankedResults.length === 0 ? (
               <div className="empty-state">
                 <Film size={26} />
-                <span>{focusTitle ? `没有找到《${focusTitle}》的可转存版本` : '没有找到匹配资源'}</span>
+                <span>{focusTitle ? `没有找到《${focusTitle}》的可获取版本` : '没有找到匹配资源'}</span>
               </div>
             ) : null}
             {!search.isLoading && !search.isError && rankedResults.length > 0 && filteredResults.length === 0 ? (
@@ -466,12 +466,13 @@ export function DiscoveryView({
               const transferring = (transfer.isPending && transfer.variables?.id === candidate.id) ||
                 queuedTransferIds.includes(candidate.id) ||
                 candidate.transferState === 'transferring'
-              const available = candidate.transferState === 'available' && Boolean(candidate.transferToken) && !transferring
+              const downloadable = isDownloadable(candidate)
+              const available = (candidate.transferState === 'available' || downloadable) && Boolean(candidate.transferToken) && !transferring
               const subscribable = candidate.transferState !== 'identity_required' && Boolean(candidate.tmdbId)
               const availabilityLabel = transferring
-                ? '转存中'
+                ? (downloadable ? '下载中' : '转存中')
                 : available
-                  ? '可转存'
+                  ? (downloadable ? '可下载' : '可转存')
                   : candidate.transferState === 'identity_required'
                     ? '身份待确认'
                     : '工作流不可用'
@@ -493,7 +494,7 @@ export function DiscoveryView({
                       <span className="result-fact-item"><HardDrive aria-hidden="true" size={13} /><span>{formatSize(candidate.release.sizeBytes)}</span></span>
                     </span>
                   </button>
-                  <div className="result-action"><span className={`availability ${transferring ? 'transferring' : available ? 'available' : 'unavailable'}`}><span />{availabilityLabel}</span><div className="result-commands"><IconButton disabled={!subscribable} label="创建订阅" onClick={() => onSubscribe(candidate)}><BellPlus size={15} /></IconButton><button disabled={!available || transferring} onClick={() => handleTransfer(candidate)} type="button">{transferring ? (transfer.isPending && transfer.variables?.id === candidate.id ? '提交中…' : '转存中') : '转存'}<FolderInput size={15} /></button></div></div>
+                  <div className="result-action"><span className={`availability ${transferring ? 'transferring' : available ? 'available' : 'unavailable'}`}><span />{availabilityLabel}</span><div className="result-commands"><IconButton disabled={!subscribable} label="创建订阅" onClick={() => onSubscribe(candidate)}><BellPlus size={15} /></IconButton><button disabled={!available || transferring} onClick={() => handleTransfer(candidate)} type="button">{transferring ? (transfer.isPending && transfer.variables?.id === candidate.id ? '提交中…' : downloadable ? '下载中' : '转存中') : downloadable ? '下载' : '转存'}{downloadable ? <Download size={15} /> : <FolderInput size={15} />}</button></div></div>
                 </article>
               )
             }) : null}
@@ -543,17 +544,21 @@ export function DiscoveryView({
                 <strong>{formatSize(selected.release.sizeBytes)}</strong>
               </div>
               <div className="detail-fact-card">
-                <span><FolderInput aria-hidden="true" size={13} />转存目标</span>
-                <strong>{selected.mediaType === 'movie' ? '115 / 电影' : '115 / 电视剧'}</strong>
+                <span>{isDownloadable(selected) ? <Download aria-hidden="true" size={13} /> : <FolderInput aria-hidden="true" size={13} />}{isDownloadable(selected) ? '下载目标' : '转存目标'}</span>
+                <strong>{isDownloadable(selected) ? 'MoviePilot / 本地' : selected.mediaType === 'movie' ? '115 / 电影' : '115 / 电视剧'}</strong>
               </div>
             </div>
             {recommendations.data?.items.length ? <div className="recommendation-links"><span>相似内容</span>{recommendations.data.items.slice(0, 4).map((item) => <button key={`${item.mediaType}-${item.tmdbId}`} onClick={() => openDiscoveryItem(item)} type="button">{item.title}</button>)}</div> : null}
-            <div className="detail-actions"><button className="secondary-command" disabled={!selected.tmdbId || selected.transferState === 'identity_required'} onClick={() => onSubscribe(selected)} type="button"><BellPlus size={16} />订阅</button><button className="primary-action" disabled={!selected.transferToken || transfer.isPending} onClick={() => handleTransfer(selected)} type="button"><FolderInput size={17} />{transfer.isPending ? '正在创建任务…' : selected.transferToken ? '加入转存队列' : selected.transferState === 'identity_required' ? '身份待确认' : '工作流不可用'}</button></div>
+            <div className="detail-actions"><button className="secondary-command" disabled={!selected.tmdbId || selected.transferState === 'identity_required'} onClick={() => onSubscribe(selected)} type="button"><BellPlus size={16} />订阅</button><button className="primary-action" disabled={!selected.transferToken || transfer.isPending} onClick={() => handleTransfer(selected)} type="button">{isDownloadable(selected) ? <Download size={17} /> : <FolderInput size={17} />}{transfer.isPending ? '正在创建任务…' : selected.transferToken ? (isDownloadable(selected) ? '加入下载队列' : '加入转存队列') : selected.transferState === 'identity_required' ? '身份待确认' : '工作流不可用'}</button></div>
           </aside> : null}
         </div>
       ) : null}
     </section>
   )
+}
+
+function isDownloadable(candidate: Candidate) {
+  return candidate.transferState === 'downloadable' || candidate.sourceId === 'moviepilot'
 }
 
 function episodeLabel(candidate: Candidate) {

@@ -14,6 +14,11 @@ type TransferSource interface {
 	TransferStatus(context.Context, int64, string) (TransferResult, error)
 }
 
+type DownloadSource interface {
+	Source
+	StartDownload(context.Context, DownloadRequest) error
+}
+
 type CheckInSource interface {
 	Source
 	CheckIn(context.Context) (CheckInResult, error)
@@ -44,6 +49,13 @@ type TransferRequest struct {
 	Reference      string
 	DestinationID  string
 	IdempotencyKey string
+}
+
+type DownloadRequest struct {
+	UserID    int64
+	Title     string
+	MediaType string
+	Reference string
 }
 
 type TransferResult struct {

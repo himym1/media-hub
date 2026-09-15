@@ -259,7 +259,7 @@ internal fun SearchScreen(
                         item {
                             MediaHubText(
                                 text = if (uiState.focusTitle.isNotBlank()) {
-                                    "没有找到《${uiState.focusTitle}》的可转存版本"
+                                    "没有找到《${uiState.focusTitle}》的可获取版本"
                                 } else {
                                     "没有找到匹配资源"
                                 },
@@ -283,12 +283,7 @@ internal fun SearchScreen(
                             onClick = { onSubscribe(selectedCandidate.id) },
                         )
                         MediaHubButton(
-                            label = when {
-                                uiState.transferringCandidateId == selectedCandidate.id -> "正在创建…"
-                                selectedCandidate.transferState == "identity_required" -> "身份待确认"
-                                selectedCandidate.transferToken == null -> "工作流不可用"
-                                else -> "开始转存"
-                            },
+                            label = transferActionLabel(selectedCandidate, uiState.transferringCandidateId == selectedCandidate.id),
                             enabled = selectedCandidate.transferToken != null && uiState.transferringCandidateId == null,
                             modifier = Modifier.weight(0.65f),
                             onClick = { onTransfer(selectedCandidate.id) },
@@ -1030,7 +1025,7 @@ private fun SearchTwoPane(
                             item {
                                 MediaHubText(
                                     text = if (uiState.focusTitle.isNotBlank()) {
-                                        "没有找到《${uiState.focusTitle}》的可转存版本"
+                                        "没有找到《${uiState.focusTitle}》的可获取版本"
                                     } else {
                                         "没有找到匹配资源"
                                     },
@@ -1233,13 +1228,7 @@ private fun SearchCandidateDetail(
                     fontSize = 13.sp,
                 )
                 if (candidate.transferState.isNotEmpty() && candidate.transferState != "unknown") {
-                    val (label, variant) = when (candidate.transferState) {
-                        "available" -> "可转存" to BadgeVariant.Success
-                        "transferring" -> "转存中" to BadgeVariant.Primary
-                        "transferred" -> "已转存" to BadgeVariant.Success
-                        "identity_required" -> "身份待确认" to BadgeVariant.Warning
-                        else -> candidate.transferState to BadgeVariant.Neutral
-                    }
+                    val (label, variant) = transferBadge(candidate.transferState)
                     MediaHubBadge(text = label, variant = variant, modifier = Modifier.padding(top = 8.dp))
                 }
             }
@@ -1269,12 +1258,7 @@ private fun SearchCandidateDetail(
                 onClick = { onSubscribe(candidate.id) },
             )
             MediaHubButton(
-                label = when {
-                    uiState.transferringCandidateId == candidate.id -> "正在创建…"
-                    candidate.transferState == "identity_required" -> "身份待确认"
-                    candidate.transferToken == null -> "工作流不可用"
-                    else -> "开始转存"
-                },
+                label = transferActionLabel(candidate, uiState.transferringCandidateId == candidate.id),
                 enabled = candidate.transferToken != null && uiState.transferringCandidateId == null,
                 modifier = Modifier.weight(0.65f),
                 onClick = { onTransfer(candidate.id) },
@@ -1311,13 +1295,7 @@ private fun ReleaseRow(
         append(formatBytes(candidate.release.sizeBytes))
     }
     val transferBadge = if (candidate.transferState.isNotEmpty() && candidate.transferState != "unknown") {
-        when (candidate.transferState) {
-            "available" -> "可转存" to BadgeVariant.Success
-            "transferring" -> "转存中" to BadgeVariant.Primary
-            "transferred" -> "已转存" to BadgeVariant.Success
-            "identity_required" -> "身份待确认" to BadgeVariant.Warning
-            else -> candidate.transferState to BadgeVariant.Neutral
-        }
+        transferBadge(candidate.transferState)
     } else {
         null
     }
@@ -1379,5 +1357,27 @@ private fun candidateDisplayTitle(candidate: SearchCandidate): String {
         "${candidate.episodeStart}-${candidate.episodeEnd}"
     }
     return "${candidate.title} · S${candidate.season}E$episodes"
+}
+
+private fun isDownloadable(candidate: SearchCandidate): Boolean {
+    return candidate.transferState == "downloadable" || candidate.sourceId == "moviepilot"
+}
+
+private fun transferActionLabel(candidate: SearchCandidate, creating: Boolean): String = when {
+    creating -> "正在创建…"
+    candidate.transferState == "identity_required" -> "身份待确认"
+    candidate.transferToken == null -> "工作流不可用"
+    isDownloadable(candidate) -> "开始下载"
+    else -> "开始转存"
+}
+
+private fun transferBadge(state: String): Pair<String, BadgeVariant> = when (state) {
+    "available" -> "可转存" to BadgeVariant.Success
+    "downloadable" -> "可下载" to BadgeVariant.Success
+    "transferring" -> "转存中" to BadgeVariant.Primary
+    "downloading" -> "下载中" to BadgeVariant.Primary
+    "transferred" -> "已转存" to BadgeVariant.Success
+    "identity_required" -> "身份待确认" to BadgeVariant.Warning
+    else -> state to BadgeVariant.Neutral
 }
 

@@ -97,7 +97,7 @@ func (s *Service) processNotification(ctx context.Context, item store.TransferNo
 	if err != nil || !begun {
 		return err
 	}
-	message := notificationMessage(item)
+	message := s.notificationMessage(ctx, item)
 	unknown, sendErr := s.notifier.Send(ctx, message)
 	if sendErr == nil {
 		return s.store.FinishTransferNotification(ctx, item, "sent", "企业微信通知已发送", s.now())
@@ -120,10 +120,13 @@ func wecomFailureMessage(err error) string {
 	return "企业微信通知发送失败"
 }
 
-func notificationMessage(item store.TransferNotification) string {
+func (s *Service) notificationMessage(ctx context.Context, item store.TransferNotification) string {
 	title := "《" + item.Title + "》"
 	switch item.EventType {
 	case "completed":
+		if sourceID, err := s.store.TransferJobSourceID(ctx, item.JobID); err == nil && sourceID == "moviepilot" {
+			return "Media Hub\n" + title + "已提交到 MoviePilot 下载"
+		}
 		return "Media Hub\n" + title + "已完成转存并可播放"
 	case "needs_attention":
 		if item.ErrorMessage != "" {
@@ -141,6 +144,11 @@ func notificationMessage(item store.TransferNotification) string {
 func (s *Service) processJob(ctx context.Context, job store.TransferJob) error {
 	switch job.State {
 	case "queued":
+		if _, ok := s.search.DownloadSource(job.SourceID); ok {
+			job.State = "transferring"
+			job.NextAttemptAt = 0
+			return s.save(ctx, &job, "queued", "开始提交 MoviePilot 下载")
+		}
 		job.State = "transferring"
 		job.NextAttemptAt = 0
 		return s.save(ctx, &job, "queued", "开始资源转存")
@@ -154,6 +162,9 @@ func (s *Service) processJob(ctx context.Context, job store.TransferJob) error {
 		job.NextAttemptAt = 0
 		return s.save(ctx, &job, "retry_wait", "继续处理")
 	case "transferring":
+		if _, ok := s.search.DownloadSource(job.SourceID); ok {
+			return s.processDownload(ctx, job)
+		}
 		return s.processTransfer(ctx, job)
 	case "transferred":
 		return s.submitSync(ctx, job)
@@ -283,7 +294,7 @@ func (s *Service) handleSourceFailure(ctx context.Context, job *store.TransferJo
 	from := job.State
 	if failure.Code == "source_submission_unknown" || failure.Code == "source_access_unknown" {
 		job.State = "needs_attention"
-		job.ResumeState = "transferring"
+		job.ResumeState = s.downloadOrTransferResume(*job)
 		job.ErrorCode = failure.Code
 		job.ErrorMessage = failure.Message
 		job.Retryable = true
@@ -300,7 +311,39 @@ func (s *Service) handleSourceFailure(ctx context.Context, job *store.TransferJo
 		job.NextAttemptAt = s.now().UTC().Add(backoff(job.Attempts)).Unix()
 		return s.save(ctx, job, from, "等待自动重试")
 	}
-	return s.fail(ctx, job, from, failure.Code, failure.Message, failure.Retryable, "transferring")
+	return s.fail(ctx, job, from, failure.Code, failure.Message, failure.Retryable, s.downloadOrTransferResume(*job))
+}
+
+func (s *Service) downloadOrTransferResume(store.TransferJob) string {
+	return "transferring"
+}
+
+func (s *Service) processDownload(ctx context.Context, job store.TransferJob) error {
+	payload, err := s.codec.Decode(job.SelectionToken)
+	if err != nil {
+		return s.fail(ctx, &job, "transferring", "selection_expired", "资源选择已过期", false, "")
+	}
+	source, ok := s.search.DownloadSource(payload.SourceID)
+	if !ok {
+		return s.fail(ctx, &job, "transferring", "source_unsupported", "资源源不支持下载", false, "")
+	}
+	job.Attempts++
+	job.NextAttemptAt = 0
+	if err := s.save(ctx, &job, "transferring", ""); err != nil {
+		return err
+	}
+	if err := source.StartDownload(ctx, search.DownloadRequest{
+		UserID: job.UserID, Title: job.Title, MediaType: payload.MediaType, Reference: payload.Reference,
+	}); err != nil {
+		return s.handleSourceFailure(ctx, &job, err)
+	}
+	job.State = "completed"
+	job.Attempts = 0
+	job.NextAttemptAt = 0
+	job.ErrorCode = ""
+	job.ErrorMessage = ""
+	job.Retryable = false
+	return s.save(ctx, &job, "transferring", "已提交到 MoviePilot 下载")
 }
 
 func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {

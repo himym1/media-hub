@@ -161,22 +161,31 @@ func (s *Service) workflowConfiguration() config.Workflow {
 }
 
 func (s *Service) SelectionToken(candidate search.Candidate) string {
-	if s.codec == nil || candidate.TransferState != "available" || candidate.SourceRef == "" {
+	if s.codec == nil || candidate.SourceRef == "" {
 		return ""
 	}
-	if !s.syncConfigured() {
-		return ""
-	}
-	if _, ok := s.workflowConfiguration().Target(candidate.MediaType); !ok {
-		return ""
-	}
-	if candidate.MediaType == "series" && (candidate.Season == 0 || candidate.EpisodeStart == 0 || candidate.EpisodeEnd == 0) {
+	switch candidate.TransferState {
+	case "downloadable":
+		if _, ok := s.search.DownloadSource(candidate.SourceID); !ok {
+			return ""
+		}
+	case "available":
+		if !s.syncConfigured() {
+			return ""
+		}
+		if _, ok := s.workflowConfiguration().Target(candidate.MediaType); !ok {
+			return ""
+		}
+		if candidate.MediaType == "series" && (candidate.Season == 0 || candidate.EpisodeStart == 0 || candidate.EpisodeEnd == 0) {
+			return ""
+		}
+		if _, ok := s.search.TransferSource(candidate.SourceID); !ok {
+			return ""
+		}
+	default:
 		return ""
 	}
 	if candidate.Revision == 0 || candidate.Revision != s.search.CurrentRevision() {
-		return ""
-	}
-	if _, ok := s.search.TransferSource(candidate.SourceID); !ok {
 		return ""
 	}
 	token, err := s.codec.Encode(selection.Payload{
@@ -198,9 +207,6 @@ func (s *Service) Enqueue(ctx context.Context, userID int64, selectionToken, ide
 	if s.codec == nil {
 		return Job{}, false, ErrUnavailable
 	}
-	if !s.syncConfigured() {
-		return Job{}, false, ErrTargetUnavailable
-	}
 	if !idempotencyPattern.MatchString(idempotencyKey) {
 		return Job{}, false, ErrInvalidIdempotency
 	}
@@ -211,11 +217,16 @@ func (s *Service) Enqueue(ctx context.Context, userID int64, selectionToken, ide
 	if payload.Revision != s.search.CurrentRevision() {
 		return Job{}, false, ErrInvalidSelection
 	}
-	if _, ok := s.workflowConfiguration().Target(payload.MediaType); !ok {
-		return Job{}, false, ErrTargetUnavailable
-	}
-	if _, ok := s.search.TransferSource(payload.SourceID); !ok {
-		return Job{}, false, ErrSourceUnavailable
+	if _, ok := s.search.DownloadSource(payload.SourceID); !ok {
+		if !s.syncConfigured() {
+			return Job{}, false, ErrTargetUnavailable
+		}
+		if _, ok := s.workflowConfiguration().Target(payload.MediaType); !ok {
+			return Job{}, false, ErrTargetUnavailable
+		}
+		if _, ok := s.search.TransferSource(payload.SourceID); !ok {
+			return Job{}, false, ErrSourceUnavailable
+		}
 	}
 
 	canonical, err := json.Marshal(struct {

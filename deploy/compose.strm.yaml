@@ -4,5 +4,8 @@ services:
       MEDIA_HUB_STRM_ROOT_MOUNT: ${MEDIA_HUB_STRM_ROOT_MOUNT:-/media}
       MEDIA_HUB_STRM_BASE_URL: ${MEDIA_HUB_STRM_BASE_URL:-https://media.himym.us.ci}
       MEDIA_HUB_STRM_SYNC_MODE: ${MEDIA_HUB_STRM_SYNC_MODE:-}
+      MEDIA_HUB_LIBRARY_PATH_MAP: ${MEDIA_HUB_LIBRARY_PATH_MAP:-/media2:/local-media2,/media/links:/local-links}
     volumes:
       - ${MEDIA_HUB_STRM_HOST_PATH:-/volume2/media/115-strm}:${MEDIA_HUB_STRM_ROOT_MOUNT:-/media}:rw
+      - ${MEDIA_HUB_ADULT_HOST_PATH:-/volume3/media2}:${MEDIA_HUB_ADULT_ROOT_MOUNT:-/local-media2}:rw
+      - ${MEDIA_HUB_PT_HOST_PATH:-/volume4/media3/links}:${MEDIA_HUB_PT_ROOT_MOUNT:-/local-links}:rw

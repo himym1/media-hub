@@ -42,7 +42,7 @@ const viewSlugs: Record<WorkspaceView, string> = {
   服务: 'settings',
 }
 const slugViews = Object.fromEntries(Object.entries(viewSlugs).map(([view, slug]) => [slug, view])) as Record<string, WorkspaceView>
-const activeTransferStates = new Set(['queued', 'transferring', 'transferred', 'submitting_sync', 'syncing', 'retry_wait', 'refreshing_emby', 'indexing_emby', 'verifying_playback'])
+const activeTransferStates = new Set(['queued', 'transferring', 'downloading', 'transferred', 'submitting_sync', 'syncing', 'retry_wait', 'refreshing_emby', 'indexing_emby', 'verifying_playback'])
 
 type SearchWorkspaceProps = {
   isLoggingOut: boolean

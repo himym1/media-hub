@@ -59,7 +59,7 @@ Implementation status: SQLite persistence, scheduler, source/release rules, epis
 - [ ] Promote Android Emby-managed Media3 playback from experimental after real movie/episode redirect, Range seek, resume, progress, and fallback acceptance.
 - [x] Native user-scoped operational summary and Media Hub-owned structured logs; provider-private logs are not proxied.
 - [x] Web library in-page player for movies and episodes (`<video>` plus optional HLS); decode failures stay on the overlay with the item `externalUrl`. Android Media3 remains the phone player.
-- [x] MoviePilot and Telegram are intentionally rejected by the product boundary; Enterprise WeChat is the supported notification channel.
+- [x] Telegram is rejected by the product boundary; Enterprise WeChat is the supported notification channel. PT search/download is orchestrated through MoviePilot rather than cloned into Hub.
 - [x] Native administrator password change with Argon2id rehashing and transactional revocation of other sessions.
 - [x] Authenticated Enterprise WeChat delivery-state list and exact-ID-confirmed manual resend for uncertain outcomes.
 
@@ -99,7 +99,6 @@ Exit gate: fresh deployment needs only Media Hub + Emby + 115; transfer-to-playb
 - Windows Tauri installer CI (`.github/workflows/desktop-windows.yml`; mpv remains an external decode dependency).
 - Multi-user roles.
 - Public registration and billing.
-- PT/MoviePilot workflows.
 - PostgreSQL, Redis, or distributed workers.
 
 ## Upgrade Signals

@@ -304,7 +304,7 @@ private fun TransferRow(job: TransferJob, selected: Boolean, onClick: () -> Unit
         onClick = onClick,
         end = {
             MediaHubBadge(
-                text = stateLabel(job.state),
+                text = stateLabel(job.state, job.source),
                 variant = stateBadgeVariant(job.state),
             )
         },
@@ -430,9 +430,22 @@ private fun TransferDetail(
 private fun transferPipelineSteps(job: TransferJob): List<PipelineStepItem> {
     val state = job.state
     val isFailed = state == "failed" || state == "needs_attention"
+    if (job.source == "moviepilot") {
+        val stageIndex = when (state) {
+            "queued" -> 0
+            "transferring", "retry_wait" -> 1
+            "completed" -> 2
+            else -> if (isFailed) 1 else 0
+        }
+        return listOf(
+            PipelineStepItem("queued", "排队", stageIndex > 0, stageIndex == 0 && !isFailed, isFailed && stageIndex == 0),
+            PipelineStepItem("download", "提交下载", stageIndex > 1, stageIndex == 1 && !isFailed, isFailed && stageIndex == 1),
+            PipelineStepItem("completed", "完成", stageIndex >= 2 && !isFailed, stageIndex == 2 && !isFailed, isFailed && stageIndex == 2),
+        )
+    }
     val stageIndex = when (state) {
         "queued" -> 0
-        "transferring", "retry_wait" -> 1
+        "transferring", "downloading", "retry_wait" -> 1
         "transferred", "submitting_sync", "syncing" -> 2
         "refreshing_emby", "indexing_emby" -> 3
         "verifying_playback", "completed" -> 4
@@ -454,9 +467,14 @@ private fun stateBadgeVariant(state: String): BadgeVariant = when (state) {
     else -> BadgeVariant.Primary
 }
 
-private fun stateLabel(state: String): String = when (state) {
+private fun stateLabel(state: String, source: String = ""): String {
+    if (source == "moviepilot" && (state == "queued" || state == "transferring")) {
+        return if (state == "queued") "排队中" else "正在提交下载"
+    }
+    return when (state) {
     "queued" -> "排队中"
     "transferring" -> "正在转存"
+    "downloading" -> "正在提交下载"
     "retry_wait" -> "等待重试"
     "transferred" -> "已转存"
     "submitting_sync" -> "提交同步"
@@ -468,6 +486,7 @@ private fun stateLabel(state: String): String = when (state) {
     "failed" -> "失败"
     "needs_attention" -> "需要确认"
     else -> "未知"
+    }
 }
 
 private fun stateColor(state: String) = when (state) {

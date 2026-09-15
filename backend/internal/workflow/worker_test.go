@@ -374,7 +374,7 @@ func TestBuiltinSyncAuthExpiryIsRetryable(t *testing.T) {
 }
 
 func TestNotificationMessageIncludesJobError(t *testing.T) {
-	message := notificationMessage(store.TransferNotification{
+	message := (&Service{}).notificationMessage(context.Background(), store.TransferNotification{
 		Title: "Movie", EventType: "failed",
 		ErrorMessage: "115 授权已失效，请在概览页重新扫码后再重试任务",
 	})
@@ -833,6 +833,68 @@ func runSubtitleIndexJob(t *testing.T, service *Service, dataStore *store.Store,
 	}
 	if err := service.processJob(ctx, loaded); err != nil {
 		t.Fatal(err)
+	}
+}
+
+type countingDownloadStub struct{ calls *int }
+
+func (countingDownloadStub) ID() string    { return "moviepilot" }
+func (countingDownloadStub) Label() string { return "PT" }
+func (countingDownloadStub) Search(context.Context, string) ([]search.Candidate, error) {
+	return []search.Candidate{{
+		ID: "item-1", Title: "Movie", MediaType: "movie", TMDBID: "123", SourceRef: "9d7e672:1", TransferState: "downloadable",
+	}}, nil
+}
+func (stub countingDownloadStub) StartDownload(context.Context, search.DownloadRequest) error {
+	*stub.calls++
+	return nil
+}
+
+func TestDownloadJobCompletesWithoutSTRM(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	downloads := 0
+	searchService := search.NewService(countingDownloadStub{calls: &downloads})
+	service := NewService(dataStore, searchService, codec, nil, nil, config.Workflow{}, nil, nil, nil)
+	candidate := searchService.Search(ctx, "Movie").Results[0]
+	token := service.SelectionToken(candidate)
+	if token == "" {
+		t.Fatal("download token was not created")
+	}
+	publicJob, _, err := service.Enqueue(ctx, admin.ID, token, "request_download")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := service.processJob(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	job, err := dataStore.TransferJob(ctx, admin.ID, publicJob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != "completed" || downloads != 1 {
+		t.Fatalf("state=%q downloads=%d", job.State, downloads)
 	}
 }
 

@@ -157,6 +157,7 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 			continue
 		}
 		_, supportsTransfer := source.(TransferSource)
+		_, supportsDownload := source.(DownloadSource)
 		for _, candidate := range outcome.candidates {
 			if !candidate.IdentityVerified {
 				candidate.PosterURL = ""
@@ -196,6 +197,11 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 				candidate.Season = 1
 				candidate.EpisodeStart = 1
 				candidate.EpisodeEnd = 1
+			}
+			if supportsDownload && candidate.SourceRef != "" {
+				candidate.TransferState = "downloadable"
+				response.Results = append(response.Results, candidate)
+				continue
 			}
 			if !supportsTransfer || candidate.SourceRef == "" {
 				continue
@@ -342,6 +348,24 @@ func (s *Service) CheckInSources() []CheckInSource {
 }
 
 func (s *Service) TransferSource(sourceID string) (TransferSource, bool) {
+	source, ok := s.lookupSource(sourceID)
+	if !ok {
+		return nil, false
+	}
+	transferSource, ok := source.(TransferSource)
+	return transferSource, ok
+}
+
+func (s *Service) DownloadSource(sourceID string) (DownloadSource, bool) {
+	source, ok := s.lookupSource(sourceID)
+	if !ok {
+		return nil, false
+	}
+	downloadSource, ok := source.(DownloadSource)
+	return downloadSource, ok
+}
+
+func (s *Service) lookupSource(sourceID string) (Source, bool) {
 	switch sourceID {
 	case "frame":
 		sourceID = "framehdr"
@@ -350,11 +374,9 @@ func (s *Service) TransferSource(sourceID string) (TransferSource, bool) {
 	}
 	_, sources, _, _ := s.snapshot()
 	for _, source := range sources {
-		if source.ID() != sourceID {
-			continue
+		if source.ID() == sourceID {
+			return source, true
 		}
-		transferSource, ok := source.(TransferSource)
-		return transferSource, ok
 	}
 	return nil, false
 }

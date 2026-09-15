@@ -27,8 +27,8 @@ describe('discoverySearch', () => {
 
   it('formats focus copy', () => {
     expect(discoveryFocusSubtitle({ year: 2018, mediaType: 'movie' })).toBe('2018 · 电影')
-    expect(discoveryResultsHeading(true, '头号玩家')).toBe('正在查找《头号玩家》可转存版本…')
-    expect(discoveryResultsHeading(false, '头号玩家')).toBe('《头号玩家》可转存版本')
+    expect(discoveryResultsHeading(true, '头号玩家')).toBe('正在查找《头号玩家》可获取版本…')
+    expect(discoveryResultsHeading(false, '头号玩家')).toBe('《头号玩家》可获取版本')
   })
 })
 

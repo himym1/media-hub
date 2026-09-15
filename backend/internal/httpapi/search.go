@@ -49,7 +49,7 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request) {
 	response := h.dependencies.Search.Search(r.Context(), query)
 	results := make([]publicCandidate, 0, len(response.Results))
 	for _, candidate := range response.Results {
-		if candidate.TransferState != "available" {
+		if candidate.TransferState != "available" && candidate.TransferState != "downloadable" {
 			continue
 		}
 		token := ""

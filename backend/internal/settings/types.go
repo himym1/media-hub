@@ -14,6 +14,7 @@ type Values struct {
 	Drive115   config.Drive115       `json:"drive115"`
 	TMDB       config.TMDB           `json:"tmdb"`
 	Assrt      config.Assrt          `json:"assrt"`
+	MoviePilot config.MoviePilot     `json:"moviePilot"`
 	WeCom      config.WeCom          `json:"wecom"`
 	Workflow   config.Workflow       `json:"workflow"`
 	CheckIn    *CheckInSettings      `json:"checkIn,omitempty"`
@@ -95,6 +96,11 @@ type AssrtUpdate struct {
 	Token   SecretUpdate `json:"token"`
 }
 
+type MoviePilotUpdate struct {
+	BaseURL  string       `json:"baseUrl"`
+	APIToken SecretUpdate `json:"apiToken"`
+}
+
 type SourceUpdate struct {
 	ID       string       `json:"id"`
 	BaseURL  string       `json:"baseUrl"`
@@ -119,6 +125,7 @@ type Update struct {
 	Drive115   Drive115Update    `json:"drive115"`
 	TMDB       TMDBUpdate        `json:"tmdb"`
 	Assrt      *AssrtUpdate      `json:"assrt"`
+	MoviePilot *MoviePilotUpdate `json:"moviePilot"`
 	WeCom      *WeComUpdate      `json:"wecom"`
 	Workflow   Workflow          `json:"workflow"`
 	CheckIn    *CheckInSettings  `json:"checkIn,omitempty"`
@@ -155,6 +162,11 @@ type AssrtView struct {
 	Token   SecretStatus `json:"token"`
 }
 
+type MoviePilotView struct {
+	BaseURL  string       `json:"baseUrl"`
+	APIToken SecretStatus `json:"apiToken"`
+}
+
 type SourceView struct {
 	ID       string       `json:"id"`
 	Label    string       `json:"label"`
@@ -180,6 +192,7 @@ type View struct {
 	Drive115   Drive115View    `json:"drive115"`
 	TMDB       TMDBView        `json:"tmdb"`
 	Assrt      AssrtView       `json:"assrt"`
+	MoviePilot MoviePilotView  `json:"moviePilot"`
 	WeCom      WeComView       `json:"wecom"`
 	Workflow   Workflow        `json:"workflow"`
 	CheckIn    CheckInSettings `json:"checkIn"`
@@ -232,6 +245,7 @@ func FromConfig(value config.Config) Values {
 		Drive115:   value.Drive115,
 		TMDB:       value.TMDB,
 		Assrt:      value.Assrt,
+		MoviePilot: value.MoviePilot,
 		WeCom:      value.WeCom,
 		Workflow:   value.Workflow,
 		Sources:    append([]config.SearchSource(nil), value.Sources...),

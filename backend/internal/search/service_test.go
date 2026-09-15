@@ -230,6 +230,22 @@ func TestServiceCompletesUnknownMediaTypeAndKeepsIncompleteSeriesTransferable(t 
 	}
 }
 
+func TestServiceKeepsDownloadableCandidates(t *testing.T) {
+	source := downloadSearchStub{sourceStub: sourceStub{
+		id: "moviepilot", label: "PT", candidates: []Candidate{{
+			ID: "ref-1", Title: "范海辛", Year: 2004, MediaType: "movie", SourceRef: "9d7e672:1",
+		}},
+	}}
+	response := NewService(source).Search(context.Background(), "范海辛")
+	if len(response.Results) != 1 || response.Results[0].TransferState != "downloadable" || response.Results[0].SourceRef != "9d7e672:1" {
+		t.Fatalf("results = %#v", response.Results)
+	}
+}
+
+type downloadSearchStub struct{ sourceStub }
+
+func (downloadSearchStub) StartDownload(context.Context, DownloadRequest) error { return nil }
+
 func TestServiceOmitsResultsThatCannotTransfer(t *testing.T) {
 	source := transferSearchStub{sourceStub: sourceStub{
 		id: "juying", label: "聚影", candidates: []Candidate{

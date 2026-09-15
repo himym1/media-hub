@@ -118,6 +118,36 @@ func TestSelectionTokenAllowsShareWithoutTMDB(t *testing.T) {
 	}
 }
 
+type downloadSourceStub struct{}
+
+func (downloadSourceStub) ID() string    { return "moviepilot" }
+func (downloadSourceStub) Label() string { return "PT" }
+func (downloadSourceStub) Search(context.Context, string) ([]search.Candidate, error) {
+	return []search.Candidate{{
+		ID: "item-1", Title: "Movie", MediaType: "movie", TMDBID: "123",
+		SourceRef: "9d7e672:1", TransferState: "downloadable",
+	}}, nil
+}
+func (downloadSourceStub) StartDownload(context.Context, search.DownloadRequest) error {
+	return nil
+}
+
+func TestSelectionTokenAllowsMoviePilotDownloadWithout115Target(t *testing.T) {
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	searchService := search.NewService(downloadSourceStub{})
+	service := NewService(nil, searchService, codec, nil, nil, config.Workflow{}, nil, nil, nil)
+	candidate := searchService.Search(context.Background(), "Movie").Results[0]
+	if candidate.TransferState != "downloadable" {
+		t.Fatalf("candidate = %#v", candidate)
+	}
+	if service.SelectionToken(candidate) == "" {
+		t.Fatal("moviepilot download should receive a token without 115 workflow")
+	}
+}
+
 func TestEnqueueRejectsInvalidSelection(t *testing.T) {
 	service := NewService(nil, search.NewService(), nil, nil, nil, config.Workflow{}, nil, nil, nil)
 	_, _, err := service.Enqueue(context.Background(), 1, "invalid", "request_one")

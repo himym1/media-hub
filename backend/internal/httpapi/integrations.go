@@ -16,6 +16,7 @@ import (
 	"media-hub/backend/internal/drive115"
 	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/strm"
+	"media-hub/backend/internal/subtitlecat"
 )
 
 var embyIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
@@ -428,7 +429,8 @@ func writeIntegrationProblem(w http.ResponseWriter, err error) {
 	case errors.Is(err, emby.ErrNotConfigured),
 		errors.Is(err, emby.ErrMissingAPIKey),
 		errors.Is(err, drive115.ErrNotConfigured),
-		errors.Is(err, assrt.ErrNotConfigured):
+		errors.Is(err, assrt.ErrNotConfigured),
+		errors.Is(err, subtitlecat.ErrNotConfigured):
 		writeProblem(w, problem{
 			Type:  "https://media-hub.local/problems/integration-incomplete",
 			Title: "集成配置不完整", Status: http.StatusServiceUnavailable,

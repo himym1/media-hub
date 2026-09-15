@@ -41,6 +41,7 @@ function createDraft(settings: ProviderSettings): Draft {
     drive115: { clientId: settings.drive115.clientId },
     tmdb: { baseUrl: settings.tmdb.baseUrl, accessToken: secret() },
     assrt: { baseUrl: settings.assrt?.baseUrl ?? '', token: secret() },
+    moviePilot: { baseUrl: settings.moviePilot?.baseUrl ?? '', apiToken: secret() },
     wecom: {
       baseUrl: settings.wecom.baseUrl,
       corpId: settings.wecom.corpId,
@@ -75,7 +76,7 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
   const [draft, setDraft] = useState<Draft>(() => createDraft(settings))
   useEffect(() => setDraft(createDraft(settings)), [settings])
 
-  const updateSecret = (provider: 'emby' | 'tmdb' | 'assrt', field: 'apiKey' | 'accessToken' | 'token', value: SecretUpdate) => {
+  const updateSecret = (provider: 'emby' | 'tmdb' | 'assrt' | 'moviePilot', field: 'apiKey' | 'accessToken' | 'token' | 'apiToken', value: SecretUpdate) => {
     setDraft((current) => ({ ...current, [provider]: { ...current[provider], [field]: value } } as Draft))
   }
 
@@ -103,6 +104,14 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
             {settings.assrt?.token.configured ? <label className="inline-check"><input checked={draft.assrt.token.clear} name="assrt-clear-token" onChange={(event) => updateSecret('assrt', 'token', { value: '', clear: event.target.checked })} type="checkbox" />清除已保存 Token</label> : null}
             <p className="settings-note">在 assrt.net 用户面板申请 32 位 Token。中文搜索优先走 Assrt，字幕写到 STRM 旁，不经 Media Hub 转发视频。</p>
             <p className="settings-note">字幕服务由 assrt.net 提供</p>
+          </fieldset>
+
+          <fieldset>
+            <legend>MoviePilot</legend>
+            <label><span>服务地址</span><input {...machineFieldProps} name="moviepilot-base-url" onChange={(event) => setDraft((current) => ({ ...current, moviePilot: { ...current.moviePilot, baseUrl: event.target.value } }))} placeholder="http://172.17.0.1:13001" type="url" value={draft.moviePilot.baseUrl} /></label>
+            <label><span>API Token · {secretHint(settings.moviePilot?.apiToken.configured ?? false)}</span><input {...machineFieldProps} autoComplete="new-password" name="moviepilot-api-token" onChange={(event) => updateSecret('moviePilot', 'apiToken', { ...draft.moviePilot.apiToken, value: event.target.value })} type="password" value={draft.moviePilot.apiToken.value} /></label>
+            {settings.moviePilot?.apiToken.configured ? <label className="inline-check"><input checked={draft.moviePilot.apiToken.clear} name="moviepilot-clear-token" onChange={(event) => updateSecret('moviePilot', 'apiToken', { value: '', clear: event.target.checked })} type="checkbox" />清除已保存 Token</label> : null}
+            <p className="settings-note">搜索会列出 PT 结果。Hub 只把下载交给 MoviePilot，不保存 PT 站点 Cookie，也不能把种子转存到 115。</p>
           </fieldset>
 
           <fieldset>

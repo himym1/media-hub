@@ -21,9 +21,9 @@ export function prioritizeDiscoveryResults(
 }
 
 export function discoveryResultsHeading(searching: boolean, focusTitle: string): string {
-  if (searching && focusTitle) return `正在查找《${focusTitle}》可转存版本…`
+  if (searching && focusTitle) return `正在查找《${focusTitle}》可获取版本…`
   if (searching) return '正在搜索…'
-  if (focusTitle) return `《${focusTitle}》可转存版本`
+  if (focusTitle) return `《${focusTitle}》可获取版本`
   return '搜索结果'
 }
 
@@ -38,6 +38,6 @@ function score(
   if (wantSeries === isSeries) value += 20
   if (item.year > 0 && candidate.year === item.year) value += 10
   if (candidate.transferToken) value += 5
-  if (candidate.transferState === 'available') value += 3
+  if (candidate.transferState === 'available' || candidate.transferState === 'downloadable') value += 3
   return value
 }

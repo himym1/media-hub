@@ -31,7 +31,7 @@ internal fun prioritizeDiscoveryResults(
             if (wantSeries == isSeries) score += 20
             if (item.year > 0 && candidate.year == item.year) score += 10
             if (candidate.transferToken != null) score += 5
-            if (candidate.transferState == "available") score += 3
+            if (candidate.transferState == "available" || candidate.transferState == "downloadable") score += 3
             score
         }.thenBy { it.title },
     )
@@ -42,8 +42,8 @@ internal fun discoveryResultsHeading(
     focusTitle: String,
     resultCount: Int,
 ): String = when {
-    searching && focusTitle.isNotBlank() -> "正在查找《$focusTitle》可转存版本…"
+    searching && focusTitle.isNotBlank() -> "正在查找《$focusTitle》可获取版本…"
     searching -> "正在搜索…"
-    focusTitle.isNotBlank() -> "《$focusTitle》可转存版本 ($resultCount)"
+    focusTitle.isNotBlank() -> "《$focusTitle》可获取版本 ($resultCount)"
     else -> "搜索结果 $resultCount"
 }

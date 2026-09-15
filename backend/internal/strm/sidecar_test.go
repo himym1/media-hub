@@ -125,6 +125,21 @@ func TestPromoteExternalSidecarCopiesZhCN(t *testing.T) {
 	}
 }
 
+func TestResolveMappedFilePrefersLongestPrefix(t *testing.T) {
+	maps, err := ParsePathMap("/media2:/local-media2,/media/links:/local-links,/media:/wrong")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := ResolveMappedFile(maps, "/media/links/电影/Local.mkv")
+	if err != nil || resolved != "/local-links/电影/Local.mkv" {
+		t.Fatalf("resolved=%q err=%v", resolved, err)
+	}
+	resolved, err = ResolveMappedFile(maps, "/media2/av/file.mp4")
+	if err != nil || resolved != "/local-media2/av/file.mp4" {
+		t.Fatalf("adult resolved=%q err=%v", resolved, err)
+	}
+}
+
 func TestReadSidecarMissing(t *testing.T) {
 	dir := t.TempDir()
 	media := filepath.Join(dir, "S01E01.strm")

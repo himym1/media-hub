@@ -27,6 +27,7 @@ import (
 	"media-hub/backend/internal/integration"
 	"media-hub/backend/internal/localupload"
 	"media-hub/backend/internal/mediaidentity"
+	"media-hub/backend/internal/moviepilot"
 	"media-hub/backend/internal/playback"
 	"media-hub/backend/internal/search"
 	"media-hub/backend/internal/securepayload"
@@ -37,6 +38,7 @@ import (
 	"media-hub/backend/internal/strm"
 	"media-hub/backend/internal/strm/builtin"
 	"media-hub/backend/internal/subscription"
+	"media-hub/backend/internal/subtitlecat"
 	"media-hub/backend/internal/subtitles"
 	"media-hub/backend/internal/tmdb"
 	"media-hub/backend/internal/webui"
@@ -128,6 +130,12 @@ func run(logger *slog.Logger) error {
 		assrtTimeout = configuration.SearchTimeout
 	}
 	assrtClient := assrt.NewClientWithProxy(configuration.Assrt.BaseURL, configuration.Assrt.Token, assrtTimeout, configuration.AssrtFileProxyURL)
+	moviePilotTimeout := 45 * time.Second
+	if configuration.SearchTimeout > moviePilotTimeout {
+		moviePilotTimeout = configuration.SearchTimeout
+	}
+	moviePilotClient := moviepilot.NewClient(configuration.MoviePilot.BaseURL, configuration.MoviePilot.APIToken, moviePilotTimeout)
+	subtitlecatClient := subtitlecat.NewClient(assrtTimeout, configuration.SourceProxyURL)
 	wecomTimeout := configuration.ProbeTimeout
 	if wecomTimeout < 10*time.Second {
 		wecomTimeout = 10 * time.Second
@@ -188,9 +196,10 @@ func run(logger *slog.Logger) error {
 			})
 			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
 			assrtClient.Configure(value.Assrt.BaseURL, value.Assrt.Token)
+			moviePilotClient.Configure(value.MoviePilot.BaseURL, value.MoviePilot.APIToken)
 			wecomClient.ConfigureDelivery(value.WeCom)
 			workflowService.Configure(value.Workflow)
-			runtimeSources := searchSourcesFromSettings(value, configuration.SearchTimeout, configuration.FixtureMode, drive115AuthService, configuration.SourceProxyURL)
+			runtimeSources := searchSourcesFromSettings(value, configuration.SearchTimeout, configuration.FixtureMode, drive115AuthService, configuration.SourceProxyURL, moviePilotClient)
 			searchService.Configure(tmdbClient, runtimeSources...)
 			normalized := settings.NormalizeCheckIn(value.CheckIn)
 			checkinService.Configure(checkin.Schedule{
@@ -215,12 +224,22 @@ func run(logger *slog.Logger) error {
 	subtitleService := subtitles.New(embyClient, assrtClient, func() string {
 		return settingsService.Values().Workflow.StrmRootMount
 	})
+	subtitleService.UseSubtitlecat(subtitlecatClient)
+	subtitleService.UseLibraryPaths(func() []strm.PathMapping {
+		maps, err := strm.ParsePathMap(configuration.LibraryPathMap)
+		if err != nil {
+			return nil
+		}
+		return maps
+	})
 	workflowService.UseSubtitles(subtitleService)
 	overview := integration.NewOverviewService(
 		searchService,
 		drive115AuthService,
 		tmdbClient,
 		assrtClient,
+		moviePilotClient,
+		subtitlecatClient,
 		wecomClient,
 		embyHub,
 		emby.NewPlaybackChecker(embyClient),
@@ -283,7 +302,7 @@ func run(logger *slog.Logger) error {
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      45 * time.Second,
+		WriteTimeout:      90 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
@@ -401,15 +420,18 @@ func integrationRecords(configurations []config.Integration) []store.Integration
 	return records
 }
 
-func searchSourcesFromSettings(value settings.Values, timeout time.Duration, fixtureMode bool, offline adapter.Offline, sourceProxyURL *url.URL) []search.Source {
+func searchSourcesFromSettings(value settings.Values, timeout time.Duration, fixtureMode bool, offline adapter.Offline, sourceProxyURL *url.URL, moviePilotClient *moviepilot.Client) []search.Source {
 	if fixtureMode {
 		return search.FixtureSources()
 	}
-	sources := make([]search.Source, 0, len(value.Sources))
+	sources := make([]search.Source, 0, len(value.Sources)+1)
 	for _, sourceConfiguration := range value.Sources {
 		if source := adapter.New(sourceConfiguration, timeout, offline, sourceProxyURL); source != nil {
 			sources = append(sources, source)
 		}
+	}
+	if moviePilotClient != nil && moviePilotClient.Configured() {
+		sources = append(sources, moviepilot.NewSource(moviePilotClient))
 	}
 	return sources
 }

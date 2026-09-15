@@ -34,8 +34,10 @@ type Config struct {
 	Drive115               Drive115
 	TMDB                   TMDB
 	Assrt                  Assrt
+	MoviePilot             MoviePilot
 	WeCom                  WeCom
 	Workflow               Workflow
+	LibraryPathMap         string
 	Sources                []SearchSource
 	LocalUploadRoots       []string
 	AndroidReleaseDir      string
@@ -67,6 +69,11 @@ type TMDB struct {
 type Assrt struct {
 	BaseURL string
 	Token   string
+}
+
+type MoviePilot struct {
+	BaseURL  string
+	APIToken string
 }
 
 type WeCom struct {
@@ -279,6 +286,27 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		assrtURL = "https://api.assrt.net"
 	}
 	assrtConfig := Assrt{BaseURL: assrtURL, Token: assrtToken}
+	moviePilotURL, err := baseURLValue(lookup, "MEDIA_HUB_MOVIEPILOT_URL")
+	if err != nil {
+		return Config{}, err
+	}
+	moviePilotToken := secretValue(lookup, "MEDIA_HUB_MOVIEPILOT_API_TOKEN")
+	if moviePilotURL == "" && moviePilotToken != "" {
+		moviePilotURL = "http://172.17.0.1:13001"
+	}
+	moviePilotConfig := MoviePilot{BaseURL: moviePilotURL, APIToken: moviePilotToken}
+	libraryPathMap := strings.TrimSpace(stringValue(lookup, "MEDIA_HUB_LIBRARY_PATH_MAP", ""))
+	if libraryPathMap != "" {
+		for _, item := range strings.Split(libraryPathMap, ",") {
+			item = strings.TrimSpace(item)
+			if item == "" {
+				continue
+			}
+			if strings.Index(item, ":/") <= 0 {
+				return Config{}, fmt.Errorf("MEDIA_HUB_LIBRARY_PATH_MAP entries must look like /emby-prefix:/local-root")
+			}
+		}
+	}
 	wecomConfig := WeCom{
 		BaseURL:  wecomURL,
 		CorpID:   strings.TrimSpace(stringValue(lookup, "MEDIA_HUB_WECOM_CORP_ID", "")),
@@ -324,7 +352,9 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 		Drive115:               drive115,
 		TMDB:                   tmdbConfig,
 		Assrt:                  assrtConfig,
+		MoviePilot:             moviePilotConfig,
 		WeCom:                  wecomConfig,
+		LibraryPathMap:         libraryPathMap,
 		Workflow: Workflow{
 			SyncMode:            syncMode,
 			StrmBaseURL:         strmBaseURL,
@@ -349,6 +379,7 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 			{ID: "115", Label: "115", BaseURL: drive115URL},
 			{ID: "tmdb", Label: "TMDB", BaseURL: tmdbConfig.BaseURL},
 			{ID: "assrt", Label: "Assrt", BaseURL: assrtConfig.BaseURL},
+			{ID: "moviepilot", Label: "MoviePilot", BaseURL: moviePilotConfig.BaseURL},
 			{ID: "wecom", Label: "企业微信", BaseURL: wecomConfig.BaseURL},
 			{ID: "emby", Label: "Emby", BaseURL: emby.BaseURL},
 		},

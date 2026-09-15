@@ -6,7 +6,7 @@
 - The repository contains one backend, one Web client, one Android client, and may add a Windows desktop client when native decode is required.
 - Media payloads must never be proxied through Media Hub. Playback remains 115 CDN to player.
 - Media Hub owns STRM generation and `/115/url/` 302 playback. Emby owns library management and playback APIs.
-- MoviePilot and local NAS upload workflows are outside the MVP.
+- PT search and download are delegated to MoviePilot. Hub does not store PT site cookies, talk to trackers, or become a second downloader. Local NAS upload remains outside the MVP.
 
 ## Architecture
 

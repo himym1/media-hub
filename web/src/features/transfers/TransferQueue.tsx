@@ -17,9 +17,17 @@ import {
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
 
+function jobStateLabel(state: TransferState, source?: string) {
+  if (source === 'moviepilot' && (state === 'transferring' || state === 'queued')) {
+    return state === 'queued' ? '排队中' : '正在提交下载'
+  }
+  return stateLabel[state]
+}
+
 const stateLabel: Record<TransferState, string> = {
   queued: '排队中',
   transferring: '正在转存',
+  downloading: '正在提交下载',
   retry_wait: '等待重试',
   transferred: '已转存',
   submitting_sync: '提交同步',
@@ -31,7 +39,7 @@ const stateLabel: Record<TransferState, string> = {
   failed: '失败',
   needs_attention: '需要确认',
 }
-const runningStates = new Set<TransferState>(['queued', 'transferring', 'retry_wait', 'transferred', 'submitting_sync', 'syncing', 'refreshing_emby', 'indexing_emby', 'verifying_playback'])
+const runningStates = new Set<TransferState>(['queued', 'transferring', 'downloading', 'retry_wait', 'transferred', 'submitting_sync', 'syncing', 'refreshing_emby', 'indexing_emby', 'verifying_playback'])
 const timeFormatter = new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 function taskIdFromLocation() {
@@ -237,9 +245,9 @@ export function TransferQueue({ query }: TransferQueueProps) {
           <aside className="task-detail" aria-label="任务详情">
             {detail.isLoading && !detail.data ? <div className="status-loading">正在读取…</div> : null}
             {detail.data ? <>
-              <div className="task-detail-heading"><div><h2>{detail.data.title}</h2></div><span className={`state-chip ${detail.data.state}`}>{stateLabel[detail.data.state]}</span></div>
+              <div className="task-detail-heading"><div><h2>{detail.data.title}</h2></div><span className={`state-chip ${detail.data.state}`}>{jobStateLabel(detail.data.state, detail.data.source)}</span></div>
               <div aria-label="工作流阶段" className="task-pipeline">
-                {getPipelineStages(detail.data.state).map((stage, idx) => (
+                {getPipelineStages(detail.data.state, detail.data.source).map((stage, idx) => (
                   <div className={`pipeline-step ${stage.status}`} key={stage.id}>
                     <span className="step-circle">{stage.status === 'completed' ? '✓' : idx + 1}</span>
                     <span className="step-text">{stage.label}</span>
@@ -289,7 +297,7 @@ function TaskGroup({ label, jobs, selectedID, onSelect }: { label: string; jobs:
     <button aria-pressed={selectedID === job.id} className={selectedID === job.id ? 'task-row selected' : 'task-row'} key={job.id} onClick={() => onSelect(job.id)} type="button">
       <span className={`task-state-mark ${job.state}`} aria-hidden="true" />
       <span className="task-copy"><strong>{transferTitle(job)}</strong><small>{job.source} · {timeFormatter.format(new Date(job.updatedAt))}</small>{job.errorMessage ? <small className="task-row-error">{job.errorMessage}</small> : null}</span>
-      <span className={`state-chip ${job.state}`}>{stateLabel[job.state]}</span>
+      <span className={`state-chip ${job.state}`}>{jobStateLabel(job.state, job.source)}</span>
     </button>
   ))}</section>
 }
@@ -311,7 +319,14 @@ type PipelineStage = {
   status: 'completed' | 'active' | 'failed' | 'pending'
 }
 
-function getPipelineStages(state: TransferState): PipelineStage[] {
+function getPipelineStages(state: TransferState, source?: string): PipelineStage[] {
+  if (source === 'moviepilot') {
+    const submitting = state === 'queued' || state === 'transferring' || state === 'retry_wait'
+    return [
+      { id: 'd1', label: '提交下载', status: state === 'completed' ? 'completed' : submitting ? 'active' : state === 'failed' || state === 'needs_attention' ? 'failed' : 'pending' },
+      { id: 'd2', label: 'MoviePilot', status: state === 'completed' ? 'completed' : 'pending' },
+    ]
+  }
   let s1: PipelineStage['status'] = 'pending'
   let s2: PipelineStage['status'] = 'pending'
   let s3: PipelineStage['status'] = 'pending'
@@ -320,6 +335,7 @@ function getPipelineStages(state: TransferState): PipelineStage[] {
   switch (state) {
     case 'queued':
     case 'transferring':
+    case 'downloading':
     case 'retry_wait':
       s1 = 'active'
       break

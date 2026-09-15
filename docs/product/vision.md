@@ -12,7 +12,7 @@ The MVP has one administrator who:
 
 - searches for a movie or series;
 - compares available releases;
-- transfers one release to the correct 115 directory;
+- transfers one release to the correct 115 directory, or sends a PT result to MoviePilot to download locally;
 - expects it to appear in Emby without manual intervention;
 - wants a precise failure reason when any stage fails;
 - primarily uses Android for discovery and status checks;
@@ -45,7 +45,7 @@ Discovered
 
 ## Non-goals
 
-- No PT downloads or MoviePilot integration.
+- No PT site cookies, tracker clients, or a second downloader/organize stack. PT search and download are delegated to MoviePilot.
 - No local NAS instant-upload scanner.
 - No built-in video player in the MVP.
 - No iOS, Flutter, or public app-store release. Windows via Tauri is in scope when native decode is required.

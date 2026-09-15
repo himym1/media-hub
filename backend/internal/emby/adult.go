@@ -88,6 +88,10 @@ func isAdultGenre(value string) bool {
 	return false
 }
 
+func LooksLikeAdultPath(value string) bool {
+	return isAdultPath(value)
+}
+
 func isAdultPath(value string) bool {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {

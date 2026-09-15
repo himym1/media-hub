@@ -20,6 +20,7 @@ export type ProviderSettings = {
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretStatus }
   assrt: { baseUrl: string; token: SecretStatus }
+  moviePilot: { baseUrl: string; apiToken: SecretStatus }
   wecom: { baseUrl: string; corpId: string; secret: SecretStatus; sendMode: 'app' | 'appchat'; agentId: number; toUser: string; chatId: string }
   workflow: { syncMode: WorkflowSyncMode; strmBaseUrl: string; strmRootMount: string; qMediaSyncAccountId: number; movie: WorkflowTargetSettings; series: WorkflowTargetSettings }
   checkIn: CheckInSettings
@@ -31,6 +32,7 @@ export type ProviderSettingsUpdate = {
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretUpdate }
   assrt: { baseUrl: string; token: SecretUpdate }
+  moviePilot: { baseUrl: string; apiToken: SecretUpdate }
   wecom: { baseUrl: string; corpId: string; secret: SecretUpdate; sendMode: 'app' | 'appchat'; agentId: number; toUser: string; chatId: string }
   workflow: ProviderSettings['workflow']
   checkIn: CheckInSettings
@@ -73,7 +75,7 @@ export type Candidate = {
   provider?: string
   posterUrl?: string
   release: Release
-  transferState: 'available' | 'identity_required' | 'unavailable' | 'transferring'
+  transferState: 'available' | 'downloadable' | 'identity_required' | 'unavailable' | 'transferring'
   transferToken?: string
 }
 
@@ -100,6 +102,7 @@ export type SearchResponse = {
 export type TransferState =
   | 'queued'
   | 'transferring'
+  | 'downloading'
   | 'retry_wait'
   | 'transferred'
   | 'submitting_sync'

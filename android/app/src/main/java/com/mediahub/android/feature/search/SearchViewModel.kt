@@ -436,7 +436,9 @@ class SearchViewModel(
         val candidate = _uiState.value.results.firstOrNull { it.id == candidateId } ?: return
         val token = candidate.transferToken
         if (token == null || _uiState.value.transferringCandidateId != null) {
-            _uiState.value = _uiState.value.copy(transferMessage = "当前资源不能转存")
+            _uiState.value = _uiState.value.copy(
+                transferMessage = if (candidate.transferState == "downloadable") "当前资源不能下载" else "当前资源不能转存",
+            )
             return
         }
         viewModelScope.launch {
@@ -451,12 +453,12 @@ class SearchViewModel(
             } catch (error: ApiException) {
                 _uiState.value = _uiState.value.copy(
                     transferringCandidateId = null,
-                    transferMessage = error.message ?: "转存任务创建失败",
+                    transferMessage = error.message ?: "任务创建失败",
                 )
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(
                     transferringCandidateId = null,
-                    transferMessage = "无法创建转存任务",
+                    transferMessage = "无法创建任务",
                 )
             }
         }

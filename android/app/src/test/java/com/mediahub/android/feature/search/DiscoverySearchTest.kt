@@ -38,11 +38,11 @@ class DiscoverySearchTest {
     @Test
     fun discoveryResultsHeadingUsesFocusCopy() {
         assertEquals(
-            "正在查找《头号玩家》可转存版本…",
+            "正在查找《头号玩家》可获取版本…",
             discoveryResultsHeading(searching = true, focusTitle = "头号玩家", resultCount = 0),
         )
         assertEquals(
-            "《头号玩家》可转存版本 (3)",
+            "《头号玩家》可获取版本 (3)",
             discoveryResultsHeading(searching = false, focusTitle = "头号玩家", resultCount = 3),
         )
         assertEquals(

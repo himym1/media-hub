@@ -406,6 +406,18 @@ type transferScanner interface {
 	Scan(...any) error
 }
 
+func (s *Store) TransferJobSourceID(ctx context.Context, jobID string) (string, error) {
+	var sourceID string
+	err := s.database.QueryRowContext(ctx, `SELECT source_id FROM transfer_jobs WHERE id = ?`, jobID).Scan(&sourceID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrTransferNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("read transfer source: %w", err)
+	}
+	return sourceID, nil
+}
+
 func scanTransfer(scanner transferScanner) (TransferJob, error) {
 	var job TransferJob
 	var retryable int

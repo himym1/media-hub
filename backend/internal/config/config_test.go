@@ -35,6 +35,9 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 		"MEDIA_HUB_ANDROID_RELEASE_DIR":      "/srv/media-hub/releases",
 		"MEDIA_HUB_SOURCE_PROXY_URL":         "http://source-egress:17898",
 		"MEDIA_HUB_ASSRT_FILE_PROXY_URL":     "http://file-proxy.local:7890",
+		"MEDIA_HUB_MOVIEPILOT_URL":           "http://172.17.0.1:13001",
+		"MEDIA_HUB_MOVIEPILOT_API_TOKEN":     "mp-token",
+		"MEDIA_HUB_LIBRARY_PATH_MAP":         "/media2:/local-media2,/media/links:/local-links",
 	}
 
 	loaded, err := load(func(key string) (string, bool) {
@@ -71,6 +74,12 @@ func TestLoadParsesProviderConfiguration(t *testing.T) {
 	}
 	if loaded.Assrt.BaseURL != "https://api.assrt.net" || loaded.Assrt.Token == "" {
 		t.Fatal("unexpected Assrt configuration")
+	}
+	if loaded.MoviePilot.BaseURL != "http://172.17.0.1:13001" || loaded.MoviePilot.APIToken == "" {
+		t.Fatal("unexpected MoviePilot configuration")
+	}
+	if loaded.LibraryPathMap != "/media2:/local-media2,/media/links:/local-links" {
+		t.Fatal("unexpected library path map")
 	}
 	if loaded.Sources[0].ID != "framehdr" || loaded.Sources[0].BaseURL != "https://frame.local/api" {
 		t.Fatal("unexpected source configuration")
