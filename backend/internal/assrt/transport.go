@@ -40,9 +40,9 @@ func assrtBaseTransport(proxyURL *url.URL) *http.Transport {
 	} else {
 		transport.Proxy = nil
 	}
-	transport.DialContext = (&net.Dialer{Timeout: 4 * time.Second, KeepAlive: 30 * time.Second}).DialContext
-	transport.TLSHandshakeTimeout = 4 * time.Second
-	transport.ResponseHeaderTimeout = 4 * time.Second
+	transport.DialContext = (&net.Dialer{Timeout: 8 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	transport.TLSHandshakeTimeout = 8 * time.Second
+	transport.ResponseHeaderTimeout = 25 * time.Second
 	return transport
 }
 

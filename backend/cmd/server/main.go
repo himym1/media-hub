@@ -132,7 +132,7 @@ func run(logger *slog.Logger) error {
 		configuration.TMDB.AccessToken,
 		configuration.ProbeTimeout,
 	)
-	assrtTimeout := 28 * time.Second
+	assrtTimeout := 60 * time.Second
 	if configuration.SearchTimeout > assrtTimeout {
 		assrtTimeout = configuration.SearchTimeout
 	}

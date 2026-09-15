@@ -270,6 +270,15 @@ func TestSyncWritesMatchingChineseSidecar(t *testing.T) {
 	}
 }
 
+func TestMatchingSubtitleAcceptsLanguageTaggedAss(t *testing.T) {
+	sub, ok := matchingSubtitle("Movie.mkv", []subtitleFile{{
+		Relative: "Movie.chs.ass", PickCode: "pick-sub",
+	}})
+	if !ok || sub.Relative != "Movie.chs.ass" {
+		t.Fatalf("got %#v ok=%v", sub, ok)
+	}
+}
+
 func TestHasVideosReportsEmptyAndReadyFolders(t *testing.T) {
 	syncer := New(filesStub{
 		userID: "1",

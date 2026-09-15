@@ -79,33 +79,10 @@ func ReadSidecar(mediaPath, language string) (Sidecar, error) {
 	if mediaPath == "" || !filepath.IsAbs(mediaPath) {
 		return Sidecar{}, fmt.Errorf("library file path is invalid")
 	}
-	dir := filepath.Dir(mediaPath)
-	stem := strings.TrimSuffix(mediaPath, filepath.Ext(mediaPath))
-	languages := sidecarLanguages(language)
-	for _, lang := range languages {
-		for _, ext := range []string{".ass", ".ssa", ".srt"} {
-			dest := stem + "." + lang + ext
-			if !strings.HasPrefix(dest, dir+string(os.PathSeparator)) {
-				continue
-			}
-			body, err := os.ReadFile(dest)
-			if err != nil {
-				if os.IsNotExist(err) {
-					continue
-				}
-				return Sidecar{}, err
-			}
-			if len(body) == 0 || len(body) > maxSidecarBytes {
-				continue
-			}
-			return Sidecar{
-				Name:        lang + ext,
-				ContentType: sidecarContentType(ext),
-				Body:        body,
-			}, nil
-		}
+	if sidecar, err := readLanguageSidecar(mediaPath, language); err == nil {
+		return sidecar, nil
 	}
-	return Sidecar{}, ErrSidecarNotFound
+	return readExternalSidecar(mediaPath)
 }
 
 func RemoveSidecars(mediaPath string) error {
@@ -133,7 +110,7 @@ func RemoveSidecars(mediaPath string) error {
 }
 
 func PromoteExternalSidecar(mediaPath string) error {
-	if sidecar, err := ReadSidecar(mediaPath, "chi"); err == nil {
+	if sidecar, err := readLanguageSidecar(mediaPath, "chi"); err == nil {
 		dest := strings.TrimSuffix(filepath.Clean(mediaPath), filepath.Ext(mediaPath)) + "." + sidecar.Name
 		return writeDefaultSidecar(dest, sidecar.Body)
 	}
@@ -141,7 +118,7 @@ func PromoteExternalSidecar(mediaPath string) error {
 	dir := filepath.Dir(mediaPath)
 	stem := strings.TrimSuffix(mediaPath, filepath.Ext(mediaPath))
 	base := filepath.Base(stem)
-	for _, extra := range []string{".zh-CN.srt", ".zh-CN.ass", ".zh-cn.srt", ".zh-cn.ass", ".zh.srt", ".zh.ass", ".chs.srt", ".chs.ass"} {
+	for _, extra := range externalSidecarSuffixes {
 		source := filepath.Join(dir, base+extra)
 		if !strings.HasPrefix(source, dir+string(os.PathSeparator)) {
 			continue
@@ -184,6 +161,59 @@ func defaultSidecarPath(dest string) string {
 		return dest
 	}
 	return strings.TrimSuffix(dest, ext) + ".default" + ext
+}
+
+var externalSidecarSuffixes = []string{".zh-CN.srt", ".zh-CN.ass", ".zh-cn.srt", ".zh-cn.ass", ".zh.srt", ".zh.ass", ".chs.srt", ".chs.ass"}
+
+func readLanguageSidecar(mediaPath, language string) (Sidecar, error) {
+	dir := filepath.Dir(mediaPath)
+	stem := strings.TrimSuffix(mediaPath, filepath.Ext(mediaPath))
+	for _, lang := range sidecarLanguages(language) {
+		for _, ext := range []string{".ass", ".ssa", ".srt"} {
+			dest := stem + "." + lang + ext
+			if !strings.HasPrefix(dest, dir+string(os.PathSeparator)) {
+				continue
+			}
+			body, err := os.ReadFile(dest)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return Sidecar{}, err
+			}
+			if len(body) == 0 || len(body) > maxSidecarBytes {
+				continue
+			}
+			return Sidecar{
+				Name:        lang + ext,
+				ContentType: sidecarContentType(ext),
+				Body:        body,
+			}, nil
+		}
+	}
+	return Sidecar{}, ErrSidecarNotFound
+}
+
+func readExternalSidecar(mediaPath string) (Sidecar, error) {
+	dir := filepath.Dir(mediaPath)
+	stem := strings.TrimSuffix(mediaPath, filepath.Ext(mediaPath))
+	for _, extra := range externalSidecarSuffixes {
+		dest := stem + extra
+		if !strings.HasPrefix(dest, dir+string(os.PathSeparator)) {
+			continue
+		}
+		body, err := os.ReadFile(dest)
+		if err != nil || len(body) == 0 || len(body) > maxSidecarBytes {
+			continue
+		}
+		ext := filepath.Ext(extra)
+		return Sidecar{
+			Name:        "chi" + ext,
+			ContentType: sidecarContentType(ext),
+			Body:        body,
+		}, nil
+	}
+	return Sidecar{}, ErrSidecarNotFound
 }
 
 func sidecarLanguages(language string) []string {

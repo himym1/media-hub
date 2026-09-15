@@ -208,13 +208,13 @@ func (s *Syncer) writeMatchingSubtitle(ctx context.Context, mediaPath string, vi
 }
 
 func matchingSubtitle(videoRelative string, subs []subtitleFile) (subtitleFile, bool) {
-	stem := strings.TrimSuffix(videoRelative, path.Ext(videoRelative))
+	stem := subtitleMatchStem(videoRelative)
 	var ass subtitleFile
 	var other subtitleFile
 	hasAss := false
 	hasOther := false
 	for _, sub := range subs {
-		if strings.TrimSuffix(sub.Relative, path.Ext(sub.Relative)) != stem || sub.PickCode == "" {
+		if subtitleMatchStem(sub.Relative) != stem || sub.PickCode == "" {
 			continue
 		}
 		switch strings.ToLower(path.Ext(sub.Relative)) {
@@ -228,6 +228,17 @@ func matchingSubtitle(videoRelative string, subs []subtitleFile) (subtitleFile, 
 		return ass, true
 	}
 	return other, hasOther
+}
+
+func subtitleMatchStem(relative string) string {
+	stem := strings.TrimSuffix(relative, path.Ext(relative))
+	lower := strings.ToLower(stem)
+	for _, suffix := range []string{".zh-cn", ".zh-tw", ".zh-hk", ".chi", ".chs", ".cht", ".zh"} {
+		if strings.HasSuffix(lower, suffix) {
+			return stem[:len(stem)-len(suffix)]
+		}
+	}
+	return stem
 }
 
 func (s *Syncer) collect(ctx context.Context, req strm.Request) ([]videoFile, []subtitleFile, map[string]int64, error) {
