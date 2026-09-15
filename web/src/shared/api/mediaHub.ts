@@ -17,7 +17,6 @@ export type CheckInSettings = { enabled: boolean; hour: number; minute: number; 
 export type ProviderSettings = {
   qmediaSync: { baseUrl: string; apiKey: SecretStatus }
   emby: { baseUrl: string; apiKey: SecretStatus; userId: string; password: SecretStatus }
-  sharedEmby: { baseUrl: string; username: string; password: SecretStatus; proxyUrl: string }
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretStatus }
   assrt: { baseUrl: string; token: SecretStatus }
@@ -29,7 +28,6 @@ export type ProviderSettings = {
 export type ProviderSettingsUpdate = {
   qmediaSync: { baseUrl: string; apiKey: SecretUpdate }
   emby: { baseUrl: string; apiKey: SecretUpdate; userId: string; password: SecretUpdate }
-  sharedEmby?: { baseUrl: string; username: string; password: SecretUpdate; proxyUrl: string }
   drive115: { clientId: string }
   tmdb: { baseUrl: string; accessToken: SecretUpdate }
   assrt: { baseUrl: string; token: SecretUpdate }

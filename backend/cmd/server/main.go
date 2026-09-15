@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -102,15 +101,7 @@ func run(logger *slog.Logger) error {
 		MovieLibraryID:  configuration.Workflow.Movie.EmbyLibraryID,
 		SeriesLibraryID: configuration.Workflow.Series.EmbyLibraryID,
 	}, configuration.ProbeTimeout)
-	sharedEmbyProxy, _ := url.Parse(strings.TrimSpace(configuration.SharedEmby.ProxyURL))
-	if sharedEmbyProxy != nil && sharedEmbyProxy.Host == "" {
-		sharedEmbyProxy = nil
-	}
-	sharedEmbyClient := emby.NewConfiguredClient(emby.RuntimeConfig{
-		BaseURL: configuration.SharedEmby.BaseURL, Username: configuration.SharedEmby.Username,
-		Password: configuration.SharedEmby.Password, ProxyURL: sharedEmbyProxy, Shared: true,
-	}, configuration.SearchTimeout)
-	embyHub := emby.NewHub(embyClient, sharedEmbyClient)
+	embyHub := emby.NewHub(embyClient)
 	posterCache, err := emby.OpenPrimaryImageCache(filepath.Join(filepath.Dir(configuration.DatabasePath), "poster-cache"))
 	if err != nil {
 		return fmt.Errorf("open poster cache: %w", err)
@@ -195,14 +186,6 @@ func run(logger *slog.Logger) error {
 				MovieLibraryID:  value.Workflow.Movie.EmbyLibraryID,
 				SeriesLibraryID: value.Workflow.Series.EmbyLibraryID,
 			})
-			proxyURL, _ := url.Parse(strings.TrimSpace(value.SharedEmby.ProxyURL))
-			if proxyURL != nil && proxyURL.Host == "" {
-				proxyURL = nil
-			}
-			embyHub.ConfigureShared(emby.RuntimeConfig{
-				BaseURL: value.SharedEmby.BaseURL, Username: value.SharedEmby.Username,
-				Password: value.SharedEmby.Password, ProxyURL: proxyURL, Shared: true,
-			})
 			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
 			assrtClient.Configure(value.Assrt.BaseURL, value.Assrt.Token)
 			wecomClient.ConfigureDelivery(value.WeCom)
@@ -240,7 +223,6 @@ func run(logger *slog.Logger) error {
 		assrtClient,
 		wecomClient,
 		embyHub,
-		embyHub.SharedHealthChecker(),
 		emby.NewPlaybackChecker(embyClient),
 		checkinService,
 		strmCoordinator,

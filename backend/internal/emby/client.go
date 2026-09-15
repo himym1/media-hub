@@ -35,25 +35,21 @@ type RuntimeConfig struct {
 	BaseURL         string
 	APIKey          string
 	UserID          string
-	Username        string
 	Password        string
 	PlaybackBaseURL string
 	MovieLibraryID  string
 	SeriesLibraryID string
 	ProxyURL        *url.URL
-	Shared          bool
 }
 
 type clientConfig struct {
 	baseURL         string
 	apiKey          string
 	userID          string
-	username        string
 	password        string
 	playbackBaseURL string
 	movieLibraryID  string
 	seriesLibraryID string
-	shared          bool
 }
 
 type Client struct {
@@ -262,12 +258,10 @@ func runtimeClientConfig(configuration RuntimeConfig) clientConfig {
 		baseURL:         strings.TrimRight(strings.TrimSpace(configuration.BaseURL), "/"),
 		apiKey:          strings.TrimSpace(configuration.APIKey),
 		userID:          strings.TrimSpace(configuration.UserID),
-		username:        strings.TrimSpace(configuration.Username),
 		password:        strings.TrimSpace(configuration.Password),
 		playbackBaseURL: strings.TrimRight(strings.TrimSpace(configuration.PlaybackBaseURL), "/"),
 		movieLibraryID:  strings.TrimSpace(configuration.MovieLibraryID),
 		seriesLibraryID: strings.TrimSpace(configuration.SeriesLibraryID),
-		shared:          configuration.Shared,
 	}
 }
 
@@ -972,11 +966,7 @@ func (c *Client) getJSONResponse(
 		return fmt.Errorf("create Emby request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
-	if configuration.shared {
-		request.Header.Set("User-Agent", sharedClientName+"/"+sharedClientVer)
-	} else {
-		request.Header.Set("User-Agent", "Media-Hub/emby")
-	}
+	request.Header.Set("User-Agent", "Media-Hub/emby")
 	if authenticated {
 		applyEmbyAuth(request, configuration)
 	}
@@ -1030,11 +1020,7 @@ func (c *Client) postJSONBody(
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Content-Type", "application/json")
-	if configuration.shared {
-		request.Header.Set("User-Agent", sharedClientName+"/"+sharedClientVer)
-	} else {
-		request.Header.Set("User-Agent", "Media-Hub/emby")
-	}
+	request.Header.Set("User-Agent", "Media-Hub/emby")
 	applyEmbyAuth(request, configuration)
 	response, err := c.jsonHTTP().Do(request)
 	if err != nil {
@@ -1055,18 +1041,9 @@ func (c *Client) postJSONBody(
 
 func applyEmbyAuth(request *http.Request, configuration clientConfig) {
 	request.Header.Set("X-Emby-Token", configuration.apiKey)
-	if configuration.shared {
-		applyNamedEmbyClientAuth(request, sharedClientName, sharedClientDevice, sharedClientVer)
-		if configuration.apiKey != "" {
-			authorization := request.Header.Get("X-Emby-Authorization")
-			request.Header.Set("X-Emby-Authorization", authorization+`, Token="`+configuration.apiKey+`"`)
-			request.Header.Set("Authorization", request.Header.Get("X-Emby-Authorization"))
-		}
-	} else {
-		authorization := embyAuthorization(configuration)
-		request.Header.Set("X-Emby-Authorization", authorization)
-		request.Header.Set("Authorization", authorization)
-	}
+	authorization := embyAuthorization(configuration)
+	request.Header.Set("X-Emby-Authorization", authorization)
+	request.Header.Set("Authorization", authorization)
 	if configuration.userID != "" {
 		request.Header.Set("X-Emby-UserId", configuration.userID)
 	}

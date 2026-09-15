@@ -143,12 +143,6 @@ func merge(current Values, input Update) Values {
 	current.Emby.APIKey = mergeSecret(current.Emby.APIKey, input.Emby.APIKey)
 	current.Emby.UserID = strings.TrimSpace(input.Emby.UserID)
 	current.Emby.Password = mergeSecret(current.Emby.Password, input.Emby.Password)
-	if input.SharedEmby != nil {
-		current.SharedEmby.BaseURL = strings.TrimSpace(input.SharedEmby.BaseURL)
-		current.SharedEmby.Username = strings.TrimSpace(input.SharedEmby.Username)
-		current.SharedEmby.Password = mergeSecret(current.SharedEmby.Password, input.SharedEmby.Password)
-		current.SharedEmby.ProxyURL = strings.TrimSpace(input.SharedEmby.ProxyURL)
-	}
 	current.Drive115.ClientID = strings.TrimSpace(input.Drive115.ClientID)
 	current.TMDB.BaseURL = strings.TrimSpace(input.TMDB.BaseURL)
 	current.TMDB.AccessToken = mergeSecret(current.TMDB.AccessToken, input.TMDB.AccessToken)
@@ -269,15 +263,6 @@ func validate(value Values) error {
 	}
 	if err := validateURL("Emby URL", value.Emby.BaseURL); err != nil {
 		return err
-	}
-	if err := validateURL("Shared Emby URL", value.SharedEmby.BaseURL); err != nil {
-		return err
-	}
-	if err := validateOptionalProxyURL("Shared Emby proxy URL", value.SharedEmby.ProxyURL); err != nil {
-		return err
-	}
-	if len(value.SharedEmby.Username) > 200 {
-		return fmt.Errorf("%w: shared Emby username is too long", ErrInvalid)
 	}
 	if err := validateURL("TMDB URL", value.TMDB.BaseURL); err != nil {
 		return err
@@ -407,17 +392,6 @@ func validateURL(label, raw string) error {
 	return nil
 }
 
-func validateOptionalProxyURL(label, raw string) error {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.Path != "" && parsed.Path != "/" || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("%w: %s must be an absolute HTTP(S) proxy URL without credentials, path, query, or fragment", ErrInvalid, label)
-	}
-	return nil
-}
-
 func isBuiltinSource(id string) bool {
 	return id == "mikan" || id == "sidhub" || id == "framehdr" || id == "juying"
 }
@@ -480,10 +454,6 @@ func publicView(value Values) View {
 		Emby: EmbyView{
 			BaseURL: value.Emby.BaseURL, APIKey: SecretStatus{Configured: value.Emby.APIKey != ""},
 			UserID: value.Emby.UserID, Password: SecretStatus{Configured: value.Emby.Password != ""},
-		},
-		SharedEmby: SharedEmbyView{
-			BaseURL: value.SharedEmby.BaseURL, Username: value.SharedEmby.Username,
-			Password: SecretStatus{Configured: value.SharedEmby.Password != ""}, ProxyURL: value.SharedEmby.ProxyURL,
 		},
 		Drive115: Drive115View{ClientID: value.Drive115.ClientID},
 		TMDB:     TMDBView{BaseURL: value.TMDB.BaseURL, AccessToken: SecretStatus{Configured: value.TMDB.AccessToken != ""}},

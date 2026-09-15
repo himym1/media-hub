@@ -460,12 +460,6 @@ func writeIntegrationProblem(w http.ResponseWriter, err error) {
 			Title: "Emby 拒绝删除该媒体", Status: http.StatusBadGateway,
 			Code: "emby_delete_rejected",
 		})
-	case errors.Is(err, emby.ErrSharedReadOnly):
-		writeProblem(w, problem{
-			Type:  "https://media-hub.local/problems/shared-emby-read-only",
-			Title: "共享 Emby 仅支持浏览和播放", Status: http.StatusConflict,
-			Code: "shared_emby_read_only",
-		})
 	default:
 		writeProblem(w, problem{
 			Type:  "https://media-hub.local/problems/integration-unavailable",

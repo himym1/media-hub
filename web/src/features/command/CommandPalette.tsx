@@ -98,7 +98,7 @@ export function CommandPalette({
         id: 'nav-library',
         category: '导航',
         title: 'Emby 媒体库浏览',
-        subtitle: '浏览 NAS 本地与远程共享 Emby 影视库',
+        subtitle: '浏览 NAS Emby 影视库',
         icon: LibraryBig,
         action: () => onNavigate('媒体库'),
         keywords: ['library', 'emby', 'meitiku', 'shipin'],

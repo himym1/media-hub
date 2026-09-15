@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.20.67
+  version: 0.21.0
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -1882,7 +1882,7 @@ components:
         token: { $ref: '#/components/schemas/SecretUpdate' }
     ProviderSettings:
       type: object
-      required: [qmediaSync, emby, sharedEmby, drive115, tmdb, assrt, wecom, workflow, checkIn, sources]
+      required: [qmediaSync, emby, drive115, tmdb, assrt, wecom, workflow, checkIn, sources]
       properties:
         qmediaSync:
           type: object
@@ -1898,14 +1898,6 @@ components:
             apiKey: { $ref: '#/components/schemas/SecretStatus' }
             userId: { type: string }
             password: { $ref: '#/components/schemas/SecretStatus' }
-        sharedEmby:
-          type: object
-          required: [baseUrl, username, password, proxyUrl]
-          properties:
-            baseUrl: { type: string }
-            username: { type: string }
-            password: { $ref: '#/components/schemas/SecretStatus' }
-            proxyUrl: { type: string, description: Optional HTTP(S) proxy Media Hub uses to reach the shared Emby host }
         drive115:
           type: object
           required: [clientId]
@@ -1959,14 +1951,6 @@ components:
             apiKey: { $ref: '#/components/schemas/SecretUpdate' }
             userId: { type: string, maxLength: 200 }
             password: { $ref: '#/components/schemas/SecretUpdate' }
-        sharedEmby:
-          type: object
-          required: [baseUrl, username, proxyUrl]
-          properties:
-            baseUrl: { type: string, maxLength: 2048 }
-            username: { type: string, maxLength: 200 }
-            password: { $ref: '#/components/schemas/SecretUpdate' }
-            proxyUrl: { type: string, maxLength: 2048 }
         drive115:
           type: object
           required: [clientId]
