@@ -429,7 +429,9 @@ async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function getLatestDesktopRelease(platform: 'windows' | 'darwin' = 'windows') {
-  return requestJSON<DesktopRelease>(`/api/v1/client/desktop/releases/latest?platform=${platform}`)
+  return requestJSON<DesktopRelease>(`/api/v1/client/desktop/releases/latest?platform=${platform}`, {
+    cache: 'no-store',
+  })
 }
 
 export function getAuthConfiguration() {

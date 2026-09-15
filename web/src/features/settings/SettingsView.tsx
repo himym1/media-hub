@@ -168,7 +168,13 @@ export function SettingsView({ desktopUpdate, integrations, onDirtyChange, onLog
     void statistics.refetch()
     void providerSettings.refetch()
     void checkins.refetch()
+    void desktopUpdate.check()
   }
+
+  useEffect(() => {
+    if (section !== 'account') return
+    void desktopUpdate.check()
+  }, [desktopUpdate.check, section])
 
   return (
     <section className="workspace-view settings-view">

@@ -40,25 +40,36 @@ export function DesktopUpdateSettings({ update }: { update: DesktopUpdateState }
         <strong>桌面端更新</strong>
         <span>{label}</span>
       </div>
-      {update.release && !update.nativeInstall ? (
-        <SaveInstallerLink className="secondary-command" release={update.release}>
-          <Download size={16} />
-          下载 {update.release.versionName}
-        </SaveInstallerLink>
-      ) : (
+      <div className="desktop-update-actions">
         <button
           className="secondary-command"
           disabled={update.checking || update.installing}
-          onClick={() => { if (update.release) void update.install(); else void update.check() }}
+          onClick={() => void update.check()}
           type="button"
         >
-          {update.release ? <Download size={16} /> : <RefreshCw size={16} />}
-          {update.installing ? '正在更新…' : update.release ? `更新 ${update.release.versionName}` : update.checking ? '正在检查' : '检查更新'}
+          <RefreshCw size={16} />
+          {update.checking ? '正在检查' : '检查更新'}
         </button>
-      )}
-      {update.release && update.nativeInstall ? (
-        <SaveInstallerLink className="secondary-command" release={update.release}>保存安装包</SaveInstallerLink>
-      ) : null}
+        {update.release && !update.nativeInstall ? (
+          <SaveInstallerLink className="secondary-command" release={update.release}>
+            <Download size={16} />
+            下载 {update.release.versionName}
+          </SaveInstallerLink>
+        ) : update.release ? (
+          <button
+            className="secondary-command"
+            disabled={update.installing}
+            onClick={() => void update.install()}
+            type="button"
+          >
+            <Download size={16} />
+            {update.installing ? '正在更新…' : `更新 ${update.release.versionName}`}
+          </button>
+        ) : null}
+        {update.release && update.nativeInstall ? (
+          <SaveInstallerLink className="secondary-command" release={update.release}>保存安装包</SaveInstallerLink>
+        ) : null}
+      </div>
       {update.error && update.release ? <span className="form-error" role="alert">{update.error}</span> : null}
     </section>
   )

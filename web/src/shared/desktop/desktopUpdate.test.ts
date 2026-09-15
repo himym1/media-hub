@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, type DesktopRelease } from '../api/mediaHub'
+import { ApiError, getLatestDesktopRelease, type DesktopRelease } from '../api/mediaHub'
 import {
   desktopAppPlatform,
   desktopAppVersion,
@@ -62,6 +62,20 @@ describe('desktopUpdate', () => {
     expect(formatDesktopUpdateSize(release.sizeBytes)).toBe('18.0 MB')
     expect(desktopUpdateErrorMessage(new ApiError(404, 'desktop_release_unavailable', '当前没有可用的桌面更新'))).toBe('当前没有可用的桌面更新')
     expect(desktopUpdateErrorMessage('https://media.himym.us.ci/secret')).toBe('桌面更新失败')
+  })
+
+  it('does not reuse a cached latest desktop release', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(release), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetch)
+    await expect(getLatestDesktopRelease('darwin')).resolves.toEqual(release)
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/client/desktop/releases/latest?platform=darwin',
+      expect.objectContaining({ cache: 'no-store', credentials: 'same-origin' }),
+    )
+    vi.unstubAllGlobals()
   })
 
   it('reads the packaged app version from Tauri', async () => {

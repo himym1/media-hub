@@ -58,6 +58,9 @@ func TestLatestAndroidReleaseAndDownload(t *testing.T) {
 	if latest.Code != 200 {
 		t.Fatalf("latest status = %d", latest.Code)
 	}
+	if latest.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("latest cache = %q", latest.Header().Get("Cache-Control"))
+	}
 
 	download := httptest.NewRecorder()
 	router.ServeHTTP(download, authenticatedRequest("GET", "/api/v1/client/android/releases/6000/apk"))
@@ -113,6 +116,9 @@ func TestLatestDesktopReleaseAndDownload(t *testing.T) {
 	if latest.Code != 200 {
 		t.Fatalf("latest status = %d", latest.Code)
 	}
+	if latest.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("latest cache = %q", latest.Header().Get("Cache-Control"))
+	}
 
 	download := httptest.NewRecorder()
 	router.ServeHTTP(download, authenticatedRequest("GET", "/api/v1/client/desktop/releases/20038/installer"))
@@ -136,6 +142,9 @@ func TestLatestDesktopReleaseAndDownload(t *testing.T) {
 	darwinRouter.ServeHTTP(latestDarwin, authenticatedRequest("GET", "/api/v1/client/desktop/releases/latest?platform=darwin"))
 	if latestDarwin.Code != 200 {
 		t.Fatalf("darwin latest status = %d", latestDarwin.Code)
+	}
+	if latestDarwin.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("darwin latest cache = %q", latestDarwin.Header().Get("Cache-Control"))
 	}
 	downloadDarwin := httptest.NewRecorder()
 	darwinRouter.ServeHTTP(downloadDarwin, authenticatedRequest("GET", "/api/v1/client/desktop/releases/20038/dmg"))

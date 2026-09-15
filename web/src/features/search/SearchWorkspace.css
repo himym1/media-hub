@@ -51,6 +51,7 @@
 }
 .desktop-update-banner p { flex: 1 1 16rem; margin: 0; color: #d8d9d2; font-size: 13px; line-height: 1.5; }
 .desktop-update-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.desktop-update-settings .desktop-update-actions { justify-content: flex-end; }
 .desktop-update-banner .primary-action { min-height: 44px; margin: 0; padding: 0 14px; text-decoration: none; }
 .desktop-update-actions a.primary-action,
 .desktop-update-settings a.secondary-command { text-decoration: none; }

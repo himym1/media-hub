@@ -18,6 +18,7 @@ func (h *handler) getLatestAndroidRelease(w http.ResponseWriter, r *http.Request
 		writeAndroidReleaseProblem(w, err)
 		return
 	}
+	w.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(w, http.StatusOK, release)
 }
 
@@ -64,6 +65,7 @@ func (h *handler) getLatestDesktopRelease(w http.ResponseWriter, r *http.Request
 		writeDesktopReleaseProblem(w, err)
 		return
 	}
+	w.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(w, http.StatusOK, release)
 }
 
