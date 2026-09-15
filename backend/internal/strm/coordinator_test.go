@@ -27,7 +27,7 @@ func (s *coordinatorSyncer) Sync(_ context.Context, req Request) (Result, error)
 type sessionStub struct{ err error }
 
 func (s sessionStub) SessionUserID(context.Context) (string, error) {
-	return "103539243", s.err
+	return "1001", s.err
 }
 
 func TestCoordinatorHealthReportsUnwritableMount(t *testing.T) {

@@ -3,8 +3,8 @@ package strm
 import "testing"
 
 func TestURLMatchesExistingQMSFormat(t *testing.T) {
-	got := URL("https://qms.himym.us.ci/", ".mkv", "bib9gv7oqzrog88cc", "103539243")
-	want := "https://qms.himym.us.ci/115/url/video.mkv?pickcode=bib9gv7oqzrog88cc&userid=103539243"
+	got := URL("https://strm.example/", ".mkv", "pick-example", "1001")
+	want := "https://strm.example/115/url/video.mkv?pickcode=pick-example&userid=1001"
 	if got != want {
 		t.Fatalf("url=%q want=%q", got, want)
 	}

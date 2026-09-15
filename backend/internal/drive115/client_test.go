@@ -51,8 +51,8 @@ func TestListFilesMapsWebFoldersAndFiles(t *testing.T) {
 }
 
 func TestSessionUserIDReadsNumericUID(t *testing.T) {
-	client := NewClient("UID=103539243_session; CID=cid; SEID=seid", time.Second)
-	if client.SessionUserID() != "103539243" {
+	client := NewClient("UID=1001_session; CID=cid; SEID=seid", time.Second)
+	if client.SessionUserID() != "1001" {
 		t.Fatalf("userid=%q", client.SessionUserID())
 	}
 }

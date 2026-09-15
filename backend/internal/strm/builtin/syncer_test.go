@@ -52,7 +52,7 @@ func TestSyncWritesMovieFolderSTRM(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncer := New(filesStub{
-		userID: "103539243",
+		userID: "1001",
 		byID: map[string][]drive115.FileItem{
 			"folder-1": {
 				{ID: "file-1", Name: "Movie.mkv", Kind: "file", PickCode: "pick-1"},
@@ -62,7 +62,7 @@ func TestSyncWritesMovieFolderSTRM(t *testing.T) {
 	})
 	result, err := syncer.Sync(context.Background(), strm.Request{
 		FileID: "folder-1", SourcePath: "电影/Movie (2018)", TargetPath: target,
-		StrmBaseURL: "https://qms.himym.us.ci", StrmRootMount: root,
+		StrmBaseURL: "https://strm.example", StrmRootMount: root,
 	})
 	if err != nil || result.Created != 1 {
 		t.Fatalf("result=%#v err=%v", result, err)
@@ -71,7 +71,7 @@ func TestSyncWritesMovieFolderSTRM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "https://qms.himym.us.ci/115/url/video.mkv?pickcode=pick-1&userid=103539243"
+	want := "https://strm.example/115/url/video.mkv?pickcode=pick-1&userid=1001"
 	if string(body) != want {
 		t.Fatalf("body=%q", body)
 	}
@@ -84,7 +84,7 @@ func TestSyncWritesReleaseNameWithDotDot(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncer := New(filesStub{
-		userID: "103539243",
+		userID: "1001",
 		byID: map[string][]drive115.FileItem{
 			"folder-1": {{ID: "file-1", Name: "Searching.for.Emily.2026.1080p.WEBRip..mkv", Kind: "file", PickCode: "pick-1"}},
 		},
@@ -119,7 +119,7 @@ func TestSyncLibraryRootDoesNotDuplicateFolderName(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncer := New(filesStub{
-		userID: "103539243",
+		userID: "1001",
 		byID: map[string][]drive115.FileItem{
 			"dest": {{ID: "file-1", Name: "Movie.mkv", Kind: "file", PickCode: "pick-1"}},
 		},
@@ -246,7 +246,7 @@ func TestSyncWritesMatchingChineseSidecar(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncer := New(filesStub{
-		userID: "103539243",
+		userID: "1001",
 		byID: map[string][]drive115.FileItem{
 			"folder-1": {
 				{ID: "file-1", Name: "Signal 2016 E03.mkv", Kind: "file", PickCode: "pick-video"},
