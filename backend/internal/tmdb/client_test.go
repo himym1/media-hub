@@ -19,7 +19,7 @@ func TestResolveNormalizesMovieAndSeriesIdentity(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		_, _ = w.Write([]byte(`{"results":[{"id":7131,"media_type":"movie","title":"范海辛","original_title":"Van Helsing","release_date":"2004-05-03","poster_path":"/poster.jpg"},{"id":99,"media_type":"person","name":"ignored"}]}`))
+		_, _ = w.Write([]byte(`{"results":[{"id":7131,"media_type":"movie","title":"范海辛","original_title":"Van Helsing","release_date":"2004-05-03","poster_path":"/poster.jpg","overview":"A monster hunter.","vote_average":6.6},{"id":99,"media_type":"person","name":"ignored"}]}`))
 	}))
 	defer server.Close()
 
@@ -32,6 +32,9 @@ func TestResolveNormalizesMovieAndSeriesIdentity(t *testing.T) {
 	}
 	if identities[0].PosterURL != "https://image.tmdb.org/t/p/w500/poster.jpg" {
 		t.Fatalf("unexpected poster URL: %q", identities[0].PosterURL)
+	}
+	if identities[0].Rating != 6.6 || identities[0].Overview != "A monster hunter." {
+		t.Fatalf("unexpected identity metadata: %#v", identities[0])
 	}
 }
 

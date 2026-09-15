@@ -70,11 +70,18 @@ func TestServiceRequiresVerifiedIdentityForTransfer(t *testing.T) {
 	}}
 	service := NewServiceWithIdentity(identityStub{identities: []Identity{{
 		TMDBID: "7131", Title: "范海辛", OriginalTitle: "Van Helsing", Year: 2004, MediaType: "movie",
+		PosterURL: "https://image.tmdb.org/t/p/w500/poster.jpg", Rating: 6.6, Overview: "A monster hunter.",
 	}}}, source)
 
 	response := service.Search(context.Background(), "范海辛")
 	if len(response.Results) != 1 || response.Results[0].TMDBID != "7131" || response.Results[0].TransferState != "available" {
 		t.Fatalf("unexpected candidate: %#v", response.Results)
+	}
+	if len(response.Identities) != 1 || response.Identities[0].TMDBID != "7131" {
+		t.Fatalf("identities = %#v", response.Identities)
+	}
+	if response.Results[0].PosterURL == "" || response.Results[0].Rating != 6.6 || response.Results[0].Overview != "A monster hunter." {
+		t.Fatalf("candidate metadata = %#v", response.Results[0])
 	}
 	withoutIdentity := NewService(source).Search(context.Background(), "范海辛")
 	if withoutIdentity.Results[0].TransferState != "available" || withoutIdentity.Results[0].TMDBID != "" {

@@ -2,6 +2,7 @@ package com.mediahub.android.feature.search
 
 import com.mediahub.android.core.network.DiscoveryItem
 import com.mediahub.android.core.network.SearchCandidate
+import com.mediahub.android.core.network.SearchIdentity
 
 internal fun discoverySearchQuery(item: DiscoveryItem): String {
     val title = item.title.trim()
@@ -35,6 +36,29 @@ internal fun prioritizeDiscoveryResults(
             score
         }.thenBy { it.title },
     )
+}
+
+internal fun isDownloadable(candidate: SearchCandidate): Boolean {
+    return candidate.transferState == "downloadable" || candidate.sourceId == "moviepilot"
+}
+
+internal fun pipelineLabel(candidate: SearchCandidate): String {
+    return if (isDownloadable(candidate)) "PT 下载" else "115 转存"
+}
+
+internal fun matchesPipeline(candidate: SearchCandidate, lane: String): Boolean = when (lane) {
+    "download" -> isDownloadable(candidate)
+    "transfer" -> !isDownloadable(candidate)
+    else -> true
+}
+
+internal fun pickSearchIdentity(
+    identities: List<SearchIdentity>,
+    candidate: SearchCandidate?,
+): SearchIdentity? {
+    if (identities.isEmpty()) return null
+    val matched = candidate?.tmdbId?.let { tmdbId -> identities.firstOrNull { it.tmdbId == tmdbId } }
+    return matched ?: identities.first()
 }
 
 internal fun discoveryResultsHeading(

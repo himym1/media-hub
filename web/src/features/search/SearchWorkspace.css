@@ -186,6 +186,22 @@ h1 em { color: var(--accent); font-style: normal; }
 .availability.transferring span { background: var(--accent); }
 .result-action button { min-height: 44px; padding: 8px 11px; color: var(--accent-ink); background: var(--accent); font-size: 12px; }
 .result-action button:hover { background: var(--accent-strong); }
+.search-identity-card { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 16px; margin-top: 18px; padding: 14px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; background: rgba(255, 255, 255, 0.03); }
+.search-identity-poster { display: grid; place-items: center; overflow: hidden; min-height: 150px; color: var(--text-muted); border-radius: 8px; background: #121416; }
+.search-identity-poster img { width: 100%; height: 150px; object-fit: cover; }
+.search-identity-copy { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.search-identity-copy strong { color: var(--text); font-size: 18px; }
+.search-identity-copy span, .search-identity-copy p { color: var(--text-muted); font-size: 13px; }
+.search-identity-copy p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-height: 1.5; }
+.search-identity-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.result-lane + .result-lane { margin-top: 18px; }
+.result-lane-heading { display: flex; align-items: center; gap: 8px; margin: 18px 0 10px; color: var(--text); font-size: 14px; font-weight: 650; }
+.result-lane-heading span { color: var(--text-muted); font-size: 12px; font-weight: 500; }
+.detail-identity { margin-top: 14px; }
+.detail-rating { color: var(--accent); font-size: 13px; font-weight: 650; }
+.detail-overview { margin-top: 8px; color: var(--text-secondary); font-size: 13px; line-height: 1.55; }
+.spec-badge.spec-pipeline-115 { color: #9fe7f9; background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.35); }
+.spec-badge.spec-pipeline-pt { color: #fce196; background: rgba(229, 175, 83, 0.12); border-color: rgba(229, 175, 83, 0.4); }
 .discovery-filter-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; padding-bottom: 16px; border-bottom: 1px solid #2a2d30; }
 .discovery-filter-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .filter-chip { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 14px; color: var(--text-muted); border: 1px solid #363b3b; border-radius: 7px; background: transparent; font-size: 12px; transition: color .18s ease, border-color .18s ease, background-color .18s ease; }

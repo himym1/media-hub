@@ -179,6 +179,17 @@ data class ReleaseFacts(
     val sizeBytes: Long,
 )
 
+data class SearchIdentity(
+    val tmdbId: String,
+    val title: String,
+    val originalTitle: String? = null,
+    val year: Int,
+    val mediaType: String,
+    val posterUrl: String? = null,
+    val rating: Double? = null,
+    val overview: String? = null,
+)
+
 data class SearchCandidate(
     val id: String,
     val title: String,
@@ -192,6 +203,8 @@ data class SearchCandidate(
     val sourceId: String = "",
     val provider: String? = null,
     val posterUrl: String?,
+    val rating: Double? = null,
+    val overview: String? = null,
     val release: ReleaseFacts,
     val transferState: String,
     val transferToken: String?,
@@ -220,6 +233,7 @@ data class SourceError(
 data class SearchResponse(
     val query: String,
     val partial: Boolean,
+    val identities: List<SearchIdentity> = emptyList(),
     val results: List<SearchCandidate>,
     val sourceErrors: List<SourceError>,
 )

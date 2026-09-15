@@ -7,6 +7,7 @@ import com.mediahub.android.core.network.DiscoveryGenre
 import com.mediahub.android.core.network.DiscoveryItem
 import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.SearchCandidate
+import com.mediahub.android.core.network.SearchIdentity
 import com.mediahub.android.data.MediaHubRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -25,6 +26,8 @@ data class SearchUiState(
     val focusTitle: String = "",
     val focusSubtitle: String = "",
     val results: List<SearchCandidate> = emptyList(),
+    val identities: List<SearchIdentity> = emptyList(),
+    val pipelineFilter: String = "all",
     val trending: List<DiscoveryItem> = emptyList(),
     val topRatedMovies: List<DiscoveryItem> = emptyList(),
     val popularSeries: List<DiscoveryItem> = emptyList(),
@@ -51,8 +54,14 @@ data class SearchUiState(
     val selectedCandidate: SearchCandidate?
         get() = results.firstOrNull { it.id == selectedCandidateId }
 
+    val visibleResults: List<SearchCandidate>
+        get() = results.filter { matchesPipeline(it, pipelineFilter) }
+
+    val titleIdentity: SearchIdentity?
+        get() = pickSearchIdentity(identities, selectedCandidate)
+
     val resultsHeading: String
-        get() = discoveryResultsHeading(searching, focusTitle, results.size)
+        get() = discoveryResultsHeading(searching, focusTitle, visibleResults.size)
 
     val heroItems: List<DiscoveryItem>
         get() = trending.take(5)
@@ -336,6 +345,20 @@ class SearchViewModel(
         _uiState.value = _uiState.value.copy(selectedCategory = category)
     }
 
+    fun onPipelineFilterSelected(lane: String) {
+        val next = when (lane) {
+            "transfer", "download" -> lane
+            else -> "all"
+        }
+        val visible = _uiState.value.results.filter { matchesPipeline(it, next) }
+        val selectedId = _uiState.value.selectedCandidateId
+        val stillVisible = visible.any { it.id == selectedId }
+        _uiState.value = _uiState.value.copy(
+            pipelineFilter = next,
+            selectedCandidateId = if (stillVisible) selectedId else visible.firstOrNull()?.id,
+        )
+    }
+
     fun onQueryChanged(query: String) {
         if (query.length > 120) return
         _uiState.value = _uiState.value.copy(
@@ -376,6 +399,8 @@ class SearchViewModel(
                 sourceMessage = null,
                 recommendations = emptyList(),
                 results = emptyList(),
+                identities = emptyList(),
+                pipelineFilter = "all",
                 selectedCandidateId = null,
             )
             try {
@@ -388,6 +413,7 @@ class SearchViewModel(
                 _uiState.value = _uiState.value.copy(
                     searching = false,
                     results = ranked,
+                    identities = response.identities,
                     selectedCandidateId = ranked.firstOrNull()?.id,
                     sourceMessage = response.sourceErrors.joinToString(" · ") { it.message }.ifEmpty { null },
                 )

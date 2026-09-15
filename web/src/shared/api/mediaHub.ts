@@ -61,6 +61,17 @@ export type Release = {
   sizeBytes: number
 }
 
+export type SearchIdentity = {
+  tmdbId: string
+  title: string
+  originalTitle?: string
+  year: number
+  mediaType: 'movie' | 'series'
+  posterUrl?: string
+  rating?: number
+  overview?: string
+}
+
 export type Candidate = {
   id: string
   title: string
@@ -74,6 +85,8 @@ export type Candidate = {
   sourceId: string
   provider?: string
   posterUrl?: string
+  rating?: number
+  overview?: string
   release: Release
   transferState: 'available' | 'downloadable' | 'identity_required' | 'unavailable' | 'transferring'
   transferToken?: string
@@ -95,6 +108,7 @@ export type DiscoveryGenre = {
 export type SearchResponse = {
   query: string
   partial: boolean
+  identities?: SearchIdentity[]
   results: Candidate[]
   sourceErrors: { source: string; code: string; message: string; retryable: boolean }[]
 }

@@ -3,6 +3,7 @@ package com.mediahub.android.feature.search
 import com.mediahub.android.core.network.DiscoveryItem
 import com.mediahub.android.core.network.ReleaseFacts
 import com.mediahub.android.core.network.SearchCandidate
+import com.mediahub.android.core.network.SearchIdentity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,6 +34,27 @@ class DiscoverySearchTest {
         )
         assertEquals("b", ranked.first().id)
         assertTrue(ranked.indexOfFirst { it.id == "b" } < ranked.indexOfFirst { it.id == "c" })
+    }
+
+    @Test
+    fun pipelineHelpersDistinguishTransferAndDownload() {
+        val transfer = candidate("a", "A", year = 2004, mediaType = "movie", tmdbId = null, token = "tok")
+        val download = transfer.copy(id = "b", sourceId = "moviepilot", transferState = "downloadable")
+        assertEquals("115 转存", pipelineLabel(transfer))
+        assertEquals("PT 下载", pipelineLabel(download))
+        assertEquals(false, isDownloadable(transfer))
+        assertEquals(true, isDownloadable(download))
+        assertEquals(true, matchesPipeline(transfer, "transfer"))
+        assertEquals(false, matchesPipeline(transfer, "download"))
+    }
+
+    @Test
+    fun pickSearchIdentityPrefersSelectedTmdb() {
+        val first = SearchIdentity("1", "First", year = 2003, mediaType = "movie")
+        val second = SearchIdentity("2", "Second", year = 2008, mediaType = "movie")
+        val selected = candidate("b", "B", year = 2008, mediaType = "movie", tmdbId = "2", token = "tok")
+        assertEquals("Second", pickSearchIdentity(listOf(first, second), selected)?.title)
+        assertEquals("First", pickSearchIdentity(listOf(first, second), null)?.title)
     }
 
     @Test

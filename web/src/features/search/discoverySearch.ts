@@ -1,4 +1,28 @@
-import type { Candidate, DiscoveryItem } from '../../shared/api/mediaHub'
+import type { Candidate, DiscoveryItem, SearchIdentity } from '../../shared/api/mediaHub'
+
+export type PipelineLane = 'all' | 'transfer' | 'download'
+
+export function isDownloadable(candidate: Pick<Candidate, 'transferState' | 'sourceId'>) {
+  return candidate.transferState === 'downloadable' || candidate.sourceId === 'moviepilot'
+}
+
+export function pipelineLabel(candidate: Pick<Candidate, 'transferState' | 'sourceId'>) {
+  return isDownloadable(candidate) ? 'PT 下载' : '115 转存'
+}
+
+export function matchesPipeline(candidate: Pick<Candidate, 'transferState' | 'sourceId'>, lane: PipelineLane) {
+  if (lane === 'all') return true
+  return lane === 'download' ? isDownloadable(candidate) : !isDownloadable(candidate)
+}
+
+export function pickSearchIdentity(identities: SearchIdentity[] | undefined, candidate?: Pick<Candidate, 'tmdbId'> | null) {
+  if (!identities?.length) return null
+  if (candidate?.tmdbId) {
+    const matched = identities.find((item) => item.tmdbId === candidate.tmdbId)
+    if (matched) return matched
+  }
+  return identities[0] ?? null
+}
 
 export function discoverySearchQuery(item: Pick<DiscoveryItem, 'title' | 'year'>): string {
   const title = item.title.trim()

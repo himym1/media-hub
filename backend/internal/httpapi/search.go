@@ -15,6 +15,7 @@ type publicCandidate struct {
 type publicSearchResponse struct {
 	Query        string               `json:"query"`
 	Partial      bool                 `json:"partial"`
+	Identities   []search.Identity    `json:"identities,omitempty"`
 	Results      []publicCandidate    `json:"results"`
 	SourceErrors []search.SourceError `json:"sourceErrors"`
 }
@@ -60,6 +61,6 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, publicSearchResponse{
 		Query: response.Query, Partial: response.Partial,
-		Results: results, SourceErrors: response.SourceErrors,
+		Identities: response.Identities, Results: results, SourceErrors: response.SourceErrors,
 	})
 }

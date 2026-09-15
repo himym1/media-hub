@@ -141,6 +141,7 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 	if identity != nil {
 		outcome := <-identityOutcomes
 		identities = outcome.identities
+		response.Identities = publicIdentities(identities)
 		if outcome.err != nil {
 			response.SourceErrors = append(response.SourceErrors, SourceError{
 				Source: "TMDB", Code: "identity_unavailable",
@@ -176,6 +177,8 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 					candidate.MediaType = identity.MediaType
 				}
 				candidate.PosterURL = identity.PosterURL
+				candidate.Rating = identity.Rating
+				candidate.Overview = identity.Overview
 			}
 			if candidate.MediaType == "" {
 				if candidate.Season > 0 || candidate.EpisodeStart > 0 {
@@ -212,6 +215,27 @@ func (s *Service) Search(ctx context.Context, query string) Response {
 	}
 	response.Partial = len(response.SourceErrors) > 0
 	return response
+}
+
+func publicIdentities(identities []Identity) []Identity {
+	if len(identities) == 0 {
+		return nil
+	}
+	const maxIdentities = 8
+	if len(identities) > maxIdentities {
+		identities = identities[:maxIdentities]
+	}
+	out := make([]Identity, 0, len(identities))
+	for _, identity := range identities {
+		if strings.TrimSpace(identity.Title) == "" || identity.TMDBID == "" {
+			continue
+		}
+		out = append(out, identity)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func matchIdentity(candidate Candidate, identities []Identity) (Identity, bool) {

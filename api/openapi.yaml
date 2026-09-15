@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.21.4
+  version: 0.21.5
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -2036,6 +2036,11 @@ components:
           type: string
         partial:
           type: boolean
+        identities:
+          type: array
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/SearchIdentity'
         results:
           type: array
           items:
@@ -2044,6 +2049,19 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SourceError'
+    SearchIdentity:
+      type: object
+      additionalProperties: false
+      required: [tmdbId, title, year, mediaType]
+      properties:
+        tmdbId: { type: string, pattern: '^[1-9][0-9]*$' }
+        title: { type: string, maxLength: 300 }
+        originalTitle: { type: string, maxLength: 300 }
+        year: { type: integer, minimum: 0, maximum: 2100 }
+        mediaType: { type: string, enum: [movie, series] }
+        posterUrl: { type: string, format: uri }
+        rating: { type: number, minimum: 0, maximum: 10 }
+        overview: { type: string, maxLength: 800 }
     SearchCandidate:
       type: object
       required: [id, title, year, mediaType, source, sourceId, release, transferState]
@@ -2076,6 +2094,8 @@ components:
         posterUrl:
           type: string
           format: uri
+        rating: { type: number, minimum: 0, maximum: 10 }
+        overview: { type: string, maxLength: 800 }
         release:
           $ref: '#/components/schemas/ReleaseFacts'
         transferState:

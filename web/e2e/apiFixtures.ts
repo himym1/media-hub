@@ -138,6 +138,14 @@ async function respond(route: Route, authenticated: boolean, state: FixtureState
     query: url.searchParams.get('query') ?? '',
     partial: false,
     sourceErrors: [],
+    identities: [{
+      tmdbId: '100',
+      title: url.searchParams.get('query') ?? '验收影片',
+      year: 2026,
+      mediaType: 'movie',
+      rating: 8.2,
+      overview: '用于验证搜索片名卡片。',
+    }],
     results: [{
       id: 'candidate-1',
       title: url.searchParams.get('query') ?? '验收影片',

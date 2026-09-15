@@ -19,7 +19,12 @@ import {
   discoveryFocusSubtitle,
   discoveryResultsHeading,
   discoverySearchQuery,
+  isDownloadable,
+  matchesPipeline,
+  pickSearchIdentity,
+  pipelineLabel,
   prioritizeDiscoveryResults,
+  type PipelineLane,
 } from './discoverySearch'
 
 function formatSize(bytes: number) {
@@ -159,10 +164,14 @@ export function DiscoveryView({
 
   const [resolutionFilter, setResolutionFilter] = useState<'all' | '2160p' | '1080p' | 'other'>('all')
   const [sortMode, setSortMode] = useState<'default' | 'size-desc' | 'size-asc'>('default')
+  const [pipelineFilter, setPipelineFilter] = useState<PipelineLane>('all')
+  const [focusIdentityId, setFocusIdentityId] = useState<string | null>(null)
 
   useEffect(() => {
     setResolutionFilter('all')
     setSortMode('default')
+    setPipelineFilter('all')
+    setFocusIdentityId(null)
   }, [submittedQuery])
 
   const rankedResults = useMemo(() => {
@@ -185,8 +194,11 @@ export function DiscoveryView({
     } else if (sortMode === 'size-asc') {
       list = [...list].sort((a, b) => (a.release.sizeBytes || 0) - (b.release.sizeBytes || 0))
     }
+    if (pipelineFilter !== 'all') {
+      list = list.filter((item) => matchesPipeline(item, pipelineFilter))
+    }
     return list
-  }, [rankedResults, resolutionFilter, sortMode])
+  }, [rankedResults, resolutionFilter, sortMode, pipelineFilter])
 
   useEffect(() => {
     if (!search.isSuccess) return
@@ -271,11 +283,21 @@ export function DiscoveryView({
   }
 
   const heading = discoveryResultsHeading(search.isFetching, focusTitle)
+  const identities = search.data?.identities ?? []
+  const titleIdentity = focusIdentityId
+    ? identities.find((item) => item.tmdbId === focusIdentityId) ?? pickSearchIdentity(identities, selected)
+    : pickSearchIdentity(identities, selected)
+  const transferCount = rankedResults.filter((item) => !isDownloadable(item)).length
+  const downloadCount = rankedResults.filter((item) => isDownloadable(item)).length
+  const showPipelineGroups = pipelineFilter === 'all' && transferCount > 0 && downloadCount > 0
+  const detailOverview = selected?.overview || titleIdentity?.overview
+  const detailRating = selected?.rating || titleIdentity?.rating
+  const detailPoster = selected?.posterUrl || titleIdentity?.posterUrl
 
   return (
     <section className="discovery-view">
       <header className="view-header discovery-header">
-        <div><h1>发现</h1><p>搜索资源、核对版本并加入自动转存流程。</p></div>
+        <div><h1>发现</h1><p>搜索资源，115 转存或交给 MoviePilot 下载。</p></div>
         <button aria-label={integrationsLoading ? '正在检查服务状态' : `刷新服务状态，${healthyCount}/${integrations.length} 个服务在线`} className="health-summary" disabled={integrationsLoading} onClick={onRefreshIntegrations} type="button"><span className={healthyCount > 0 ? 'healthy' : ''} /><strong>{integrationsLoading ? '检查中…' : `${healthyCount}/${integrations.length} 服务在线`}</strong><RefreshCw aria-hidden="true" size={15} /></button>
       </header>
 
@@ -401,8 +423,68 @@ export function DiscoveryView({
                 {focusSubtitle ? <p>{focusSubtitle}</p> : null}
               </div>
             </div>
+            {titleIdentity ? (
+              <div className="search-identity-card">
+                <div className="search-identity-poster">
+                  {titleIdentity.posterUrl ? (
+                    <img alt={`${titleIdentity.title} 海报`} height="150" src={titleIdentity.posterUrl} width="100" />
+                  ) : (
+                    <Film aria-hidden="true" size={24} />
+                  )}
+                </div>
+                <div className="search-identity-copy">
+                  <strong>{titleIdentity.title}</strong>
+                  <span>
+                    {titleIdentity.year || '年份未知'} · {titleIdentity.mediaType === 'series' ? '剧集' : '电影'}
+                    {titleIdentity.rating ? ` · ${titleIdentity.rating.toFixed(1)}` : ''}
+                  </span>
+                  {titleIdentity.overview ? <p>{titleIdentity.overview}</p> : null}
+                  {identities.length > 1 ? (
+                    <div aria-label="匹配片名" className="search-identity-picker" role="group">
+                      {identities.map((item) => (
+                        <button
+                          aria-pressed={(focusIdentityId ?? titleIdentity.tmdbId) === item.tmdbId}
+                          className={(focusIdentityId ?? titleIdentity.tmdbId) === item.tmdbId ? 'filter-chip active' : 'filter-chip'}
+                          key={item.tmdbId}
+                          onClick={() => setFocusIdentityId(item.tmdbId)}
+                          type="button"
+                        >
+                          {item.year || item.title}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
             {!search.isLoading && !search.isError && rankedResults.length > 0 ? (
               <div className="discovery-filter-bar">
+                <div aria-label="按获取方式筛选" className="discovery-filter-group" role="group">
+                  <button
+                    aria-pressed={pipelineFilter === 'all'}
+                    className={pipelineFilter === 'all' ? 'filter-chip active' : 'filter-chip'}
+                    onClick={() => setPipelineFilter('all')}
+                    type="button"
+                  >
+                    全部 {rankedResults.length}
+                  </button>
+                  <button
+                    aria-pressed={pipelineFilter === 'transfer'}
+                    className={pipelineFilter === 'transfer' ? 'filter-chip active' : 'filter-chip'}
+                    onClick={() => setPipelineFilter('transfer')}
+                    type="button"
+                  >
+                    115 转存 {transferCount}
+                  </button>
+                  <button
+                    aria-pressed={pipelineFilter === 'download'}
+                    className={pipelineFilter === 'download' ? 'filter-chip active' : 'filter-chip'}
+                    onClick={() => setPipelineFilter('download')}
+                    type="button"
+                  >
+                    PT 下载 {downloadCount}
+                  </button>
+                </div>
                 <div aria-label="按清晰度筛选" className="discovery-filter-group" role="group">
                   <button
                     aria-pressed={resolutionFilter === 'all'}
@@ -462,69 +544,50 @@ export function DiscoveryView({
                 <button className="secondary-command" onClick={() => setResolutionFilter('all')} type="button">查看全部清晰度</button>
               </div>
             ) : null}
-            {!search.isLoading && !search.isError ? filteredResults.map((candidate) => {
-              const transferring = (transfer.isPending && transfer.variables?.id === candidate.id) ||
-                queuedTransferIds.includes(candidate.id) ||
-                candidate.transferState === 'transferring'
-              const downloadable = isDownloadable(candidate)
-              const available = (candidate.transferState === 'available' || downloadable) && Boolean(candidate.transferToken) && !transferring
-              const subscribable = candidate.transferState !== 'identity_required' && Boolean(candidate.tmdbId)
-              const availabilityLabel = transferring
-                ? (downloadable ? '下载中' : '转存中')
-                : available
-                  ? (downloadable ? '可下载' : '可转存')
-                  : candidate.transferState === 'identity_required'
-                    ? '身份待确认'
-                    : '工作流不可用'
-              return (
-                <article className={selected?.id === candidate.id ? 'result-row selected' : 'result-row'} data-candidate-id={candidate.id} key={candidate.id}>
-                  <div className="poster-wrap">{candidate.posterUrl ? <img alt={`${candidate.title} 海报`} height="144" loading="lazy" src={candidate.posterUrl} width="96" /> : <Film aria-hidden="true" size={24} />}<span>{candidate.mediaType === 'movie' ? '电影' : '剧集'}</span></div>
-                  <button aria-pressed={selected?.id === candidate.id} className="result-main result-select" onClick={() => setSelected(candidate)} type="button">
-                    <span className="result-title-row"><span className="result-title">{candidate.title}</span><span className="year">{candidate.year}</span></span>
-                    <span className="source-line">
-                      <span className="spec-badge spec-source">{candidate.provider ?? candidate.source}</span>
-                      {episodeLabel(candidate) ? <span className="spec-badge spec-episode">{episodeLabel(candidate)}</span> : null}
-                      <span className={`spec-badge spec-res ${resolutionBadgeClass(candidate.release.resolution)}`}>{candidate.release.resolution}</span>
-                      <span className="spec-badge spec-codec">{candidate.release.videoCodec}</span>
-                      {candidate.release.dynamicRange ? <span className={`spec-badge spec-hdr ${dynamicRangeBadgeClass(candidate.release.dynamicRange)}`}>{candidate.release.dynamicRange}</span> : null}
-                    </span>
-                    <span className="result-facts">
-                      <span className="result-fact-item"><Volume2 aria-hidden="true" size={13} /><span>{candidate.release.audio ?? '音轨未知'}</span></span>
-                      <span>·</span>
-                      <span className="result-fact-item"><HardDrive aria-hidden="true" size={13} /><span>{formatSize(candidate.release.sizeBytes)}</span></span>
-                    </span>
-                  </button>
-                  <div className="result-action"><span className={`availability ${transferring ? 'transferring' : available ? 'available' : 'unavailable'}`}><span />{availabilityLabel}</span><div className="result-commands"><IconButton disabled={!subscribable} label="创建订阅" onClick={() => onSubscribe(candidate)}><BellPlus size={15} /></IconButton><button disabled={!available || transferring} onClick={() => handleTransfer(candidate)} type="button">{transferring ? (transfer.isPending && transfer.variables?.id === candidate.id ? '提交中…' : downloadable ? '下载中' : '转存中') : downloadable ? '下载' : '转存'}{downloadable ? <Download size={15} /> : <FolderInput size={15} />}</button></div></div>
-                </article>
+            {!search.isLoading && !search.isError ? (
+              showPipelineGroups ? (
+                <>
+                  <ResultLane fallbackPoster={identities.length === 1 ? identities[0]?.posterUrl : undefined} heading="115 转存" items={filteredResults.filter((item) => !isDownloadable(item))} queuedTransferIds={queuedTransferIds} selected={selected} transfer={transfer} onSelect={setSelected} onSubscribe={onSubscribe} onTransfer={handleTransfer} />
+                  <ResultLane fallbackPoster={identities.length === 1 ? identities[0]?.posterUrl : undefined} heading="PT 下载" items={filteredResults.filter((item) => isDownloadable(item))} queuedTransferIds={queuedTransferIds} selected={selected} transfer={transfer} onSelect={setSelected} onSubscribe={onSubscribe} onTransfer={handleTransfer} />
+                </>
+              ) : (
+                <ResultLane fallbackPoster={identities.length === 1 ? identities[0]?.posterUrl : undefined} heading={pipelineFilter === 'download' ? 'PT 下载' : pipelineFilter === 'transfer' ? '115 转存' : ''} items={filteredResults} queuedTransferIds={queuedTransferIds} selected={selected} transfer={transfer} onSelect={setSelected} onSubscribe={onSubscribe} onTransfer={handleTransfer} />
               )
-            }) : null}
+            ) : null}
           </section>
 
           {selected ? <aside className="detail-panel" aria-label="资源详情">
             <div className="detail-header"><div><h2>{selected.title}</h2></div><IconButton label="关闭详情" onClick={() => setSelected(null)} subtle><X size={17} /></IconButton></div>
             <div className="detail-poster">
-              {selected.posterUrl ? (
+              {detailPoster ? (
                 <>
                   <div
                     aria-hidden="true"
                     className="detail-poster-backdrop"
-                    style={{ backgroundImage: `url(${selected.posterUrl})` }}
+                    style={{ backgroundImage: `url(${detailPoster})` }}
                   />
                   <div aria-hidden="true" className="detail-poster-vignette" />
                   <div className="detail-poster-foreground">
-                    <img alt={`${selected.title} 海报`} height="180" src={selected.posterUrl} width="120" />
+                    <img alt={`${selected.title} 海报`} height="180" src={detailPoster} width="120" />
                   </div>
                 </>
               ) : (
                 <div className="poster-placeholder"><Film size={34} /></div>
               )}
               <div className="poster-overlay">
+                <span className={`spec-badge ${isDownloadable(selected) ? 'spec-pipeline-pt' : 'spec-pipeline-115'}`}>{pipelineLabel(selected)}</span>
                 <span className="spec-badge spec-source">{selected.provider ?? selected.source}</span>
                 <strong className={`spec-badge spec-res ${resolutionBadgeClass(selected.release.resolution)}`}>
                   {selected.release.resolution}
                 </strong>
               </div>
             </div>
+            {detailRating || detailOverview ? (
+              <div className="detail-identity">
+                {detailRating ? <p className="detail-rating">TMDB {Number(detailRating).toFixed(1)}</p> : null}
+                {detailOverview ? <p className="detail-overview">{detailOverview}</p> : null}
+              </div>
+            ) : null}
             <div className="detail-facts">
               <div className="detail-fact-card">
                 <span><Tv aria-hidden="true" size={13} />视频规格</span>
@@ -557,8 +620,101 @@ export function DiscoveryView({
   )
 }
 
-function isDownloadable(candidate: Candidate) {
-  return candidate.transferState === 'downloadable' || candidate.sourceId === 'moviepilot'
+function ResultLane({
+  fallbackPoster,
+  heading,
+  items,
+  queuedTransferIds,
+  selected,
+  transfer,
+  onSelect,
+  onSubscribe,
+  onTransfer,
+}: {
+  fallbackPoster?: string
+  heading: string
+  items: Candidate[]
+  queuedTransferIds: string[]
+  selected: Candidate | null
+  transfer: { isPending: boolean; variables?: Candidate }
+  onSelect: (candidate: Candidate) => void
+  onSubscribe: (candidate: Candidate) => void
+  onTransfer: (candidate: Candidate) => void
+}) {
+  if (items.length === 0) return null
+  return (
+    <section className="result-lane" aria-label={heading || undefined}>
+      {heading ? <h3 className="result-lane-heading">{heading}<span>{items.length}</span></h3> : null}
+      {items.map((candidate) => (
+        <CandidateRow
+          candidate={candidate}
+          fallbackPoster={fallbackPoster}
+          key={candidate.id}
+          queued={queuedTransferIds.includes(candidate.id)}
+          selected={selected?.id === candidate.id}
+          transferring={transfer.isPending && transfer.variables?.id === candidate.id}
+          onSelect={onSelect}
+          onSubscribe={onSubscribe}
+          onTransfer={onTransfer}
+        />
+      ))}
+    </section>
+  )
+}
+
+function CandidateRow({
+  candidate,
+  fallbackPoster,
+  queued,
+  selected,
+  transferring: submitting,
+  onSelect,
+  onSubscribe,
+  onTransfer,
+}: {
+  candidate: Candidate
+  fallbackPoster?: string
+  queued: boolean
+  selected: boolean
+  transferring: boolean
+  onSelect: (candidate: Candidate) => void
+  onSubscribe: (candidate: Candidate) => void
+  onTransfer: (candidate: Candidate) => void
+}) {
+  const transferring = submitting || queued || candidate.transferState === 'transferring'
+  const downloadable = isDownloadable(candidate)
+  const available = (candidate.transferState === 'available' || downloadable) && Boolean(candidate.transferToken) && !transferring
+  const subscribable = candidate.transferState !== 'identity_required' && Boolean(candidate.tmdbId)
+  const availabilityLabel = transferring
+    ? (downloadable ? '下载中' : '转存中')
+    : available
+      ? (downloadable ? '可下载' : '可转存')
+      : candidate.transferState === 'identity_required'
+        ? '身份待确认'
+        : '工作流不可用'
+  const poster = candidate.posterUrl || fallbackPoster
+  return (
+    <article className={selected ? 'result-row selected' : 'result-row'} data-candidate-id={candidate.id}>
+      <div className="poster-wrap">{poster ? <img alt={`${candidate.title} 海报`} height="144" loading="lazy" src={poster} width="96" /> : <Film aria-hidden="true" size={24} />}<span>{candidate.mediaType === 'movie' ? '电影' : '剧集'}</span></div>
+      <button aria-pressed={selected} className="result-main result-select" onClick={() => onSelect(candidate)} type="button">
+        <span className="result-title-row"><span className="result-title">{candidate.title}</span><span className="year">{candidate.year}</span></span>
+        <span className="source-line">
+          <span className={`spec-badge ${downloadable ? 'spec-pipeline-pt' : 'spec-pipeline-115'}`}>{pipelineLabel(candidate)}</span>
+          <span className="spec-badge spec-source">{candidate.provider ?? candidate.source}</span>
+          {episodeLabel(candidate) ? <span className="spec-badge spec-episode">{episodeLabel(candidate)}</span> : null}
+          <span className={`spec-badge spec-res ${resolutionBadgeClass(candidate.release.resolution)}`}>{candidate.release.resolution}</span>
+          <span className="spec-badge spec-codec">{candidate.release.videoCodec}</span>
+          {candidate.release.dynamicRange ? <span className={`spec-badge spec-hdr ${dynamicRangeBadgeClass(candidate.release.dynamicRange)}`}>{candidate.release.dynamicRange}</span> : null}
+        </span>
+        <span className="result-facts">
+          <span className="result-fact-item"><Volume2 aria-hidden="true" size={13} /><span>{candidate.release.audio ?? '音轨未知'}</span></span>
+          <span>·</span>
+          <span className="result-fact-item"><HardDrive aria-hidden="true" size={13} /><span>{formatSize(candidate.release.sizeBytes)}</span></span>
+        </span>
+      </button>
+      <div className="result-action"><span className={`availability ${transferring ? 'transferring' : available ? 'available' : 'unavailable'}`}><span />{availabilityLabel}</span><div className="result-commands"><IconButton disabled={!subscribable} label="创建订阅" onClick={() => onSubscribe(candidate)}><BellPlus size={15} /></IconButton><button disabled={!available || transferring} onClick={() => onTransfer(candidate)} type="button">{submitting ? '提交中…' : transferring ? (downloadable ? '下载中' : '转存中') : downloadable ? '下载' : '转存'}{downloadable ? <Download size={15} /> : <FolderInput size={15} />}</button></div></div>
+    </article>
+  )
 }
 
 function episodeLabel(candidate: Candidate) {

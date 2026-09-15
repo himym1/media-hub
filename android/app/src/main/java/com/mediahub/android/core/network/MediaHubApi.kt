@@ -456,9 +456,13 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         val payload = JSONObject(request("/api/v1/search?query=$encodedQuery", token = token))
         val results = payload.getJSONArray("results")
         val sourceErrors = payload.getJSONArray("sourceErrors")
+        val identities = payload.optJSONArray("identities")
         return SearchResponse(
             query = payload.getString("query"),
             partial = payload.getBoolean("partial"),
+            identities = if (identities == null) emptyList() else buildList(identities.length()) {
+                for (index in 0 until identities.length()) add(parseIdentity(identities.getJSONObject(index)))
+            },
             results = buildList(results.length()) {
                 for (index in 0 until results.length()) add(parseCandidate(results.getJSONObject(index)))
             },
@@ -679,6 +683,17 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         updatedAt = item.getString("updatedAt"),
     )
 
+    private fun parseIdentity(item: JSONObject) = SearchIdentity(
+        tmdbId = item.getString("tmdbId"),
+        title = item.getString("title"),
+        originalTitle = item.optionalString("originalTitle"),
+        year = item.optInt("year", 0),
+        mediaType = item.getString("mediaType"),
+        posterUrl = item.optionalString("posterUrl"),
+        rating = item.optionalDouble("rating"),
+        overview = item.optionalString("overview"),
+    )
+
     private fun parseCandidate(item: JSONObject): SearchCandidate {
         val release = item.getJSONObject("release")
         return SearchCandidate(
@@ -694,6 +709,8 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
             sourceId = item.getString("sourceId"),
             provider = item.optionalString("provider"),
             posterUrl = item.optionalString("posterUrl"),
+            rating = item.optionalDouble("rating"),
+            overview = item.optionalString("overview"),
             release = ReleaseFacts(
                 resolution = release.getString("resolution"),
                 videoCodec = release.getString("videoCodec"),
@@ -975,6 +992,12 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
     private fun JSONObject.optionalString(key: String): String? {
         if (!has(key) || isNull(key)) return null
         return getString(key).trim().takeIf(String::isNotEmpty)
+    }
+
+    private fun JSONObject.optionalDouble(key: String): Double? {
+        if (!has(key) || isNull(key)) return null
+        val value = optDouble(key, Double.NaN)
+        return value.takeUnless { it.isNaN() }
     }
 
     private fun InputStream?.readLimited(limit: Int): String {

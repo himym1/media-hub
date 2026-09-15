@@ -34,12 +34,14 @@ type IdentityResolver interface {
 }
 
 type Identity struct {
-	TMDBID        string
-	Title         string
-	OriginalTitle string
-	Year          int
-	MediaType     string
-	PosterURL     string
+	TMDBID        string  `json:"tmdbId"`
+	Title         string  `json:"title"`
+	OriginalTitle string  `json:"originalTitle,omitempty"`
+	Year          int     `json:"year"`
+	MediaType     string  `json:"mediaType"`
+	PosterURL     string  `json:"posterUrl,omitempty"`
+	Rating        float64 `json:"rating,omitempty"`
+	Overview      string  `json:"overview,omitempty"`
 }
 
 type TransferRequest struct {
@@ -78,6 +80,8 @@ type Candidate struct {
 	Source           string       `json:"source"`
 	Provider         string       `json:"provider,omitempty"`
 	PosterURL        string       `json:"posterUrl,omitempty"`
+	Rating           float64      `json:"rating,omitempty"`
+	Overview         string       `json:"overview,omitempty"`
 	Release          ReleaseFacts `json:"release"`
 	TransferState    string       `json:"transferState"`
 	SourceID         string       `json:"sourceId"`
@@ -98,6 +102,7 @@ type ReleaseFacts struct {
 type Response struct {
 	Query        string        `json:"query"`
 	Partial      bool          `json:"partial"`
+	Identities   []Identity    `json:"identities,omitempty"`
 	Results      []Candidate   `json:"results"`
 	SourceErrors []SourceError `json:"sourceErrors"`
 }

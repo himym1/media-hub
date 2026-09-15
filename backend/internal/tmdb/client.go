@@ -46,15 +46,17 @@ const discoveryCacheTTL = 5 * time.Minute
 
 type multiSearchResponse struct {
 	Results []struct {
-		ID            int64  `json:"id"`
-		MediaType     string `json:"media_type"`
-		Title         string `json:"title"`
-		OriginalTitle string `json:"original_title"`
-		Name          string `json:"name"`
-		OriginalName  string `json:"original_name"`
-		ReleaseDate   string `json:"release_date"`
-		FirstAirDate  string `json:"first_air_date"`
-		PosterPath    string `json:"poster_path"`
+		ID            int64   `json:"id"`
+		MediaType     string  `json:"media_type"`
+		Title         string  `json:"title"`
+		OriginalTitle string  `json:"original_title"`
+		Name          string  `json:"name"`
+		OriginalName  string  `json:"original_name"`
+		ReleaseDate   string  `json:"release_date"`
+		FirstAirDate  string  `json:"first_air_date"`
+		PosterPath    string  `json:"poster_path"`
+		Overview      string  `json:"overview"`
+		VoteAverage   float64 `json:"vote_average"`
 	} `json:"results"`
 }
 
@@ -163,6 +165,10 @@ func (c *Client) Resolve(ctx context.Context, queryText string) ([]search.Identi
 		}
 		if strings.HasPrefix(result.PosterPath, "/") {
 			identity.PosterURL = "https://image.tmdb.org/t/p/w500" + result.PosterPath
+		}
+		identity.Overview = boundedOverview(result.Overview)
+		if result.VoteAverage > 0 {
+			identity.Rating = float64(int(result.VoteAverage*10+0.5)) / 10
 		}
 		identities = append(identities, identity)
 	}
@@ -443,6 +449,14 @@ func (c *Client) getJSON(ctx context.Context, endpointPath string, query url.Val
 		return fmt.Errorf("decode TMDB response: %w", err)
 	}
 	return nil
+}
+
+func boundedOverview(value string) string {
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) > 800 {
+		return string(runes[:800])
+	}
+	return string(runes)
 }
 
 func year(date string) int {

@@ -82,6 +82,7 @@ import com.mediahub.android.core.network.DiscoveryGenre
 import com.mediahub.android.core.network.DiscoveryItem
 import com.mediahub.android.core.network.IntegrationHealth
 import com.mediahub.android.core.network.SearchCandidate
+import com.mediahub.android.core.network.SearchIdentity
 import java.util.Locale
 
 @Composable
@@ -117,6 +118,7 @@ internal fun SearchRoute(
         onRecommendationSelected = viewModel::searchRecommendation,
         onShuffleRecommendations = viewModel::shuffleRecommendations,
         onCategorySelected = viewModel::onCategorySelected,
+        onPipelineFilterSelected = viewModel::onPipelineFilterSelected,
         onGenreSelected = viewModel::selectGenre,
         onOpenServices = onOpenServices,
         onTransfer = viewModel::createTransfer,
@@ -135,6 +137,7 @@ internal fun SearchScreen(
     onRecommendationSelected: (DiscoveryItem) -> Unit,
     onShuffleRecommendations: () -> Unit = {},
     onCategorySelected: (String) -> Unit = {},
+    onPipelineFilterSelected: (String) -> Unit = {},
     onGenreSelected: (DiscoveryGenre?) -> Unit = {},
     onOpenServices: () -> Unit = {},
     onTransfer: (String) -> Unit = {},
@@ -167,6 +170,7 @@ internal fun SearchScreen(
             onShuffleRecommendations = onShuffleRecommendations,
             onGenreSelected = onGenreSelected,
             onCategorySelected = onCategorySelected,
+            onPipelineFilterSelected = onPipelineFilterSelected,
             onOpenServices = onOpenServices,
             onOpenHealthDetail = { showHealthDialog = true },
             onTransfer = onTransfer,
@@ -226,13 +230,30 @@ internal fun SearchScreen(
                     contentPadding = PaddingValues(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    if (uiState.titleIdentity != null) {
+                        item(key = "identity") {
+                            SearchIdentityCard(identity = uiState.titleIdentity)
+                        }
+                    }
                     if (uiState.results.isNotEmpty()) {
+                        item(key = "pipeline-filter") {
+                            PipelineFilterChips(
+                                selected = uiState.pipelineFilter,
+                                transferCount = uiState.results.count { !isDownloadable(it) },
+                                downloadCount = uiState.results.count { isDownloadable(it) },
+                                total = uiState.results.size,
+                                onSelected = onPipelineFilterSelected,
+                            )
+                        }
+                    }
+                    if (uiState.visibleResults.isNotEmpty()) {
                         item(key = "results") {
                             MediaHubCard {
-                                uiState.results.forEachIndexed { index, candidate ->
+                                uiState.visibleResults.forEachIndexed { index, candidate ->
                                     if (index > 0) MediaHubListDivider()
                                     ReleaseRow(
                                         candidate = candidate,
+                                        fallbackPoster = uiState.identities.singleOrNull()?.posterUrl,
                                         selected = selectedCandidate?.id == candidate.id,
                                         onClick = { onCandidateSelected(candidate.id) },
                                     )
@@ -960,6 +981,7 @@ private fun SearchTwoPane(
     onShuffleRecommendations: () -> Unit = {},
     onGenreSelected: (DiscoveryGenre?) -> Unit = {},
     onCategorySelected: (String) -> Unit = {},
+    onPipelineFilterSelected: (String) -> Unit = {},
     onOpenServices: () -> Unit = {},
     onOpenHealthDetail: () -> Unit = {},
     onTransfer: (String) -> Unit = {},
@@ -1007,13 +1029,30 @@ private fun SearchTwoPane(
                         contentPadding = PaddingValues(vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
+                        if (uiState.titleIdentity != null) {
+                            item(key = "identity") {
+                                SearchIdentityCard(identity = uiState.titleIdentity)
+                            }
+                        }
                         if (uiState.results.isNotEmpty()) {
+                            item(key = "pipeline-filter") {
+                                PipelineFilterChips(
+                                    selected = uiState.pipelineFilter,
+                                    transferCount = uiState.results.count { !isDownloadable(it) },
+                                    downloadCount = uiState.results.count { isDownloadable(it) },
+                                    total = uiState.results.size,
+                                    onSelected = onPipelineFilterSelected,
+                                )
+                            }
+                        }
+                        if (uiState.visibleResults.isNotEmpty()) {
                             item(key = "results") {
                                 MediaHubCard {
-                                    uiState.results.forEachIndexed { index, candidate ->
+                                    uiState.visibleResults.forEachIndexed { index, candidate ->
                                         if (index > 0) MediaHubListDivider()
                                         ReleaseRow(
                                             candidate = candidate,
+                                            fallbackPoster = uiState.identities.singleOrNull()?.posterUrl,
                                             selected = selectedCandidate?.id == candidate.id,
                                             onClick = { onCandidateSelected(candidate.id) },
                                         )
@@ -1205,6 +1244,8 @@ private fun SearchCandidateDetail(
                 MediaHubText(text = candidateDisplayTitle(candidate), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 MediaHubText(
                     text = buildString {
+                        append(pipelineLabel(candidate))
+                        append(" · ")
                         append(if (candidate.mediaType == "movie") "电影" else "剧集")
                         if (candidate.year > 0) append(" · ").append(candidate.year)
                         append(" · ").append(candidate.provider ?: candidate.source)
@@ -1213,6 +1254,26 @@ private fun SearchCandidateDetail(
                     color = MediaHubColors.TextMuted,
                     fontSize = 13.sp,
                 )
+                val identity = uiState.titleIdentity
+                val rating = candidate.rating ?: identity?.rating
+                val overview = candidate.overview ?: identity?.overview
+                if (rating != null) {
+                    MediaHubText(
+                        text = "TMDB ${String.format(Locale.ROOT, "%.1f", rating)}",
+                        modifier = Modifier.padding(top = 8.dp),
+                        color = MediaHubColors.Accent,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                if (!overview.isNullOrBlank()) {
+                    MediaHubText(
+                        text = overview,
+                        modifier = Modifier.padding(top = 8.dp),
+                        color = MediaHubColors.TextSecondary,
+                        fontSize = 13.sp,
+                    )
+                }
                 MediaHubText(
                     text = buildString {
                         append(candidate.release.resolution)
@@ -1280,10 +1341,67 @@ private fun StatusMessage(message: String, color: Color) {
 }
 
 @Composable
+private fun SearchIdentityCard(identity: SearchIdentity?) {
+    if (identity == null) return
+    MediaHubCard {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            RemotePoster(
+                url = identity.posterUrl,
+                contentDescription = "${identity.title} 海报",
+                modifier = Modifier
+                    .width(72.dp)
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(8.dp)),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                MediaHubText(text = identity.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                MediaHubText(
+                    text = buildString {
+                        if (identity.year > 0) append(identity.year).append(" · ")
+                        append(if (identity.mediaType == "series") "剧集" else "电影")
+                        identity.rating?.let { append(" · ").append(String.format(Locale.ROOT, "%.1f", it)) }
+                    },
+                    color = MediaHubColors.TextMuted,
+                    fontSize = 12.sp,
+                )
+                identity.overview?.takeIf { it.isNotBlank() }?.let {
+                    MediaHubText(text = it, color = MediaHubColors.TextSecondary, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PipelineFilterChips(
+    selected: String,
+    transferCount: Int,
+    downloadCount: Int,
+    total: Int,
+    onSelected: (String) -> Unit,
+) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            MediaHubFilterChip(label = "全部 $total", selected = selected == "all", onClick = { onSelected("all") })
+        }
+        item {
+            MediaHubFilterChip(label = "115 转存 $transferCount", selected = selected == "transfer", onClick = { onSelected("transfer") })
+        }
+        item {
+            MediaHubFilterChip(label = "PT 下载 $downloadCount", selected = selected == "download", onClick = { onSelected("download") })
+        }
+    }
+}
+
+@Composable
 private fun ReleaseRow(
     candidate: SearchCandidate,
     selected: Boolean,
     onClick: () -> Unit,
+    fallbackPoster: String? = null,
 ) {
     val facts = buildString {
         append(candidate.release.resolution)
@@ -1299,14 +1417,29 @@ private fun ReleaseRow(
     } else {
         null
     }
+    val poster = candidate.posterUrl ?: fallbackPoster
     MediaHubPreferenceRow(
         title = candidateDisplayTitle(candidate),
         summary = facts,
         selected = selected,
         role = Role.RadioButton,
         onClick = onClick,
+        start = {
+            RemotePoster(
+                url = poster,
+                contentDescription = "${candidate.title} 海报",
+                modifier = Modifier
+                    .width(40.dp)
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(6.dp)),
+            )
+        },
         end = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                MediaHubBadge(
+                    text = pipelineLabel(candidate),
+                    variant = if (isDownloadable(candidate)) BadgeVariant.Warning else BadgeVariant.Primary,
+                )
                 MediaHubBadge(
                     text = candidate.provider ?: candidate.source,
                     variant = BadgeVariant.Source,
@@ -1357,10 +1490,6 @@ private fun candidateDisplayTitle(candidate: SearchCandidate): String {
         "${candidate.episodeStart}-${candidate.episodeEnd}"
     }
     return "${candidate.title} · S${candidate.season}E$episodes"
-}
-
-private fun isDownloadable(candidate: SearchCandidate): Boolean {
-    return candidate.transferState == "downloadable" || candidate.sourceId == "moviepilot"
 }
 
 private fun transferActionLabel(candidate: SearchCandidate, creating: Boolean): String = when {
