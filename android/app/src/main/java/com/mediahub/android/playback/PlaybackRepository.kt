@@ -5,7 +5,6 @@ import com.mediahub.android.core.network.ApiException
 import com.mediahub.android.core.network.DownloadedFile
 import com.mediahub.android.core.network.MediaHubApi
 import com.mediahub.android.core.network.MediaHubHttpClient
-import java.io.File
 import java.net.URI
 import org.json.JSONObject
 
@@ -65,7 +64,6 @@ data class PlaybackDescriptor(
 class NetworkPlaybackRepository(
     private val http: MediaHubHttpClient,
     private val sessionStore: SecureSessionStore,
-    private val cacheDir: File,
 ) : PlaybackRepository {
     private val api = MediaHubApi(http)
 
@@ -81,27 +79,18 @@ class NetworkPlaybackRepository(
                 .put("itemId", target.itemId)
                 .toString()
         }
-        val descriptor = parsePlaybackDescriptor(http.request(
+        return parsePlaybackDescriptor(http.request(
             path = path,
             method = "POST",
             body = body,
             token = authorization,
         ))
-        val subtitle = (request.target as? EmbyItemTarget)?.let { item ->
-            runCatching { cacheLocalSubtitle(item.itemId) }.getOrNull()
-        }
-        return descriptor.copy(subtitle = subtitle)
     }
 
     override suspend fun fetchLocalSubtitle(itemId: String): DownloadedFile? {
         val authorization = sessionStore.load()
             ?: throw ApiException(401, "authentication_required", "需要登录")
         return api.fetchLocalSubtitle(authorization, itemId)
-    }
-
-    internal suspend fun cacheLocalSubtitle(itemId: String): LocalSubtitleFile? {
-        val downloaded = fetchLocalSubtitle(itemId) ?: return null
-        return writeLocalSubtitleCache(cacheDir, itemId, downloaded.bytes, downloaded.contentType, downloaded.fileName)
     }
 
     override suspend fun reportSession(

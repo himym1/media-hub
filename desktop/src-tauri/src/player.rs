@@ -1,7 +1,8 @@
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Mutex};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -315,7 +316,7 @@ fn stop_child(state: &PlayerState) {
     let _ = ipc_command(&[serde_json::json!("quit")]);
     if let Some(mut child) = state.child.lock().ok().and_then(|mut guard| guard.take()) {
         let _ = child.kill();
-        let _ = child.wait();
+        wait_child_exit(child, Duration::from_millis(400));
     }
     if !cfg!(windows) {
         let _ = std::fs::remove_file(ipc_path());
@@ -323,6 +324,15 @@ fn stop_child(state: &PlayerState) {
     for name in ["media-hub-sub.srt", "media-hub-sub.ass", "media-hub-sub.vtt"] {
         let _ = std::fs::remove_file(std::env::temp_dir().join(name));
     }
+}
+
+fn wait_child_exit(mut child: Child, timeout: Duration) {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = child.wait();
+        let _ = tx.send(());
+    });
+    let _ = rx.recv_timeout(timeout);
 }
 
 fn spawn_embedded(
@@ -359,10 +369,10 @@ fn spawn_embedded(
         cmd.env("PATH", path);
     }
     let mut child = cmd.spawn().map_err(|_| "无法启动播放器。".to_string())?;
-    wait_child_started(&mut child, Duration::from_millis(1200))?;
+    wait_child_started(&mut child, Duration::from_millis(80))?;
     *state.child.lock().map_err(|_| "无法记录播放器。".to_string())? = Some(child);
     if sub_file.is_some() {
-        select_external_subtitle();
+        std::thread::spawn(select_external_subtitle);
     }
     Ok(())
 }
@@ -382,7 +392,31 @@ fn write_and_read_ipc(mut stream: impl ReadWrite, body: &str) -> Result<serde_js
 trait ReadWrite: Read + Write {}
 impl<T: Read + Write> ReadWrite for T {}
 
+fn ipc_busy() -> &'static AtomicBool {
+    static BUSY: AtomicBool = AtomicBool::new(false);
+    &BUSY
+}
+
 fn ipc_command(command: &[serde_json::Value]) -> Result<serde_json::Value, String> {
+    if ipc_busy()
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err("播放器尚未就绪。".to_string());
+    }
+    let command = command.to_vec();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ipc_command_blocking(&command)))
+            .unwrap_or_else(|_| Err("无法控制播放器。".to_string()));
+        let _ = tx.send(result);
+        ipc_busy().store(false, Ordering::SeqCst);
+    });
+    rx.recv_timeout(Duration::from_millis(400))
+        .unwrap_or_else(|_| Err("播放器尚未就绪。".to_string()))
+}
+
+fn ipc_command_blocking(command: &[serde_json::Value]) -> Result<serde_json::Value, String> {
     let path = ipc_path();
     let payload = serde_json::json!({ "command": command });
     let body = format!("{payload}\n");
@@ -399,6 +433,8 @@ fn ipc_command(command: &[serde_json::Value]) -> Result<serde_json::Value, Strin
     {
         let stream = std::os::unix::net::UnixStream::connect(&path)
             .map_err(|_| "播放器尚未就绪。".to_string())?;
+        let _ = stream.set_read_timeout(Some(Duration::from_millis(250)));
+        let _ = stream.set_write_timeout(Some(Duration::from_millis(250)));
         return write_and_read_ipc(stream, &body);
     }
     #[cfg(not(any(windows, unix)))]
@@ -565,6 +601,31 @@ pub fn play_native(
 }
 
 #[tauri::command]
+pub fn attach_native_subtitle(
+    subtitle_base64: String,
+    subtitle_file_name: Option<String>,
+) -> Result<(), String> {
+    let encoded = subtitle_base64.trim();
+    if encoded.is_empty() {
+        return Ok(());
+    }
+    let bytes = decode_subtitle_base64(encoded)?;
+    let name = subtitle_file_name
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("chi.srt");
+    let path = write_subtitle_temp(&bytes, name)?;
+    std::thread::spawn(move || {
+        let _ = ipc_command(&[
+            serde_json::json!("sub-add"),
+            serde_json::json!(path.display().to_string()),
+        ]);
+        select_external_subtitle();
+    });
+    Ok(())
+}
+
+#[tauri::command]
 pub fn layout_native(app: AppHandle, bounds: EmbedBounds) -> Result<(), String> {
     let Ok(surface) = surface_window(&app) else {
         return Ok(());
@@ -592,11 +653,16 @@ pub fn set_native_cursor_visible(app: AppHandle, visible: bool) -> Result<(), St
 }
 
 #[tauri::command]
-pub fn native_control(action: String, value: Option<f64>, mode: Option<String>) -> Result<(), String> {
-    for command in native_control_commands(&action, value, mode.as_deref())? {
-        ipc_command(&command)?;
-    }
-    Ok(())
+pub async fn native_control(action: String, value: Option<f64>, mode: Option<String>) -> Result<(), String> {
+    let commands = native_control_commands(&action, value, mode.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        for command in commands {
+            ipc_command(&command)?;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|_| "无法控制播放器。".to_string())?
 }
 
 #[tauri::command]
@@ -659,9 +725,29 @@ pub fn close_player_window(app: AppHandle, state: tauri::State<PlayerState>) -> 
 }
 
 #[tauri::command]
-pub fn native_status() -> Result<NativeStatus, String> {
+pub async fn native_status() -> Result<NativeStatus, String> {
+    Ok(tauri::async_runtime::spawn_blocking(read_native_status)
+        .await
+        .unwrap_or_else(|_| idle_native_status()))
+}
+
+fn idle_native_status() -> NativeStatus {
+    NativeStatus {
+        paused: true,
+        time: 0.0,
+        duration: 0.0,
+        volume: 1.0,
+        speed: 1.0,
+        zoom: 1.0,
+        cursor_hover: false,
+        mouse_x: 0.0,
+        mouse_y: 0.0,
+    }
+}
+
+fn read_native_status() -> NativeStatus {
     let pos = ipc_mouse_pos();
-    Ok(NativeStatus {
+    NativeStatus {
         paused: ipc_bool("pause"),
         time: ipc_number("time-pos"),
         duration: ipc_number("duration"),
@@ -671,7 +757,7 @@ pub fn native_status() -> Result<NativeStatus, String> {
         cursor_hover: pos.hover,
         mouse_x: pos.x,
         mouse_y: pos.y,
-    })
+    }
 }
 
 #[cfg(test)]

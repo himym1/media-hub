@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { boundsFromElement, bytesToBase64, canPlayNatively, closePlayerWindow, controlNatively, nativeSubtitleFromBytes, openPlayerWindow, playNatively, setNativeCursorVisible, toggleNativeWindow } from './nativePlayback'
+import { attachNativeSubtitle, boundsFromElement, bytesToBase64, canPlayNatively, closePlayerWindow, controlNatively, nativeSubtitleFromBytes, openPlayerWindow, playNatively, setNativeCursorVisible, toggleNativeWindow } from './nativePlayback'
 
 afterEach(() => {
   delete (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
@@ -34,6 +34,17 @@ describe('nativePlayback', () => {
       startPositionMs: 1500,
       userAgent: 'Mozilla/5.0 MediaHub',
       bounds: { x: 10, y: 64, width: 1200, height: 640 },
+      subtitleBase64: bytesToBase64(new TextEncoder().encode('hello').buffer),
+      subtitleFileName: 'chi.ass',
+    })
+  })
+
+  it('attaches a sidecar after play has already started', async () => {
+    const invoke = vi.fn(async () => undefined)
+    ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
+    const subtitle = nativeSubtitleFromBytes(new TextEncoder().encode('hello').buffer, 'chi.ass')
+    await attachNativeSubtitle(subtitle!)
+    expect(invoke).toHaveBeenCalledWith('attach_native_subtitle', {
       subtitleBase64: bytesToBase64(new TextEncoder().encode('hello').buffer),
       subtitleFileName: 'chi.ass',
     })

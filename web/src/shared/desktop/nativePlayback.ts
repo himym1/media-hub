@@ -98,6 +98,13 @@ export async function playNatively(streamUrl: string, request: NativePlayRequest
   })
 }
 
+export async function attachNativeSubtitle(subtitle: NativeSubtitle) {
+  await invokeNative('attach_native_subtitle', {
+    subtitleBase64: subtitle.base64,
+    subtitleFileName: subtitle.fileName,
+  })
+}
+
 export async function layoutNatively(bounds: NativeBounds) {
   await invokeNative('layout_native', { bounds })
 }

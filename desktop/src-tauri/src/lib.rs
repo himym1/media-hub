@@ -157,6 +157,8 @@ pub(crate) fn mpv_args(
         "--osc=no".to_string(),
         "--no-border".to_string(),
         "--focus-on=never".to_string(),
+        "--cache=yes".to_string(),
+        "--network-timeout=20".to_string(),
         format!("--title={}", title.replace(['\n', '\r'], " ")),
         "--no-terminal".to_string(),
         "--slang=zh,chi,zh-Hans,zh-CN,zh-TW,zh-HK".to_string(),
@@ -197,6 +199,7 @@ pub fn run() {
             updater::desktop_app_platform,
             updater::install_desktop_update,
             player::play_native,
+            player::attach_native_subtitle,
             player::layout_native,
             player::stop_native,
             player::native_control,
@@ -308,6 +311,8 @@ mod tests {
         let agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
         let args = mpv_args("范海辛", 0, Some(agent), Some(42), None, None, None);
         assert!(args.iter().any(|arg| arg == "--osc=no"));
+        assert!(args.iter().any(|arg| arg == "--cache=yes"));
+        assert!(args.iter().any(|arg| arg == "--network-timeout=20"));
         assert!(args.iter().any(|arg| arg == "--slang=zh,chi,zh-Hans,zh-CN,zh-TW,zh-HK"));
         assert!(args.iter().any(|arg| arg == &format!("--user-agent={agent}")));
         assert!(args.iter().any(|arg| arg == "--wid=42"));

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { ApiError, createEmbyPlaybackDescriptor, fetchLocalSubtitle, reportPlaybackSessionEvent } from '../../shared/api/mediaHub'
 import {
   boundsFromElement,
+  attachNativeSubtitle,
   canPlayNatively,
   controlNatively,
   layoutNatively,
@@ -293,38 +294,28 @@ export function LibraryPlayer({
     video.addEventListener('error', fail)
     void (async () => {
       try {
-        const [descriptor, subtitle] = await Promise.all([
-          createEmbyPlaybackDescriptor(itemId, navigator.userAgent),
-          fetchLocalSubtitle(itemId).catch(() => null),
-        ])
+        const descriptor = await createEmbyPlaybackDescriptor(itemId, navigator.userAgent)
         if (cancelled) return
+        const subtitlePromise = fetchLocalSubtitle(itemId).catch(() => null)
         if (canPlayNatively()) {
-          const nativeSubtitle = subtitle
-            ? nativeSubtitleFromBytes(subtitle.bytes, subtitle.fileName)
-            : null
           nativeRequest.current = {
             url: descriptor.streamUrl,
             title,
             startPositionMs: descriptor.startPositionMs,
             userAgent: descriptor.userAgent,
             sessionId: descriptor.sessionId,
-            subtitle: nativeSubtitle,
           }
-          setCaptions(nativeSubtitle ? 'on' : 'missing')
-          setSubtitleHint(nativeSubtitle && subtitle ? subtitleStartHint(subtitle.bytes) : null)
-          setNativeActive(true)
-          return
-        }
-        const attached = subtitleAttachResult(subtitle)
-        setSubtitleHint(attached.kind === 'track' && subtitle ? subtitleStartHint(subtitle.bytes) : null)
-        if (attached.kind === 'track') {
-          subtitleUrl = attached.url
-          detachSubtitle = attachSubtitleTrack(video, attached.url)
-          setCaptions('on')
-        } else if (attached.kind === 'ass') {
-          setCaptions('ass')
-        } else {
           setCaptions('missing')
+          setNativeActive(true)
+          void subtitlePromise.then((subtitle) => {
+            if (cancelled || !subtitle) return
+            const nativeSubtitle = nativeSubtitleFromBytes(subtitle.bytes, subtitle.fileName)
+            if (!nativeSubtitle) return
+            setCaptions('on')
+            setSubtitleHint(subtitleStartHint(subtitle.bytes))
+            void attachNativeSubtitle(nativeSubtitle).catch(() => undefined)
+          })
+          return
         }
         if (isHlsStream(descriptor.streamUrl)) {
           const { default: Hls } = await import('hls.js')
@@ -348,6 +339,17 @@ export function LibraryPlayer({
         }
         detachSession = attachPlaybackSession(descriptor.sessionId, video, reportPlaybackSessionEvent)
         await video.play().catch(() => undefined)
+        const subtitle = await subtitlePromise
+        if (cancelled || !subtitle) return
+        const attached = subtitleAttachResult(subtitle)
+        setSubtitleHint(attached.kind === 'track' ? subtitleStartHint(subtitle.bytes) : null)
+        if (attached.kind === 'track') {
+          subtitleUrl = attached.url
+          detachSubtitle = attachSubtitleTrack(video, attached.url)
+          setCaptions('on')
+        } else if (attached.kind === 'ass') {
+          setCaptions('ass')
+        }
       } catch (cause) {
         if (!cancelled) {
           setError(cause instanceof ApiError ? cause.message : '当前浏览器无法直接播放')

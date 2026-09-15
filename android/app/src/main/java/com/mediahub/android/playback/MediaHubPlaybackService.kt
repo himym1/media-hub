@@ -170,6 +170,7 @@ class MediaHubPlaybackService : MediaSessionService() {
         player.setMediaItem(item, startPositionMs)
         player.prepare()
         player.playWhenReady = autoPlay
+        (request.target as? EmbyItemTarget)?.let { attachLocalSubtitle(it.itemId) }
     }
 
     private fun attachLocalSubtitle(itemId: String) {
