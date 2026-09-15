@@ -217,11 +217,22 @@ func (c *Client) catalogItemVisible(ctx context.Context, configuration clientCon
 	if is115Item(item) {
 		return true, nil
 	}
-	inLocal, err := c.itemInNon115Library(ctx, configuration, item)
-	if err != nil || inLocal || item.Type != "Series" {
-		return inLocal, err
+	in115, err := c.itemInLibraries(ctx, configuration, item, configuredLibraryIDs(configuration))
+	if err != nil {
+		return false, err
 	}
-	return c.cloudItemVisible(ctx, configuration, item)
+	if in115 {
+		if item.Type == "Series" {
+			return c.cloudItemVisible(ctx, configuration, item)
+		}
+		return false, nil
+	}
+	switch item.Type {
+	case "Movie", "Series", "Episode", "Video":
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 func (c *Client) cloudItemVisible(ctx context.Context, configuration clientConfig, item baseItem) (bool, error) {

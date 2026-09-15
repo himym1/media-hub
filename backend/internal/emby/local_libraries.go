@@ -161,13 +161,12 @@ func catalogItems(items []baseItem) []baseItem {
 	return filtered
 }
 
-func (c *Client) itemInNon115Library(ctx context.Context, configuration clientConfig, item baseItem) (bool, error) {
-	allowed := make(map[string]struct{})
-	for _, library := range c.listLocalLibraries(ctx, configuration) {
-		if isConfiguredLibrary(configuration, library.ID) {
-			continue
+func (c *Client) itemInLibraries(ctx context.Context, configuration clientConfig, item baseItem, libraryIDs []string) (bool, error) {
+	allowed := make(map[string]struct{}, len(libraryIDs))
+	for _, id := range libraryIDs {
+		if id = strings.TrimSpace(id); id != "" {
+			allowed[id] = struct{}{}
 		}
-		allowed[library.ID] = struct{}{}
 	}
 	if len(allowed) == 0 {
 		return false, nil

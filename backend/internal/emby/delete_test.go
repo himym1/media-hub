@@ -87,16 +87,18 @@ func TestDeleteItemUsesUserSessionToken(t *testing.T) {
 	}
 }
 
-func TestDeletePreviewRejectsLocalOnlyItems(t *testing.T) {
+func TestDeletePreviewRejectsLocalLeftoversIn115Library(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/Items/local-1" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		_, _ = w.Write([]byte(`{"Id":"local-1","Name":"Local","Type":"Movie","Path":"/volume1/media/movie.mkv"}`))
+		_, _ = w.Write([]byte(`{"Id":"local-1","Name":"Local","Type":"Movie","ParentId":"library-1","Path":"/volume1/media/movie.mkv"}`))
 	}))
 	defer server.Close()
-	_, err := NewClient(server.URL, "emby-key", time.Second).DeletePreview(context.Background(), "local-1")
+	client := NewClient(server.URL, "emby-key", time.Second)
+	client.Configure(RuntimeConfig{BaseURL: server.URL, APIKey: "emby-key", MovieLibraryID: "library-1"})
+	_, err := client.DeletePreview(context.Background(), "local-1")
 	if !errors.Is(err, ErrItemNotFound) {
 		t.Fatalf("error=%v", err)
 	}

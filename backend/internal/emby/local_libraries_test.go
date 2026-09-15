@@ -170,6 +170,37 @@ func TestItemDetailsAllowsLocalLibraryFilesAndHides115Leftovers(t *testing.T) {
 	}
 }
 
+func TestItemDetailsAllowsLocalFileWhenViewIdDiffersFromFolder(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Users/user-1/Items/pt-nested":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"Id": "pt-nested", "Name": "Nested", "Type": "Movie", "ParentId": "folder-9",
+				"Path": "/media/links/电影/英美电影/Nested.mkv",
+			})
+		case "/Items/pt-nested/Ancestors":
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"Id": "folder-9", "Name": "Nested", "Type": "Folder"},
+				{"Id": "collection-99", "Name": "英美电影", "Type": "CollectionFolder"},
+			})
+		case "/System/Info":
+			_, _ = w.Write([]byte(`{"Id":"server-1","ServerName":"Emby","Version":"4.9"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key", time.Second, "user-1")
+	client.Configure(RuntimeConfig{
+		BaseURL: server.URL, APIKey: "test-key", UserID: "user-1", MovieLibraryID: "library-1",
+	})
+	detail, err := client.ItemDetails(context.Background(), "pt-nested")
+	if err != nil || detail.ID != "pt-nested" {
+		t.Fatalf("detail=%#v err=%v", detail, err)
+	}
+}
+
 func TestEpisodesIncludeLocalLibraryFiles(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/Shows/series-1/Episodes" {

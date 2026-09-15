@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Captions, ChevronLeft, ChevronRight, CircleAlert, Film, RefreshCw, Search, Trash2, X } from 'lucide-react'
+import { BookOpen, Captions, ChevronLeft, ChevronRight, CircleAlert, Film, Play, RefreshCw, Search, Star, Trash2, X } from 'lucide-react'
 import {
   deleteEmbyItem,
   downloadEmbyRemoteSubtitle,
