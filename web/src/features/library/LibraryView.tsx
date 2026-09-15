@@ -1,6 +1,27 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDownUp, BookOpen, Captions, ChevronLeft, ChevronRight, CircleAlert, ExternalLink, Film, Play, RefreshCw, Search, Star, Trash2, X } from 'lucide-react'
+import {
+  ArrowDownUp,
+  BookOpen,
+  Captions,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  CircleAlert,
+  Clapperboard,
+  ExternalLink,
+  Film,
+  LayoutGrid,
+  Music,
+  Play,
+  RefreshCw,
+  Search,
+  Star,
+  Trash2,
+  Tv,
+  X,
+} from 'lucide-react'
 import {
   deleteEmbyItem,
   downloadEmbyRemoteSubtitle,
@@ -47,6 +68,23 @@ export function LibraryView() {
   const [typeFilter, setTypeFilter] = useState<'all' | 'Movie' | 'Series'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'unplayed' | 'played'>('all')
   const [spotlightIndex, setSpotlightIndex] = useState(0)
+  const [isExpanded, setIsExpanded] = useState(false)
+  const tabsRef = useRef<HTMLDivElement>(null)
+
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (!tabsRef.current) return
+    const scrollAmount = 260
+    tabsRef.current.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    })
+  }
+
+  const handleTabsWheel = (e: React.WheelEvent) => {
+    if (e.deltaY !== 0 && tabsRef.current) {
+      tabsRef.current.scrollLeft += e.deltaY
+    }
+  }
 
   const libraries = useQuery({ queryKey: ['emby-libraries'], queryFn: getEmbyLibraries })
   const allLibraries = useMemo(() => libraries.data?.libraries ?? [], [libraries.data?.libraries])
@@ -235,22 +273,35 @@ export function LibraryView() {
 
   return (
     <section className={itemId ? 'library-page has-detail' : 'library-page'}>
-      <header className="view-header compact-view-header">
-        <div><h1>媒体库</h1><p>已入库的电影和剧集。</p></div>
-        <IconButton label="刷新媒体库列表" onClick={() => void libraries.refetch()} subtle><RefreshCw size={17} /></IconButton>
-      </header>
-
       {libraries.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>媒体库读取失败</strong><span>{libraries.error.message}</span></div><button onClick={() => void libraries.refetch()} type="button">重试</button></div> : null}
       {mutationError ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{mutationError.message}</span></div> : null}
 
       <div className="library-browse">
         <div className="library-header-bar">
           <div className="library-nav-cluster">
-            <nav aria-label="Emby 媒体库" className="library-tabs">
+            {allLibraries.length > 3 ? (
+              <button
+                aria-label="向左滚动媒体库"
+                className="library-nav-scroll-btn left"
+                onClick={() => scrollTabs('left')}
+                title="向左滚动"
+                type="button"
+              >
+                <ChevronLeft size={16} />
+              </button>
+            ) : null}
+
+            <nav
+              aria-label="Emby 媒体库"
+              className="library-tabs"
+              onWheel={handleTabsWheel}
+              ref={tabsRef}
+            >
               {allLibraries.map((library) => {
                 const typeLabel = libraryCollectionLabel(library.collectionType)
                 const name = library.name
                 const isSelected = library.id === libraryId
+                const Icon = getLibraryIcon(name, library.collectionType)
                 return (
                   <button
                     aria-pressed={isSelected}
@@ -259,6 +310,7 @@ export function LibraryView() {
                     onClick={() => selectLibrary(library.id)}
                     type="button"
                   >
+                    <Icon className="tab-icon" size={14} />
                     <span className="tab-name">{name}</span>
                     {typeLabel.toLocaleLowerCase() !== name.trim().toLocaleLowerCase() ? (
                       <span className="tab-type">{typeLabel}</span>
@@ -267,6 +319,32 @@ export function LibraryView() {
                 )
               })}
             </nav>
+
+            {allLibraries.length > 3 ? (
+              <button
+                aria-label="向右滚动媒体库"
+                className="library-nav-scroll-btn right"
+                onClick={() => scrollTabs('right')}
+                title="向右滚动"
+                type="button"
+              >
+                <ChevronRight size={16} />
+              </button>
+            ) : null}
+
+            {allLibraries.length > 0 ? (
+              <button
+                aria-expanded={isExpanded}
+                className={isExpanded ? 'library-expand-toggle-btn active' : 'library-expand-toggle-btn'}
+                onClick={() => setIsExpanded((prev) => !prev)}
+                title={isExpanded ? '收起全部媒体库' : '展开查看全部媒体库'}
+                type="button"
+              >
+                <LayoutGrid size={14} />
+                <span>全部 ({allLibraries.length})</span>
+                {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              </button>
+            ) : null}
           </div>
 
           <div className="library-action-cluster">
@@ -333,6 +411,56 @@ export function LibraryView() {
             </div>
           </div>
         </div>
+
+        {isExpanded ? (
+          <div aria-label="全部媒体库" className="library-expand-panel" role="region">
+            <div className="library-expand-header">
+              <div className="library-expand-title">
+                <LayoutGrid size={15} />
+                <span>全部媒体库</span>
+                <span className="library-expand-badge">{allLibraries.length} 个分类</span>
+              </div>
+              <button
+                className="library-expand-close-btn"
+                onClick={() => setIsExpanded(false)}
+                type="button"
+              >
+                <ChevronUp size={14} />
+                <span>收起</span>
+              </button>
+            </div>
+            <div className="library-expand-grid">
+              {allLibraries.map((library) => {
+                const typeLabel = libraryCollectionLabel(library.collectionType)
+                const name = library.name
+                const isSelected = library.id === libraryId
+                const Icon = getLibraryIcon(name, library.collectionType)
+                return (
+                  <button
+                    className={isSelected ? 'library-expand-card active' : 'library-expand-card'}
+                    key={library.id}
+                    onClick={() => {
+                      selectLibrary(library.id)
+                      setIsExpanded(false)
+                    }}
+                    type="button"
+                  >
+                    <div className="expand-card-icon">
+                      <Icon size={18} />
+                    </div>
+                    <div className="expand-card-body">
+                      <strong className="expand-card-name">{name}</strong>
+                      <span className="expand-card-type">{typeLabel}</span>
+                    </div>
+                    {isSelected ? (
+                      <span className="expand-card-status">当前</span>
+                    ) : null}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
 
         {submittedQuery ? (
           <div className="search-active-pill">
@@ -883,7 +1011,28 @@ function deletePreviewCopy(preview: EmbyDeletePreview) {
 function libraryCollectionLabel(type?: string) {
   if (type === 'movies') return '电影'
   if (type === 'tvshows') return '剧集'
+  if (type === 'music') return '音乐'
+  if (type === 'boxsets') return '合集'
+  if (type === 'homevideos') return '视频'
   return '媒体库'
+}
+
+function getLibraryIcon(name: string, collectionType?: string) {
+  const lowerName = name.toLowerCase()
+  const lowerType = (collectionType ?? '').toLowerCase()
+  if (lowerName.includes('音') || lowerName.includes('唱') || lowerType === 'music') {
+    return Music
+  }
+  if (lowerName.includes('漫') || lowerName.includes('画') || lowerName.includes('anime')) {
+    return Clapperboard
+  }
+  if (lowerName.includes('剧') || lowerName.includes('综') || lowerType === 'tvshows') {
+    return Tv
+  }
+  if (lowerName.includes('纪录') || lowerName.includes('专栏') || lowerType === 'boxsets') {
+    return BookOpen
+  }
+  return Film
 }
 
 function mediaTypeLabel(type: string) {

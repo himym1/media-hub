@@ -232,21 +232,21 @@
   }
 }
 
-.drive-workspace { margin: 20px 0 28px; padding: 18px 0; border-top: 1px solid #2a2d30; border-bottom: 1px solid #2a2d30; }
+.drive-workspace { margin: 20px 0 28px; padding: 18px 0; border-top: 1px solid rgba(255, 255, 255, 0.07); border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
 .drive-workspace .section-heading h3 { display: flex; align-items: center; gap: 8px; }
 .drive-workspace > .form-field { max-width: 360px; margin: 12px 0; }
-.drive-files { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: #2b2e30; border: 1px solid #2b2e30; }
-.drive-files button { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 11px; text-align: left; color: #d7d9d4; background: #181a1b; border: 0; }
-.drive-files button:not(:disabled):hover { background: #202324; }
+.drive-files { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; background: transparent; border: 0; }
+.drive-files button { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 11px 13px; text-align: left; color: var(--text-secondary); background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; transition: all .18s ease; }
+.drive-files button:not(:disabled):hover { color: var(--text); background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.15); transform: translateY(-1px); }
 .drive-files button:disabled { cursor: default; opacity: .78; }
 .drive-files button span, .drive-command-list > div > span:first-child { min-width: 0; display: grid; gap: 3px; }
 .drive-files strong, .drive-command-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.drive-files small, .drive-command-list small { color: #777e7b; font-size: 12px; overflow-wrap: anywhere; }
+.drive-files small, .drive-command-list small { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
 .drive-command-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: end; margin-top: 14px; }
 .drive-command-form button { min-height: 44px; }
-.drive-command-list { display: grid; margin-top: 14px; border-top: 1px solid #2a2d30; }
-.drive-command-list > div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; min-height: 50px; border-bottom: 1px solid #25282a; }
-.danger-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 12px; color: #f2b4ab; background: #341d1b; border: 1px solid #71403b; border-radius: 6px; transition: background-color .18s ease, border-color .18s ease, transform .18s ease; }
+.drive-command-list { display: grid; margin-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.drive-command-list > div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; min-height: 50px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.danger-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 14px; color: #f2b4ab; background: #341d1b; border: 1px solid #71403b; border-radius: 7px; transition: background-color .18s ease, border-color .18s ease, transform .18s ease; }
 .danger-button:hover:not(:disabled) { background: #422320; border-color: #8c4e47; }
 .danger-button:active:not(:disabled) { transform: scale(0.975); }
 .danger-button:disabled { opacity: .5; }
@@ -254,21 +254,22 @@
 @media (max-width: 900px) { .drive-files { grid-template-columns: repeat(2, minmax(0, 1fr)); } .drive-command-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .drive-files, .drive-command-form { grid-template-columns: 1fr; } .drive-command-list > div { grid-template-columns: minmax(0, 1fr) auto; padding: 8px 0; } .drive-command-list .danger-button { grid-column: 1 / -1; } }
 
-.local-upload-workspace { margin: 0 0 28px; padding: 18px 0; border-bottom: 1px solid #2a2d30; }
+.local-upload-workspace { margin: 0 0 28px; padding: 18px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
 .local-upload-workspace .section-heading h3 { display: flex; align-items: center; gap: 8px; }
 .local-upload-controls { display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; gap: 10px; align-items: end; margin: 12px 0; }
 .local-upload-controls .secondary-command { min-height: 44px; }
-.local-files { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; max-height: 300px; overflow: auto; background: #2b2e30; border: 1px solid #2b2e30; }
-.local-files button { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 10px; text-align: left; color: #d7d9d4; background: #181a1b; border: 0; }
-.local-files button.active { color: #d8e58d; background: #292d21; }
+.local-files { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; max-height: 300px; overflow: auto; background: transparent; border: 0; }
+.local-files button { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 10px 12px; text-align: left; color: var(--text-secondary); background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; transition: all .18s ease; }
+.local-files button:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.15); }
+.local-files button.active { color: #ffffff; background: rgba(16, 185, 129, 0.15); border-color: var(--accent); box-shadow: 0 0 10px rgba(52, 211, 153, 0.12); }
 .local-files button span, .local-upload-jobs > div > span:first-child { display: grid; min-width: 0; gap: 3px; }
 .local-files strong, .local-upload-jobs strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.local-files small, .local-upload-jobs small { color: #777e7b; font-size: 12px; }
+.local-files small, .local-upload-jobs small { color: var(--text-muted); font-size: 12px; }
 .local-upload-submit { display: grid; grid-template-columns: minmax(0, 1fr) 190px auto; gap: 10px; align-items: center; margin-top: 12px; }
-.local-upload-submit > span { overflow: hidden; color: #a4aaa7; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.local-upload-submit input { min-height: 44px; padding: 0 10px; color: #dedfd8; background: #131516; border: 1px solid #3b403e; border-radius: 4px; }
-.local-upload-jobs { display: grid; margin-top: 14px; border-top: 1px solid #2a2d30; }
-.local-upload-jobs > div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; min-height: 50px; border-bottom: 1px solid #25282a; }
+.local-upload-submit > span { overflow: hidden; color: var(--text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.local-upload-submit input { min-height: 44px; padding: 0 12px; color: var(--text); background: rgba(18, 21, 25, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 7px; }
+.local-upload-jobs { display: grid; margin-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.local-upload-jobs > div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; min-height: 50px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
 @media (max-width: 900px) { .local-files { grid-template-columns: repeat(2, minmax(0, 1fr)); } .local-upload-submit { grid-template-columns: 1fr 180px; } .local-upload-submit .primary-button { grid-column: 1 / -1; } }
 @media (max-width: 620px) { .local-upload-controls, .local-upload-submit, .local-files { grid-template-columns: 1fr; } .local-upload-jobs > div { grid-template-columns: minmax(0, 1fr) auto; padding: 8px 0; } .local-upload-jobs .danger-button { grid-column: 1 / -1; } }
 
