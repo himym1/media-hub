@@ -515,6 +515,12 @@ export function LibraryPlayer({
   }, [chromeVisible, itemId, nativeActive, nativeFullscreen])
 
   useEffect(() => {
+    if (nativeFullscreen) {
+      setChromeVisible(false)
+    }
+  }, [nativeFullscreen])
+
+  useEffect(() => {
     if (error || silentAudio || nativeActive) return
     const video = videoRef.current
     if (!video) return

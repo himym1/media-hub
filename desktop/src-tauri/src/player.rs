@@ -165,6 +165,9 @@ fn restore_host_chrome(app: &AppHandle, state: &PlayerState) {
     let _ = host.set_cursor_visible(true);
     let _ = host.set_fullscreen(false);
     restore_host_frame(&host, state);
+    if !host_embed_supported() {
+        toggle_mpv_fullscreen(state, false);
+    }
 }
 
 fn teardown_player_window(app: &AppHandle, state: &PlayerState) {
@@ -182,8 +185,16 @@ fn host_embed_supported() -> bool {
     cfg!(windows)
 }
 
-pub(crate) fn should_apply_windowed_layout(_fullscreen: bool) -> bool {
-    true
+pub(crate) fn should_apply_windowed_layout(fullscreen: bool) -> bool {
+    host_embed_supported() || !fullscreen
+}
+
+pub(crate) fn windowed_fullscreen_command(enable: bool) -> Vec<serde_json::Value> {
+    vec![
+        serde_json::json!("set_property"),
+        serde_json::json!("fullscreen"),
+        serde_json::json!(enable),
+    ]
 }
 
 fn save_host_frame(host: &WebviewWindow) -> Option<SavedHostFrame> {
@@ -198,21 +209,37 @@ fn save_host_frame(host: &WebviewWindow) -> Option<SavedHostFrame> {
     })
 }
 
-fn cover_current_monitor(host: &WebviewWindow) -> Result<(), String> {
-    let _ = host.set_max_size(None::<PhysicalSize<u32>>);
-    let _ = host.set_fullscreen(false);
-    host.set_decorations(false)
-        .map_err(|_| "无法进入全屏。".to_string())?;
-    if let Some(monitor) = host.current_monitor().ok().flatten() {
-        let position = monitor.position();
-        let size = monitor.size();
-        host.set_position(PhysicalPosition::new(position.x, position.y))
-            .map_err(|_| "无法进入全屏。".to_string())?;
-        host.set_size(PhysicalSize::new(size.width, size.height))
-            .map_err(|_| "无法进入全屏。".to_string())?;
-        return Ok(());
+fn enter_host_fullscreen(host: &WebviewWindow, state: &PlayerState) -> Result<(), String> {
+    if let Some(frame) = save_host_frame(host) {
+        if let Ok(mut saved) = state.saved_frame.lock() {
+            *saved = Some(frame);
+        }
     }
-    host.maximize().map_err(|_| "无法进入全屏。".to_string())
+    host.set_fullscreen(true)
+        .map_err(|_| "无法进入全屏。".to_string())?;
+    state.windowed_fullscreen.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+fn toggle_mpv_fullscreen(state: &PlayerState, enable: bool) {
+    state.windowed_fullscreen.store(enable, Ordering::SeqCst);
+    let geometry = state
+        .last_geometry
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone());
+    std::thread::spawn(move || {
+        let _ = ipc_command(&windowed_fullscreen_command(enable));
+        if !enable {
+            if let Some(geometry) = geometry {
+                let _ = ipc_command(&[
+                    serde_json::json!("set_property"),
+                    serde_json::json!("geometry"),
+                    serde_json::json!(geometry),
+                ]);
+            }
+        }
+    });
 }
 
 fn restore_host_frame(host: &WebviewWindow, state: &PlayerState) {
@@ -305,6 +332,9 @@ fn input_conf_path() -> PathBuf {
 pub(crate) fn input_conf_contents() -> &'static str {
     concat!(
         "MBTN_LEFT cycle pause\n",
+        "MBTN_LEFT_DBL cycle fullscreen\n",
+        "ESC cycle fullscreen\n",
+        "f cycle fullscreen\n",
         "WHEEL_UP add video-zoom 0.1\n",
         "WHEEL_DOWN add video-zoom -0.1\n",
         "WHEEL_LEFT seek -10\n",
@@ -737,6 +767,9 @@ pub fn layout_native(
     state: tauri::State<PlayerState>,
     bounds: EmbedBounds,
 ) -> Result<(), String> {
+    if !should_apply_windowed_layout(state.windowed_fullscreen.load(Ordering::SeqCst)) {
+        return Ok(());
+    }
     if host_embed_supported() {
         let Ok(surface) = surface_window(&app) else {
             return Ok(());
@@ -792,21 +825,17 @@ pub async fn native_control(action: String, value: Option<f64>, mode: Option<Str
 
 #[tauri::command]
 pub fn toggle_native_window(app: AppHandle, state: tauri::State<PlayerState>) -> Result<(), String> {
-    let host = host_window(&app)?;
-    if state.windowed_fullscreen.load(Ordering::SeqCst) {
-        restore_host_frame(&host, &state);
+    let next = !state.windowed_fullscreen.load(Ordering::SeqCst);
+    if host_embed_supported() {
+        let host = host_window(&app)?;
+        if next {
+            enter_host_fullscreen(&host, &state)?;
+        } else {
+            restore_host_frame(&host, &state);
+        }
         return Ok(());
     }
-    if let Some(frame) = save_host_frame(&host) {
-        if let Ok(mut saved) = state.saved_frame.lock() {
-            *saved = Some(frame);
-        }
-    }
-    if let Err(error) = cover_current_monitor(&host) {
-        restore_host_frame(&host, &state);
-        return Err(error);
-    }
-    state.windowed_fullscreen.store(true, Ordering::SeqCst);
+    toggle_mpv_fullscreen(&state, next);
     Ok(())
 }
 
@@ -862,11 +891,16 @@ pub fn close_player_window(app: AppHandle, state: tauri::State<PlayerState>) -> 
 
 #[tauri::command]
 pub async fn native_status(state: tauri::State<'_, PlayerState>) -> Result<NativeStatus, String> {
-    let fullscreen = state.windowed_fullscreen.load(Ordering::SeqCst);
     let mut status = tauri::async_runtime::spawn_blocking(read_native_status)
         .await
         .unwrap_or_else(|_| idle_native_status());
-    status.fullscreen = fullscreen;
+    if host_embed_supported() {
+        status.fullscreen = state.windowed_fullscreen.load(Ordering::SeqCst);
+    } else {
+        state
+            .windowed_fullscreen
+            .store(status.fullscreen, Ordering::SeqCst);
+    }
     Ok(status)
 }
 
@@ -898,7 +932,7 @@ fn read_native_status() -> NativeStatus {
         cursor_hover: pos.hover,
         mouse_x: pos.x,
         mouse_y: pos.y,
-        fullscreen: false,
+        fullscreen: ipc_bool("fullscreen"),
         subtitles: ipc_command(&[
             serde_json::json!("get_property"),
             serde_json::json!("sub-visibility"),
@@ -932,15 +966,29 @@ mod tests {
     }
 
     #[test]
-    fn windowed_fullscreen_still_lays_out_the_hole() {
+    fn windowed_layout_stays_in_the_hole_unless_mpv_owns_the_screen() {
         assert!(should_apply_windowed_layout(false));
-        assert!(should_apply_windowed_layout(true));
+        if host_embed_supported() {
+            assert!(should_apply_windowed_layout(true));
+        } else {
+            assert!(!should_apply_windowed_layout(true));
+        }
+        assert_eq!(
+            windowed_fullscreen_command(true),
+            vec![
+                serde_json::json!("set_property"),
+                serde_json::json!("fullscreen"),
+                serde_json::json!(true),
+            ]
+        );
     }
 
     #[test]
     fn input_conf_zooms_with_the_mouse_wheel() {
         let conf = input_conf_contents();
         assert!(conf.contains("MBTN_LEFT cycle pause"));
+        assert!(conf.contains("MBTN_LEFT_DBL cycle fullscreen"));
+        assert!(conf.contains("ESC cycle fullscreen"));
         assert!(conf.contains("WHEEL_UP add video-zoom 0.1"));
         assert!(conf.contains("WHEEL_DOWN add video-zoom -0.1"));
     }
