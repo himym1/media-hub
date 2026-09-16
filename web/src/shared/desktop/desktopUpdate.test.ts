@@ -88,10 +88,9 @@ describe('desktopUpdate', () => {
     vi.unstubAllGlobals()
   })
 
-  it('keeps Windows on the download path until the silent updater ships', () => {
-    expect(desktopNativeInstallReady('0.20.48', 'windows')).toBe(false)
-    expect(desktopNativeInstallReady('0.20.50', 'windows')).toBe(true)
-    expect(desktopNativeInstallReady('0.20.48', 'darwin')).toBe(true)
+  it('keeps desktop updates on the download path until in-app install works', () => {
+    expect(desktopNativeInstallReady('0.21.14', 'windows')).toBe(false)
+    expect(desktopNativeInstallReady('0.21.14', 'darwin')).toBe(false)
     expect(desktopNativeInstallReady(null, 'windows')).toBe(false)
   })
 

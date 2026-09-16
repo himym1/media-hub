@@ -123,10 +123,11 @@ export function desktopUpdateRequired(currentVersionCode: number, latest: Deskto
 }
 
 export function desktopNativeInstallReady(version: string | null, platform: DesktopPlatform | null) {
-  if (!version || !platform) return false
-  if (platform === 'darwin') return desktopVersionCode(version) != null
-  const code = desktopVersionCode(version)
-  return code != null && code >= 20_050
+  void version
+  void platform
+  // In-app replace is not reliable yet: Windows silent NSIS often never
+  // finishes, and macOS only opens the DMG. Keep one download action.
+  return false
 }
 
 export function formatDesktopUpdateSize(bytes: number) {
