@@ -434,19 +434,22 @@ func integrationRecords(configurations []config.Integration) []store.Integration
 }
 
 func searchSourcesFromSettings(value settings.Values, timeout time.Duration, fixtureMode bool, offline adapter.Offline, sourceProxyURL *url.URL, moviePilotClient *moviepilot.Client) []search.Source {
+	var sources []search.Source
 	if fixtureMode {
-		return search.FixtureSources()
-	}
-	sources := make([]search.Source, 0, len(value.Sources)+1)
-	for _, sourceConfiguration := range value.Sources {
-		if source := adapter.New(sourceConfiguration, timeout, offline, sourceProxyURL); source != nil {
-			sources = append(sources, source)
+		sources = search.FixtureSources()
+	} else {
+		sources = make([]search.Source, 0, len(value.Sources)+2)
+		for _, sourceConfiguration := range value.Sources {
+			if source := adapter.New(sourceConfiguration, timeout, offline, sourceProxyURL); source != nil {
+				sources = append(sources, source)
+			}
+		}
+		if moviePilotClient != nil && moviePilotClient.Configured() {
+			sources = append(sources, moviepilot.NewSource(moviePilotClient))
 		}
 	}
-	if moviePilotClient != nil && moviePilotClient.Configured() {
-		sources = append(sources, moviepilot.NewSource(moviePilotClient))
-	}
-	return sources
+	receiver, _ := offline.(adapter.ShareReceiver)
+	return append(sources, adapter.NewShareImport(receiver))
 }
 
 func parseOptionalHTTPURL(raw string) *url.URL {

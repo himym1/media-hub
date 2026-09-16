@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.21.24
+  version: 0.21.25
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -1509,6 +1509,43 @@ paths:
           $ref: '#/components/responses/ProblemResponse'
         '409':
           $ref: '#/components/responses/ProblemResponse'
+  /share-imports:
+    post:
+      operationId: createShareImport
+      summary: Import a pasted 115 share into the adult library workflow
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShareImportRequest'
+      responses:
+        '200':
+          description: Existing job for the same idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferJob'
+        '202':
+          description: Import job persisted and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferJob'
+        '400':
+          $ref: '#/components/responses/ProblemResponse'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '403':
+          $ref: '#/components/responses/ProblemResponse'
+        '409':
+          $ref: '#/components/responses/ProblemResponse'
   /transfers/{transferId}:
     get:
       operationId: getTransfer
@@ -1873,7 +1910,7 @@ components:
         embyLibraryId: { type: string, maxLength: 200 }
     WorkflowSettings:
       type: object
-      required: [qMediaSyncAccountId, movie, series]
+      required: [qMediaSyncAccountId, movie, series, adult]
       properties:
         syncMode: { type: string, enum: [qmediasync, builtin], default: builtin, description: Always treated as builtin; qmediasync is accepted from older clients }
         strmBaseUrl: { type: string, maxLength: 2048, description: URL written into .strm files during builtin sync }
@@ -1881,6 +1918,7 @@ components:
         qMediaSyncAccountId: { type: integer, minimum: 0, maximum: 4294967295 }
         movie: { $ref: '#/components/schemas/WorkflowTargetSettings' }
         series: { $ref: '#/components/schemas/WorkflowTargetSettings' }
+        adult: { $ref: '#/components/schemas/WorkflowTargetSettings' }
     CheckInSettings:
       type: object
       required: [enabled, hour, minute, sources]
@@ -2644,6 +2682,21 @@ components:
           type: string
           minLength: 1
           maxLength: 32768
+    CreateShareImportRequest:
+      type: object
+      required: [url]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          minLength: 8
+          maxLength: 2048
+        receiveCode:
+          type: string
+          maxLength: 8
+        title:
+          type: string
+          maxLength: 300
     SetTransferArchivedRequest:
       type: object
       required: [archived]
@@ -2676,10 +2729,10 @@ components:
         episodeEnd: { type: integer, minimum: 0, maximum: 10000 }
         mediaType:
           type: string
-          enum: [movie, series]
+          enum: [movie, series, adult]
         tmdbId:
           type: string
-          pattern: '^[1-9][0-9]*$'
+          pattern: '^([1-9][0-9]*)?$'
         source:
           type: string
         state:

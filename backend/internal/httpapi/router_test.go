@@ -74,6 +74,13 @@ func (stub *workflowStub) Enqueue(_ context.Context, _ int64, _ string, key stri
 	stub.idempotencyKey = key
 	return workflow.Job{ID: "job-1", Title: "Movie", MediaType: "movie", Source: "frame", State: "queued"}, true, nil
 }
+func (stub *workflowStub) EnqueueShareImport(_ context.Context, _ int64, title, shareCode, receiveCode, key string) (workflow.Job, bool, error) {
+	stub.idempotencyKey = key
+	if title == "" {
+		title = shareCode
+	}
+	return workflow.Job{ID: "job-share", Title: title, MediaType: "adult", Source: "share", State: "queued", TMDBID: ""}, true, nil
+}
 func (*workflowStub) Get(context.Context, int64, string) (workflow.JobDetail, error) {
 	return workflow.JobDetail{}, nil
 }
@@ -394,6 +401,31 @@ func authenticatedRequest(method, target string) *http.Request {
 	request := httptest.NewRequest(method, target, nil)
 	request.Header.Set("Authorization", "Bearer valid-session")
 	return request
+}
+
+func TestCreateShareImportAccepts115URL(t *testing.T) {
+	provider := &workflowStub{}
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodPost, "/api/v1/share-imports")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "share_one_1")
+	request.Body = io.NopCloser(strings.NewReader(`{"url":"https://115.com/s/shareABC123?password=ab12","title":"SSIS-001"}`))
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Workflow: provider}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusAccepted || provider.idempotencyKey != "share_one_1" {
+		t.Fatalf("status=%d key=%q body=%s", recorder.Code, provider.idempotencyKey, recorder.Body.String())
+	}
+}
+
+func TestCreateShareImportRejectsOtherCloud(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodPost, "/api/v1/share-imports")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "share_bad_1")
+	request.Body = io.NopCloser(strings.NewReader(`{"url":"https://pan.quark.cn/s/nope"}`))
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Workflow: &workflowStub{}}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", recorder.Code)
+	}
 }
 
 func TestCreateTransferRequiresCSRFForWebCookie(t *testing.T) {

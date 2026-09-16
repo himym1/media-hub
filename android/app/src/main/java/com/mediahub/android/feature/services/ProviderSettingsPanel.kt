@@ -117,6 +117,10 @@ internal fun ProviderSettingsPanel(
             WorkflowTargetEditor("剧集", draft.workflow.series) {
                 onDraftChange(draft.copy(workflow = draft.workflow.copy(series = it, syncMode = "builtin")))
             }
+            WorkflowTargetEditor("成人影视", draft.workflow.adult) {
+                onDraftChange(draft.copy(workflow = draft.workflow.copy(adult = it, syncMode = "builtin")))
+            }
+            MediaHubText("成人导入只进这一组目录。Emby 库 ID 可填 adult。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
         }
 
         SettingsSection("消息通知", "企业微信推送通知与消息卡片", Lucide.ServerCog) {

@@ -326,6 +326,10 @@ func TestWorkflowTargetBuiltinDoesNotRequireQMSAccount(t *testing.T) {
 	if target, ok := workflow.Target("movie"); !ok || target.EmbyLibraryID != "15075" {
 		t.Fatalf("builtin target ok=%v %#v", ok, target)
 	}
+	workflow.Adult = WorkflowTarget{DestinationID: "300", QMediaSyncTargetPath: "/media2/av"}
+	if target, ok := workflow.Target("adult"); !ok || target.EmbyLibraryID != "adult" {
+		t.Fatalf("adult target ok=%v %#v", ok, target)
+	}
 	workflow.StrmBaseURL = ""
 	if _, ok := workflow.Target("movie"); ok {
 		t.Fatal("builtin target must require STRM base URL")

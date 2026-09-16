@@ -230,7 +230,7 @@ func pansouShareCandidate(queryText, itemTitle, content, workTitle, note, cloudT
 	if strings.ToLower(strings.TrimSpace(cloudType)) != "115" {
 		return search.Candidate{}, false
 	}
-	shareCode, receiveCode, err := parsePansou115ShareURL(rawURL, password)
+	shareCode, receiveCode, err := Parse115ShareURL(rawURL, password)
 	if err != nil {
 		return search.Candidate{}, false
 	}
@@ -268,46 +268,7 @@ func pansouShareCandidate(queryText, itemTitle, content, workTitle, note, cloudT
 }
 
 func parsePansou115ShareURL(raw, fallbackCode string) (string, string, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", "", errors.New("empty share URL")
-	}
-	if !strings.Contains(raw, "://") {
-		raw = "https://" + strings.TrimPrefix(raw, "//")
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil || parsed.User != nil {
-		return "", "", errors.New("invalid share URL")
-	}
-	scheme := strings.ToLower(parsed.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return "", "", errors.New("invalid share scheme")
-	}
-	host := strings.ToLower(parsed.Hostname())
-	switch host {
-	case "115.com", "www.115.com", "115cdn.com", "www.115cdn.com", "anxia.com", "www.anxia.com":
-	default:
-		return "", "", errors.New("unsupported share host")
-	}
-	segments := strings.Split(strings.Trim(parsed.EscapedPath(), "/"), "/")
-	if len(segments) < 2 || segments[0] != "s" {
-		return "", "", errors.New("invalid share path")
-	}
-	shareCode, err := url.PathUnescape(segments[1])
-	if err != nil || !frameHDRShareCode.MatchString(shareCode) {
-		return "", "", errors.New("invalid share code")
-	}
-	receiveCode := strings.TrimSpace(parsed.Query().Get("password"))
-	if receiveCode == "" {
-		receiveCode = strings.TrimSpace(parsed.Query().Get("pwd"))
-	}
-	if receiveCode == "" {
-		receiveCode = strings.TrimSpace(fallbackCode)
-	}
-	if !frameHDRAccessCode.MatchString(receiveCode) {
-		return "", "", errors.New("invalid receive code")
-	}
-	return shareCode, receiveCode, nil
+	return Parse115ShareURL(raw, fallbackCode)
 }
 
 func firstPositiveYear(values ...string) int {

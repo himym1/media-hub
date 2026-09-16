@@ -215,6 +215,9 @@ func (s *Service) processTransfer(ctx context.Context, job store.TransferJob) er
 			UserID: job.UserID, Title: job.Title, MediaType: payload.MediaType, Reference: payload.Reference, DestinationID: target.DestinationID,
 			IdempotencyKey: job.ID + "_transfer",
 		})
+		if err == nil && job.SourceID == "share" && strings.TrimSpace(result.Path) != "" && !result.IsFile {
+			job.Title = path.Base(strings.TrimRight(result.Path, "/"))
+		}
 	} else if canInspect {
 		result = search.TransferResult{
 			OperationID: provider.OperationID, FileID: provider.FileID, Path: provider.Path, IsFile: provider.IsFile, Status: "pending",
@@ -368,7 +371,7 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 	if sourcePath == "" {
 		return s.fail(ctx, &job, "transferred", "provider_state_invalid", "资源转存结果无法解密", false, "")
 	}
-	if s.validateTransfer != nil && !isFile {
+	if s.validateTransfer != nil && !isFile && job.MediaType != "adult" {
 		if err := s.validateTransfer(ctx, job.MediaType, provider.FileID); err != nil {
 			return s.fail(ctx, &job, "transferred", "source_identity_mismatch", err.Error(), false, "transferred")
 		}
@@ -379,7 +382,11 @@ func (s *Service) submitSync(ctx context.Context, job store.TransferJob) error {
 			return waitErr
 		}
 	}
-	desiredName := libraryEntryName(job.Title, job.Year, isFile, sourcePath)
+	year := job.Year
+	if job.MediaType == "adult" {
+		year = 0
+	}
+	desiredName := libraryEntryName(job.Title, year, isFile, sourcePath)
 	if s.renameSource != nil && shouldRenameTransferredFolder(provider.FileID, target.DestinationID, sourcePath, desiredName) {
 		if err := s.renameSource(ctx, provider.FileID, desiredName); err != nil {
 			if saveErr := s.save(ctx, &job, "transferred", "标准化目录名失败，继续同步"); saveErr != nil {
@@ -512,7 +519,16 @@ func (s *Service) pollEmbyIndex(ctx context.Context, job store.TransferJob) erro
 		return s.save(ctx, &job, "indexing_emby", "")
 	}
 	job.EmbyItemID = item.ID
-	if emby.NeedsTMDBIdentify(item, job.TMDBID) {
+	if job.MediaType == "adult" {
+		if err := s.emby.RefreshItemMetadata(ctx, item.ID); err != nil {
+			slog.Default().Warn("emby adult metadata refresh failed", "job_id", job.ID, "error", err)
+			if saveErr := s.save(ctx, &job, "indexing_emby", "Emby 成人刮削未完成，继续入库"); saveErr != nil {
+				return saveErr
+			}
+		} else if saveErr := s.save(ctx, &job, "indexing_emby", "已触发 Emby 成人刮削"); saveErr != nil {
+			return saveErr
+		}
+	} else if emby.NeedsTMDBIdentify(item, job.TMDBID) {
 		if err := s.emby.ApplyTMDBMetadata(ctx, item.ID, job.MediaType, job.Title, job.Year, job.TMDBID, true); err != nil {
 			slog.Default().Warn("emby metadata apply failed", "job_id", job.ID, "error", err)
 			if saveErr := s.save(ctx, &job, "indexing_emby", "Emby 元数据识别失败，继续完成入库"); saveErr != nil {
@@ -529,6 +545,10 @@ func (s *Service) pollEmbyIndex(ctx context.Context, job store.TransferJob) erro
 }
 
 func (s *Service) attachLibrarySubtitles(ctx context.Context, job *store.TransferJob) {
+	if job.MediaType == "adult" {
+		_ = s.save(ctx, job, "indexing_emby", "成人条目跳过自动中文字幕")
+		return
+	}
 	attacher := s.subtitleAttacher()
 	if attacher == nil {
 		_ = s.save(ctx, job, "indexing_emby", "自动挂载中文字幕未接入，已跳过")

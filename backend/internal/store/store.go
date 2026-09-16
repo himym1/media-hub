@@ -145,6 +145,13 @@ func (s *Store) applyMigration(ctx context.Context, name string) error {
 		return fmt.Errorf("read migration %q: %w", name, err)
 	}
 
+	if version == 17 {
+		if _, err := s.database.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+			return fmt.Errorf("disable foreign keys for migration %q: %w", name, err)
+		}
+		defer func() { _, _ = s.database.ExecContext(ctx, "PRAGMA foreign_keys = ON") }()
+	}
+
 	transaction, err := s.database.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin migration %q: %w", name, err)

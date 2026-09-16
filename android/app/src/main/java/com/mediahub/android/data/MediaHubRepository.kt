@@ -155,6 +155,10 @@ class MediaHubRepository(
         api.createTransfer(token, transferToken, UUID.randomUUID().toString())
     }
 
+    suspend fun createShareImport(url: String, receiveCode: String, title: String): TransferJob = authenticated { token ->
+        api.createShareImport(token, url, receiveCode, title, UUID.randomUUID().toString())
+    }
+
     suspend fun subscriptions(): List<MediaSubscription> = authenticated { token -> api.subscriptions(token) }
 
     suspend fun exportSubscriptions(): String = authenticated(api::exportSubscriptions)

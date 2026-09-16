@@ -62,6 +62,7 @@ function createDraft(settings: ProviderSettings): Draft {
       syncMode: 'builtin',
       strmBaseUrl: settings.workflow.strmBaseUrl || '',
       strmRootMount: settings.workflow.strmRootMount || '',
+      adult: settings.workflow.adult ?? { destinationId: '', qMediaSyncTargetPath: '', embyLibraryId: 'adult' },
     },
     checkIn: settings.checkIn ?? defaultCheckIn,
     sources: settings.sources.map((source) => ({
@@ -152,16 +153,16 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
       <section className="settings-group" aria-labelledby="workflow-settings-heading">
         <div className="settings-group-header">
           <h3 id="workflow-settings-heading"><Waypoints size={17} />工作流目录映射</h3>
-          <p>指定转存落盘的 115 目录 ID、STRM 写入路径与 Emby 库 ID。内置模式把 <code>/115/url/</code> 写到 Media Hub 同源地址，不经 Media Hub 转发视频字节。</p>
+          <p>指定转存落盘的 115 目录 ID、STRM 写入路径与 Emby 库 ID。粘贴导入只进成人组。内置模式把 <code>/115/url/</code> 写到 Media Hub 同源地址，不经 Media Hub 转发视频字节。</p>
         </div>
         <fieldset className="workflow-settings">
           <div>
             <label><span>STRM 基址</span><input {...machineFieldProps} name="strm-base-url" onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, strmBaseUrl: event.target.value } }))} placeholder="https://media.himym.us.ci" type="url" value={draft.workflow.strmBaseUrl} /></label>
             <label><span>STRM 根挂载</span><input {...machineFieldProps} name="strm-root-mount" onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, strmRootMount: event.target.value } }))} placeholder="/media" value={draft.workflow.strmRootMount} /></label>
           </div>
-          {(['movie', 'series'] as const).map((mediaType) => {
-            const target = draft.workflow[mediaType]
-            const label = mediaType === 'movie' ? '电影' : '剧集'
+          {(['movie', 'series', 'adult'] as const).map((mediaType) => {
+            const target = draft.workflow[mediaType] ?? { destinationId: '', qMediaSyncTargetPath: '', embyLibraryId: mediaType === 'adult' ? 'adult' : '' }
+            const label = mediaType === 'movie' ? '电影' : mediaType === 'series' ? '剧集' : '成人影视'
             return <div className="workflow-target" key={mediaType}><strong>{label}</strong>
               <label><span>115 目标目录 ID</span><input {...machineFieldProps} name={`${mediaType}-destination-id`} onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, [mediaType]: { ...target, destinationId: event.target.value } } }))} value={target.destinationId} /></label>
               <label><span>STRM 目标路径</span><input {...machineFieldProps} name={`${mediaType}-strm-target-path`} onChange={(event) => setDraft((current) => ({ ...current, workflow: { ...current.workflow, [mediaType]: { ...target, qMediaSyncTargetPath: event.target.value } } }))} value={target.qMediaSyncTargetPath} /></label>

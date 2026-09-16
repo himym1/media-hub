@@ -42,6 +42,7 @@ type Workflow struct {
 	QMediaSyncAccountID uint           `json:"qMediaSyncAccountId"`
 	Movie               WorkflowTarget `json:"movie"`
 	Series              WorkflowTarget `json:"series"`
+	Adult               WorkflowTarget `json:"adult"`
 }
 
 func workflowFromConfig(value config.Workflow) Workflow {
@@ -52,6 +53,7 @@ func workflowFromConfig(value config.Workflow) Workflow {
 		QMediaSyncAccountID: value.QMediaSyncAccountID,
 		Movie:               WorkflowTarget{DestinationID: value.Movie.DestinationID, QMediaSyncTargetPath: value.Movie.QMediaSyncTargetPath, EmbyLibraryID: value.Movie.EmbyLibraryID},
 		Series:              WorkflowTarget{DestinationID: value.Series.DestinationID, QMediaSyncTargetPath: value.Series.QMediaSyncTargetPath, EmbyLibraryID: value.Series.EmbyLibraryID},
+		Adult:               WorkflowTarget{DestinationID: value.Adult.DestinationID, QMediaSyncTargetPath: value.Adult.QMediaSyncTargetPath, EmbyLibraryID: value.Adult.EmbyLibraryID},
 	}
 }
 
@@ -63,6 +65,7 @@ func (value Workflow) Config() config.Workflow {
 		QMediaSyncAccountID: value.QMediaSyncAccountID,
 		Movie:               config.WorkflowTarget{DestinationID: value.Movie.DestinationID, QMediaSyncTargetPath: value.Movie.QMediaSyncTargetPath, EmbyLibraryID: value.Movie.EmbyLibraryID},
 		Series:              config.WorkflowTarget{DestinationID: value.Series.DestinationID, QMediaSyncTargetPath: value.Series.QMediaSyncTargetPath, EmbyLibraryID: value.Series.EmbyLibraryID},
+		Adult:               config.WorkflowTarget{DestinationID: value.Adult.DestinationID, QMediaSyncTargetPath: value.Adult.QMediaSyncTargetPath, EmbyLibraryID: value.Adult.EmbyLibraryID},
 	}
 }
 

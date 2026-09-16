@@ -118,6 +118,60 @@ func TestSelectionTokenAllowsShareWithoutTMDB(t *testing.T) {
 	}
 }
 
+type shareImportSourceStub struct{}
+
+func (shareImportSourceStub) ID() string    { return "share" }
+func (shareImportSourceStub) Label() string { return "115分享" }
+func (shareImportSourceStub) Search(context.Context, string) ([]search.Candidate, error) {
+	return nil, nil
+}
+func (shareImportSourceStub) StartTransfer(context.Context, search.TransferRequest) (search.TransferResult, error) {
+	return search.TransferResult{Status: "completed", FileID: "file-1", Path: "SSIS-001", IsFile: false}, nil
+}
+func (shareImportSourceStub) TransferStatus(context.Context, int64, string) (search.TransferResult, error) {
+	return search.TransferResult{}, nil
+}
+
+func TestEnqueueShareImportCreatesAdultJob(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dataStore.Close() })
+	if _, err := dataStore.EnsureAdmin(ctx, "hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	searchService := search.NewService(shareImportSourceStub{})
+	service := NewService(
+		dataStore,
+		searchService,
+		codec,
+		emby.NewClient("http://emby.local", "emby-key", time.Second),
+		nil,
+		config.Workflow{
+			StrmBaseURL:   "https://media.example",
+			StrmRootMount: "/media",
+			Adult:         config.WorkflowTarget{DestinationID: "300", QMediaSyncTargetPath: "/strm/adult", EmbyLibraryID: "adult"},
+		},
+		nil,
+		nil,
+		nil,
+	)
+	job, created, err := service.EnqueueShareImport(ctx, admin.ID, "SSIS-001", "shareABC123", "ab12", "share_job_1")
+	if err != nil || !created || job.MediaType != "adult" || job.Source != "share" || job.Title != "SSIS-001" || job.TMDBID != "" {
+		t.Fatalf("job=%#v created=%v err=%v", job, created, err)
+	}
+}
+
 type downloadSourceStub struct{}
 
 func (downloadSourceStub) ID() string    { return "moviepilot" }

@@ -122,6 +122,7 @@ type Workflow struct {
 	QMediaSyncAccountID uint
 	Movie               WorkflowTarget
 	Series              WorkflowTarget
+	Adult               WorkflowTarget
 }
 
 func (w Workflow) NormalizedSyncMode() string {
@@ -145,6 +146,11 @@ func (w Workflow) Target(mediaType string) (WorkflowTarget, bool) {
 		target = w.Movie
 	case "series":
 		target = w.Series
+	case "adult":
+		target = w.Adult
+		if strings.TrimSpace(target.EmbyLibraryID) == "" {
+			target.EmbyLibraryID = "adult"
+		}
 	default:
 		return WorkflowTarget{}, false
 	}
@@ -397,6 +403,11 @@ func load(lookup func(string) (string, bool)) (Config, error) {
 				DestinationID:        stringValue(lookup, "MEDIA_HUB_115_SERIES_DESTINATION_ID", ""),
 				QMediaSyncTargetPath: stringValue(lookup, "MEDIA_HUB_QMS_SERIES_TARGET_PATH", ""),
 				EmbyLibraryID:        stringValue(lookup, "MEDIA_HUB_EMBY_SERIES_LIBRARY_ID", ""),
+			},
+			Adult: WorkflowTarget{
+				DestinationID:        stringValue(lookup, "MEDIA_HUB_115_ADULT_DESTINATION_ID", ""),
+				QMediaSyncTargetPath: stringValue(lookup, "MEDIA_HUB_QMS_ADULT_TARGET_PATH", ""),
+				EmbyLibraryID:        stringValue(lookup, "MEDIA_HUB_EMBY_ADULT_LIBRARY_ID", "adult"),
 			},
 		},
 		Sources:           sources,

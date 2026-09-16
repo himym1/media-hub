@@ -203,6 +203,9 @@ func merge(current Values, input Update) Values {
 	if nextWorkflow.StrmRootMount == "" {
 		nextWorkflow.StrmRootMount = current.Workflow.StrmRootMount
 	}
+	if nextWorkflow.Adult.DestinationID == "" && nextWorkflow.Adult.QMediaSyncTargetPath == "" && nextWorkflow.Adult.EmbyLibraryID == "" {
+		nextWorkflow.Adult = current.Workflow.Adult
+	}
 	current.Workflow = nextWorkflow
 	if input.CheckIn != nil {
 		normalized := NormalizeCheckIn(input.CheckIn)
@@ -355,7 +358,7 @@ func validate(value Values) error {
 	} else if mode := value.WeCom.DeliveryMode(); mode != config.WeComSendModeApp && mode != config.WeComSendModeAppChat {
 		return fmt.Errorf("%w: WeCom send mode must be app or appchat", ErrInvalid)
 	}
-	for _, target := range []config.WorkflowTarget{value.Workflow.Movie, value.Workflow.Series} {
+	for _, target := range []config.WorkflowTarget{value.Workflow.Movie, value.Workflow.Series, value.Workflow.Adult} {
 		if len(target.DestinationID) > 200 || len(target.QMediaSyncTargetPath) > 2048 || len(target.EmbyLibraryID) > 200 {
 			return fmt.Errorf("%w: workflow target is too long", ErrInvalid)
 		}

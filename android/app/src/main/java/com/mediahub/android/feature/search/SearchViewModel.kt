@@ -50,6 +50,8 @@ data class SearchUiState(
     val sourceMessage: String? = null,
     val transferringCandidateId: String? = null,
     val transferMessage: String? = null,
+    val shareImporting: Boolean = false,
+    val shareImportMessage: String? = null,
 ) {
     val selectedCandidate: SearchCandidate?
         get() = results.firstOrNull { it.id == selectedCandidateId }
@@ -456,6 +458,25 @@ class SearchViewModel(
             return
         }
         viewModelScope.launch { _events.emit(SearchEvent.SubscriptionRequested(candidate)) }
+    }
+
+    fun importShare(url: String, receiveCode: String, title: String) {
+        if (_uiState.value.shareImporting || !canSubmitShareImport(url, receiveCode)) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(shareImporting = true, shareImportMessage = null)
+            try {
+                repository.createShareImport(url.trim(), receiveCode.trim(), title.trim())
+                _uiState.value = _uiState.value.copy(shareImporting = false, shareImportMessage = "已加入转存队列")
+                _events.emit(SearchEvent.TransferCreated)
+            } catch (error: ApiException) {
+                _uiState.value = _uiState.value.copy(
+                    shareImporting = false,
+                    shareImportMessage = error.message ?: "导入失败",
+                )
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(shareImporting = false, shareImportMessage = "无法导入分享")
+            }
+        }
     }
 
     fun createTransfer(candidateId: String) {

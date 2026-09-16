@@ -88,6 +88,15 @@ h1 em { color: var(--accent); font-style: normal; }
 .search-form button { min-width: 77px; height: 42px; color: var(--accent-ink); background: var(--accent); }
 .search-form button:hover, .primary-action:hover { background: var(--accent-strong); transform: translateY(-1px); }
 .search-meta { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--text-muted); font-size: 12px; }
+.share-import { display: grid; gap: 10px; margin-top: 16px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.share-import-copy h2 { color: var(--text); font-size: 15px; font-weight: 650; }
+.share-import-copy p { margin-top: 4px; color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+.share-import-form { display: grid; grid-template-columns: minmax(0, 1fr) 7.5rem minmax(8rem, 12rem) auto; gap: 8px; align-items: center; }
+.share-import-form label { display: block; min-width: 0; }
+.share-import-form input { width: 100%; min-height: 44px; padding: 0 12px; color: var(--text); background: #191c1d; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+.share-import-form button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 14px; color: var(--accent-ink); background: var(--accent); border: 0; border-radius: 8px; font-weight: 650; white-space: nowrap; }
+.share-import-form button:disabled { opacity: .45; cursor: not-allowed; }
+.share-import-success { margin: 0; color: var(--accent); font-size: 12px; }
 .fixture-tag { margin-left: auto; padding: 4px 7px; color: #b7cb68; border: 1px solid #56663a; border-radius: 4px; font-size: 12px; letter-spacing: 0; }
 .status-strip { display: flex; align-items: center; gap: 28px; min-height: 74px; border-bottom: 1px solid #2a2d30; }
 .status-intro { display: flex; align-items: center; gap: 11px; min-width: 170px; }
@@ -2085,6 +2094,7 @@ h1 em { color: var(--accent); font-style: normal; }
   .search-form input { font-size: 14px; }
   .search-form kbd { display: none; }
   .search-form button { min-width: 61px; height: 38px; font-size: 12px; }
+  .share-import-form { grid-template-columns: 1fr; }
   .status-strip { display: block; padding: 17px 0; }
   .status-intro { margin-bottom: 14px; }
   .status-items { gap: 14px; flex-wrap: wrap; }

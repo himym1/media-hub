@@ -518,6 +518,22 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         return payload.getJSONArray("items").objects(::parseDiscoveryItem)
     }
 
+    suspend fun createShareImport(token: String, url: String, receiveCode: String, title: String, idempotencyKey: String): TransferJob {
+        val body = JSONObject()
+            .put("url", url)
+            .put("receiveCode", receiveCode)
+            .put("title", title)
+            .toString()
+        val response = request(
+            path = "/api/v1/share-imports",
+            method = "POST",
+            body = body,
+            token = token,
+            headers = mapOf("Idempotency-Key" to idempotencyKey),
+        )
+        return parseTransferJob(JSONObject(response))
+    }
+
     suspend fun createTransfer(token: String, transferToken: String, idempotencyKey: String): TransferJob {
         val body = JSONObject().put("transferToken", transferToken).toString()
         val response = request(
@@ -928,6 +944,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         qMediaSyncAccountId = item.getInt("qMediaSyncAccountId"),
         movie = parseWorkflowTarget(item.getJSONObject("movie")),
         series = parseWorkflowTarget(item.getJSONObject("series")),
+        adult = item.optJSONObject("adult")?.let(::parseWorkflowTarget) ?: WorkflowTargetSettings("", "", "adult"),
     )
 
     private fun parseWorkflowTarget(item: JSONObject) = WorkflowTargetSettings(
@@ -961,7 +978,8 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
             .put("strmRootMount", input.workflow.strmRootMount)
             .put("qMediaSyncAccountId", input.workflow.qMediaSyncAccountId)
             .put("movie", workflowTargetBody(input.workflow.movie))
-            .put("series", workflowTargetBody(input.workflow.series)))
+            .put("series", workflowTargetBody(input.workflow.series))
+            .put("adult", workflowTargetBody(input.workflow.adult)))
         .put("checkIn", JSONObject()
             .put("enabled", input.checkIn.enabled)
             .put("hour", input.checkIn.hour)

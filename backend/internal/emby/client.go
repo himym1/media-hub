@@ -798,6 +798,23 @@ func (c *Client) RefreshItem(ctx context.Context, itemID string) error {
 	return c.refreshItem(ctx, itemID)
 }
 
+func (c *Client) RefreshItemMetadata(ctx context.Context, itemID string) error {
+	configuration := c.configuration()
+	if err := validateAuthenticated(configuration); err != nil {
+		return err
+	}
+	itemID = strings.TrimSpace(itemID)
+	if itemID == "" {
+		return ErrUpstreamResponse
+	}
+	query := url.Values{
+		"Recursive":            {"true"},
+		"MetadataRefreshMode":  {"FullRefresh"},
+		"ImageRefreshMode":     {"FullRefresh"},
+	}
+	return c.postJSON(ctx, configuration, path.Join("Items", itemID, "Refresh"), query, nil)
+}
+
 func (c *Client) refreshItem(ctx context.Context, itemID string) error {
 	configuration := c.configuration()
 	if err := validateAuthenticated(configuration); err != nil {

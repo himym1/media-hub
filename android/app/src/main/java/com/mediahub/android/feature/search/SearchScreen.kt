@@ -77,6 +77,7 @@ import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubTabRow
 import com.mediahub.android.core.designsystem.MediaHubText
 import com.mediahub.android.core.designsystem.MediaHubTextButton
+import com.mediahub.android.core.designsystem.MediaHubTextField
 import com.mediahub.android.core.image.RemotePoster
 import com.mediahub.android.core.network.DiscoveryGenre
 import com.mediahub.android.core.network.DiscoveryItem
@@ -123,6 +124,7 @@ internal fun SearchRoute(
         onOpenServices = onOpenServices,
         onTransfer = viewModel::createTransfer,
         onSubscribe = viewModel::requestSubscription,
+        onImportShare = viewModel::importShare,
     )
 }
 
@@ -142,6 +144,7 @@ internal fun SearchScreen(
     onOpenServices: () -> Unit = {},
     onTransfer: (String) -> Unit = {},
     onSubscribe: (String) -> Unit = {},
+    onImportShare: (String, String, String) -> Unit = { _, _, _ -> },
 ) {
     var showHealthDialog by remember { mutableStateOf(false) }
 
@@ -175,6 +178,7 @@ internal fun SearchScreen(
             onOpenHealthDetail = { showHealthDialog = true },
             onTransfer = onTransfer,
             onSubscribe = onSubscribe,
+            onImportShare = onImportShare,
         )
         return
     }
@@ -330,6 +334,14 @@ internal fun SearchScreen(
                         onRefresh = onRefreshOverview,
                         onOpenDetail = { showHealthDialog = true },
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                    )
+                }
+                item(key = "share-import") {
+                    ShareImportCard(
+                        importing = uiState.shareImporting,
+                        message = uiState.shareImportMessage,
+                        onImport = onImportShare,
+                        modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
 
@@ -986,6 +998,7 @@ private fun SearchTwoPane(
     onOpenHealthDetail: () -> Unit = {},
     onTransfer: (String) -> Unit = {},
     onSubscribe: (String) -> Unit = {},
+    onImportShare: (String, String, String) -> Unit = { _, _, _ -> },
 ) {
     val selectedCandidate = uiState.selectedCandidate
     val showingResults = uiState.submittedQuery.isNotBlank() || uiState.searching || uiState.results.isNotEmpty()
@@ -1084,6 +1097,7 @@ private fun SearchTwoPane(
                         onShuffleRecommendations = onShuffleRecommendations,
                         onGenreSelected = onGenreSelected,
                         onCategorySelected = onCategorySelected,
+                        onImportShare = onImportShare,
                     )
                 }
             }
@@ -1111,6 +1125,7 @@ private fun SearchIdleOverview(
     onShuffleRecommendations: () -> Unit,
     onGenreSelected: (DiscoveryGenre?) -> Unit = {},
     onCategorySelected: (String) -> Unit = {},
+    onImportShare: (String, String, String) -> Unit = { _, _, _ -> },
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1123,6 +1138,13 @@ private fun SearchIdleOverview(
                 refreshing = uiState.refreshing,
                 onRefresh = onRefresh,
                 onOpenDetail = onOpenDetail,
+            )
+        }
+        item {
+            ShareImportCard(
+                importing = uiState.shareImporting,
+                message = uiState.shareImportMessage,
+                onImport = onImportShare,
             )
         }
         if (uiState.heroItems.isNotEmpty()) {
@@ -1508,5 +1530,39 @@ private fun transferBadge(state: String): Pair<String, BadgeVariant> = when (sta
     "transferred" -> "已转存" to BadgeVariant.Success
     "identity_required" -> "身份待确认" to BadgeVariant.Warning
     else -> state to BadgeVariant.Neutral
+}
+
+@Composable
+private fun ShareImportCard(
+    importing: Boolean,
+    message: String?,
+    onImport: (String, String, String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var url by remember { mutableStateOf("") }
+    var receiveCode by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf("") }
+    MediaHubCard(modifier = modifier, insideMargin = PaddingValues(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            MediaHubSmallTitle(text = "导入 115 分享")
+            MediaHubText(
+                text = "只进成人影视库。有番号更容易刮封面。",
+                color = MediaHubColors.TextMuted,
+                fontSize = 12.sp,
+            )
+            MediaHubTextField(value = url, onValueChange = { url = it }, placeholder = "115 分享链接")
+            MediaHubTextField(value = receiveCode, onValueChange = { receiveCode = it.take(8) }, placeholder = "提取码，可选")
+            MediaHubTextField(value = title, onValueChange = { title = it }, placeholder = "番号或标题，可选")
+            MediaHubButton(
+                label = if (importing) "正在导入" else "导入成人库",
+                enabled = !importing && canSubmitShareImport(url, receiveCode),
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { onImport(url, receiveCode, title) },
+            )
+            if (!message.isNullOrBlank()) {
+                MediaHubText(text = message, color = MediaHubColors.TextMuted, fontSize = 12.sp)
+            }
+        }
+    }
 }
 

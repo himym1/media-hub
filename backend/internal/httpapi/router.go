@@ -135,6 +135,7 @@ type LocalUploadService interface {
 type TransferWorkflow interface {
 	SelectionToken(search.Candidate) string
 	Enqueue(context.Context, int64, string, string) (workflow.Job, bool, error)
+	EnqueueShareImport(context.Context, int64, string, string, string, string) (workflow.Job, bool, error)
 	Get(context.Context, int64, string) (workflow.JobDetail, error)
 	List(context.Context, int64, int, bool) ([]workflow.Job, error)
 	SetArchived(context.Context, int64, string, bool) (workflow.Job, error)
@@ -297,6 +298,7 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/subscriptions/{id}/runs", h.protected(h.listSubscriptionRuns))
 	mux.Handle("GET /api/v1/transfers", h.protected(h.listTransfers))
 	mux.Handle("POST /api/v1/transfers", h.protected(h.createTransfer))
+	mux.Handle("POST /api/v1/share-imports", h.protected(h.createShareImport))
 	mux.Handle("GET /api/v1/transfers/{id}", h.protected(h.getTransfer))
 	mux.Handle("POST /api/v1/transfers/{id}/retry", h.protected(h.retryTransfer))
 	mux.Handle("PATCH /api/v1/transfers/{id}/archived", h.protected(h.setTransferArchived))

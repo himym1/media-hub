@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -101,10 +102,10 @@ func (c *Codec) Decode(token string) (Payload, error) {
 	}
 	if payload.SourceID == "" || payload.CandidateID == "" || payload.Reference == "" ||
 		!validTMDBID(payload.TMDBID) ||
-		(payload.MediaType != "movie" && payload.MediaType != "series") ||
+		!validMediaType(payload.MediaType) ||
 		payload.Season < 0 || payload.Season > 100 ||
 		!validEpisodeRange(payload.EpisodeStart, payload.EpisodeEnd) ||
-		(payload.MediaType == "movie" && (payload.Season != 0 || payload.EpisodeStart != 0 || payload.EpisodeEnd != 0)) ||
+		((payload.MediaType == "movie" || payload.MediaType == "adult") && (payload.Season != 0 || payload.EpisodeStart != 0 || payload.EpisodeEnd != 0)) ||
 		(payload.MediaType == "series" && (payload.Season == 0 || payload.EpisodeStart == 0 || payload.EpisodeEnd == 0)) ||
 		!c.now().UTC().Before(time.Unix(payload.ExpiresAt, 0).UTC()) {
 		return Payload{}, ErrInvalidToken
@@ -158,7 +159,14 @@ func validProviderPayload(payload ProviderPayload) bool {
 	return payload.OperationID != ""
 }
 
+func validMediaType(value string) bool {
+	return value == "movie" || value == "series" || value == "adult"
+}
+
 func validTMDBID(value string) bool {
+	if strings.TrimSpace(value) == "" {
+		return true
+	}
 	id, err := strconv.ParseInt(value, 10, 64)
 	return err == nil && id > 0
 }

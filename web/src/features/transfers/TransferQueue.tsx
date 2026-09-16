@@ -17,6 +17,11 @@ import {
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
 
+function jobMediaTypeLabel(mediaType: TransferJob['mediaType']) {
+  if (mediaType === 'adult') return '成人'
+  return mediaType === 'series' ? '剧集' : '电影'
+}
+
 function jobStateLabel(state: TransferState, source?: string) {
   if (source === 'moviepilot' && (state === 'transferring' || state === 'queued')) {
     return state === 'queued' ? '排队中' : '正在提交下载'
@@ -256,7 +261,7 @@ export function TransferQueue({ query }: TransferQueueProps) {
                 ))}
               </div>
               {detail.data.errorMessage ? <div className="task-error" role="alert"><CircleAlert size={17} /><span>{detail.data.errorMessage}</span></div> : null}
-              <dl className="task-facts"><div><dt>类型</dt><dd>{detail.data.mediaType === 'movie' ? '电影' : '剧集'}</dd></div><div><dt>来源</dt><dd>{detail.data.source}</dd></div><div><dt>创建</dt><dd>{timeFormatter.format(new Date(detail.data.createdAt))}</dd></div></dl>
+              <dl className="task-facts"><div><dt>类型</dt><dd>{jobMediaTypeLabel(detail.data.mediaType)}</dd></div><div><dt>来源</dt><dd>{detail.data.source === 'share' ? '115分享' : detail.data.source}</dd></div><div><dt>创建</dt><dd>{timeFormatter.format(new Date(detail.data.createdAt))}</dd></div></dl>
               <div className="task-progress-heading"><strong>最近进度</strong><span>{detail.data.events.length} 条记录</span></div>
               {renderEvents(recentEvents)}
               {detail.data.events.length > recentEvents.length ? <details className="event-history"><summary>查看全部技术记录</summary>{renderEvents(detail.data.events)}</details> : null}

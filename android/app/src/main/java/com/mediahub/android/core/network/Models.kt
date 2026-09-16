@@ -26,6 +26,7 @@ data class WorkflowSettings(
     val qMediaSyncAccountId: Int,
     val movie: WorkflowTargetSettings,
     val series: WorkflowTargetSettings,
+    val adult: WorkflowTargetSettings = WorkflowTargetSettings("", "", "adult"),
  )
 data class ProviderSourceSettings(val id: String, val label: String, val baseUrl: String, val account: String, val authMode: String, val token: SecretStatus)
 data class WeComSettings(

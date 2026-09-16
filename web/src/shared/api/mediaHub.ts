@@ -23,7 +23,7 @@ export type ProviderSettings = {
   assrt: { baseUrl: string; token: SecretStatus }
   moviePilot: { baseUrl: string; apiToken: SecretStatus }
   wecom: { baseUrl: string; corpId: string; secret: SecretStatus; sendMode: 'app' | 'appchat'; agentId: number; toUser: string; chatId: string }
-  workflow: { syncMode: WorkflowSyncMode; strmBaseUrl: string; strmRootMount: string; qMediaSyncAccountId: number; movie: WorkflowTargetSettings; series: WorkflowTargetSettings }
+  workflow: { syncMode: WorkflowSyncMode; strmBaseUrl: string; strmRootMount: string; qMediaSyncAccountId: number; movie: WorkflowTargetSettings; series: WorkflowTargetSettings; adult: WorkflowTargetSettings }
   checkIn: CheckInSettings
   sources: { id: string; label: string; baseUrl: string; account: string; authMode: string; token: SecretStatus }[]
 }
@@ -137,7 +137,7 @@ export type TransferJob = {
   season?: number
   episodeStart?: number
   episodeEnd?: number
-  mediaType: 'movie' | 'series'
+  mediaType: 'movie' | 'series' | 'adult'
   tmdbId: string
   source: string
   state: TransferState
@@ -776,6 +776,18 @@ export function createLocalUpload(rootId: string, path: string, destinationId: s
 }
 export function retryLocalUpload(upload: LocalUploadJob) {
   return requestJSON<LocalUploadJob>(`/api/v1/local-uploads/${encodeURIComponent(upload.id)}/retry`, { method: 'POST', headers: writeHeaders(true), body: JSON.stringify({ confirmation: upload.id }) })
+}
+
+export function createShareImport(input: { url: string; receiveCode?: string; title?: string }, idempotencyKey: string) {
+  return requestJSON<TransferJob>('/api/v1/share-imports', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+      'X-CSRF-Token': readCookie('media_hub_csrf') ?? '',
+    },
+    body: JSON.stringify(input),
+  })
 }
 
 export function createTransfer(transferToken: string, idempotencyKey: string) {

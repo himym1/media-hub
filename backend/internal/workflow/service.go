@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
+	"media-hub/backend/internal/adapter"
 	"media-hub/backend/internal/config"
 	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/search"
@@ -150,7 +152,10 @@ func (s *Service) syncConfigured() bool {
 	if _, ok := workflow.Target("movie"); ok {
 		return true
 	}
-	_, ok := workflow.Target("series")
+	if _, ok := workflow.Target("series"); ok {
+		return true
+	}
+	_, ok := workflow.Target("adult")
 	return ok
 }
 
@@ -199,6 +204,34 @@ func (s *Service) SelectionToken(candidate search.Candidate) string {
 		return ""
 	}
 	return token
+}
+
+func (s *Service) EnqueueShareImport(ctx context.Context, userID int64, title, shareCode, receiveCode, idempotencyKey string) (Job, bool, error) {
+	title = strings.TrimSpace(title)
+	shareCode = strings.TrimSpace(shareCode)
+	receiveCode = strings.TrimSpace(receiveCode)
+	if title == "" {
+		title = "115分享 " + shareCode
+	}
+	if _, ok := s.workflowConfiguration().Target("adult"); !ok {
+		return Job{}, false, ErrTargetUnavailable
+	}
+	if _, ok := s.search.TransferSource(adapter.ShareSourceID); !ok {
+		return Job{}, false, ErrSourceUnavailable
+	}
+	reference, err := adapter.ShareReferenceJSON(title, shareCode, receiveCode)
+	if err != nil {
+		return Job{}, false, ErrInvalidSelection
+	}
+	token := s.SelectionToken(search.Candidate{
+		ID: "share-" + shareCode, Title: title, MediaType: "adult",
+		SourceID: adapter.ShareSourceID, SourceRef: reference,
+		TransferState: "available", Revision: s.search.CurrentRevision(),
+	})
+	if token == "" {
+		return Job{}, false, ErrInvalidSelection
+	}
+	return s.Enqueue(ctx, userID, token, idempotencyKey)
 }
 
 func (s *Service) Enqueue(ctx context.Context, userID int64, selectionToken, idempotencyKey string) (Job, bool, error) {
