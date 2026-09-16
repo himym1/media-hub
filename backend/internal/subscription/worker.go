@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -113,36 +114,51 @@ func (s *Service) processRun(ctx context.Context, run store.SubscriptionRun) err
 	if s.search == nil || s.workflow == nil {
 		return s.finishRun(ctx, run, "failed", "subscription_unavailable", "订阅执行器未配置", false)
 	}
-	response := s.search.Search(ctx, item.Title+seasonLabel(item.Season))
-	if len(response.Results) == 0 && len(response.SourceErrors) > 0 {
-		retryable := false
-		for _, sourceError := range response.SourceErrors {
-			retryable = retryable || sourceError.Retryable
-		}
-		return s.retryRun(ctx, run, "source_search_failed", "所有资源源搜索失败", retryable)
-	}
 	preferences, sourceIDs, err := decodeRules(item)
 	if err != nil {
 		return s.finishRun(ctx, run, "failed", "invalid_rules", "订阅规则无法读取", false)
 	}
 	skip := map[string]struct{}{}
 	var candidate search.Candidate
-	for {
-		next, found := selectCandidate(response.Results, item, sourceIDs, preferences, skip)
-		if !found {
-			return s.finishRun(ctx, run, "no_match", "", "没有符合规则且身份已验证的资源", false)
-		}
-		fingerprint := candidateFingerprint(next)
-		seen, err := s.store.HasSubscriptionCandidate(ctx, item.ID, fingerprint)
-		if err != nil {
-			return err
-		}
-		if seen {
-			skip[fingerprint] = struct{}{}
+	foundCandidate := false
+	hadResults := false
+	retryableSearch := false
+	for _, query := range searchQueries(item) {
+		response := s.search.Search(ctx, query)
+		if len(response.Results) == 0 {
+			for _, sourceError := range response.SourceErrors {
+				retryableSearch = retryableSearch || sourceError.Retryable
+			}
 			continue
 		}
-		candidate = next
-		break
+		hadResults = true
+		for {
+			next, found := selectCandidate(response.Results, item, sourceIDs, preferences, skip)
+			if !found {
+				break
+			}
+			fingerprint := candidateFingerprint(next)
+			seen, err := s.store.HasSubscriptionCandidate(ctx, item.ID, fingerprint)
+			if err != nil {
+				return err
+			}
+			if seen {
+				skip[fingerprint] = struct{}{}
+				continue
+			}
+			candidate = next
+			foundCandidate = true
+			break
+		}
+		if foundCandidate {
+			break
+		}
+	}
+	if !foundCandidate {
+		if !hadResults && retryableSearch {
+			return s.retryRun(ctx, run, "source_search_failed", "所有资源源搜索失败", true)
+		}
+		return s.finishRun(ctx, run, "no_match", "", "没有符合规则且身份已验证的资源", false)
 	}
 	if item.Policy == "once" {
 		if candidate.EpisodeEnd > 0 && candidate.EpisodeEnd <= item.LastEpisode {
@@ -265,6 +281,31 @@ func runBackoff(attempt int) time.Duration {
 		attempt = maxRunAttempts
 	}
 	return time.Duration(1<<(attempt-1)) * time.Minute
+}
+
+func searchQueries(item store.Subscription) []string {
+	suffix := seasonLabel(item.Season)
+	queries := make([]string, 0, 4)
+	seen := make(map[string]struct{}, 4)
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		if _, exists := seen[value]; exists {
+			return
+		}
+		seen[value] = struct{}{}
+		queries = append(queries, value)
+	}
+	add(item.Title + suffix)
+	add(item.OriginalTitle + suffix)
+	if item.Year > 0 {
+		year := strconv.Itoa(item.Year)
+		add(strings.TrimSpace(item.Title+suffix) + " " + year)
+		add(strings.TrimSpace(item.OriginalTitle+suffix) + " " + year)
+	}
+	return queries
 }
 
 func decodeRules(item store.Subscription) (Preferences, []string, error) {

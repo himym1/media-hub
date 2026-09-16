@@ -284,6 +284,29 @@ func TestFindIndexedItemMatchesReleaseStyleNamesWithoutProviderIds(t *testing.T)
 	}
 }
 
+func TestFindIndexedItemDoesNotTreatShorterTitleAsExistingFilm(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/Items" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if request.URL.Query().Get("AnyProviderIdEquals") != "" {
+			_, _ = w.Write([]byte(`{"Items":[],"TotalRecordCount":0}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"Items":[
+			{"Id":"man-of-steel","Name":"超人：钢铁之躯","Type":"Movie","OriginalTitle":"Man of Steel","Path":"/library/mos.strm"}
+		],"TotalRecordCount":1}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key", time.Second, "")
+	_, found, err := client.FindIndexedItem(context.Background(), "超人", "movie", 2025, "1061474")
+	if err != nil || found {
+		t.Fatalf("short title without year should not match longer film: found=%v err=%v", found, err)
+	}
+}
+
 func TestContainsTitleTokenRejectsLongerPrefixedTitles(t *testing.T) {
 	if !containsTitleToken("【站点】头号玩家(无字片源).Ready.Player.One", "头号玩家") {
 		t.Fatal("expected contained Chinese title to match")

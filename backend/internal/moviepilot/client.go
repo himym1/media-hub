@@ -235,7 +235,7 @@ func (c *Client) searchMedia(ctx context.Context, query string) (Media, error) {
 		if err != nil {
 			return Media{}, err
 		}
-		if media, ok := firstMedia(payload, candidateType); ok {
+		if media, ok := pickMedia(payload, candidateType, year); ok {
 			return media, nil
 		}
 	}
@@ -375,6 +375,10 @@ func decodeToolResult(raw json.RawMessage) (json.RawMessage, error) {
 }
 
 func firstMedia(payload json.RawMessage, fallbackType string) (Media, bool) {
+	return pickMedia(payload, fallbackType, 0)
+}
+
+func pickMedia(payload json.RawMessage, fallbackType string, year int) (Media, bool) {
 	items := jsonArray(payload)
 	if len(items) == 0 {
 		if item := jsonObject(payload); item != nil {
@@ -383,6 +387,8 @@ func firstMedia(payload json.RawMessage, fallbackType string) (Media, bool) {
 			}
 		}
 	}
+	var fallback Media
+	hasFallback := false
 	for _, item := range items {
 		var row map[string]any
 		if json.Unmarshal(item, &row) != nil {
@@ -392,15 +398,27 @@ func firstMedia(payload json.RawMessage, fallbackType string) (Media, bool) {
 		if tmdbID == "" || tmdbID == "0" {
 			continue
 		}
-		mediaType := normalizeMediaType(firstNonEmpty(lookupString(row, "media_type"), lookupString(row, "type"), fallbackType))
-		return Media{
+		media := Media{
 			TMDBID:    tmdbID,
 			Title:     firstNonEmpty(lookupString(row, "title"), lookupString(row, "name")),
 			Year:      lookupInt(row, "year"),
-			MediaType: mediaType,
-		}, true
+			MediaType: normalizeMediaType(firstNonEmpty(lookupString(row, "media_type"), lookupString(row, "type"), fallbackType)),
+		}
+		if year > 0 && media.Year == year {
+			return media, true
+		}
+		if hasFallback {
+			continue
+		}
+		if year == 0 || media.Year == 0 {
+			fallback = media
+			hasFallback = true
+		}
 	}
-	return Media{}, false
+	if year > 0 {
+		return Media{}, false
+	}
+	return fallback, hasFallback
 }
 
 func parseTorrents(payload json.RawMessage) []Torrent {

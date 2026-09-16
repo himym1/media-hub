@@ -56,6 +56,44 @@ func TestSearchMapsTorrentResults(t *testing.T) {
 	}
 }
 
+func TestSearchPrefersMediaMatchingQueryYear(t *testing.T) {
+	var torrentTMDB any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		var envelope struct {
+			Params struct {
+				Name      string         `json:"name"`
+				Arguments map[string]any `json:"arguments"`
+			} `json:"params"`
+		}
+		body, _ := io.ReadAll(request.Body)
+		_ = json.Unmarshal(body, &envelope)
+		switch envelope.Params.Name {
+		case "search_media":
+			writeMCPText(w, `[{"tmdb_id":912649,"title":"毒液：最后一舞","year":2024,"media_type":"movie"},{"tmdb_id":335983,"title":"毒液：致命守护者","year":2018,"media_type":"movie"}]`)
+		case "search_torrents":
+			torrentTMDB = envelope.Params.Arguments["tmdb_id"]
+			writeMCPText(w, `{"total_count":1}`)
+		case "get_search_results":
+			writeMCPText(w, `{"total_count":1,"results":[{"torrent_info":{"title":"Venom 2018 1080p","size":"8 GB","seeders":4,"site_name":"织梦","torrent_url":"venom:1"},"media_info":{"tmdb_id":335983,"year":2018,"media_type":"movie"}}]}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "token", time.Second)
+	results, err := client.Search(context.Background(), "毒液 2018")
+	if err != nil || len(results) != 1 {
+		t.Fatalf("results=%#v err=%v", results, err)
+	}
+	if results[0].TMDBID != "335983" {
+		t.Fatalf("candidate = %#v", results[0])
+	}
+	if torrentTMDB != float64(335983) {
+		t.Fatalf("search_torrents tmdb_id = %#v", torrentTMDB)
+	}
+}
+
 func TestStartDownloadSubmitsTorrentRef(t *testing.T) {
 	var submitted []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {

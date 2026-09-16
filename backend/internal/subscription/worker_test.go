@@ -58,6 +58,27 @@ func TestSelectCandidateAppliesSourceAudioAndSizeConstraints(t *testing.T) {
 	}
 }
 
+func TestSearchQueriesUsesOriginalTitleAndYear(t *testing.T) {
+	got := searchQueries(store.Subscription{
+		Title: "毒液", OriginalTitle: "Venom", Year: 2018, Season: 0,
+	})
+	want := []string{"毒液", "Venom", "毒液 2018", "Venom 2018"}
+	if len(got) != len(want) {
+		t.Fatalf("queries = %#v", got)
+	}
+	for index, query := range want {
+		if got[index] != query {
+			t.Fatalf("queries = %#v", got)
+		}
+	}
+	series := searchQueries(store.Subscription{
+		Title: "信号", OriginalTitle: "Signal", Year: 2016, Season: 1,
+	})
+	if series[0] != "信号 S1" || series[1] != "Signal S1" || series[2] != "信号 S1 2016" || series[3] != "Signal S1 2016" {
+		t.Fatalf("series queries = %#v", series)
+	}
+}
+
 func TestSelectCandidateSkipsFailedShareFingerprints(t *testing.T) {
 	item := store.Subscription{TMDBID: "396535", MediaType: "movie", Year: 2016}
 	dead := search.Candidate{

@@ -665,8 +665,10 @@ func (c *Client) findIndexedItem(ctx context.Context, configuration clientConfig
 
 // indexedTitleMatchScore ranks Emby candidates for workflow completion.
 // Exact Name/OriginalTitle beats release-style names that merely contain the title.
-// Fuzzy matches require a year agreement when both sides provide one, and reject
-// longer titles that only share a prefix (e.g. 超凡蜘蛛侠 must not match 超凡蜘蛛侠2).
+// Fuzzy matches require a year agreement when both sides provide one, reject
+// longer titles that only share a prefix (e.g. 超凡蜘蛛侠 must not match 超凡蜘蛛侠2),
+// and do not treat a yearless longer title as the requested film (e.g. 超人 must
+// not match 超人：钢铁之躯).
 func indexedTitleMatchScore(title string, year int, item baseItem) (int, bool) {
 	title = strings.TrimSpace(title)
 	if title == "" {
@@ -683,7 +685,7 @@ func indexedTitleMatchScore(title string, year int, item baseItem) (int, bool) {
 	}
 	if containsTitleToken(name, title) || containsTitleToken(original, title) || containsTitleToken(pathValue, title) {
 		if year > 0 && item.ProductionYear <= 0 {
-			return 1, true
+			return 0, false
 		}
 		return 2, true
 	}
