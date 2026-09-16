@@ -82,3 +82,43 @@ func TestManualSubscriptionRunRejectsConcurrentRun(t *testing.T) {
 		t.Fatalf("second run error = %v, want ErrSubscriptionRunActive", err)
 	}
 }
+
+func TestFailedSubscriptionCandidateIsNotTriedAgain(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "encoded-password-hash"); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	now := time.Unix(1_720_000_000, 0).UTC()
+	_, err = dataStore.CreateSubscription(ctx, Subscription{
+		ID: "subscription-1", UserID: 1, TMDBID: "396535", Title: "釜山行",
+		MediaType: "movie", Policy: "once", Enabled: true, IntervalMinutes: 60,
+		SourceIDsJSON: `[]`, PreferencesJSON: `{}`, CreatedAt: now.Unix(), UpdatedAt: now.Unix(),
+	})
+	if err != nil {
+		t.Fatalf("create subscription: %v", err)
+	}
+	run, err := dataStore.CreateManualSubscriptionRun(ctx, 1, "subscription-1", "run-1", now)
+	if err != nil {
+		t.Fatalf("create manual run: %v", err)
+	}
+	run.State = "failed"
+	run.CandidateFingerprint = "framehdr:dead-share"
+	run.FinishedAt = now.Unix()
+	run.UpdatedAt = now.Unix()
+	if err := dataStore.UpdateSubscriptionRun(ctx, run, "queued"); err != nil {
+		t.Fatalf("mark run failed: %v", err)
+	}
+	seen, err := dataStore.HasSubscriptionCandidate(ctx, "subscription-1", "framehdr:dead-share")
+	if err != nil || !seen {
+		t.Fatalf("failed fingerprint seen=%v err=%v", seen, err)
+	}
+	seen, err = dataStore.HasSubscriptionCandidate(ctx, "subscription-1", "moviepilot:other")
+	if err != nil || seen {
+		t.Fatalf("other fingerprint seen=%v err=%v", seen, err)
+	}
+}

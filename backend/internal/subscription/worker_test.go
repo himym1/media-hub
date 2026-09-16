@@ -29,7 +29,7 @@ func TestSelectCandidateUsesIdentitySeasonAndPreferenceOrder(t *testing.T) {
 	selected, found := selectCandidate(candidates, item, nil, Preferences{
 		Resolutions: []string{"2160p", "1080p"},
 		VideoCodecs: []string{"HEVC"},
-	})
+	}, nil)
 	if !found || selected.ID != "2160" {
 		t.Fatalf("selected = %#v found=%v", selected, found)
 	}
@@ -52,8 +52,27 @@ func TestSelectCandidateAppliesSourceAudioAndSizeConstraints(t *testing.T) {
 	selected, found := selectCandidate(candidates, item, []string{"juying"}, Preferences{
 		AudioContains: []string{"Atmos"},
 		MaxSizeBytes:  40 << 30,
-	})
+	}, nil)
 	if !found || selected.ID != "matching" {
+		t.Fatalf("selected = %#v found=%v", selected, found)
+	}
+}
+
+func TestSelectCandidateSkipsFailedShareFingerprints(t *testing.T) {
+	item := store.Subscription{TMDBID: "396535", MediaType: "movie", Year: 2016}
+	dead := search.Candidate{
+		ID: "dead-share", SourceID: "framehdr", TMDBID: "396535", MediaType: "movie", Year: 2016,
+		IdentityVerified: true,
+		Release:          search.ReleaseFacts{Resolution: "2160p", VideoCodec: "HEVC", SizeBytes: 20 << 30},
+	}
+	other := search.Candidate{
+		ID: "moviepilot", SourceID: "moviepilot", TMDBID: "396535", MediaType: "movie", Year: 2016,
+		IdentityVerified: true,
+		Release:          search.ReleaseFacts{Resolution: "1080p", VideoCodec: "AVC", SizeBytes: 8 << 30},
+	}
+	skip := map[string]struct{}{candidateFingerprint(dead): {}}
+	selected, found := selectCandidate([]search.Candidate{dead, other}, item, nil, Preferences{}, skip)
+	if !found || selected.ID != "moviepilot" {
 		t.Fatalf("selected = %#v found=%v", selected, found)
 	}
 }

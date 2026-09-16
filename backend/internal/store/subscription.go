@@ -377,7 +377,7 @@ func (s *Store) HasSubscriptionCandidate(ctx context.Context, subscriptionID, fi
 	err := s.database.QueryRowContext(ctx, `SELECT EXISTS(
 		SELECT 1 FROM subscription_runs
 		WHERE subscription_id = ? AND candidate_fingerprint = ?
-		  AND state IN ('enqueued', 'completed', 'needs_attention')
+		  AND state IN ('enqueued', 'completed', 'failed', 'needs_attention')
 	)`, subscriptionID, fingerprint).Scan(&exists)
 	return exists, err
 }

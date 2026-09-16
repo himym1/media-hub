@@ -125,9 +125,24 @@ func (s *Service) processRun(ctx context.Context, run store.SubscriptionRun) err
 	if err != nil {
 		return s.finishRun(ctx, run, "failed", "invalid_rules", "订阅规则无法读取", false)
 	}
-	candidate, found := selectCandidate(response.Results, item, sourceIDs, preferences)
-	if !found {
-		return s.finishRun(ctx, run, "no_match", "", "没有符合规则且身份已验证的资源", false)
+	skip := map[string]struct{}{}
+	var candidate search.Candidate
+	for {
+		next, found := selectCandidate(response.Results, item, sourceIDs, preferences, skip)
+		if !found {
+			return s.finishRun(ctx, run, "no_match", "", "没有符合规则且身份已验证的资源", false)
+		}
+		fingerprint := candidateFingerprint(next)
+		seen, err := s.store.HasSubscriptionCandidate(ctx, item.ID, fingerprint)
+		if err != nil {
+			return err
+		}
+		if seen {
+			skip[fingerprint] = struct{}{}
+			continue
+		}
+		candidate = next
+		break
 	}
 	if item.Policy == "once" {
 		if candidate.EpisodeEnd > 0 && candidate.EpisodeEnd <= item.LastEpisode {
@@ -158,13 +173,6 @@ func (s *Service) processRun(ctx context.Context, run store.SubscriptionRun) err
 		}
 	}
 	fingerprint := candidateFingerprint(candidate)
-	seen, err := s.store.HasSubscriptionCandidate(ctx, item.ID, fingerprint)
-	if err != nil {
-		return err
-	}
-	if seen {
-		return s.finishRun(ctx, run, "duplicate", "", "该资源版本已经处理过", false)
-	}
 	token := s.workflow.SelectionToken(candidate)
 	if token == "" {
 		return s.finishRun(ctx, run, "failed", "transfer_unavailable", "资源或目标暂不支持自动转存", false)
@@ -271,11 +279,14 @@ func decodeRules(item store.Subscription) (Preferences, []string, error) {
 	return preferences, sourceIDs, nil
 }
 
-func selectCandidate(candidates []search.Candidate, item store.Subscription, sourceIDs []string, preferences Preferences) (search.Candidate, bool) {
+func selectCandidate(candidates []search.Candidate, item store.Subscription, sourceIDs []string, preferences Preferences, skip map[string]struct{}) (search.Candidate, bool) {
 	var selected search.Candidate
 	selectedScore := -1
 	found := false
 	for _, candidate := range candidates {
+		if _, skipped := skip[candidateFingerprint(candidate)]; skipped {
+			continue
+		}
 		if !candidate.IdentityVerified || candidate.TMDBID != item.TMDBID || candidate.MediaType != item.MediaType {
 			continue
 		}
