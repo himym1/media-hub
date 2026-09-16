@@ -474,10 +474,14 @@ func (c *Client) probeSharedStream(ctx context.Context, endpoint, token string) 
 	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 		return ErrUnauthorized
 	}
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
+	switch response.StatusCode {
+	case http.StatusOK, http.StatusPartialContent,
+		http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther,
+		http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+		return nil
+	default:
 		return ErrUpstreamResponse
 	}
-	return nil
 }
 
 func absoluteEmbyURL(baseURL, value string) string {

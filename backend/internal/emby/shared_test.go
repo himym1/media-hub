@@ -107,6 +107,26 @@ func TestSharedLibrariesBrowseAndPlayback(t *testing.T) {
 	}
 }
 
+func TestProbeSharedStreamAcceptsCDNRedirect(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/Videos/movie-1/stream.mkv" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("Range") != "bytes=0-0" || r.Header.Get("X-Emby-Token") != "shared-token" {
+			http.Error(w, "bad probe", http.StatusBadRequest)
+			return
+		}
+		http.Redirect(w, r, "https://cdn.example/video.mkv?temporary=1", http.StatusFound)
+	}))
+	t.Cleanup(server.Close)
+	client := NewConfiguredClient(RuntimeConfig{BaseURL: server.URL, Username: "u", Password: "p", Shared: true}, 0)
+	if err := client.probeSharedStream(context.Background(), server.URL+"/Videos/movie-1/stream.mkv", "shared-token"); err != nil {
+		t.Fatalf("redirect probe: %v", err)
+	}
+}
+
 func TestHubRoutesSharedIDs(t *testing.T) {
 	t.Parallel()
 	localServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
