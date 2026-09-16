@@ -94,6 +94,41 @@ func TestSearchPrefersMediaMatchingQueryYear(t *testing.T) {
 	}
 }
 
+func TestStartDownloadWaitsLongerThanSearchClientTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		writeMCPText(w, `{"success":true}`)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "token", 50*time.Millisecond)
+	if err := client.StartDownload(context.Background(), search.DownloadRequest{Reference: "venom:1"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPublicFailureMapsTimeout(t *testing.T) {
+	err := publicFailure(context.DeadlineExceeded)
+	failure, ok := err.(search.Failure)
+	if !ok || failure.Message != "MoviePilot 提交下载超时" || !failure.Retryable {
+		t.Fatalf("failure = %#v", err)
+	}
+}
+
+func TestStartDownloadRejectsStaleSearchReference(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		writeMCPText(w, "任务添加失败：001dbd6:13 引用无效，请重新使用 get_search_results 查看搜索结果")
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "token", time.Second)
+	err := client.StartDownload(context.Background(), search.DownloadRequest{Reference: "stale:1"})
+	failure, ok := err.(search.Failure)
+	if !ok || failure.Code != "source_stale" || failure.Retryable {
+		t.Fatalf("err = %#v", err)
+	}
+}
+
 func TestStartDownloadSubmitsTorrentRef(t *testing.T) {
 	var submitted []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {

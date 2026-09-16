@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -24,6 +25,7 @@ const (
 	defaultBaseURL = "http://172.17.0.1:13001"
 	searchBudget   = 45 * time.Second
 	healthBudget   = 5 * time.Second
+	downloadBudget = 2 * time.Minute
 	maxCandidates  = 20
 	maxBodyBytes   = 4 << 20
 )
@@ -203,7 +205,9 @@ func (c *Client) StartDownload(ctx context.Context, request search.DownloadReque
 	if reference == "" {
 		return search.Failure{Code: "source_invalid", Message: "下载引用无效", Retryable: false}
 	}
-	payload, err := c.callTool(ctx, "add_download_tasks", map[string]any{
+	downloadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), downloadBudget)
+	defer cancel()
+	payload, err := c.callTool(downloadCtx, "add_download_tasks", map[string]any{
 		"torrent_url": []string{reference},
 	})
 	if err != nil {
@@ -212,7 +216,11 @@ func (c *Client) StartDownload(ctx context.Context, request search.DownloadReque
 	if lookupBool(payload, "success") {
 		return nil
 	}
-	if message := lookupString(jsonObject(payload), "message"); message != "" && strings.Contains(strings.ToLower(message), "fail") {
+	message := lookupString(jsonObject(payload), "message")
+	if strings.Contains(message, "引用无效") || strings.Contains(strings.ToLower(message), "get_search_results") {
+		return search.Failure{Code: "source_stale", Message: "MoviePilot 搜索结果已过期，请重新搜索", Retryable: false}
+	}
+	if message != "" && (strings.Contains(message, "失败") || strings.Contains(strings.ToLower(message), "fail")) {
 		return search.Failure{Code: "source_unavailable", Message: "MoviePilot 未能加入下载队列", Retryable: true}
 	}
 	return nil
@@ -295,7 +303,7 @@ func (c *Client) call(ctx context.Context, method string, params map[string]any)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("X-API-KEY", configuration.apiKey)
 	request.Header.Set("User-Agent", "Media-Hub/moviepilot")
-	response, err := c.client.Do(request)
+	response, err := c.httpClient(ctx).Do(request)
 	if err != nil {
 		return nil, err
 	}
@@ -332,6 +340,21 @@ func (c *Client) call(ctx context.Context, method string, params map[string]any)
 	return decodeToolResult(rpc.Result)
 }
 
+func (c *Client) httpClient(ctx context.Context) *http.Client {
+	if deadline, ok := ctx.Deadline(); ok {
+		remain := time.Until(deadline)
+		if remain > 0 && remain > c.client.Timeout {
+			return &http.Client{Timeout: remain, Transport: c.client.Transport}
+		}
+	}
+	return c.client
+}
+
+type toolContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
 func decodeToolResult(raw json.RawMessage) (json.RawMessage, error) {
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return json.RawMessage(`{}`), nil
@@ -339,10 +362,7 @@ func decodeToolResult(raw json.RawMessage) (json.RawMessage, error) {
 	var result struct {
 		IsError           bool            `json:"isError"`
 		StructuredContent json.RawMessage `json:"structuredContent"`
-		Content           []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
+		Content           []toolContent   `json:"content"`
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {
 		if json.Valid(raw) {
@@ -351,27 +371,45 @@ func decodeToolResult(raw json.RawMessage) (json.RawMessage, error) {
 		return nil, ErrUpstreamResponse
 	}
 	if result.IsError {
+		if message := firstToolText(result.Content); message != "" {
+			return marshalToolMessage(false, message)
+		}
 		return nil, ErrUpstreamResponse
 	}
 	if len(bytes.TrimSpace(result.StructuredContent)) > 0 {
 		return result.StructuredContent, nil
 	}
-	for _, item := range result.Content {
-		if !strings.EqualFold(item.Type, "text") {
-			continue
-		}
-		text := strings.TrimSpace(item.Text)
-		if text == "" {
-			continue
-		}
+	if text := firstToolText(result.Content); text != "" {
 		if json.Valid([]byte(text)) {
 			return json.RawMessage(text), nil
 		}
+		ok := !strings.Contains(text, "失败") && !strings.Contains(strings.ToLower(text), "fail")
+		return marshalToolMessage(ok, text)
 	}
 	if json.Valid(raw) {
 		return raw, nil
 	}
 	return json.RawMessage(`{}`), nil
+}
+
+func firstToolText(items []toolContent) string {
+	for _, item := range items {
+		if !strings.EqualFold(item.Type, "text") {
+			continue
+		}
+		if text := strings.TrimSpace(item.Text); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+func marshalToolMessage(success bool, message string) (json.RawMessage, error) {
+	raw, err := json.Marshal(map[string]any{"success": success, "message": message})
+	if err != nil {
+		return nil, ErrUpstreamResponse
+	}
+	return raw, nil
 }
 
 func firstMedia(payload json.RawMessage, fallbackType string) (Media, bool) {
@@ -636,9 +674,22 @@ func publicFailure(err error) error {
 		return search.Failure{Code: "source_unauthorized", Message: "MoviePilot 认证失败", Retryable: true}
 	case errors.Is(err, ErrNotConfigured):
 		return search.Failure{Code: "source_unconfigured", Message: "MoviePilot 未配置", Retryable: false}
+	case isTimeout(err):
+		return search.Failure{Code: "source_unavailable", Message: "MoviePilot 提交下载超时", Retryable: true}
 	default:
 		return search.Failure{Code: "source_unavailable", Message: "MoviePilot 暂时不可用", Retryable: true}
 	}
+}
+
+func isTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 func firstNonEmpty(values ...string) string {
