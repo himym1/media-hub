@@ -4,7 +4,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -19,6 +18,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/securepayload"
 	"media-hub/backend/internal/settings"
 )
@@ -35,7 +35,8 @@ func main() {
 	dbPath := flag.String("db", "", "path to media-hub.db")
 	userID := flag.Int64("user", 1, "admin user id")
 	dryRun := flag.Bool("dry-run", false, "list candidates without calling Emby")
-	onlyMissing := flag.Bool("only-missing", true, "skip items that already have the matching Tmdb provider id")
+	onlyMissing := flag.Bool("only-missing", true, "skip items that already have the matching Tmdb provider id and a clean title")
+	onlyItem := flag.String("item", "", "only identify this Emby item id")
 	flag.Parse()
 	if strings.TrimSpace(*dbPath) == "" {
 		fatalf("missing -db")
@@ -100,6 +101,9 @@ func main() {
 		if seen[job.EmbyItemID] {
 			continue
 		}
+		if *onlyItem != "" && job.EmbyItemID != *onlyItem {
+			continue
+		}
 		seen[job.EmbyItemID] = true
 		jobs = append(jobs, job)
 	}
@@ -108,37 +112,38 @@ func main() {
 	}
 	fmt.Printf("candidates=%d dry_run=%v only_missing=%v\n", len(jobs), *dryRun, *onlyMissing)
 
-	client := &http.Client{Timeout: 90 * time.Second}
+	httpClient := &http.Client{Timeout: 90 * time.Second}
+	embyClient := emby.NewClient(baseURL, apiKey, 90*time.Second, userIDHeader)
 	ctx := context.Background()
 	applied, skipped, failed := 0, 0, 0
 	for _, job := range jobs {
-		provider, name, err := readEmbyItem(ctx, client, baseURL, apiKey, userIDHeader, job.EmbyItemID)
+		provider, name, err := readEmbyItem(ctx, httpClient, baseURL, apiKey, userIDHeader, job.EmbyItemID)
 		if err != nil {
-			foundID, foundTMDB, foundName, findErr := findEmbyItemByTitle(ctx, client, baseURL, apiKey, userIDHeader, job.Title, job.MediaType, job.Year)
+			foundID, foundTMDB, foundName, findErr := findEmbyItemByTitle(ctx, httpClient, baseURL, apiKey, userIDHeader, job.Title, job.MediaType, job.Year)
 			if findErr != nil {
-				fmt.Printf("failed item=%s title=%q err=read:%v find:%v\n", job.EmbyItemID, job.Title, err, findErr)
+				fmt.Printf("failed item=%s err=read:%v find:%v\n", job.EmbyItemID, err, findErr)
 				failed++
 				continue
 			}
-			fmt.Printf("resolved item=%s -> %s title=%q name=%q\n", job.EmbyItemID, foundID, job.Title, foundName)
+			fmt.Printf("resolved item=%s -> %s\n", job.EmbyItemID, foundID)
 			job.EmbyItemID = foundID
 			provider, name = foundTMDB, foundName
 		}
-		if *onlyMissing && provider == job.TMDBID {
-			fmt.Printf("skip item=%s title=%q name=%q tmdb=%s\n", job.EmbyItemID, job.Title, name, provider)
+		if *onlyMissing && provider == job.TMDBID && !emby.LooksLikeUnidentifiedName(name) {
+			fmt.Printf("skip item=%s tmdb=%s\n", job.EmbyItemID, provider)
 			skipped++
 			continue
 		}
 		if *dryRun {
-			fmt.Printf("would-apply item=%s title=%q name=%q current_tmdb=%q want=%s\n", job.EmbyItemID, job.Title, name, provider, job.TMDBID)
+			fmt.Printf("would-apply item=%s current_tmdb=%q want=%s unidentified=%v\n", job.EmbyItemID, provider, job.TMDBID, emby.LooksLikeUnidentifiedName(name))
 			continue
 		}
-		if err := applyTMDB(ctx, client, baseURL, apiKey, job); err != nil {
-			fmt.Printf("failed item=%s title=%q err=apply:%v\n", job.EmbyItemID, job.Title, err)
+		if err := embyClient.ApplyTMDBMetadata(ctx, job.EmbyItemID, job.MediaType, job.Title, job.Year, job.TMDBID, true); err != nil {
+			fmt.Printf("failed item=%s err=apply:%v\n", job.EmbyItemID, err)
 			failed++
 			continue
 		}
-		fmt.Printf("applied item=%s title=%q year=%d tmdb=%s\n", job.EmbyItemID, job.Title, job.Year, job.TMDBID)
+		fmt.Printf("applied item=%s year=%d tmdb=%s\n", job.EmbyItemID, job.Year, job.TMDBID)
 		applied++
 		time.Sleep(750 * time.Millisecond)
 	}
@@ -200,36 +205,6 @@ func readEmbyItem(ctx context.Context, client *http.Client, baseURL, apiKey, use
 		lastErr = fmt.Errorf("item not found")
 	}
 	return "", "", lastErr
-}
-
-func applyTMDB(ctx context.Context, client *http.Client, baseURL, apiKey string, job jobRow) error {
-	endpoint := fmt.Sprintf("%s/Items/RemoteSearch/Apply/%s?ReplaceAllImages=true", baseURL, url.PathEscape(job.EmbyItemID))
-	payload := map[string]any{
-		"Name":           job.Title,
-		"ProductionYear": job.Year,
-		"ProviderIds":    map[string]string{"Tmdb": job.TMDBID},
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Emby-Token", apiKey)
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("status %d", resp.StatusCode)
-	}
-	return nil
 }
 
 func findEmbyItemByTitle(ctx context.Context, client *http.Client, baseURL, apiKey, userID, title, mediaType string, year int) (itemID, tmdbID, name string, err error) {

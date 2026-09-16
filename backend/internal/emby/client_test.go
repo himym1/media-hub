@@ -297,34 +297,44 @@ func TestContainsTitleTokenRejectsLongerPrefixedTitles(t *testing.T) {
 }
 
 func TestApplyTMDBMetadataPostsRemoteSearchApply(t *testing.T) {
-	var sawPath string
-	var sawBody string
+	var paths []string
+	var applyBody string
 	var sawReplace string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost || request.Header.Get("X-Emby-Token") != "test-key" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		sawPath = request.URL.Path
-		sawReplace = request.URL.Query().Get("ReplaceAllImages")
+		paths = append(paths, request.URL.Path)
 		body, _ := io.ReadAll(request.Body)
-		sawBody = string(body)
-		w.WriteHeader(http.StatusNoContent)
+		switch request.URL.Path {
+		case "/Items/RemoteSearch/Movie":
+			if !strings.Contains(string(body), `"Tmdb":"333339"`) || !strings.Contains(string(body), `"Name":"头号玩家"`) {
+				t.Fatalf("search body=%s", body)
+			}
+			_, _ = w.Write([]byte(`[{"Name":"头号玩家","ProductionYear":2018,"ProviderIds":{"Tmdb":"333339"},"SearchProviderName":"TheMovieDb"}]`))
+		case "/Items/RemoteSearch/Apply/item-9":
+			sawReplace = request.URL.Query().Get("ReplaceAllImages")
+			applyBody = string(body)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
 	}))
 	defer server.Close()
 
 	client := NewClient(server.URL, "test-key", time.Second, "")
-	if err := client.ApplyTMDBMetadata(context.Background(), "item-9", "头号玩家", 2018, "333339", true); err != nil {
+	if err := client.ApplyTMDBMetadata(context.Background(), "item-9", "movie", "头号玩家", 2018, "333339", true); err != nil {
 		t.Fatalf("apply metadata: %v", err)
 	}
-	if sawPath != "/Items/RemoteSearch/Apply/item-9" {
-		t.Fatalf("path=%q", sawPath)
+	if len(paths) != 2 || paths[0] != "/Items/RemoteSearch/Movie" || paths[1] != "/Items/RemoteSearch/Apply/item-9" {
+		t.Fatalf("paths=%q", paths)
 	}
 	if sawReplace != "true" {
 		t.Fatalf("replace=%q", sawReplace)
 	}
-	if !strings.Contains(sawBody, `"Tmdb":"333339"`) || !strings.Contains(sawBody, `"Name":"头号玩家"`) {
-		t.Fatalf("body=%s", sawBody)
+	if !strings.Contains(applyBody, `"Tmdb":"333339"`) || !strings.Contains(applyBody, `"Name":"头号玩家"`) {
+		t.Fatalf("apply body=%s", applyBody)
 	}
 }
 

@@ -790,34 +790,6 @@ func (c *Client) RefreshItem(ctx context.Context, itemID string) error {
 	return c.refreshItem(ctx, itemID)
 }
 
-// ApplyTMDBMetadata identifies an Emby item with a known TMDB id and refreshes
-// metadata/images. Prefer this over library refresh alone when folder names are
-// non-standard and ProviderIds are empty.
-func (c *Client) ApplyTMDBMetadata(ctx context.Context, itemID, title string, year int, tmdbID string, replaceAllImages bool) error {
-	configuration := c.configuration()
-	if err := validateAuthenticated(configuration); err != nil {
-		return err
-	}
-	itemID = strings.TrimSpace(itemID)
-	tmdbID = strings.TrimSpace(tmdbID)
-	if itemID == "" || tmdbID == "" {
-		return ErrUpstreamResponse
-	}
-	payload := map[string]any{
-		"ProviderIds": map[string]string{"Tmdb": tmdbID},
-	}
-	if name := strings.TrimSpace(title); name != "" {
-		payload["Name"] = name
-	}
-	if year > 0 {
-		payload["ProductionYear"] = year
-	}
-	query := url.Values{}
-	if replaceAllImages {
-		query.Set("ReplaceAllImages", "true")
-	}
-	return c.postJSONBody(ctx, configuration, path.Join("Items", "RemoteSearch", "Apply", itemID), query, payload, nil, false)
-}
 
 func (c *Client) refreshItem(ctx context.Context, itemID string) error {
 	configuration := c.configuration()

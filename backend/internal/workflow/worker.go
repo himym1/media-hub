@@ -512,8 +512,9 @@ func (s *Service) pollEmbyIndex(ctx context.Context, job store.TransferJob) erro
 		return s.save(ctx, &job, "indexing_emby", "")
 	}
 	job.EmbyItemID = item.ID
-	if job.TMDBID != "" && item.ProviderIDs["Tmdb"] != job.TMDBID {
-		if err := s.emby.ApplyTMDBMetadata(ctx, item.ID, job.Title, job.Year, job.TMDBID, true); err != nil {
+	if emby.NeedsTMDBIdentify(item, job.TMDBID) {
+		if err := s.emby.ApplyTMDBMetadata(ctx, item.ID, job.MediaType, job.Title, job.Year, job.TMDBID, true); err != nil {
+			slog.Default().Warn("emby metadata apply failed", "job_id", job.ID, "error", err)
 			if saveErr := s.save(ctx, &job, "indexing_emby", "Emby 元数据识别失败，继续完成入库"); saveErr != nil {
 				return saveErr
 			}
