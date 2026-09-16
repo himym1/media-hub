@@ -49,6 +49,7 @@ pub struct NativeStatus {
     pub mouse_x: f64,
     pub mouse_y: f64,
     pub fullscreen: bool,
+    pub subtitles: Option<bool>,
 }
 
 fn parked_origin() -> PhysicalPosition<i32> {
@@ -275,6 +276,21 @@ fn write_input_conf() -> Result<PathBuf, String> {
     Ok(path)
 }
 
+pub(crate) fn subtitle_visibility_command(value: Option<f64>) -> Vec<serde_json::Value> {
+    if let Some(value) = value {
+        vec![
+            serde_json::json!("set_property"),
+            serde_json::json!("sub-visibility"),
+            serde_json::json!(value > 0.5),
+        ]
+    } else {
+        vec![
+            serde_json::json!("cycle"),
+            serde_json::json!("sub-visibility"),
+        ]
+    }
+}
+
 pub(crate) fn native_control_commands(
     action: &str,
     value: Option<f64>,
@@ -304,10 +320,7 @@ pub(crate) fn native_control_commands(
             serde_json::json!("cycle"),
             serde_json::json!("mute"),
         ]]),
-        "subtitles" => Ok(vec![vec![
-            serde_json::json!("cycle"),
-            serde_json::json!("sub-visibility"),
-        ]]),
+        "subtitles" => Ok(vec![subtitle_visibility_command(value)]),
         "cycle-audio" => Ok(vec![vec![
             serde_json::json!("cycle"),
             serde_json::json!("audio"),
@@ -568,11 +581,6 @@ fn select_external_subtitle() {
                     serde_json::json!("set_property"),
                     serde_json::json!("sid"),
                     serde_json::json!(sid),
-                ]);
-                let _ = ipc_command(&[
-                    serde_json::json!("set_property"),
-                    serde_json::json!("sub-visibility"),
-                    serde_json::json!(true),
                 ]);
                 return;
             }
@@ -838,6 +846,7 @@ fn idle_native_status() -> NativeStatus {
         mouse_x: 0.0,
         mouse_y: 0.0,
         fullscreen: false,
+        subtitles: None,
     }
 }
 
@@ -854,6 +863,12 @@ fn read_native_status() -> NativeStatus {
         mouse_x: pos.x,
         mouse_y: pos.y,
         fullscreen: ipc_bool("fullscreen"),
+        subtitles: ipc_command(&[
+            serde_json::json!("get_property"),
+            serde_json::json!("sub-visibility"),
+        ])
+        .ok()
+        .and_then(|value| value.as_bool()),
     }
 }
 
@@ -930,6 +945,22 @@ mod tests {
             ]]
         );
         assert!(native_control_commands("unknown", None, None).is_err());
+        assert_eq!(
+            native_control_commands("subtitles", Some(0.0), None).expect("hide"),
+            vec![vec![
+                serde_json::json!("set_property"),
+                serde_json::json!("sub-visibility"),
+                serde_json::json!(false),
+            ]]
+        );
+        assert_eq!(
+            native_control_commands("subtitles", Some(1.0), None).expect("show"),
+            vec![vec![
+                serde_json::json!("set_property"),
+                serde_json::json!("sub-visibility"),
+                serde_json::json!(true),
+            ]]
+        );
     }
 
     #[test]

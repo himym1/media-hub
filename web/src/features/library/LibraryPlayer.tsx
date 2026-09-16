@@ -190,6 +190,20 @@ export function LibraryPlayer({
     else video.pause()
   }, [nativeActive])
 
+  const toggleCaptions = useCallback(() => {
+    const next = captions === 'off' ? 'on' : 'off'
+    if (nativeActive) {
+      void controlNatively('subtitles', next === 'on' ? 1 : 0).catch(() => undefined)
+      setCaptions(next)
+      return
+    }
+    if (captions !== 'on' && captions !== 'off') return
+    const video = videoRef.current
+    if (!video) return
+    setSubtitleMode(video, next === 'on')
+    setCaptions(next)
+  }, [captions, nativeActive])
+
   const toggleFullscreen = useCallback(() => {
     const root = holeRef.current?.closest('.library-player') ?? videoRef.current
     if (!root) return
@@ -257,12 +271,7 @@ export function LibraryPlayer({
         }
       } else if (event.key === 'c') {
         event.preventDefault()
-        if (captions === 'on' || captions === 'off') {
-          const next = captions === 'on' ? 'off' : 'on'
-          if (nativeActive) void controlNatively('subtitles').catch(() => undefined)
-          else if (video) setSubtitleMode(video, next === 'on')
-          setCaptions(next)
-        }
+        toggleCaptions()
       } else if (event.key === 'z') {
         event.preventDefault()
         applyAspect(nextPlayerAspect(aspect))
@@ -279,7 +288,7 @@ export function LibraryPlayer({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [applyAspect, applyZoom, aspect, captions, nativeActive, onClose, pictureZoom, revealChrome, seekBy, togglePlayback, togglePresentation])
+  }, [applyAspect, applyZoom, aspect, nativeActive, onClose, pictureZoom, revealChrome, seekBy, toggleCaptions, togglePlayback, togglePresentation])
 
   useEffect(() => {
     setError(null)
@@ -318,7 +327,7 @@ export function LibraryPlayer({
             userAgent: descriptor.userAgent,
             sessionId: descriptor.sessionId,
           }
-          setCaptions('missing')
+          setCaptions('on')
           setNativeActive(true)
           void subtitlePromise.then((subtitle) => {
             if (cancelled || !subtitle) return
@@ -437,6 +446,9 @@ export function LibraryPlayer({
         setDurationSeconds(status.duration)
         setVolume(status.volume)
         setRate(status.speed)
+        if (typeof status.subtitles === 'boolean') {
+          setCaptions(status.subtitles ? 'on' : 'off')
+        }
         if (typeof status.zoom === 'number' && status.zoom > 0) {
           setPictureZoom(clampPictureZoom(status.zoom))
         }
@@ -502,20 +514,6 @@ export function LibraryPlayer({
     stage.addEventListener('wheel', onWheel, { passive: false })
     return () => stage.removeEventListener('wheel', onWheel)
   }, [applyZoom, pictureZoom, revealChrome])
-
-  const toggleCaptions = () => {
-    if (captions !== 'on' && captions !== 'off') return
-    const next = captions === 'on' ? 'off' : 'on'
-    if (nativeActive) {
-      void controlNatively('subtitles').catch(() => undefined)
-      setCaptions(next)
-      return
-    }
-    const video = videoRef.current
-    if (!video) return
-    setSubtitleMode(video, next === 'on')
-    setCaptions(next)
-  }
 
   const seekProgress = durationSeconds > 0 ? Math.min(1, currentSeconds / durationSeconds) : 0
   const shellClass = [
@@ -786,16 +784,16 @@ export function LibraryPlayer({
               </select>
             </label>
 
-            {(captions === 'on' || captions === 'off') ? (
+            {(captions === 'on' || captions === 'off' || nativeActive) ? (
               <button
-                aria-label={captions === 'on' ? '字幕开' : '字幕关'}
-                aria-pressed={captions === 'on'}
-                className={captions === 'on' ? 'library-player-icon-action active' : 'library-player-icon-action'}
+                aria-label={captions === 'off' ? '字幕关' : '字幕开'}
+                aria-pressed={captions !== 'off'}
+                className={captions === 'off' ? 'library-player-icon-action' : 'library-player-icon-action active'}
                 onClick={toggleCaptions}
                 type="button"
               >
                 <Captions size={18} />
-                <span aria-hidden="true">{captions === 'on' ? '字幕开' : '字幕关'}</span>
+                <span aria-hidden="true">{captions === 'off' ? '字幕关' : '字幕开'}</span>
               </button>
             ) : !nativeActive ? (
               <button

@@ -85,9 +85,11 @@ describe('nativePlayback', () => {
     await controlNatively('aspect', undefined, 'zoom')
     await controlNatively('zoom', 1.2)
     await controlNatively('cycle-audio')
+    await controlNatively('subtitles', 0)
     expect(invoke).toHaveBeenCalledWith('native_control', { action: 'aspect', value: undefined, mode: 'zoom' })
     expect(invoke).toHaveBeenCalledWith('native_control', { action: 'zoom', value: 1.2, mode: undefined })
     expect(invoke).toHaveBeenCalledWith('native_control', { action: 'cycle-audio', value: undefined, mode: undefined })
+    expect(invoke).toHaveBeenCalledWith('native_control', { action: 'subtitles', value: 0, mode: undefined })
   })
 
   it('toggles the desktop window maximize state', async () => {
