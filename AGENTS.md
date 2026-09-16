@@ -60,3 +60,10 @@
 - `himym`：Media Hub 生产 NAS 部署主机，承载 Docker、媒体数据和 Media Hub 服务。
 - `dmit`：Media Hub 的 Mikan egress SSH 目标；`deploy/compose.mikan-egress.yaml` 通过 `MEDIA_HUB_MIKAN_EGRESS_SSH_HOST` 连接远端 `127.0.0.1:17898`，仅在启用 egress overlay 时使用。
 - 涉及部署或远程运维时必须同时确认 SSH alias、远程目录和是否启用了 egress overlay；不要记录 secret value。
+
+## 注释语言
+
+- 新增或修改代码注释默认使用简体中文，包括文档注释。
+- 保留必要的英文技术术语、标识符、命令、协议字段及工具要求的固定注释。
+- 不为统一语言批量翻译已有注释；修改相关代码时按需调整。
+- 用户明确要求英文，或文件必须遵循外部规范时，以该要求为准。
