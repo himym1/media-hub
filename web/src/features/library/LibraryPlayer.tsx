@@ -219,12 +219,18 @@ export function LibraryPlayer({
 
   const togglePresentation = useCallback(() => {
     if (canPlayNatively()) {
-      nativeFullscreenRef.current = !nativeFullscreenRef.current
-      setNativeFullscreen(nativeFullscreenRef.current)
-      void toggleNativeWindow().catch(() => {
-        nativeFullscreenRef.current = !nativeFullscreenRef.current
-        setNativeFullscreen(nativeFullscreenRef.current)
-      })
+      const next = !nativeFullscreenRef.current
+      nativeFullscreenRef.current = next
+      setNativeFullscreen(next)
+      void toggleNativeWindow(next)
+        .then(() => {
+          const bounds = nativeSurfaceBounds()
+          if (bounds) void layoutNatively(bounds).catch(() => undefined)
+        })
+        .catch(() => {
+          nativeFullscreenRef.current = !next
+          setNativeFullscreen(!next)
+        })
       return
     }
     toggleFullscreen()

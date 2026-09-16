@@ -97,6 +97,8 @@ describe('nativePlayback', () => {
     ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
     await toggleNativeWindow()
     expect(invoke).toHaveBeenCalledWith('toggle_native_window', {})
+    await toggleNativeWindow(false)
+    expect(invoke).toHaveBeenCalledWith('toggle_native_window', { fullscreen: false })
   })
 
   it('hides the desktop pointer without failing on older shells', async () => {

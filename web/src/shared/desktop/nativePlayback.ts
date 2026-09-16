@@ -127,8 +127,11 @@ export async function nativeStatus(): Promise<NativeStatus | null> {
   }
 }
 
-export async function toggleNativeWindow() {
-  await invokeNative('toggle_native_window')
+export async function toggleNativeWindow(fullscreen?: boolean) {
+  await invokeNative(
+    'toggle_native_window',
+    fullscreen === undefined ? {} : { fullscreen },
+  )
 }
 
 export async function setNativeCursorVisible(visible: boolean) {
