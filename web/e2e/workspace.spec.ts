@@ -243,6 +243,7 @@ test('subscription polling does not overwrite an in-progress edit', async ({ pag
   await installApiFixtures(page, { withSubscription: true })
   await page.goto('/?view=subscriptions')
   await page.getByRole('button', { name: /验收影片.*TMDB 100/ }).click()
+  await expect(page.getByRole('button', { name: '删除订阅' })).toBeVisible()
   await page.getByLabel('标题', { exact: true }).fill('尚未保存的标题')
 
   const refreshed = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/subscriptions')

@@ -1987,6 +1987,8 @@ h1 em { color: var(--accent); font-style: normal; }
 .check-row label { display: inline-flex; align-items: center; gap: 7px; color: #a7aca7; font-size: 12px; }
 .check-row input { accent-color: var(--accent); }
 .editor-actions { justify-content: flex-end; flex-wrap: wrap; margin-top: 20px; }
+.editor-actions-secondary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-right: auto; }
+.editor-actions .danger-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; margin: 0; padding: 0 13px; }
 .editor-actions .primary-action.compact { width: auto; min-height: 44px; margin: 0 0 0 auto; padding: 0 15px; }
 .subscription-sources { margin-top: 18px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .subscription-sources summary { display: flex; align-items: center; gap: 12px; min-height: 48px; color: var(--text); cursor: pointer; font-size: 13px; font-weight: 650; }

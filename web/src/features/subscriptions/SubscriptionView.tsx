@@ -278,7 +278,13 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
               {editor.qualityPreset === 'custom' ? <div className="check-row"><label><input checked={editor.allowUnknownSize} onChange={(event) => setField(setEditor, 'allowUnknownSize', event.target.checked)} type="checkbox" />设定体积范围时允许未知体积</label><label><input checked={editor.preferSmaller} onChange={(event) => setField(setEditor, 'preferSmaller', event.target.checked)} type="checkbox" />同分时优先较小版本</label></div> : <p className="preset-summary">{qualityPresetSummary(editor.qualityPreset)}</p>}
             </details>
             <div className="editor-actions">
-              {selected ? <><IconButton label={selected.enabled ? '暂停订阅' : '恢复订阅'} onClick={() => toggle.mutate({ id: selected.id, enabled: !selected.enabled })}>{selected.enabled ? <Pause size={16} /> : <Play size={16} />}</IconButton><IconButton label="立即运行" onClick={() => runNow.mutate(selected.id)}><RefreshCw size={16} /></IconButton><IconButton disabled={remove.isPending} label="删除订阅" onClick={() => setConfirmingDelete(true)}><Trash2 size={16} /></IconButton></> : null}
+              {selected ? (
+                <div className="editor-actions-secondary">
+                  <button className="secondary-command" disabled={toggle.isPending} onClick={() => toggle.mutate({ id: selected.id, enabled: !selected.enabled })} type="button">{selected.enabled ? <Pause size={16} /> : <Play size={16} />}{selected.enabled ? '暂停' : '恢复'}</button>
+                  <button className="secondary-command" disabled={runNow.isPending} onClick={() => runNow.mutate(selected.id)} type="button"><RefreshCw size={16} />立即运行</button>
+                  <button className="danger-button" disabled={remove.isPending} onClick={() => setConfirmingDelete(true)} type="button"><Trash2 size={16} />删除订阅</button>
+                </div>
+              ) : null}
               <button className="primary-action compact" disabled={save.isPending || !editor.tmdbId.trim() || !editor.title.trim()} type="submit"><Save size={16} />{save.isPending ? '保存中' : '保存订阅'}</button>
             </div>
             {selected && confirmingDelete ? (
