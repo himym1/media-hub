@@ -263,6 +263,14 @@ fn download_and_verify(
     Ok(())
 }
 
+pub(crate) fn macos_quarantine_clear_args(path: &Path) -> Option<Vec<String>> {
+    let value = path.to_str()?;
+    if value.contains('\n') || value.contains('\r') || value.contains('\0') {
+        return None;
+    }
+    Some(vec!["xattr".into(), "-cr".into(), value.into()])
+}
+
 pub(crate) fn unblock_downloaded_file(path: &Path) {
     let Some(value) = path.to_str() else {
         return;
@@ -271,6 +279,18 @@ pub(crate) fn unblock_downloaded_file(path: &Path) {
         return;
     }
     let _ = fs::remove_file(format!("{value}:Zone.Identifier"));
+    if let Some(args) = macos_quarantine_clear_args(path) {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = std::process::Command::new(&args[0])
+                .args(&args[1..])
+                .status();
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = args;
+        }
+    }
 }
 
 fn start_installer(path: &Path, kind: ArtifactKind) -> Result<(), String> {
@@ -365,6 +385,7 @@ fn start_windows_installer(path: &Path) -> Result<(), String> {
 fn start_darwin_installer(path: &Path) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
+        unblock_downloaded_file(path);
         std::process::Command::new("open")
             .arg(path)
             .spawn()
@@ -478,6 +499,34 @@ mod tests {
     #[test]
     fn unblock_ignores_paths_with_control_characters() {
         unblock_downloaded_file(Path::new("media-hub-20048.exe\nZone.Identifier"));
+    }
+
+    #[test]
+    fn macos_unblock_clears_quarantine_with_xattr() {
+        assert_eq!(
+            macos_quarantine_clear_args(Path::new("/Users/me/Downloads/media-hub-21016.dmg")).unwrap(),
+            ["xattr", "-cr", "/Users/me/Downloads/media-hub-21016.dmg"]
+        );
+        assert!(macos_quarantine_clear_args(Path::new("media-hub-21016.dmg\nxattr")).is_none());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn unblock_removes_com_apple_quarantine() {
+        let path = std::env::temp_dir().join("media-hub-quarantine-test.dmg");
+        fs::write(&path, b"test").expect("temp dmg");
+        let _ = std::process::Command::new("xattr")
+            .args(["-w", "com.apple.quarantine", "0081;00000000;Safari;"])
+            .arg(&path)
+            .status();
+        unblock_downloaded_file(&path);
+        let listed = std::process::Command::new("xattr").arg("-l").arg(&path).output().expect("xattr");
+        let _ = fs::remove_file(&path);
+        let attrs = String::from_utf8_lossy(&listed.stdout);
+        assert!(
+            !attrs.contains("com.apple.quarantine"),
+            "quarantine still present: {attrs}"
+        );
     }
 
     #[test]

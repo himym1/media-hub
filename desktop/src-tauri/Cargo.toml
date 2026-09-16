@@ -1,6 +1,6 @@
 [package]
 name = "media-hub-desktop"
-version = "0.21.15"
+version = "0.21.16"
 description = "Media Hub desktop shell"
 authors = ["Media Hub"]
 edition = "2021"

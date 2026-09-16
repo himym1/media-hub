@@ -106,7 +106,15 @@ describe('desktopUpdate', () => {
       ...release,
       downloadPath: '/api/v1/client/desktop/releases/20039/dmg',
       notes: '修复安装后仍提示更新',
-    }, false, true)).toBe('修复安装后仍提示更新 · 约 18.0 MB。装好后完全退出，从「应用程序」打开。')
+    }, false, true)).toBe('修复安装后仍提示更新 · 约 18.0 MB。装好后完全退出，从「应用程序」打开。若提示已损坏，终端执行 xattr -cr "/Applications/Media Hub.app"')
+    expect(desktopUpdateBody({
+      ...release,
+      downloadPath: '/api/v1/client/desktop/releases/20039/dmg',
+    }, false, false)).toBe('约 18.0 MB。拖到「应用程序」后完全退出再打开。若提示已损坏，终端执行 xattr -cr "/Applications/Media Hub.app"')
+    expect(desktopUpdateBody({
+      ...release,
+      downloadPath: '/api/v1/client/desktop/releases/20039/dmg',
+    }, true, false)).toBe('请完全退出，再从「应用程序」打开。只关窗口会继续用旧版。若提示已损坏，终端执行 xattr -cr "/Applications/Media Hub.app"')
   })
 
   it('formats installer size and hides raw URLs', () => {

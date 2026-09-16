@@ -145,21 +145,28 @@ export function desktopUpdateHeadline(release: DesktopRelease, pendingRelaunch: 
   return pendingRelaunch ? `${release.versionName} 已就绪` : `桌面端 ${release.versionName}`
 }
 
+const darwinGatekeeperHint =
+  '若提示已损坏，终端执行 xattr -cr "/Applications/Media Hub.app"'
+
 export function desktopUpdateBody(
   release: DesktopRelease,
   pendingRelaunch: boolean,
   nativeInstall: boolean,
 ) {
   if (pendingRelaunch) {
-    return '请完全退出，再从「应用程序」打开。只关窗口会继续用旧版。'
+    const reopen = '请完全退出，再从「应用程序」打开。只关窗口会继续用旧版。'
+    return desktopPlatformFromPath(release.downloadPath) === 'darwin'
+      ? `${reopen}${darwinGatekeeperHint}`
+      : reopen
   }
   const size = formatDesktopUpdateSize(release.sizeBytes)
   const blurb = desktopReleaseBlurb(release)
   const lead = blurb ? `${blurb} · 约 ${size}` : `约 ${size}`
   if (desktopPlatformFromPath(release.downloadPath) === 'darwin') {
-    return nativeInstall
+    const install = nativeInstall
       ? `${lead}。装好后完全退出，从「应用程序」打开。`
       : `${lead}。拖到「应用程序」后完全退出再打开。`
+    return `${install}${darwinGatekeeperHint}`
   }
   return nativeInstall ? `${lead}。安装后会重新打开。` : `${lead}。退出后再打开安装包。`
 }
