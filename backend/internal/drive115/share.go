@@ -169,11 +169,8 @@ func (c *Client) InspectShare(ctx context.Context, shareCode, receiveCode string
 					List  []shareItem     `json:"list"`
 				} `json:"data"`
 			}
-			if err := c.getJSONWithSession(ctx, c.shareSnapURL, query, cookie, &payload); err != nil {
+			if err := c.shareSnap(ctx, query, cookie, &payload); err != nil {
 				return nil, nil, err
-			}
-			if !payload.State {
-				return nil, nil, ErrUpstreamResponse
 			}
 			if count, ok := shareInteger(payload.Data.Count); ok {
 				if count > shareSnapMaxEntries-directoryBaseEntries {
@@ -246,6 +243,36 @@ func (c *Client) InspectShare(ctx context.Context, shareCode, receiveCode string
 		return nil, nil, ErrUpstreamResponse
 	}
 	return names, rootIDs, nil
+}
+
+// shareSnap lists a share without the login cookie first. 115 currently answers
+// /share/snap with HTTP 405 when a session cookie is sent; ReceiveShare still
+// authenticates. Cookie is only retried if the anonymous listing does not open.
+func (c *Client) shareSnap(ctx context.Context, query url.Values, cookie string, target any) error {
+	if err := c.getJSONWithSession(ctx, c.shareSnapURL, query, "", target); err == nil && snapOpened(target) {
+		return nil
+	}
+	if strings.TrimSpace(cookie) == "" {
+		return ErrUpstreamResponse
+	}
+	if err := c.getJSONWithSession(ctx, c.shareSnapURL, query, cookie, target); err != nil {
+		return err
+	}
+	if !snapOpened(target) {
+		return ErrUpstreamResponse
+	}
+	return nil
+}
+
+func snapOpened(target any) bool {
+	raw, err := json.Marshal(target)
+	if err != nil {
+		return false
+	}
+	var payload struct {
+		State bool `json:"state"`
+	}
+	return json.Unmarshal(raw, &payload) == nil && payload.State
 }
 
 func shareVideoName(name string) bool {

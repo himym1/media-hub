@@ -173,7 +173,7 @@ func TestInspectShareListsNestedMediaAndRootIDsWithoutReceiving(t *testing.T) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		requests++
-		if request.Method != http.MethodGet || request.Header.Get("Cookie") != cookie || request.URL.Query().Get("share_code") != "abc123" || request.URL.Query().Get("receive_code") != "xy9z" || request.URL.Query().Get("offset") != "0" {
+		if request.Method != http.MethodGet || request.Header.Get("Cookie") != "" || request.URL.Query().Get("share_code") != "abc123" || request.URL.Query().Get("receive_code") != "xy9z" || request.URL.Query().Get("offset") != "0" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -197,6 +197,36 @@ func TestInspectShareListsNestedMediaAndRootIDsWithoutReceiving(t *testing.T) {
 	}
 	if len(names) != 1 || names[0] != "Van.Helsing.2004.2160p.mkv" || len(rootIDs) != 2 || rootIDs[0] != "10" || rootIDs[1] != "11" || requests != 2 {
 		t.Fatalf("names=%#v roots=%#v requests=%d", names, rootIDs, requests)
+	}
+}
+
+func TestInspectShareFallsBackToSessionWhenAnonymousSnapRejected(t *testing.T) {
+	const cookie = "UID=123_session; CID=cid; SEID=seid"
+	anonymous := 0
+	authed := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Cookie") == "" {
+			anonymous++
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		authed++
+		if request.Header.Get("Cookie") != cookie {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"state":true,"data":{"list":[{"fid":"20","fc":1,"n":"Van.Helsing.2004.mkv"}]}}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(cookie, time.Second)
+	client.shareSnapURL = server.URL
+	names, rootIDs, err := client.InspectShare(context.Background(), "abc123", "xy9z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if anonymous != 1 || authed != 1 || len(names) != 1 || names[0] != "Van.Helsing.2004.mkv" || len(rootIDs) != 1 || rootIDs[0] != "20" {
+		t.Fatalf("anonymous=%d authed=%d names=%#v roots=%#v", anonymous, authed, names, rootIDs)
 	}
 }
 
