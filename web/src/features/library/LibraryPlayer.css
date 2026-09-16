@@ -40,6 +40,20 @@
   color: #f2f1eb;
 }
 
+.library-player:fullscreen,
+.library-player:-webkit-full-screen {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.library-player:fullscreen .library-player-stage,
+.library-player:-webkit-full-screen .library-player-stage {
+  min-height: 100%;
+  height: 100%;
+}
+
 .library-player-stage {
   position: relative;
   width: 100%;

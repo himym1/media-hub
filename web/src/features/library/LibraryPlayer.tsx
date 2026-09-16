@@ -40,6 +40,12 @@ import {
   stepPictureZoom,
   type PlayerAspectId,
 } from './playerChrome'
+import {
+  documentFullscreenElement,
+  exitDocumentFullscreen,
+  shouldClosePlayerOnEscape,
+  toggleDocumentFullscreen,
+} from './playerFullscreen'
 import { looksLikeSilentDirectPlay } from './silentAudio'
 import './LibraryPlayer.css'
 
@@ -97,6 +103,7 @@ export function LibraryPlayer({
   const [silentAudio, setSilentAudio] = useState(false)
   const [nativeActive, setNativeActive] = useState(false)
   const [nativeFullscreen, setNativeFullscreen] = useState(false)
+  const [webFullscreen, setWebFullscreen] = useState(false)
   const nativeFullscreenRef = useRef(false)
   const [nativePointerReady, setNativePointerReady] = useState(false)
   const [subtitleHint, setSubtitleHint] = useState<string | null>(null)
@@ -207,8 +214,7 @@ export function LibraryPlayer({
   const toggleFullscreen = useCallback(() => {
     const root = holeRef.current?.closest('.library-player') ?? videoRef.current
     if (!root) return
-    if (document.fullscreenElement) void document.exitFullscreen()
-    else void root.requestFullscreen()
+    void toggleDocumentFullscreen(root).catch(() => undefined)
   }, [])
 
   const togglePresentation = useCallback(() => {
@@ -241,11 +247,17 @@ export function LibraryPlayer({
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
       const video = videoRef.current
       if (event.key === 'Escape') {
-        event.preventDefault()
-        if (nativeActive && nativeFullscreenRef.current) {
-          togglePresentation()
+        const inDocumentFullscreen = documentFullscreenElement() !== null
+        if (!shouldClosePlayerOnEscape(Boolean(nativeActive && nativeFullscreenRef.current), inDocumentFullscreen)) {
+          event.preventDefault()
+          if (nativeActive && nativeFullscreenRef.current) {
+            togglePresentation()
+            return
+          }
+          void exitDocumentFullscreen().catch(() => undefined)
           return
         }
+        event.preventDefault()
         onClose()
         return
       }
@@ -289,6 +301,17 @@ export function LibraryPlayer({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [applyAspect, applyZoom, aspect, nativeActive, onClose, pictureZoom, revealChrome, seekBy, toggleCaptions, togglePlayback, togglePresentation])
+
+  useEffect(() => {
+    const sync = () => setWebFullscreen(documentFullscreenElement() !== null)
+    sync()
+    document.addEventListener('fullscreenchange', sync)
+    document.addEventListener('webkitfullscreenchange', sync)
+    return () => {
+      document.removeEventListener('fullscreenchange', sync)
+      document.removeEventListener('webkitfullscreenchange', sync)
+    }
+  }, [])
 
   useEffect(() => {
     setError(null)
@@ -429,7 +452,6 @@ export function LibraryPlayer({
       }
     })()
     const relayout = () => {
-      if (nativeFullscreenRef.current) return
       const bounds = nativeSurfaceBounds()
       if (bounds) void layoutNatively(bounds).catch(() => undefined)
     }
@@ -451,6 +473,10 @@ export function LibraryPlayer({
         }
         if (typeof status.zoom === 'number' && status.zoom > 0) {
           setPictureZoom(clampPictureZoom(status.zoom))
+        }
+        if (typeof status.fullscreen === 'boolean' && status.fullscreen !== nativeFullscreenRef.current) {
+          nativeFullscreenRef.current = status.fullscreen
+          setNativeFullscreen(status.fullscreen)
         }
         const pointer = nativePointerFromStatus(status)
         if (pointer) {
@@ -483,7 +509,7 @@ export function LibraryPlayer({
   }, [itemId, nativeActive])
 
   useEffect(() => {
-    if (!nativeActive || nativeFullscreen) return
+    if (!nativeActive) return
     const bounds = nativeSurfaceBounds()
     if (bounds) void layoutNatively(bounds).catch(() => undefined)
   }, [chromeVisible, itemId, nativeActive, nativeFullscreen])
@@ -839,6 +865,7 @@ export function LibraryPlayer({
 
             <button
               aria-label="全屏"
+              aria-pressed={nativeFullscreen || webFullscreen}
               className="library-player-icon-action"
               onClick={togglePresentation}
               type="button"
