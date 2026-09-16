@@ -81,6 +81,19 @@ func TestPansouSearchFallsBackToMerged115(t *testing.T) {
 	}
 }
 
+func TestPansouSearchAcceptsInvalidUTF8Payload(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{\"code\":0,\"data\":{\"results\":[{\"title\":\"ok\xff\",\"links\":[{\"type\":\"115\",\"url\":\"https://115.com/s/shareABC123\",\"password\":\"WENG\"}]}]}}"))
+	}))
+	defer server.Close()
+
+	results, err := NewPansou(server.URL, "", time.Second, nil).Search(context.Background(), "范海辛")
+	if err != nil || len(results) != 1 {
+		t.Fatalf("results = %#v err=%v", results, err)
+	}
+}
+
 func TestPansouSearchRejectsUnauthorized(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)

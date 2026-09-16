@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"media-hub/backend/internal/mediaidentity"
 	"media-hub/backend/internal/search"
@@ -139,6 +140,9 @@ func (s *Pansou) Search(ctx context.Context, queryText string) ([]search.Candida
 	payload, err := io.ReadAll(limited)
 	if err != nil || len(payload) > pansouMaxPageBytes {
 		return nil, search.Failure{Code: "source_unavailable", Message: "盘搜响应无效", Retryable: true}
+	}
+	if !utf8.Valid(payload) {
+		payload = []byte(strings.ToValidUTF8(string(payload), ""))
 	}
 	var parsed pansouAPIResponse
 	if err := json.Unmarshal(payload, &parsed); err != nil {
