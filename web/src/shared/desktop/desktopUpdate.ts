@@ -123,11 +123,10 @@ export function desktopUpdateRequired(currentVersionCode: number, latest: Deskto
 }
 
 export function desktopNativeInstallReady(version: string | null, platform: DesktopPlatform | null) {
-  void version
-  void platform
-  // In-app replace is not reliable yet: Windows silent NSIS often never
-  // finishes, and macOS only opens the DMG. Keep one download action.
-  return false
+  if (platform !== 'darwin' || version == null) return false
+  const code = desktopVersionCode(version)
+  // 0.21.21+ copies the .app into Applications and clears quarantine.
+  return code != null && code >= 21_021
 }
 
 export function formatDesktopUpdateSize(bytes: number) {
@@ -155,7 +154,7 @@ export function desktopUpdateBody(
 ) {
   if (pendingRelaunch) {
     const reopen = '请完全退出，再从「应用程序」打开。只关窗口会继续用旧版。'
-    return desktopPlatformFromPath(release.downloadPath) === 'darwin'
+    return desktopPlatformFromPath(release.downloadPath) === 'darwin' && !nativeInstall
       ? `${reopen}${darwinGatekeeperHint}`
       : reopen
   }
@@ -163,10 +162,9 @@ export function desktopUpdateBody(
   const blurb = desktopReleaseBlurb(release)
   const lead = blurb ? `${blurb} · 约 ${size}` : `约 ${size}`
   if (desktopPlatformFromPath(release.downloadPath) === 'darwin') {
-    const install = nativeInstall
-      ? `${lead}。装好后完全退出，从「应用程序」打开。`
-      : `${lead}。拖到「应用程序」后完全退出再打开。`
-    return `${install}${darwinGatekeeperHint}`
+    return nativeInstall
+      ? `${lead}。会装到「应用程序」，然后完全退出再打开。`
+      : `${lead}。拖到「应用程序」后完全退出再打开。${darwinGatekeeperHint}`
   }
   return nativeInstall ? `${lead}。安装后会重新打开。` : `${lead}。退出后再打开安装包。`
 }

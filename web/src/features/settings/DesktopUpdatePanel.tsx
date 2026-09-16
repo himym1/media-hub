@@ -20,10 +20,22 @@ export function DesktopUpdateBanner({ update }: { update: DesktopUpdateState }) 
             {update.required ? null : (
               <button className="secondary-command" disabled={update.installing} onClick={update.dismiss} type="button">稍后</button>
             )}
-            <SaveInstallerLink className="primary-action" onDownloaded={update.check} release={update.prompt}>
-              <Download size={16} />
-              下载 {update.prompt.versionName}
-            </SaveInstallerLink>
+            {update.nativeInstall ? (
+              <button
+                className="primary-action"
+                disabled={update.installing}
+                onClick={() => void update.install()}
+                type="button"
+              >
+                <Download size={16} />
+                {update.installing ? '正在安装…' : `安装 ${update.prompt.versionName}`}
+              </button>
+            ) : (
+              <SaveInstallerLink className="primary-action" onDownloaded={update.check} release={update.prompt}>
+                <Download size={16} />
+                下载 {update.prompt.versionName}
+              </SaveInstallerLink>
+            )}
           </>
         )}
       </div>
@@ -60,10 +72,22 @@ export function DesktopUpdateSettings({ update }: { update: DesktopUpdateState }
           {update.checking ? '正在检查' : '检查更新'}
         </button>
         {update.release && !update.pendingRelaunch ? (
-          <SaveInstallerLink className="secondary-command" onDownloaded={update.check} release={update.release}>
-            <Download size={16} />
-            下载 {update.release.versionName}
-          </SaveInstallerLink>
+          update.nativeInstall ? (
+            <button
+              className="secondary-command"
+              disabled={update.installing}
+              onClick={() => void update.install()}
+              type="button"
+            >
+              <Download size={16} />
+              {update.installing ? '正在安装…' : `安装 ${update.release.versionName}`}
+            </button>
+          ) : (
+            <SaveInstallerLink className="secondary-command" onDownloaded={update.check} release={update.release}>
+              <Download size={16} />
+              下载 {update.release.versionName}
+            </SaveInstallerLink>
+          )
         ) : null}
       </div>
       {update.error && update.release ? <span className="form-error" role="alert">{update.error}</span> : null}

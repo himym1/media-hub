@@ -37,9 +37,9 @@ On a version tag, the same workflow copies the NSIS installer to the NAS `releas
 
 ## macOS disk image
 
-`.github/workflows/desktop-macos.yml` builds a `.dmg` on `macos-latest`. A version tag also writes `media-hub-<versionCode>.dmg` and `desktop-darwin-latest.json` to the NAS `releases/` directory. The Mac app opens the disk image after checksum verification; drag Media Hub into Applications, then reopen it.
+`.github/workflows/desktop-macos.yml` builds a `.dmg` on `macos-latest`. A version tag also writes `media-hub-<versionCode>.dmg` and `desktop-darwin-latest.json` to the NAS `releases/` directory. From 0.21.21 the Mac app copies `Media Hub.app` into `/Applications` and strips `com.apple.quarantine` on the installed bundle. Older shells still only download the DMG.
 
-The DMG is unsigned unless Apple notarization secrets are added later. macOS reports an unsigned internet download as “Media Hub is damaged”. The desktop app strips `com.apple.quarantine` after a trusted in-app download. If Finder still blocks it, run `xattr -cr "/Applications/Media Hub.app"` and open the app, or right-click → Open.
+The DMG is unsigned unless Apple notarization secrets are added later. macOS reports an unsigned internet download as “Media Hub is damaged” if the copied app still has quarantine. If Finder blocks a dragged install, run `xattr -cr "/Applications/Media Hub.app"` and open the app, or right-click → Open.
 
 ## Scope
 

@@ -382,14 +382,84 @@ fn start_windows_installer(path: &Path) -> Result<(), String> {
     }
 }
 
+const DARWIN_APP_NAME: &str = "Media Hub.app";
+
+pub(crate) fn darwin_applications_target() -> PathBuf {
+    PathBuf::from("/Applications").join(DARWIN_APP_NAME)
+}
+
+pub(crate) fn darwin_mount_point(dmg: &Path) -> Option<PathBuf> {
+    let raw = dmg.to_str()?;
+    if raw.contains('\n') || raw.contains('\r') || raw.contains('\0') {
+        return None;
+    }
+    let stem = dmg.file_stem()?.to_str()?;
+    if stem.is_empty() {
+        return None;
+    }
+    Some(std::env::temp_dir().join(format!("{stem}-mount")))
+}
+
+fn darwin_path_is_safe(path: &Path) -> bool {
+    path.to_str().is_some_and(|value| {
+        Path::new(value).is_absolute()
+            && !value.contains('\n')
+            && !value.contains('\r')
+            && !value.contains('\0')
+    })
+}
+
 fn start_darwin_installer(path: &Path) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
+        if !darwin_path_is_safe(path) {
+            return Err("更新包路径无效。".into());
+        }
         unblock_downloaded_file(path);
-        std::process::Command::new("open")
+        let mount = darwin_mount_point(path).ok_or_else(|| "更新包路径无效。".to_string())?;
+        if !darwin_path_is_safe(&mount) {
+            return Err("更新包路径无效。".into());
+        }
+        let _ = std::process::Command::new("hdiutil")
+            .args(["detach", "-quiet"])
+            .arg(&mount)
+            .status();
+        let _ = fs::remove_dir(&mount);
+        let attached = std::process::Command::new("hdiutil")
+            .args(["attach", "-nobrowse", "-readonly", "-mountpoint"])
+            .arg(&mount)
             .arg(path)
-            .spawn()
+            .status()
             .map_err(|_| "无法打开安装盘。".to_string())?;
+        if !attached.success() {
+            return Err("无法打开安装盘。".into());
+        }
+        let source = mount.join(DARWIN_APP_NAME);
+        let dest = darwin_applications_target();
+        if !source.is_dir() {
+            let _ = std::process::Command::new("hdiutil")
+                .args(["detach", "-force", "-quiet"])
+                .arg(&mount)
+                .status();
+            return Err("安装盘里没有 Media Hub。".into());
+        }
+        unblock_downloaded_file(&source);
+        let copied = std::process::Command::new("ditto")
+            .arg(&source)
+            .arg(&dest)
+            .status()
+            .map_err(|_| "无法写入应用程序。".to_string());
+        let _ = std::process::Command::new("hdiutil")
+            .args(["detach", "-force", "-quiet"])
+            .arg(&mount)
+            .status();
+        if !copied.map(|status| status.success()).unwrap_or(false) {
+            return Err("无法写入应用程序。".into());
+        }
+        unblock_downloaded_file(&dest);
+        if !dest.join("Contents").is_dir() {
+            return Err("应用程序安装不完整。".into());
+        }
         Ok(())
     }
     #[cfg(not(target_os = "macos"))]
@@ -508,6 +578,15 @@ mod tests {
             ["xattr", "-cr", "/Users/me/Downloads/media-hub-21016.dmg"]
         );
         assert!(macos_quarantine_clear_args(Path::new("media-hub-21016.dmg\nxattr")).is_none());
+        assert_eq!(
+            darwin_applications_target(),
+            PathBuf::from("/Applications/Media Hub.app")
+        );
+        assert_eq!(
+            darwin_mount_point(Path::new("/tmp/media-hub-21021.dmg")),
+            Some(std::env::temp_dir().join("media-hub-21021-mount"))
+        );
+        assert!(darwin_mount_point(Path::new("media-hub-21021.dmg\nmount")).is_none());
     }
 
     #[cfg(target_os = "macos")]

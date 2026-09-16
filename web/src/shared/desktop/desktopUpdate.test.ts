@@ -88,10 +88,11 @@ describe('desktopUpdate', () => {
     vi.unstubAllGlobals()
   })
 
-  it('keeps desktop updates on the download path until in-app install works', () => {
+  it('enables macOS in-app install only after the shell can clear quarantine', () => {
     expect(desktopNativeInstallReady('0.21.14', 'windows')).toBe(false)
-    expect(desktopNativeInstallReady('0.21.14', 'darwin')).toBe(false)
-    expect(desktopNativeInstallReady(null, 'windows')).toBe(false)
+    expect(desktopNativeInstallReady('0.21.20', 'darwin')).toBe(false)
+    expect(desktopNativeInstallReady('0.21.21', 'darwin')).toBe(true)
+    expect(desktopNativeInstallReady(null, 'darwin')).toBe(false)
   })
 
   it('hides boilerplate notes and keeps the banner short', () => {
@@ -106,7 +107,7 @@ describe('desktopUpdate', () => {
       ...release,
       downloadPath: '/api/v1/client/desktop/releases/20039/dmg',
       notes: '修复安装后仍提示更新',
-    }, false, true)).toBe('修复安装后仍提示更新 · 约 18.0 MB。装好后完全退出，从「应用程序」打开。若提示已损坏，终端执行 xattr -cr "/Applications/Media Hub.app"')
+    }, false, true)).toBe('修复安装后仍提示更新 · 约 18.0 MB。会装到「应用程序」，然后完全退出再打开。')
     expect(desktopUpdateBody({
       ...release,
       downloadPath: '/api/v1/client/desktop/releases/20039/dmg',
