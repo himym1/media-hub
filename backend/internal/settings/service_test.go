@@ -423,6 +423,28 @@ func TestMergeKeepsEmbyPasswordUnlessUpdated(t *testing.T) {
 	}
 }
 
+func TestSharedEmbySettingsMergeWithoutClearing(t *testing.T) {
+	current := Values{SharedEmby: config.SharedEmby{BaseURL: "https://shared.example", Username: "reader", Password: "saved-password"}}
+	kept := merge(current, Update{})
+	if kept.SharedEmby.Password != "saved-password" || kept.SharedEmby.Username != "reader" {
+		t.Fatalf("omitted shared Emby was not preserved: %#v", kept.SharedEmby)
+	}
+	updated := merge(current, Update{SharedEmby: &SharedEmbyUpdate{
+		BaseURL: "https://shared.example", Username: "reader", Password: SecretUpdate{Value: "next-password"},
+	}})
+	if updated.SharedEmby.Password != "next-password" {
+		t.Fatalf("shared password was not updated: %q", updated.SharedEmby.Password)
+	}
+	cleared := merge(current, Update{SharedEmby: &SharedEmbyUpdate{Password: SecretUpdate{Clear: true}}})
+	if cleared.SharedEmby.Password != "" {
+		t.Fatalf("shared password was not cleared: %q", cleared.SharedEmby.Password)
+	}
+	view := publicView(Values{SharedEmby: config.SharedEmby{Username: "reader", Password: "saved-password"}})
+	if view.SharedEmby.Username != "reader" || !view.SharedEmby.Password.Configured {
+		t.Fatal("shared Emby view did not hide the password")
+	}
+}
+
 func TestReadinessCountsBuiltinSourcesWithoutURLs(t *testing.T) {
 	service := NewService(nil, nil, Values{Sources: configSources()}, nil)
 	_, nativeSources := service.ReadinessConfiguration()

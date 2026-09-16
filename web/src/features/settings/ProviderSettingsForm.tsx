@@ -38,6 +38,12 @@ function createDraft(settings: ProviderSettings): Draft {
   return {
     qmediaSync: { baseUrl: settings.qmediaSync.baseUrl, apiKey: secret() },
     emby: { baseUrl: settings.emby.baseUrl, apiKey: secret(), userId: settings.emby.userId, password: secret() },
+    sharedEmby: {
+      baseUrl: settings.sharedEmby?.baseUrl ?? '',
+      username: settings.sharedEmby?.username ?? '',
+      password: secret(),
+      proxyUrl: settings.sharedEmby?.proxyUrl ?? '',
+    },
     drive115: { clientId: settings.drive115.clientId },
     tmdb: { baseUrl: settings.tmdb.baseUrl, accessToken: secret() },
     assrt: { baseUrl: settings.assrt?.baseUrl ?? '', token: secret() },
@@ -124,6 +130,16 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
             <p className="settings-note">从 Emby 删除媒体需要该用户的登录密码；仅 API Key 无法删除。</p>
             {settings.emby.apiKey.configured ? <label className="inline-check"><input checked={draft.emby.apiKey.clear} name="emby-clear-api-key" onChange={(event) => updateSecret('emby', 'apiKey', { value: '', clear: event.target.checked })} type="checkbox" />清除已保存 API Key</label> : null}
             {settings.emby.password.configured ? <label className="inline-check"><input checked={draft.emby.password.clear} name="emby-clear-password" onChange={(event) => setDraft((current) => ({ ...current, emby: { ...current.emby, password: { value: '', clear: event.target.checked } } }))} type="checkbox" />清除已保存用户密码</label> : null}
+          </fieldset>
+
+          <fieldset>
+            <legend>共享 Emby</legend>
+            <label><span>服务地址</span><input {...machineFieldProps} name="shared-emby-base-url" onChange={(event) => setDraft((current) => ({ ...current, sharedEmby: { ...current.sharedEmby, baseUrl: event.target.value } }))} placeholder="https://emby.example.com" type="url" value={draft.sharedEmby.baseUrl} /></label>
+            <label><span>用户名</span><input {...machineFieldProps} name="shared-emby-username" onChange={(event) => setDraft((current) => ({ ...current, sharedEmby: { ...current.sharedEmby, username: event.target.value } }))} value={draft.sharedEmby.username} /></label>
+            <label><span>密码 · {secretHint(settings.sharedEmby?.password.configured ?? false)}</span><input {...machineFieldProps} autoComplete="new-password" name="shared-emby-password" onChange={(event) => setDraft((current) => ({ ...current, sharedEmby: { ...current.sharedEmby, password: { ...current.sharedEmby.password, value: event.target.value } } }))} type="password" value={draft.sharedEmby.password.value} /></label>
+            <label><span>代理地址（可选）</span><input {...machineFieldProps} name="shared-emby-proxy-url" onChange={(event) => setDraft((current) => ({ ...current, sharedEmby: { ...current.sharedEmby, proxyUrl: event.target.value } }))} placeholder="http://127.0.0.1:7890" type="url" value={draft.sharedEmby.proxyUrl} /></label>
+            <p className="settings-note">只读第二路目录，不替换 NAS 上的 Emby。播放由播放器直连远程 Emby，不经 Media Hub 转发视频。</p>
+            {settings.sharedEmby?.password.configured ? <label className="inline-check"><input checked={draft.sharedEmby.password.clear} name="shared-emby-clear-password" onChange={(event) => setDraft((current) => ({ ...current, sharedEmby: { ...current.sharedEmby, password: { value: '', clear: event.target.checked } } }))} type="checkbox" />清除已保存密码</label> : null}
           </fieldset>
 
           <fieldset>

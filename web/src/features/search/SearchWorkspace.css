@@ -443,6 +443,34 @@ h1 em { color: var(--accent); font-style: normal; }
   flex: 1;
 }
 
+.library-scope-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.scope-switch-btn {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.scope-switch-btn.active {
+  color: #ffffff;
+  background: rgba(16, 185, 129, 0.28);
+}
+
 .library-nav-scroll-btn {
   display: inline-flex;
   align-items: center;

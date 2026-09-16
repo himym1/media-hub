@@ -31,6 +31,7 @@ import {
   getEmbyItem,
   getEmbyLibraries,
   getEmbyLibraryItems,
+  getSystemOverview,
   previewEmbyItemDelete,
   refreshEmbyItem,
   refreshEmbyLibrary,
@@ -49,9 +50,11 @@ import { LibraryEpisodes } from './LibraryEpisodes'
 import { LibraryPlayer } from './LibraryPlayer'
 import { LibraryWatchAction } from './LibraryWatchAction'
 import { episodeLabel, playbackStatus } from './libraryPlayback'
-import { adultLibraryId, childLibraries, libraryRootId, rootLibraries } from './libraryGroups'
+import { adultLibraryId, childLibraries, isSharedEmbyId, libraryDisplayName, libraryRootId, mineLibraries, rootLibraries, sharedLibraries } from './libraryGroups'
 
 const pageSize = 24
+
+type LibraryScope = 'mine' | 'shared'
 
 function locationValue(name: string) {
   return new URLSearchParams(window.location.search).get(name)
@@ -70,6 +73,7 @@ export function LibraryView() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'unplayed' | 'played'>('all')
   const [spotlightIndex, setSpotlightIndex] = useState(0)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [scope, setScope] = useState<LibraryScope>(() => (isSharedEmbyId(locationValue('library')) ? 'shared' : 'mine'))
   const tabsRef = useRef<HTMLDivElement>(null)
 
   const scrollTabs = (direction: 'left' | 'right') => {
@@ -88,10 +92,22 @@ export function LibraryView() {
   }
 
   const libraries = useQuery({ queryKey: ['emby-libraries'], queryFn: getEmbyLibraries })
+  const overview = useQuery({ queryKey: ['system-overview'], queryFn: getSystemOverview, retry: false })
   const allLibraries = useMemo(() => libraries.data?.libraries ?? [], [libraries.data?.libraries])
-  const topLibraries = useMemo(() => rootLibraries(allLibraries), [allLibraries])
-  const adultGroups = useMemo(() => childLibraries(allLibraries, adultLibraryId), [allLibraries])
-  const selectedRootId = libraryRootId(allLibraries, libraryId)
+  const localLibraries = useMemo(() => mineLibraries(allLibraries), [allLibraries])
+  const remoteLibraries = useMemo(() => sharedLibraries(allLibraries), [allLibraries])
+  const hasShared = remoteLibraries.length > 0
+  const sharedHealth = overview.data?.integrations.find((integration) => integration.id === 'shared-emby')
+  const sharedUnavailable = Boolean(
+    sharedHealth
+    && sharedHealth.status !== 'unconfigured'
+    && sharedHealth.status !== 'healthy'
+    && !hasShared,
+  )
+  const scopeLibraries = scope === 'shared' ? remoteLibraries : localLibraries
+  const topLibraries = useMemo(() => rootLibraries(scopeLibraries), [scopeLibraries])
+  const adultGroups = useMemo(() => childLibraries(scopeLibraries, adultLibraryId), [scopeLibraries])
+  const selectedRootId = libraryRootId(scopeLibraries, libraryId)
   const libraryItems = useQuery({
     queryKey: ['emby-library-items', libraryId, page],
     queryFn: () => getEmbyLibraryItems(libraryId!, page * pageSize, pageSize),
@@ -138,6 +154,7 @@ export function LibraryView() {
       setPage(0)
       setQueryText('')
       setSubmittedQuery('')
+      setScope(isSharedEmbyId(nextLibrary) ? 'shared' : 'mine')
     }
     window.addEventListener('popstate', restoreLocation)
     return () => window.removeEventListener('popstate', restoreLocation)
@@ -151,15 +168,32 @@ export function LibraryView() {
 
   useEffect(() => {
     if (!libraries.data) return
-    if (libraryId && allLibraries.some((library) => library.id === libraryId)) return
-    const fallback = allLibraries[0]?.id ?? null
+    if (!hasShared && scope === 'shared') {
+      setScope('mine')
+      return
+    }
+    if (libraryId && scopeLibraries.some((library) => library.id === libraryId)) return
+    const fallback = (scope === 'shared' ? remoteLibraries : rootLibraries(localLibraries))[0]?.id ?? null
     setLibraryId(fallback)
     setItemId(null)
     setPlayId(null)
     setPage(0)
     commitUrl({ library: fallback, media: null, play: null }, 'replace')
-  }, [libraries.data, libraryId, allLibraries])
+  }, [libraries.data, libraryId, scope, scopeLibraries, hasShared, localLibraries, remoteLibraries])
 
+  const selectScope = (next: LibraryScope) => {
+    if (next === scope) return
+    setScope(next)
+    setSubmittedQuery('')
+    setQueryText('')
+    setItemId(null)
+    setPlayId(null)
+    setPage(0)
+    setSpotlightIndex(0)
+    const fallback = (next === 'shared' ? remoteLibraries : rootLibraries(localLibraries))[0]?.id ?? null
+    setLibraryId(fallback)
+    commitUrl({ library: fallback, media: null, play: null })
+  }
   const selectLibrary = (id: string) => {
     setLibraryId(id)
     setItemId(null)
@@ -168,6 +202,7 @@ export function LibraryView() {
     setQueryText('')
     setSubmittedQuery('')
     setSpotlightIndex(0)
+    setScope(isSharedEmbyId(id) ? 'shared' : 'mine')
     commitUrl({ library: id, media: null, play: null })
   }
   const selectItem = (id: string) => {
@@ -215,7 +250,11 @@ export function LibraryView() {
   }
 
   const result = submittedQuery ? search : libraryItems
-  const rawItems = useMemo(() => result.data?.items ?? [], [result.data?.items])
+  const rawItems = useMemo(() => {
+    const list = result.data?.items ?? []
+    if (!submittedQuery) return list
+    return list.filter((item) => (scope === 'shared' ? isSharedEmbyId(item.id) : !isSharedEmbyId(item.id)))
+  }, [result.data?.items, submittedQuery, scope])
 
   const continueWatchingItems = useMemo(() => {
     return rawItems.filter((item) => (item.playbackPositionMs ?? 0) >= 30_000 && !item.played)
@@ -275,11 +314,40 @@ export function LibraryView() {
   return (
     <section className={itemId ? 'library-page has-detail' : 'library-page'}>
       {libraries.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>媒体库读取失败</strong><span>{libraries.error.message}</span></div><button onClick={() => void libraries.refetch()} type="button">重试</button></div> : null}
+      {sharedUnavailable ? (
+        <div className="source-warning error" role="alert">
+          <CircleAlert size={16} />
+          <span>共享 Emby 暂时不可用：{sharedHealth?.detail || '无法读取共享库'}。我的库仍可正常使用。</span>
+        </div>
+      ) : null}
       {mutationError ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{mutationError.message}</span></div> : null}
 
       <div className="library-browse">
         <div className="library-header-bar">
           <div className="library-nav-cluster">
+            {hasShared ? (
+              <div aria-label="媒体库来源" className="library-scope-switch" role="tablist">
+                <button
+                  aria-selected={scope === 'mine'}
+                  className={scope === 'mine' ? 'scope-switch-btn active' : 'scope-switch-btn'}
+                  onClick={() => selectScope('mine')}
+                  role="tab"
+                  type="button"
+                >
+                  我的库
+                </button>
+                <button
+                  aria-selected={scope === 'shared'}
+                  className={scope === 'shared' ? 'scope-switch-btn active' : 'scope-switch-btn'}
+                  onClick={() => selectScope('shared')}
+                  role="tab"
+                  type="button"
+                >
+                  共享库
+                </button>
+              </div>
+            ) : null}
+
             {topLibraries.length > 3 ? (
               <button
                 aria-label="向左滚动媒体库"
@@ -293,14 +361,14 @@ export function LibraryView() {
             ) : null}
 
             <nav
-              aria-label="Emby 媒体库"
+              aria-label={scope === 'shared' ? '共享 Emby 媒体库' : '我的 Emby 媒体库'}
               className="library-tabs"
               onWheel={handleTabsWheel}
               ref={tabsRef}
             >
               {topLibraries.map((library) => {
                 const typeLabel = libraryCollectionLabel(library.collectionType)
-                const name = library.name
+                const name = libraryDisplayName(library.name)
                 const isSelected = library.id === selectedRootId
                 const Icon = getLibraryIcon(name, library.collectionType)
                 return (
@@ -358,7 +426,7 @@ export function LibraryView() {
                 maxLength={120}
                 name="library-query"
                 onChange={(event) => setQueryText(event.target.value)}
-                placeholder="搜索…"
+                placeholder={scope === 'shared' ? '搜索共享库…' : '搜索…'}
                 type="search"
                 value={queryText}
               />
@@ -374,7 +442,7 @@ export function LibraryView() {
 
             <div className="library-meta-actions">
               <span className="library-count-tag">{total} 部</span>
-              {selectedLibrary && !submittedQuery ? (
+              {selectedLibrary && !submittedQuery && !isSharedEmbyId(selectedLibrary.id) ? (
                 <button
                   className="library-refresh-btn"
                   disabled={refreshLibrary.isPending}
@@ -457,7 +525,7 @@ export function LibraryView() {
             <div className="library-expand-grid">
               {topLibraries.map((library) => {
                 const typeLabel = libraryCollectionLabel(library.collectionType)
-                const name = library.name
+                const name = libraryDisplayName(library.name)
                 const isSelected = library.id === selectedRootId
                 const Icon = getLibraryIcon(name, library.collectionType)
                 return (
@@ -758,7 +826,7 @@ export function LibraryView() {
           </button>
           {detail.isLoading && !detail.data ? <div className="status-loading">正在读取媒体详情…</div> : null}
           {detail.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>详情读取失败</strong><span>{detail.error.message}</span></div><button onClick={() => void detail.refetch()} type="button">重试</button></div> : null}
-          {detail.data ? <LibraryItemDetail inPagePlayback={inPagePlayback} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} /> : null}
+          {detail.data ? <LibraryItemDetail inPagePlayback={inPagePlayback} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} shared={isSharedEmbyId(detail.data.id)} /> : null}
         </aside>
       ) : null}
       {inPagePlayback && playTarget ? (
@@ -818,13 +886,14 @@ function LibraryPosterCard({ item, selected, onSelect }: { item: EmbyItem; selec
   )
 }
 
-function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh, refreshing }: {
+function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh, refreshing, shared }: {
   item: EmbyItemDetail
   inPagePlayback: boolean
   onDeleted: () => void
   onPlay: (target: Pick<EmbyEpisode, 'id' | 'name' | 'externalUrl'>) => void
   onRefresh: (id: string) => void
   refreshing: boolean
+  shared: boolean
 }) {
   const queryClient = useQueryClient()
   const originalTitle = visibleOriginalTitle(item)
@@ -854,7 +923,7 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
   const localSubtitle = useQuery({
     queryKey: ['emby-local-subtitle', item.id],
     queryFn: () => fetchLocalSubtitle(item.id),
-    enabled: item.type !== 'Series',
+    enabled: !shared && item.type !== 'Series',
     retry: false,
     staleTime: 60_000,
   })
@@ -907,7 +976,7 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
             </dd>
           </div>
           <div><dt>进度</dt><dd>{playbackStatus(item)}</dd></div>
-          {item.type === 'Series' ? null : (
+          {shared || item.type === 'Series' ? null : (
             <div>
               <dt>字幕</dt>
               <dd>{localSubtitle.isLoading ? '检查中' : localSubtitle.data ? '已挂中文' : '未挂中文'}</dd>
@@ -956,9 +1025,10 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
         <div><dt>媒体源</dt><dd>{item.type === 'Series' ? '由分集提供' : `${item.mediaSourceCount} 个`}</dd></div>
       </dl>
     </details>
+    {shared ? <p className="library-shared-note">共享库只读；播放由播放设备直连远程 Emby，不经 Media Hub 转发视频。</p> : null}
     <div className="library-detail-actions library-detail-actions-secondary">
-      <button className="secondary-command" disabled={busy} onClick={() => onRefresh(item.id)} type="button"><RefreshCw size={16} />{refreshing ? '已提交…' : '刷新元数据'}</button>
-      {canSearchSubtitles ? (
+      {shared ? null : <button className="secondary-command" disabled={busy} onClick={() => onRefresh(item.id)} type="button"><RefreshCw size={16} />{refreshing ? '已提交…' : '刷新元数据'}</button>}
+      {shared ? null : canSearchSubtitles ? (
         <button
           className="secondary-command"
           disabled={busy}
@@ -971,10 +1041,10 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
           <Captions size={16} />
           {searchSubtitles.isPending ? '正在搜索…' : '搜中文字幕'}
         </button>
-      ) : (
+      ) : shared ? null : (
         <span className="library-subtitle-hint">剧集请在 Emby 分集条目上搜索字幕</span>
       )}
-      {preview ? null : <button className="danger-button" disabled={busy} onClick={() => previewDelete.mutate()} type="button"><Trash2 size={16} />{previewDelete.isPending ? '正在读取删除预览…' : '从 Emby 删除'}</button>}
+      {shared || preview ? null : <button className="danger-button" disabled={busy} onClick={() => previewDelete.mutate()} type="button"><Trash2 size={16} />{previewDelete.isPending ? '正在读取删除预览…' : '从 Emby 删除'}</button>}
     </div>
     {item.type === 'Series' ? <LibraryEpisodes inPagePlayback={inPagePlayback} onPlay={onPlay} seriesId={item.id} seriesTitle={item.name} /> : null}
     {subtitleResults ? (

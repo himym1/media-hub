@@ -88,6 +88,19 @@ internal fun ProviderSettingsPanel(
             }
             MediaHubText("Media Hub 从 NAS 访问 Emby，请填局域网地址。公网域名会在容器里回环，容易变成 502。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             MediaHubText("从 Emby 删除媒体需要该用户的登录密码；仅 API Key 无法删除。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+            LabeledField("共享 Emby 地址", draft.sharedEmby.baseUrl) {
+                onDraftChange(draft.copy(sharedEmby = draft.sharedEmby.copy(baseUrl = it)))
+            }
+            LabeledField("共享 Emby 用户名", draft.sharedEmby.username) {
+                onDraftChange(draft.copy(sharedEmby = draft.sharedEmby.copy(username = it)))
+            }
+            SecretField("共享 Emby 密码", settings.sharedEmby.password, draft.sharedEmby.password) {
+                onDraftChange(draft.copy(sharedEmby = draft.sharedEmby.copy(password = it)))
+            }
+            LabeledField("共享 Emby 代理（可选）", draft.sharedEmby.proxyUrl) {
+                onDraftChange(draft.copy(sharedEmby = draft.sharedEmby.copy(proxyUrl = it)))
+            }
+            MediaHubText("只读第二路目录，不替换 NAS 上的 Emby。播放由播放器直连远程 Emby。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             MediaHubText("115 网盘请在「概览」页扫码授权，无需开放平台开发者账号。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
         }
 

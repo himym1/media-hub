@@ -13,6 +13,7 @@ import com.mediahub.android.core.network.ProviderSettings
 import com.mediahub.android.core.network.ProviderSettingsUpdate
 import com.mediahub.android.core.network.ProviderSourceSettingsUpdate
 import com.mediahub.android.core.network.SecretUpdate
+import com.mediahub.android.core.network.SharedEmbySettingsUpdate
 import com.mediahub.android.core.network.SourceCheckIn
 import com.mediahub.android.core.network.STRMStatus
 import com.mediahub.android.data.MediaHubRepository
@@ -331,6 +332,7 @@ private fun ProviderSettings.toUpdate() = ProviderSettingsUpdate(
     embyApiKey = SecretUpdate(),
     embyUserId = embyUserId,
     embyPassword = SecretUpdate(),
+    sharedEmby = SharedEmbySettingsUpdate(baseUrl = sharedEmby.baseUrl, username = sharedEmby.username, proxyUrl = sharedEmby.proxyUrl),
     drive115ClientId = drive115ClientId,
     tmdbBaseUrl = tmdbBaseUrl,
     tmdbAccessToken = SecretUpdate(),

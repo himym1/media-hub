@@ -874,6 +874,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
             embyApiKey = SecretStatus(emby.getJSONObject("apiKey").getBoolean("configured")),
             embyUserId = emby.getString("userId"),
             embyPassword = SecretStatus(emby.optJSONObject("password")?.optBoolean("configured") == true),
+            sharedEmby = parseSharedEmbySettings(item.optJSONObject("sharedEmby")),
             drive115ClientId = drive.getString("clientId"),
             tmdbBaseUrl = tmdb.getString("baseUrl"),
             tmdbAccessToken = SecretStatus(tmdb.getJSONObject("accessToken").getBoolean("configured")),
@@ -906,6 +907,13 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         )
     }
 
+    private fun parseSharedEmbySettings(item: JSONObject?) = SharedEmbySettings(
+        baseUrl = item?.optString("baseUrl").orEmpty(),
+        username = item?.optString("username").orEmpty(),
+        password = SecretStatus(item?.optJSONObject("password")?.optBoolean("configured") == true),
+        proxyUrl = item?.optString("proxyUrl").orEmpty(),
+    )
+
     private fun parseCheckInSettings(item: JSONObject?) = CheckInSettings(
         enabled = item?.optBoolean("enabled", true) ?: true,
         hour = item?.optInt("hour", 0) ?: 0,
@@ -931,6 +939,11 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
     private fun providerSettingsBody(input: ProviderSettingsUpdate) = JSONObject()
         .put("qmediaSync", JSONObject().put("baseUrl", input.qmediaSyncBaseUrl).put("apiKey", secretBody(input.qmediaSyncApiKey)))
         .put("emby", JSONObject().put("baseUrl", input.embyBaseUrl).put("apiKey", secretBody(input.embyApiKey)).put("userId", input.embyUserId).put("password", secretBody(input.embyPassword)))
+        .put("sharedEmby", JSONObject()
+            .put("baseUrl", input.sharedEmby.baseUrl)
+            .put("username", input.sharedEmby.username)
+            .put("password", secretBody(input.sharedEmby.password))
+            .put("proxyUrl", input.sharedEmby.proxyUrl))
         .put("drive115", JSONObject().put("clientId", input.drive115ClientId))
         .put("tmdb", JSONObject().put("baseUrl", input.tmdbBaseUrl).put("accessToken", secretBody(input.tmdbAccessToken)))
         .put("assrt", JSONObject().put("baseUrl", input.assrtBaseUrl).put("token", secretBody(input.assrtToken)))

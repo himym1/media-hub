@@ -37,6 +37,18 @@ data class WeComSettings(
     val toUser: String,
     val chatId: String,
  )
+data class SharedEmbySettings(
+    val baseUrl: String = "",
+    val username: String = "",
+    val password: SecretStatus = SecretStatus(false),
+    val proxyUrl: String = "",
+)
+data class SharedEmbySettingsUpdate(
+    val baseUrl: String = "",
+    val username: String = "",
+    val password: SecretUpdate = SecretUpdate(),
+    val proxyUrl: String = "",
+)
 data class WeComSettingsUpdate(
     val baseUrl: String,
     val corpId: String,
@@ -53,6 +65,7 @@ data class ProviderSettings(
     val embyApiKey: SecretStatus,
     val embyUserId: String,
     val embyPassword: SecretStatus,
+    val sharedEmby: SharedEmbySettings = SharedEmbySettings(),
     val drive115ClientId: String,
     val tmdbBaseUrl: String,
     val tmdbAccessToken: SecretStatus,
@@ -78,6 +91,7 @@ data class ProviderSettingsUpdate(
     val embyApiKey: SecretUpdate,
     val embyUserId: String,
     val embyPassword: SecretUpdate,
+    val sharedEmby: SharedEmbySettingsUpdate = SharedEmbySettingsUpdate(),
     val drive115ClientId: String,
     val tmdbBaseUrl: String,
     val tmdbAccessToken: SecretUpdate,

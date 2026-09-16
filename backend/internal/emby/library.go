@@ -74,8 +74,15 @@ func (c *Client) Episodes(ctx context.Context, seriesID string) ([]Episode, erro
 }
 
 func (c *Client) PrimaryImage(ctx context.Context, itemID string, maxWidth int) (PrimaryImage, error) {
-	configuration := c.configuration()
-	if err := validateAuthenticated(configuration); err != nil {
+	return c.primaryImageWith(ctx, c.configuration(), itemID, maxWidth)
+}
+
+func (c *Client) primaryImageWith(ctx context.Context, configuration clientConfig, itemID string, maxWidth int) (PrimaryImage, error) {
+	if configuration.shared {
+		if !c.SharedConfigured() {
+			return PrimaryImage{}, ErrNotConfigured
+		}
+	} else if err := validateAuthenticated(configuration); err != nil {
 		return PrimaryImage{}, err
 	}
 	if !validEmbyIdentifier(itemID) {
@@ -97,8 +104,15 @@ func (c *Client) PrimaryImage(ctx context.Context, itemID string, maxWidth int) 
 	}
 	// Prefer JPEG: some Emby builds return 500 when asked to convert Primary to WebP.
 	request.Header.Set("Accept", "image/jpeg,image/png,image/webp,*/*")
-	request.Header.Set("User-Agent", "Media-Hub/emby-image")
-	request.Header.Set("X-Emby-Token", configuration.apiKey)
+	if configuration.shared {
+		request.Header.Set("User-Agent", sharedClientName+"/"+sharedClientVer)
+		applyNamedEmbyClientAuth(request, sharedClientName, sharedClientDevice, sharedClientVer)
+	} else {
+		request.Header.Set("User-Agent", "Media-Hub/emby-image")
+	}
+	if configuration.apiKey != "" {
+		request.Header.Set("X-Emby-Token", configuration.apiKey)
+	}
 	response, err := c.imageClient.Do(request)
 	if err != nil {
 		return PrimaryImage{}, err

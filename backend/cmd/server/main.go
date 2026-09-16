@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -103,7 +104,11 @@ func run(logger *slog.Logger) error {
 		MovieLibraryID:  configuration.Workflow.Movie.EmbyLibraryID,
 		SeriesLibraryID: configuration.Workflow.Series.EmbyLibraryID,
 	}, configuration.ProbeTimeout)
-	embyHub := emby.NewHub(embyClient)
+	sharedEmbyClient := emby.NewConfiguredClient(emby.RuntimeConfig{
+		BaseURL: configuration.SharedEmby.BaseURL, Username: configuration.SharedEmby.Username,
+		Password: configuration.SharedEmby.Password, ProxyURL: parseOptionalHTTPURL(configuration.SharedEmby.ProxyURL), Shared: true,
+	}, configuration.SearchTimeout)
+	embyHub := emby.NewHub(embyClient, sharedEmbyClient)
 	posterCache, err := emby.OpenPrimaryImageCache(filepath.Join(filepath.Dir(configuration.DatabasePath), "poster-cache"))
 	if err != nil {
 		return fmt.Errorf("open poster cache: %w", err)
@@ -196,6 +201,10 @@ func run(logger *slog.Logger) error {
 				MovieLibraryID:  value.Workflow.Movie.EmbyLibraryID,
 				SeriesLibraryID: value.Workflow.Series.EmbyLibraryID,
 			})
+			embyHub.ConfigureShared(emby.RuntimeConfig{
+				BaseURL: value.SharedEmby.BaseURL, Username: value.SharedEmby.Username,
+				Password: value.SharedEmby.Password, ProxyURL: parseOptionalHTTPURL(value.SharedEmby.ProxyURL), Shared: true,
+			})
 			tmdbClient.Configure(value.TMDB.BaseURL, value.TMDB.AccessToken)
 			assrtClient.Configure(value.Assrt.BaseURL, value.Assrt.Token)
 			moviePilotClient.Configure(value.MoviePilot.BaseURL, value.MoviePilot.APIToken)
@@ -245,6 +254,7 @@ func run(logger *slog.Logger) error {
 		subtitlecatClient,
 		wecomClient,
 		embyHub,
+		embyHub.SharedHealthChecker(),
 		emby.NewPlaybackChecker(embyClient),
 		checkinService,
 		strmCoordinator,
@@ -437,4 +447,12 @@ func searchSourcesFromSettings(value settings.Values, timeout time.Duration, fix
 		sources = append(sources, moviepilot.NewSource(moviePilotClient))
 	}
 	return sources
+}
+
+func parseOptionalHTTPURL(raw string) *url.URL {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Host == "" {
+		return nil
+	}
+	return parsed
 }

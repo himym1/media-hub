@@ -2,6 +2,22 @@ import type { EmbyLibrary } from '../../shared/api/mediaHub'
 
 export const adultLibraryId = 'adult'
 
+export function isSharedEmbyId(id: string | null | undefined) {
+  return Boolean(id?.startsWith('r_'))
+}
+
+export function libraryDisplayName(name: string) {
+  return name.replace(/^共享\//, '')
+}
+
+export function mineLibraries(libraries: EmbyLibrary[]) {
+  return libraries.filter((library) => !isSharedEmbyId(library.id))
+}
+
+export function sharedLibraries(libraries: EmbyLibrary[]) {
+  return libraries.filter((library) => isSharedEmbyId(library.id))
+}
+
 export function rootLibraries(libraries: EmbyLibrary[]) {
   return libraries.filter((library) => !library.parentId)
 }

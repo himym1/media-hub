@@ -68,6 +68,7 @@ class LibraryViewModel(
                 val libraries = repository.libraries()
                 val previousSelected = _uiState.value.selectedLibraryId
                 val selected = previousSelected?.takeIf { id -> libraries.any { it.id == id } }
+                    ?: libraries.firstOrNull { !isSharedEmbyId(it.id) }?.id
                     ?: libraries.firstOrNull()?.id
                 val browsing = _uiState.value.submittedQuery.isEmpty()
                 val selectionChanged = selected != previousSelected
@@ -99,6 +100,11 @@ class LibraryViewModel(
         refreshLibraries(force = false)
     }
 
+    fun selectLibraryScope(shared: Boolean) {
+        val next = _uiState.value.libraries.firstOrNull { isSharedEmbyId(it.id) == shared } ?: return
+        selectLibrary(next.id)
+    }
+
     fun selectLibrary(id: String) {
         if (_uiState.value.libraries.none { it.id == id }) return
         if (id == _uiState.value.selectedLibraryId && _uiState.value.submittedQuery.isEmpty()) return
@@ -128,7 +134,9 @@ class LibraryViewModel(
             _uiState.value = _uiState.value.copy(submittedQuery = query, loadingItems = true, loadingMore = false, errorMessage = null)
             try {
                 val items = repository.items(query)
-                _uiState.value = _uiState.value.copy(items = items, total = items.size, page = 0, loadingItems = false)
+                val sharedScope = isSharedEmbyId(_uiState.value.selectedLibraryId)
+                val filtered = items.filter { isSharedEmbyId(it.id) == sharedScope }
+                _uiState.value = _uiState.value.copy(items = filtered, total = filtered.size, page = 0, loadingItems = false)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: ApiException) {
@@ -173,7 +181,7 @@ class LibraryViewModel(
 
     fun refreshSelectedLibrary() {
         val id = _uiState.value.selectedLibraryId ?: return
-        if (_uiState.value.refreshing) return
+        if (isSharedEmbyId(id) || _uiState.value.refreshing) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(refreshing = true, errorMessage = null, actionMessage = null)
             try {
@@ -268,6 +276,10 @@ internal fun libraryHasMore(itemCount: Int, total: Int, searching: Boolean): Boo
     !searching && itemCount < total.coerceAtLeast(0)
 
 internal const val AdultLibraryId = "adult"
+
+internal fun isSharedEmbyId(id: String?) = id?.startsWith("r_") == true
+
+internal fun libraryDisplayName(name: String) = name.removePrefix("共享/")
 
 internal fun rootLibraries(libraries: List<MediaLibrary>) =
     libraries.filter { it.parentId.isNullOrBlank() }

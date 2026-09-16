@@ -31,4 +31,11 @@ class LibraryPagingTest {
         assertEquals(AdultLibraryId, libraryRootId(libraries, "group-jp"))
         assertEquals("movies", libraryRootId(libraries, "movies"))
     }
+
+    @Test
+    fun sharedCatalogIdsStayOffTheLocalLibraryList() {
+        assertEquals(true, isSharedEmbyId("r_remote"))
+        assertEquals(false, isSharedEmbyId("movies"))
+        assertEquals("电影", libraryDisplayName("共享/电影"))
+    }
 }

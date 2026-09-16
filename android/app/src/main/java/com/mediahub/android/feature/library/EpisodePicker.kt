@@ -38,6 +38,7 @@ internal fun EpisodePicker(
     seriesTitle: String = "",
     onPlay: (EmbyEpisode) -> Unit,
     onSearchSubtitles: (EmbyEpisode) -> Unit = {},
+    showSubtitleSearch: Boolean = true,
 ) {
     val seasons = remember(episodes) { episodes.map { displaySeason(it.item.season) }.distinct().sorted() }
     var selectedSeason by remember(seasons) { mutableIntStateOf(seasons.firstOrNull() ?: 0) }
@@ -76,11 +77,13 @@ internal fun EpisodePicker(
                             contentDescription = playLabel,
                             onClick = { onPlay(episode) },
                             end = {
-                                MediaHubIconButton(
-                                    imageVector = Lucide.Captions,
-                                    contentDescription = "搜中文字幕 ${episodeLabel(episode, seriesTitle)}",
-                                    onClick = { onSearchSubtitles(episode) },
-                                )
+                                if (showSubtitleSearch) {
+                                    MediaHubIconButton(
+                                        imageVector = Lucide.Captions,
+                                        contentDescription = "搜中文字幕 ${episodeLabel(episode, seriesTitle)}",
+                                        onClick = { onSearchSubtitles(episode) },
+                                    )
+                                }
                             },
                         )
                     }

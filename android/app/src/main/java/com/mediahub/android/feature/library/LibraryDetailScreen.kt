@@ -81,12 +81,14 @@ internal fun LibraryDetailScreen(
                 }
             },
             actions = {
-                MediaHubIconButton(
-                    imageVector = Lucide.RefreshCw,
-                    contentDescription = "刷新媒体元数据",
-                    enabled = !state.refreshing,
-                    onClick = actions.onRefresh,
-                )
+                if (!isSharedEmbyId(state.item?.item?.id)) {
+                    MediaHubIconButton(
+                        imageVector = Lucide.RefreshCw,
+                        contentDescription = "刷新媒体元数据",
+                        enabled = !state.refreshing,
+                        onClick = actions.onRefresh,
+                    )
+                }
             },
         )
         LazyColumn(
@@ -102,6 +104,7 @@ internal fun LibraryDetailScreen(
                 item { MediaHubText(text = "正在读取媒体详情…", color = MediaHubColors.TextMuted, fontSize = 13.sp) }
             }
             state.item?.let { detail ->
+                val shared = isSharedEmbyId(detail.item.id)
                 val fallback = PlaybackFallback(detail.appUrl, detail.externalUrl)
                 item { DetailIdentity(detail, posterLoader) }
                 if (detail.item.type == "Series") {
@@ -120,6 +123,7 @@ internal fun LibraryDetailScreen(
                             onSearchSubtitles = { episode ->
                                 actions.onSearchSubtitles(episode.item.id, episodeLabel(episode, detail.item.name))
                             },
+                            showSubtitleSearch = !shared,
                         )
                     }
                 } else {
@@ -134,17 +138,19 @@ internal fun LibraryDetailScreen(
                                 onClick = { actions.onPlayItem(detail.item, fallback) },
                                 modifier = Modifier.weight(1f),
                             )
-                            MediaHubSecondaryButton(
-                                label = if (subtitleState.searching && subtitleState.targetId == detail.item.id) {
-                                    "搜索中…"
-                                } else {
-                                    "字幕"
-                                },
-                                icon = Lucide.Captions,
-                                enabled = !subtitleState.searching && subtitleState.downloadingId == null && !state.refreshing,
-                                onClick = { actions.onSearchSubtitles(detail.item.id, detail.item.name) },
-                                modifier = Modifier.weight(1f),
-                            )
+                            if (!shared) {
+                                MediaHubSecondaryButton(
+                                    label = if (subtitleState.searching && subtitleState.targetId == detail.item.id) {
+                                        "搜索中…"
+                                    } else {
+                                        "字幕"
+                                    },
+                                    icon = Lucide.Captions,
+                                    enabled = !subtitleState.searching && subtitleState.downloadingId == null && !state.refreshing,
+                                    onClick = { actions.onSearchSubtitles(detail.item.id, detail.item.name) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
                         }
                     }
                 }
@@ -166,7 +172,17 @@ internal fun LibraryDetailScreen(
                     )
                 }
                 item { TechnicalDetails(detail) }
-                item { DeleteActions(state, actions) }
+                if (shared) {
+                    item {
+                        MediaHubText(
+                            text = "共享库只读；播放由播放器直连远程 Emby。",
+                            color = MediaHubColors.TextMuted,
+                            fontSize = 12.sp,
+                        )
+                    }
+                } else {
+                    item { DeleteActions(state, actions) }
+                }
             }
         }
     }

@@ -45,6 +45,7 @@ import com.mediahub.android.core.designsystem.MediaHubListDetail
 import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubSearchField
+import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubTabRow
 import com.mediahub.android.core.designsystem.MediaHubText
@@ -60,6 +61,7 @@ data class LibraryBrowseActions(
     val onRefreshLibraries: () -> Unit,
     val onRefreshSelectedLibrary: () -> Unit,
     val onSelectLibrary: (String) -> Unit,
+    val onSelectLibraryScope: (Boolean) -> Unit = {},
     val onSelectItem: (String) -> Unit,
     val onLoadMore: () -> Unit,
 )
@@ -117,6 +119,7 @@ internal fun LibraryRoute(
         onRefreshLibraries = browseViewModel::refreshLibraries,
         onRefreshSelectedLibrary = browseViewModel::refreshSelectedLibrary,
         onSelectLibrary = browseViewModel::selectLibrary,
+        onSelectLibraryScope = browseViewModel::selectLibraryScope,
         onSelectItem = { onSelectedItemChanged(it) },
         onLoadMore = browseViewModel::loadMore,
     )
@@ -191,15 +194,26 @@ internal fun LibraryScreen(
             .fillMaxSize()
             .padding(horizontal = 12.dp),
     ) {
-        val topLibraries = rootLibraries(uiState.libraries)
-        val adultGroups = childLibraries(uiState.libraries, AdultLibraryId)
-        val selectedRootId = libraryRootId(uiState.libraries, uiState.selectedLibraryId).orEmpty()
-        if (topLibraries.size >= 2) {
+        val sharedScope = isSharedEmbyId(uiState.selectedLibraryId)
+        val scopeLibraries = uiState.libraries.filter { isSharedEmbyId(it.id) == sharedScope }
+        val hasShared = uiState.libraries.any { isSharedEmbyId(it.id) }
+        val topLibraries = rootLibraries(scopeLibraries)
+        val adultGroups = childLibraries(scopeLibraries, AdultLibraryId)
+        val selectedRootId = libraryRootId(scopeLibraries, uiState.selectedLibraryId).orEmpty()
+        if (hasShared) {
+            MediaHubSegmentedControl(
+                options = listOf("mine" to "我的库", "shared" to "共享库"),
+                selected = if (sharedScope) "shared" else "mine",
+                onSelected = { actions.onSelectLibraryScope(it == "shared") },
+                modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
+            )
+        }
+        if (topLibraries.size >= 2 || (hasShared && topLibraries.isNotEmpty())) {
             MediaHubTabRow(
-                options = topLibraries.map { it.id to it.name },
+                options = topLibraries.map { it.id to libraryDisplayName(it.name) },
                 selected = selectedRootId,
                 onSelected = actions.onSelectLibrary,
-                modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                modifier = Modifier.padding(top = if (hasShared) 0.dp else 2.dp, bottom = 4.dp),
             )
         }
         if (selectedRootId == AdultLibraryId && adultGroups.isNotEmpty()) {
@@ -235,7 +249,7 @@ internal fun LibraryScreen(
                 text = if (uiState.submittedQuery.isNotEmpty()) "搜索结果 (${uiState.total})" else "全部媒体 (${uiState.total})",
                 modifier = Modifier.weight(1f),
             )
-            if (uiState.submittedQuery.isEmpty() && uiState.selectedLibraryId != null) {
+            if (uiState.submittedQuery.isEmpty() && uiState.selectedLibraryId != null && !isSharedEmbyId(uiState.selectedLibraryId)) {
                 MediaHubIconButton(Lucide.RefreshCw, "刷新当前媒体库", actions.onRefreshSelectedLibrary, enabled = !uiState.refreshing)
             }
         }
