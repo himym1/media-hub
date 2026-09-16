@@ -55,6 +55,7 @@ func (s *Service) Load(ctx context.Context, userID int64) error {
 		if err := s.codec.Open(sealed, &value); err != nil {
 			return fmt.Errorf("decrypt runtime settings: %w", err)
 		}
+		value.Sources = ensureCanonicalSources(sourcesByID(value.Sources))
 		if err := validate(value); err != nil {
 			return fmt.Errorf("validate persisted runtime settings: %w", err)
 		}
@@ -212,12 +213,16 @@ func merge(current Values, input Update) Values {
 	for _, source := range current.Sources {
 		byID[source.ID] = source
 	}
-	updated := make([]config.SearchSource, 0, len(input.Sources))
 	seen := make(map[string]struct{}, len(input.Sources))
+	extras := make([]config.SearchSource, 0)
 	for _, source := range input.Sources {
 		id := strings.TrimSpace(source.ID)
+		if _, ok := sourceLabels[id]; !ok {
+			extras = append(extras, config.SearchSource{ID: id})
+			continue
+		}
 		if _, exists := seen[id]; exists {
-			updated = append(updated, config.SearchSource{ID: id})
+			byID[id] = config.SearchSource{ID: id, Label: sourceLabels[id]}
 			continue
 		}
 		seen[id] = struct{}{}
@@ -238,12 +243,12 @@ func merge(current Values, input Update) Values {
 		if source.Account != nil {
 			account = strings.TrimSpace(*source.Account)
 		}
-		updated = append(updated, config.SearchSource{
+		byID[id] = config.SearchSource{
 			ID: id, Label: sourceLabels[id], BaseURL: strings.TrimSpace(source.BaseURL), Account: account,
 			Token: mergeSecret(token, source.Token), AuthMode: authMode,
-		})
+		}
 	}
-	current.Sources = updated
+	current.Sources = append(ensureCanonicalSources(byID), extras...)
 	return current
 }
 
@@ -431,12 +436,12 @@ func validateOptionalProxyURL(label, raw string) error {
 }
 
 func isBuiltinSource(id string) bool {
-	return id == "mikan" || id == "sidhub" || id == "framehdr" || id == "juying"
+	return id == "mikan" || id == "sidhub" || id == "framehdr" || id == "juying" || id == "pansou"
 }
 
 func sourceReady(source config.SearchSource) bool {
 	switch source.ID {
-	case "mikan", "sidhub":
+	case "mikan", "sidhub", "pansou":
 		return true
 	case "framehdr":
 		if source.BaseURL == "" || isOfficialSourceRoot(source.BaseURL, "framehdr.com") {
@@ -479,7 +484,7 @@ func publicView(value Values) View {
 	for _, source := range value.Sources {
 		byID[source.ID] = source
 	}
-	for _, id := range []string{"dian", "framehdr", "gimy", "guanying", "hdhive", "juying", "mikan", "sidhub"} {
+	for _, id := range canonicalSourceIDs {
 		source := byID[id]
 		authMode := ""
 		if id == "juying" {

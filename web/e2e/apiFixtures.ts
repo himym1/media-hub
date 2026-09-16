@@ -30,7 +30,7 @@ const subscription = {
   nextRunAt: '2026-08-16T01:00:00Z', createdAt: '2026-08-15T01:00:00Z', updatedAt: '2026-08-15T01:00:00Z',
 }
 
-const sources = ['mikan', 'sidhub', 'framehdr', 'juying', 'dian', 'guanying', 'gimy', 'hdhive'].map((id) => ({
+const sources = ['mikan', 'sidhub', 'framehdr', 'juying', 'dian', 'guanying', 'gimy', 'hdhive', 'pansou'].map((id) => ({
   id,
   label: id,
   baseUrl: `https://${id}.example`,

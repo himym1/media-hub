@@ -26,7 +26,7 @@ func TestAutomaticWriteRetryClassification(t *testing.T) {
 }
 
 func TestNewUsesBuiltinSourcesWhenURLEmpty(t *testing.T) {
-	for _, id := range []string{"mikan", "sidhub"} {
+	for _, id := range []string{"mikan", "sidhub", "pansou"} {
 		source := New(config.SearchSource{ID: id}, time.Second, nil, nil)
 		if source == nil || source.ID() != id {
 			t.Fatalf("source %s = %#v", id, source)
@@ -108,6 +108,18 @@ func TestNewDoesNotApplyBuiltinProxyToContractSource(t *testing.T) {
 func TestNewIgnoresUnconfiguredContractSource(t *testing.T) {
 	if source := New(config.SearchSource{ID: "dian", Label: "点点"}, time.Second, nil, nil); source != nil {
 		t.Fatalf("source = %#v", source)
+	}
+}
+
+func TestNewUsesNativePansouWhenURLConfigured(t *testing.T) {
+	empty := New(config.SearchSource{ID: "pansou"}, time.Second, nil, nil)
+	if native, ok := empty.(*Pansou); !ok || native.baseURL != defaultPansouURL {
+		t.Fatalf("default pansou = %#v", empty)
+	}
+	got := New(config.SearchSource{ID: "pansou", BaseURL: "http://172.17.0.1:57081", Token: "token"}, time.Second, nil, nil)
+	native, ok := got.(*Pansou)
+	if !ok || native.baseURL != "http://172.17.0.1:57081" || native.token != "token" {
+		t.Fatalf("pansou = %#v", got)
 	}
 }
 

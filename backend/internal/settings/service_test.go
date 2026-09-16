@@ -6,6 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"media-hub/backend/internal/config"
 	"media-hub/backend/internal/securepayload"
@@ -99,7 +100,7 @@ func TestUpdateRejectsInvalidSourceAndSupportsExplicitSecretClear(t *testing.T) 
 }
 
 func sourceUpdates(configuredID, baseURL string) []SourceUpdate {
-	ids := []string{"dian", "framehdr", "gimy", "guanying", "hdhive", "juying", "mikan", "sidhub"}
+	ids := append([]string(nil), canonicalSourceIDs...)
 	result := make([]SourceUpdate, 0, len(ids))
 	for _, id := range ids {
 		source := SourceUpdate{ID: id}
@@ -445,25 +446,80 @@ func TestSharedEmbySettingsMergeWithoutClearing(t *testing.T) {
 	}
 }
 
+func TestLoadPadsMissingPansouSource(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "test-hash"); err != nil {
+		t.Fatal(err)
+	}
+	codec, err := securepayload.New(base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyIDs := []string{"dian", "framehdr", "gimy", "guanying", "hdhive", "juying", "mikan", "sidhub"}
+	legacy := make([]config.SearchSource, 0, len(legacyIDs))
+	for _, id := range legacyIDs {
+		legacy = append(legacy, config.SearchSource{ID: id, Label: sourceLabels[id]})
+	}
+	legacy[1].Account = "user"
+	legacy[1].Token = "pass"
+	sealed, err := codec.Seal(Values{Sources: legacy})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dataStore.UpsertProviderCredential(ctx, 1, ProviderKey, sealed, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(dataStore, codec, Values{}, nil)
+	if err := service.Load(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	values := service.Values()
+	if len(values.Sources) != len(canonicalSourceIDs) || values.Sources[8].ID != "pansou" || values.Sources[8].BaseURL != "" {
+		t.Fatalf("sources = %#v", values.Sources)
+	}
+	if values.Sources[1].Account != "user" || values.Sources[1].Token != "pass" {
+		t.Fatalf("legacy source was not preserved: %#v", values.Sources[1])
+	}
+}
+
+func TestMergePreservesOmittedPansouSource(t *testing.T) {
+	current := Values{Sources: configSources()}
+	current.Sources[8].BaseURL = "http://172.17.0.1:57081"
+	current.Sources[8].Token = "saved-token"
+	legacyUpdates := make([]SourceUpdate, 0, 8)
+	for _, id := range []string{"dian", "framehdr", "gimy", "guanying", "hdhive", "juying", "mikan", "sidhub"} {
+		legacyUpdates = append(legacyUpdates, SourceUpdate{ID: id})
+	}
+	merged := merge(current, Update{Sources: legacyUpdates})
+	if len(merged.Sources) != 9 || merged.Sources[8].ID != "pansou" || merged.Sources[8].BaseURL != "http://172.17.0.1:57081" || merged.Sources[8].Token != "saved-token" {
+		t.Fatalf("pansou merge = %#v", merged.Sources[8])
+	}
+}
+
 func TestReadinessCountsBuiltinSourcesWithoutURLs(t *testing.T) {
 	service := NewService(nil, nil, Values{Sources: configSources()}, nil)
 	_, nativeSources := service.ReadinessConfiguration()
-	if nativeSources != 2 {
-		t.Fatalf("native sources = %d, want 2", nativeSources)
+	if nativeSources != 3 {
+		t.Fatalf("native sources = %d, want 3", nativeSources)
 	}
 	configured := configSources()
 	configured[1].Account = "user"
 	configured[1].Token = "pass"
 	service = NewService(nil, nil, Values{Sources: configured}, nil)
 	_, nativeSources = service.ReadinessConfiguration()
-	if nativeSources != 3 {
-		t.Fatalf("native sources = %d, want 3", nativeSources)
+	if nativeSources != 4 {
+		t.Fatalf("native sources = %d, want 4", nativeSources)
 	}
 	configured[5].Account = "app-id"
 	configured[5].Token = "app-key"
 	service = NewService(nil, nil, Values{Sources: configured}, nil)
 	_, nativeSources = service.ReadinessConfiguration()
-	if nativeSources != 4 {
-		t.Fatalf("native sources = %d, want 4", nativeSources)
+	if nativeSources != 5 {
+		t.Fatalf("native sources = %d, want 5", nativeSources)
 	}
 }

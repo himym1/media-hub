@@ -201,7 +201,7 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
       <section className="settings-group" aria-labelledby="sources-settings-heading">
         <div className="settings-group-header">
           <h3 id="sources-settings-heading"><Search size={17} />资源搜索源</h3>
-          <p>全网检索影视资源的适配器。蜜柑和 Sidhub 使用内置匿名适配器。</p>
+          <p>全网检索影视资源的适配器。蜜柑和 Sidhub 使用内置匿名适配器。盘搜只收 115 分享，TG 频道配在盘搜服务里。</p>
         </div>
         <fieldset className="source-settings">
           {settings.sources.map((source, index) => {
@@ -216,7 +216,7 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
                   ? authMode === 'web' ? { account: '用户名', secret: '密码' } : { account: 'App ID', secret: 'API Key' }
                   : source.id === 'mikan' || source.id === 'sidhub'
                     ? null
-                    : { secret: 'Token' }
+                    : { secret: source.id === 'pansou' ? 'Bearer Token（可选）' : 'Token' }
             const setJuyingMode = (nextMode: 'web' | 'developer') => {
               if (authMode === nextMode) return
               onDirty()
@@ -226,7 +226,7 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
               <div className="source-setting-heading"><strong>{source.label}</strong>
                 {source.id === 'juying' ? <div aria-label="聚影认证方式" className="source-auth-mode" role="group"><button aria-pressed={authMode === 'web'} onClick={() => setJuyingMode('web')} type="button">网页登录</button><button aria-pressed={authMode === 'developer'} onClick={() => setJuyingMode('developer')} type="button">开发者 API</button></div> : null}
               </div>
-              <label><span>适配器地址</span><input {...machineFieldProps} name={`${source.id}-base-url`} onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, baseUrl: event.target.value } : value) }))} type="url" value={item.baseUrl} /></label>
+              <label><span>适配器地址</span><input {...machineFieldProps} name={`${source.id}-base-url`} onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, baseUrl: event.target.value } : value) }))} placeholder={source.id === 'pansou' ? 'http://172.17.0.1:57081' : undefined} type="url" value={item.baseUrl} /></label>
               {credential?.account ? <label><span>{credential.account}</span><input {...machineFieldProps} name={`${source.id}-account`} onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, account: event.target.value } : value) }))} value={item.account} /></label> : null}
               {credential ? <label><span>{credential.secret} · {modeChanged ? '切换模式后需重新填写' : secretHint(source.token.configured)}</span><input {...machineFieldProps} autoComplete="new-password" name={`${source.id}-secret`} onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, token: { value: event.target.value, clear: false } } : value) }))} type="password" value={item.token.value} /></label> : null}
               {credential && source.token.configured ? <label className="inline-check"><input checked={item.token.clear} name={`${source.id}-clear-secret`} onChange={(event) => setDraft((current) => ({ ...current, sources: current.sources.map((value, itemIndex) => itemIndex === index ? { ...value, token: { value: '', clear: event.target.checked } } : value) }))} type="checkbox" />清除已保存 {credential.secret}</label> : <span />}

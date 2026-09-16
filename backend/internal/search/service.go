@@ -274,7 +274,10 @@ func candidateTitleMatchesIdentity(candidate Candidate, identityTitle string) bo
 	if strings.EqualFold(strings.TrimSpace(candidate.Title), strings.TrimSpace(identityTitle)) {
 		return true
 	}
-	return candidate.SourceID == "mikan" && titleContainsIdentity(candidate.Title, identityTitle)
+	if candidate.SourceID == "mikan" && titleContainsIdentity(candidate.Title, identityTitle) {
+		return true
+	}
+	return candidate.SourceID == "pansou" && (titleContainsIdentity(candidate.Title, identityTitle) || titleContainsIdentity(candidate.ReleaseTitle, identityTitle))
 }
 
 func releaseTitleContainsIdentity(releaseTitle, identityTitle string) bool {

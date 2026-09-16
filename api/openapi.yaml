@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.21.22
+  version: 0.21.23
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -1895,7 +1895,7 @@ components:
       type: object
       required: [id, label, baseUrl, account, authMode, token]
       properties:
-        id: { type: string, enum: [dian, framehdr, gimy, guanying, hdhive, juying, mikan, sidhub] }
+        id: { type: string, enum: [dian, framehdr, gimy, guanying, hdhive, juying, mikan, sidhub, pansou] }
         label: { type: string }
         baseUrl: { type: string, maxLength: 2048 }
         account: { type: string, maxLength: 200 }
@@ -1905,7 +1905,7 @@ components:
       type: object
       required: [id, baseUrl, token]
       properties:
-        id: { type: string, enum: [dian, framehdr, gimy, guanying, hdhive, juying, mikan, sidhub] }
+        id: { type: string, enum: [dian, framehdr, gimy, guanying, hdhive, juying, mikan, sidhub, pansou] }
         baseUrl: { type: string, maxLength: 2048 }
         account: { type: string, maxLength: 200 }
         authMode: { type: string, enum: ['', web, developer], description: 可选以兼容旧客户端；显式切换会清空原模式凭据 }
@@ -1974,8 +1974,8 @@ components:
         checkIn: { $ref: '#/components/schemas/CheckInSettings' }
         sources:
           type: array
-          minItems: 8
-          maxItems: 8
+          minItems: 9
+          maxItems: 9
           items: { $ref: '#/components/schemas/SourceSettings' }
     ProviderSettingsUpdate:
       type: object
@@ -2042,7 +2042,7 @@ components:
         sources:
           type: array
           minItems: 8
-          maxItems: 8
+          maxItems: 9
           items: { $ref: '#/components/schemas/SourceSettingsUpdate' }
     DiscoveryItem:
       type: object

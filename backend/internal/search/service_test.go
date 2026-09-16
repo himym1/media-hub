@@ -177,6 +177,22 @@ func TestServiceRequiresJuyingTMDBAndReleaseIdentityEvidence(t *testing.T) {
 	}
 }
 
+func TestServiceMatchesPansouIdentityFromReleaseTitle(t *testing.T) {
+	source := transferSearchStub{sourceStub: sourceStub{
+		id: "pansou", label: "盘搜", candidates: []Candidate{{
+			ID: "share-1", Title: "范海辛 资源", Year: 2004, MediaType: "movie", SourceRef: "private",
+			ReleaseTitle: "Van.Helsing.2004.2160p.HEVC",
+		}},
+	}}
+	service := NewServiceWithIdentity(identityStub{identities: []Identity{{
+		TMDBID: "7131", Title: "范海辛", OriginalTitle: "Van Helsing", Year: 2004, MediaType: "movie",
+	}}}, source)
+	response := service.Search(context.Background(), "范海辛")
+	if len(response.Results) != 1 || response.Results[0].TMDBID != "7131" || !response.Results[0].IdentityVerified {
+		t.Fatalf("candidate = %#v", response.Results)
+	}
+}
+
 func TestServiceDoesNotUseReleaseTitleContainmentForContractSources(t *testing.T) {
 	source := transferSearchStub{sourceStub: sourceStub{
 		id: "framehdr", label: "帧影", candidates: []Candidate{{

@@ -239,6 +239,19 @@ func TestLoadConfiguresEightCanonicalSources(t *testing.T) {
 	}
 }
 
+func TestLoadConfiguresPansouSource(t *testing.T) {
+	loaded, err := load(testLookup(map[string]string{
+		"MEDIA_HUB_SOURCE_PANSOU_URL":   "http://172.17.0.1:57081",
+		"MEDIA_HUB_SOURCE_PANSOU_TOKEN": "token",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Sources) != 1 || loaded.Sources[0].ID != "pansou" || loaded.Sources[0].BaseURL != "http://172.17.0.1:57081" || loaded.Sources[0].Token != "token" {
+		t.Fatalf("sources = %#v", loaded.Sources)
+	}
+}
+
 func TestLoadConfiguresAccountSourceWithoutURL(t *testing.T) {
 	values := map[string]string{
 		"MEDIA_HUB_SOURCE_FRAMEHDR_ACCOUNT": "user",

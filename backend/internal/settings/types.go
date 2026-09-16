@@ -219,7 +219,10 @@ type View struct {
 var sourceLabels = map[string]string{
 	"dian": "点点", "framehdr": "帧影", "gimy": "Gimy", "guanying": "观影",
 	"hdhive": "HDHive", "juying": "聚影", "mikan": "蜜柑", "sidhub": "Sidhub",
+	"pansou": "盘搜",
 }
+
+var canonicalSourceIDs = []string{"dian", "framehdr", "gimy", "guanying", "hdhive", "juying", "mikan", "sidhub", "pansou"}
 
 func DefaultCheckIn() CheckInSettings {
 	return CheckInSettings{Enabled: true, Hour: 0, Minute: 5, Sources: []string{"framehdr", "juying"}}
@@ -266,6 +269,25 @@ func FromConfig(value config.Config) Values {
 		MoviePilot: value.MoviePilot,
 		WeCom:      value.WeCom,
 		Workflow:   value.Workflow,
-		Sources:    append([]config.SearchSource(nil), value.Sources...),
+		Sources:    ensureCanonicalSources(sourcesByID(value.Sources)),
 	}
+}
+
+func sourcesByID(sources []config.SearchSource) map[string]config.SearchSource {
+	byID := make(map[string]config.SearchSource, len(sources))
+	for _, source := range sources {
+		byID[source.ID] = source
+	}
+	return byID
+}
+
+func ensureCanonicalSources(byID map[string]config.SearchSource) []config.SearchSource {
+	result := make([]config.SearchSource, 0, len(canonicalSourceIDs))
+	for _, id := range canonicalSourceIDs {
+		source := byID[id]
+		source.ID = id
+		source.Label = sourceLabels[id]
+		result = append(result, source)
+	}
+	return result
 }

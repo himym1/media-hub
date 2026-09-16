@@ -506,6 +506,7 @@ func searchSourceConfigurations(
 		{"juying", "聚影", "JUYING"},
 		{"mikan", "蜜柑", "MIKAN"},
 		{"sidhub", "Sidhub", "SIDHUB"},
+		{"pansou", "盘搜", "PANSOU"},
 	}
 	result := make([]SearchSource, 0, len(specifications))
 	for _, specification := range specifications {

@@ -103,6 +103,10 @@ func New(source config.SearchSource, timeout time.Duration, offline Offline, pro
 	if source.ID == "sidhub" && (source.BaseURL == "" || isSidhubHost(source.BaseURL)) {
 		return NewSidhub(source.BaseURL, timeout, offline, proxyURL)
 	}
+	if source.ID == "pansou" {
+		receiver, _ := offline.(ShareReceiver)
+		return NewPansou(source.BaseURL, source.Token, timeout, receiver)
+	}
 	if source.BaseURL == "" {
 		return nil
 	}

@@ -148,14 +148,14 @@ internal fun ProviderSettingsPanel(
             if (tested) MediaHubText("测试通知已提交", color = MediaHubColors.Source, fontSize = 12.sp)
         }
 
-        SettingsSection("资源搜索源", "8 个内置媒体搜索适配器配置", Lucide.ServerCog) {
-            MediaHubText("蜜柑和 Sidhub 使用内置匿名适配器；帧影使用站点账号；聚影可选择网页登录或开发者 API。癫影当前仍使用合同适配器。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
+        SettingsSection("资源搜索源", "内置媒体搜索适配器配置", Lucide.ServerCog) {
+            MediaHubText("蜜柑和 Sidhub 使用内置匿名适配器；帧影使用站点账号；聚影可选择网页登录或开发者 API。盘搜只收 115 分享，TG 频道配在盘搜服务里。", color = MediaHubColors.TextMuted, fontSize = 12.sp)
             settings.sources.forEachIndexed { index, source ->
                 val item = draft.sources[index]
                 val authMode = if (source.id == "juying") item.authMode.ifBlank { "web" } else ""
                 val modeChanged = source.id == "juying" && authMode != source.authMode
                 val accountLabel = when (source.id) { "framehdr" -> "用户名"; "juying" -> if (authMode == "web") "用户名" else "App ID"; else -> null }
-                val secretLabel = when (source.id) { "framehdr" -> "密码"; "dian" -> "OpenAPI Key"; "juying" -> if (authMode == "web") "密码" else "API Key"; "mikan", "sidhub" -> null; else -> "Bearer Token" }
+                val secretLabel = when (source.id) { "framehdr" -> "密码"; "dian" -> "OpenAPI Key"; "juying" -> if (authMode == "web") "密码" else "API Key"; "mikan", "sidhub" -> null; "pansou" -> "Bearer Token（可选）"; else -> "Bearer Token" }
                 MediaHubText(source.label, color = MediaHubColors.TextStrong, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 if (source.id == "juying") AuthModePicker(authMode) { nextMode ->
                     onDraftChange(draft.copy(sources = draft.sources.mapIndexed { itemIndex, current ->
