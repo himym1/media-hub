@@ -2,6 +2,7 @@ import { ArrowUpDown, Check, CircleAlert, Film, Play, Star } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { embyPrimaryImageURL, getEmbyEpisodes, type EmbyEpisode } from '../../shared/api/mediaHub'
+import { LibraryEpisodesSkeleton } from './LibrarySkeletons'
 import { LibraryWatchAction } from './LibraryWatchAction'
 import { episodeLabel, playbackStatus } from './libraryPlayback'
 import { calculateEpisodeProgress, seasonDisplayName } from './librarySeason'
@@ -56,7 +57,7 @@ export function LibraryEpisodes({ seriesId, seriesTitle, inPagePlayback, onPlay 
     return descending ? [...list].reverse() : list
   }, [items, activeSeason, descending])
 
-  if (episodes.isLoading) return <div className="status-loading">正在读取分集…</div>
+  if (episodes.isLoading) return <LibraryEpisodesSkeleton />
   if (episodes.isError) {
     return (
       <div className="inline-error">
@@ -181,6 +182,7 @@ function EpisodeStillCard({
   onPlay: (episode: EmbyEpisode) => void
 }) {
   const [thumbFailed, setThumbFailed] = useState(false)
+  const [thumbLoaded, setThumbLoaded] = useState(false)
   const isPlayed = Boolean(episode.played)
   const hasProgress = (episode.playbackPositionMs ?? 0) >= 30_000 && !isPlayed
   const progressPct = calculateEpisodeProgress(episode.playbackPositionMs, episode.runtimeMinutes)
@@ -206,11 +208,12 @@ function EpisodeStillCard({
         {!thumbFailed ? (
           <img
             alt=""
-            className="episode-still-img"
+            className={`episode-still-img fade-in-image ${thumbLoaded ? 'loaded' : ''}`}
             decoding="async"
             height={90}
             loading="lazy"
             onError={() => setThumbFailed(true)}
+            onLoad={() => setThumbLoaded(true)}
             src={embyPrimaryImageURL(episode.id)}
             width={160}
           />

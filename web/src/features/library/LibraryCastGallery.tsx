@@ -44,6 +44,7 @@ function CastCard({
   onSelect?: (name: string) => void
 }) {
   const [imgFailed, setImgFailed] = useState(!person.primaryImageTag && !person.id)
+  const [imgLoaded, setImgLoaded] = useState(false)
   const roleText = formatPersonRole(person)
   const isDirector = person.type?.trim().toLowerCase() === 'director'
   const actionTitle = onSelect ? `${person.name} (${roleText}) · 点击在媒体库中查看其作品` : `${person.name} (${roleText})`
@@ -59,11 +60,12 @@ function CastCard({
         {!imgFailed ? (
           <img
             alt=""
-            className="cast-avatar-img"
+            className={`cast-avatar-img fade-in-image ${imgLoaded ? 'loaded' : ''}`}
             decoding="async"
             height={68}
             loading="lazy"
             onError={() => setImgFailed(true)}
+            onLoad={() => setImgLoaded(true)}
             src={embyPrimaryImageURL(person.id)}
             width={68}
           />

@@ -50,6 +50,7 @@ import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
 import { LibraryEpisodes } from './LibraryEpisodes'
 import { LibraryCastGallery } from './LibraryCastGallery'
+import { LibraryDetailSkeleton, LibraryPosterGridSkeleton } from './LibrarySkeletons'
 import { LibraryPlayer } from './LibraryPlayer'
 import { LibraryWatchAction } from './LibraryWatchAction'
 import { episodeLabel, playbackStatus } from './libraryPlayback'
@@ -803,14 +804,7 @@ export function LibraryView() {
 
         <div className="library-results">
           {result.isLoading && items.length === 0 ? (
-            <div aria-label="正在加载媒体海报" className="library-poster-grid" role="status">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div className="library-poster-skeleton" key={i}>
-                  <div className="skeleton-poster-frame" />
-                  <div className="skeleton-poster-title" />
-                </div>
-              ))}
-            </div>
+            <LibraryPosterGridSkeleton count={12} />
           ) : null}
           {result.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>媒体内容读取失败</strong><span>{result.error.message}</span></div><button onClick={() => void result.refetch()} type="button">重试</button></div> : null}
           {!result.isLoading && !result.isError && items.length === 0 ? (
@@ -839,7 +833,7 @@ export function LibraryView() {
             <ChevronLeft aria-hidden="true" size={18} />
             返回媒体列表
           </button>
-          {detail.isLoading && !detail.data ? <div className="status-loading">正在读取媒体详情…</div> : null}
+          {detail.isLoading && !detail.data ? <LibraryDetailSkeleton /> : null}
           {detail.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>详情读取失败</strong><span>{detail.error.message}</span></div><button onClick={() => void detail.refetch()} type="button">重试</button></div> : null}
           {detail.data ? <LibraryItemDetail inPagePlayback={inPagePlayback} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} onSelectPerson={selectPerson} refreshing={refreshItem.isPending} seriesEpisodes={episodes.data?.items} shared={isSharedEmbyId(detail.data.id)} /> : null}
         </aside>
@@ -860,6 +854,7 @@ export function LibraryView() {
 
 function LibraryPosterCard({ item, selected, onSelect }: { item: EmbyItem; selected: boolean; onSelect: (id: string) => void }) {
   const [failed, setFailed] = useState(false)
+  const [imgLoaded, setImgLoaded] = useState(false)
   const isPlayed = Boolean(item.played)
   const isProgress = (item.playbackPositionMs ?? 0) >= 30_000 && !isPlayed
   const status = isPlayed || isProgress ? playbackStatus(item) : ''
@@ -870,10 +865,12 @@ function LibraryPosterCard({ item, selected, onSelect }: { item: EmbyItem; selec
         {!failed ? (
           <img
             alt=""
+            className={imgLoaded ? 'fade-in-image loaded' : 'fade-in-image'}
             decoding="async"
             height={240}
             loading="lazy"
             onError={() => setFailed(true)}
+            onLoad={() => setImgLoaded(true)}
             src={embyPrimaryImageURL(item.id)}
             width={160}
           />
@@ -931,6 +928,7 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
   const originalTitle = visibleOriginalTitle(item)
   const genres = localizedGenres(item.genres ?? [])
   const [posterFailed, setPosterFailed] = useState(false)
+  const [posterLoaded, setPosterLoaded] = useState(false)
   const [backdropFailed, setBackdropFailed] = useState(false)
   const [subtitleResults, setSubtitleResults] = useState<EmbyRemoteSubtitle[] | null>(null)
   const effectiveSpecs = item.techSpecs ?? seriesEpisodes?.find((ep) => ep.techSpecs)?.techSpecs
@@ -997,7 +995,16 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
           <>
             <div aria-hidden="true" className="detail-poster-backdrop" style={{ backgroundImage: `url(${embyPrimaryImageURL(item.id)})` }} />
             <div aria-hidden="true" className="detail-poster-vignette" />
-            <img alt="" className="detail-poster-foreground" decoding="async" height={360} onError={() => setPosterFailed(true)} src={embyPrimaryImageURL(item.id)} width={240} />
+            <img
+              alt=""
+              className={`detail-poster-foreground fade-in-image ${posterLoaded ? 'loaded' : ''}`}
+              decoding="async"
+              height={360}
+              onError={() => setPosterFailed(true)}
+              onLoad={() => setPosterLoaded(true)}
+              src={embyPrimaryImageURL(item.id)}
+              width={240}
+            />
           </>
         ) : (
           <span aria-hidden="true" className="library-poster-fallback"><Film size={36} /></span>

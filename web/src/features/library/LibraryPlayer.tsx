@@ -1,4 +1,4 @@
-import { Captions, Maximize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Captions, Maximize2, Minimize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ApiError, createEmbyPlaybackDescriptor, fetchLocalSubtitle, reportPlaybackSessionEvent } from '../../shared/api/mediaHub'
 import {
@@ -101,6 +101,9 @@ export function LibraryPlayer({
   const [subtitleHint, setSubtitleHint] = useState<string | null>(null)
   const [aspect, setAspect] = useState<PlayerAspectId>('fit')
   const [pictureZoom, setPictureZoom] = useState(1)
+  const [isMini, setIsMini] = useState(false)
+  const [hoverTime, setHoverTime] = useState<number | null>(null)
+  const [hoverRatio, setHoverRatio] = useState<number | null>(null)
 
   const clearIdleTimer = () => {
     if (idleTimer.current != null) {
@@ -182,15 +185,23 @@ export function LibraryPlayer({
   }, [])
 
   const onSurfaceClick = useCallback(() => {
+    if (isMini) {
+      setIsMini(false)
+      return
+    }
     revealChrome(false, true)
     schedulePlayerClick(clickTimer, togglePlayback)
-  }, [revealChrome, togglePlayback])
+  }, [isMini, revealChrome, togglePlayback])
 
   const onSurfaceDoubleClick = useCallback(() => {
+    if (isMini) {
+      setIsMini(false)
+      return
+    }
     cancelScheduledPlayerClick(clickTimer)
     revealChrome(false, true)
     togglePresentation()
-  }, [revealChrome, togglePresentation])
+  }, [isMini, revealChrome, togglePresentation])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -198,6 +209,11 @@ export function LibraryPlayer({
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
       const video = videoRef.current
       if (event.key === 'Escape') {
+        if (isMini) {
+          event.preventDefault()
+          setIsMini(false)
+          return
+        }
         const inDocumentFullscreen = documentFullscreenElement() !== null
         if (!shouldClosePlayerOnEscape(false, inDocumentFullscreen)) {
           event.preventDefault()
@@ -211,7 +227,10 @@ export function LibraryPlayer({
       // mpv 自己一个窗口，播放键都归它，Hub 只留 Esc 收面板。
       if (nativeShell) return
       revealChrome()
-      if (event.key === ' ' || event.key === 'k') {
+      if (event.key === 'i') {
+        event.preventDefault()
+        setIsMini((prev) => !prev)
+      } else if (event.key === ' ' || event.key === 'k') {
         event.preventDefault()
         togglePlayback()
       } else if (event.key === 'ArrowLeft' || event.key === 'j') {
@@ -248,7 +267,7 @@ export function LibraryPlayer({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [applyAspect, applyZoom, aspect, nativeActive, nativeShell, onClose, pictureZoom, revealChrome, seekBy, toggleCaptions, togglePlayback, togglePresentation])
+  }, [applyAspect, applyZoom, aspect, isMini, nativeActive, nativeShell, onClose, pictureZoom, revealChrome, seekBy, toggleCaptions, togglePlayback, togglePresentation])
 
   useEffect(() => {
     const sync = () => setWebFullscreen(documentFullscreenElement() !== null)
@@ -470,6 +489,7 @@ export function LibraryPlayer({
   const seekProgress = durationSeconds > 0 ? Math.min(1, currentSeconds / durationSeconds) : 0
   const shellClass = [
     'library-player',
+    isMini ? 'is-mini-player' : '',
     chromeVisible || !playing || Boolean(error) ? 'chrome-visible' : 'chrome-hidden',
     playing ? 'is-playing' : 'is-paused',
   ].filter(Boolean).join(' ')
@@ -585,9 +605,75 @@ export function LibraryPlayer({
             >
               <ZoomIn size={18} />
             </button>
+            <button
+              aria-label="缩小为浮窗播放"
+              className="library-player-icon-action"
+              onClick={() => {
+                if (documentFullscreenElement()) {
+                  void exitDocumentFullscreen().catch(() => undefined)
+                }
+                setIsMini(true)
+              }}
+              title="缩小为右下角小浮窗播放，可继续浏览媒体库 (按 I 快捷切换)"
+              type="button"
+            >
+              <Minimize2 size={18} />
+              <span aria-hidden="true">浮窗</span>
+            </button>
             <IconButton label="关闭播放器" onClick={onClose}><X size={17} /></IconButton>
           </div>
         </header>
+
+        {isMini ? (
+          <div className="library-mini-player-overlay">
+            <div className="mini-player-topbar">
+              <span className="mini-player-title" title={title}>{title}</span>
+              <div className="mini-player-actions">
+                <button
+                  aria-label="恢复正常播放"
+                  className="mini-action-btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIsMini(false)
+                  }}
+                  title="恢复正常大小"
+                  type="button"
+                >
+                  <Maximize2 size={14} />
+                </button>
+                <button
+                  aria-label="关闭播放器"
+                  className="mini-action-btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onClose()
+                  }}
+                  title="关闭"
+                  type="button"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+            <button
+              aria-label={playing ? '暂停' : '播放'}
+              className="mini-player-center-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                togglePlayback()
+              }}
+              type="button"
+            >
+              {playing ? <Pause size={20} /> : <Play size={20} />}
+            </button>
+            <div className="mini-player-progress-bar">
+              <div
+                className="mini-player-progress-fill"
+                style={{ width: `${seekProgress * 100}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
 
         <div
           className={`library-player-picture ${playerAspectClassName(aspect)}`}
@@ -659,23 +745,54 @@ export function LibraryPlayer({
             revealChrome()
           }}
         >
-          <label className="library-player-seek" style={{ '--seek-progress': `${seekProgress * 100}%` } as CSSProperties}>
-            <span>{formatPlaybackClock(currentSeconds)}</span>
-            <input
-              aria-label="播放进度"
-              max={durationSeconds || 0}
-              min={0}
-              onChange={(event) => {
-                const next = Number(event.target.value)
-                if (videoRef.current) videoRef.current.currentTime = next
-                revealChrome(true)
+          <div className="library-player-seek" style={{ '--seek-progress': `${seekProgress * 100}%` } as CSSProperties}>
+            <span className="seek-clock">{formatPlaybackClock(currentSeconds)}</span>
+            <div
+              className="library-player-seek-track-wrap"
+              onPointerLeave={() => {
+                setHoverTime(null)
+                setHoverRatio(null)
               }}
-              step={1}
-              type="range"
-              value={Math.min(currentSeconds, durationSeconds || 0)}
-            />
-            <span>{formatPlaybackClock(durationSeconds)}</span>
-          </label>
+              onPointerMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect()
+                if (rect.width <= 0 || !durationSeconds) return
+                const offsetX = Math.max(0, Math.min(e.clientX - rect.left, rect.width))
+                const ratio = offsetX / rect.width
+                setHoverRatio(ratio)
+                setHoverTime(ratio * durationSeconds)
+              }}
+            >
+              {hoverTime !== null && hoverRatio !== null ? (
+                <div
+                  className="library-player-seek-tooltip"
+                  style={{ left: `${hoverRatio * 100}%` }}
+                >
+                  <span className="tooltip-time">{formatPlaybackClock(hoverTime)}</span>
+                </div>
+              ) : null}
+              {hoverRatio !== null ? (
+                <div
+                  aria-hidden="true"
+                  className="library-player-seek-hover-marker"
+                  style={{ left: `${hoverRatio * 100}%` }}
+                />
+              ) : null}
+              <input
+                aria-label="播放进度"
+                max={durationSeconds || 0}
+                min={0}
+                onChange={(event) => {
+                  const next = Number(event.target.value)
+                  if (videoRef.current) videoRef.current.currentTime = next
+                  revealChrome(true)
+                }}
+                step={1}
+                type="range"
+                value={Math.min(currentSeconds, durationSeconds || 0)}
+              />
+            </div>
+            <span className="seek-clock">{formatPlaybackClock(durationSeconds)}</span>
+          </div>
 
           <div className="library-player-controls">
             <button
@@ -793,12 +910,29 @@ export function LibraryPlayer({
                   if (document.pictureInPictureElement) void document.exitPictureInPicture()
                   else void video.requestPictureInPicture()
                 }}
+                title="系统画中画 (脱离浏览器)"
                 type="button"
               >
                 <PictureInPicture2 size={18} />
                 <span aria-hidden="true">画中画</span>
               </button>
             ) : null}
+
+            <button
+              aria-label="浮窗播放"
+              className="library-player-icon-action"
+              onClick={() => {
+                if (documentFullscreenElement()) {
+                  void exitDocumentFullscreen().catch(() => undefined)
+                }
+                setIsMini(true)
+              }}
+              title="应用内浮窗播放 (按 I 快捷切换)"
+              type="button"
+            >
+              <Minimize2 size={18} />
+              <span aria-hidden="true">浮窗</span>
+            </button>
 
             <button
               aria-label="全屏"

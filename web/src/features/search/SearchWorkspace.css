@@ -3756,28 +3756,256 @@ h1, h2, h3, .detail-header h2, .result-title {
   border-radius: 4px;
 }
 
-/* Poster Skeleton Shimmer */
-.library-poster-skeleton {
-  display: grid;
-  gap: 8px;
-  width: 100%;
+/* ==========================================================================
+   Apple / Infuse 风格微光骨架屏 (Shimmer Skeleton UI)
+   ========================================================================== */
+
+@keyframes shimmer-sweep {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
-.skeleton-poster-frame {
-  width: 100%;
-  aspect-ratio: 2 / 3;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: linear-gradient(90deg, var(--surface) 20%, var(--surface-raised) 50%, var(--surface) 80%);
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.07) 35%,
+    rgba(255, 255, 255, 0.13) 50%,
+    rgba(255, 255, 255, 0.07) 65%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
   background-size: 200% 100%;
-  animation: shimmer-wave 1.8s ease-in-out infinite;
+  animation: shimmer-sweep 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-.skeleton-poster-title {
-  width: 70%;
+/* 海报网格骨架 */
+.skeleton-grid {
+  pointer-events: none;
+}
+
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.skeleton-card .library-poster-frame {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.skeleton-line {
   height: 14px;
   border-radius: 4px;
+}
+
+.skeleton-line.skeleton-title {
+  width: 75%;
+  height: 14px;
+}
+
+.skeleton-line.skeleton-subtitle {
+  width: 45%;
+  height: 12px;
+}
+
+.skeleton-line.skeleton-heading {
+  width: 48%;
+  height: 32px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+/* 详情页骨架屏 */
+.library-detail-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+  pointer-events: none;
+}
+
+.skeleton-backdrop {
+  width: 100%;
+  height: 220px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.skeleton-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+
+.skeleton-pill {
+  display: inline-block;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.skeleton-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 20px;
+}
+
+.skeleton-btn {
+  border-radius: 8px;
+}
+
+.skeleton-facts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+  padding: 14px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.skeleton-fact-cell {
+  height: 38px;
+  border-radius: 6px;
+}
+
+.skeleton-overview-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 20px;
+}
+
+.skeleton-cast-section {
+  display: flex;
+  flex-direction: column;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.skeleton-cast-row {
+  display: flex;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.skeleton-cast-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 72px;
+  flex-shrink: 0;
+}
+
+.skeleton-avatar {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+}
+
+/* 分集列表骨架屏 */
+.library-episodes-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 24px;
+  pointer-events: none;
+}
+
+.skeleton-up-next {
+  width: 100%;
+  height: 84px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.skeleton-season-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.skeleton-episode-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeleton-episode-item {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 16px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
   background: var(--surface);
+}
+
+.skeleton-still-thumb {
+  width: 160px;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+}
+
+.skeleton-episode-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.skeleton-episode-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+/* ==========================================================================
+   图片渐显过渡 (Image Fade-In Transition)
+   ========================================================================== */
+.fade-in-image {
+  opacity: 0;
+  transition: opacity 0.36s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fade-in-image.loaded {
+  opacity: 1;
+}
+
+/* ==========================================================================
+   Apple 级微质感物理按压反馈 (Tactile Spring Feedback)
+   ========================================================================== */
+.library-poster-card:active .library-poster-frame {
+  transform: translateY(-2px) scale(0.975);
+  transition: transform 0.1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.episode-card-item:active {
+  transform: scale(0.988);
+  transition: transform 0.1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.season-pill-btn:active {
+  transform: scale(0.96);
+  transition: transform 0.1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cast-card-btn:active {
+  transform: scale(0.95);
+  transition: transform 0.1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.episode-up-next-card:active {
+  transform: scale(0.992);
+  transition: transform 0.1s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 
