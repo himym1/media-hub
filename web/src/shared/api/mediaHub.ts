@@ -292,9 +292,27 @@ export function embyPrimaryImageURL(itemId: string) {
   return `/api/v1/integrations/emby/items/${encodeURIComponent(itemId)}/primary-image`
 }
 
+export function embyBackdropImageURL(itemId: string) {
+  return `/api/v1/integrations/emby/items/${encodeURIComponent(itemId)}/backdrop-image`
+}
+
+export type EmbyMediaTechSpecs = {
+  resolution?: string
+  videoCodec?: string
+  videoRange?: string
+  audioCodec?: string
+  audioProfile?: string
+  audioChannels?: string
+  audioChannelCount?: number
+  bitDepth?: number
+  aspectRatio?: string
+  container?: string
+}
+
 export type EmbyEpisode = EmbyItem & {
   externalUrl: string
   appUrl?: string
+  techSpecs?: EmbyMediaTechSpecs
 }
 
 export type PlaybackDescriptor = {
@@ -320,6 +338,7 @@ export type EmbyItemDetail = EmbyItem & {
   mediaSourceCount: number
   externalUrl: string
   appUrl?: string
+  techSpecs?: EmbyMediaTechSpecs
 }
 
 export type EmbyDeletePreview = {

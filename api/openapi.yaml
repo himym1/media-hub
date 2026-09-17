@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.21.31
+  version: 0.21.32
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -697,6 +697,27 @@ paths:
       responses:
         '200':
           description: Bounded primary poster image
+          headers:
+            Cache-Control: { schema: { type: string } }
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '401': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '502': { $ref: '#/components/responses/ProblemResponse' }
+        '503': { $ref: '#/components/responses/ProblemResponse' }
+  /integrations/emby/items/{id}/backdrop-image:
+    get:
+      operationId: getEmbyBackdropImage
+      summary: Read a bounded Emby backdrop image without exposing the Emby API key
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' } }
+      responses:
+        '200':
+          description: Bounded backdrop image
           headers:
             Cache-Control: { schema: { type: string } }
           content:
@@ -2306,6 +2327,20 @@ components:
         episode: { type: integer, minimum: 0 }
         playbackPositionMs: { type: integer, format: int64, minimum: 0 }
         played: { type: boolean }
+    EmbyMediaTechSpecs:
+      type: object
+      additionalProperties: false
+      properties:
+        resolution: { type: string, maxLength: 32 }
+        videoCodec: { type: string, maxLength: 32 }
+        videoRange: { type: string, maxLength: 32 }
+        audioCodec: { type: string, maxLength: 32 }
+        audioProfile: { type: string, maxLength: 32 }
+        audioChannels: { type: string, maxLength: 16 }
+        audioChannelCount: { type: integer, minimum: 0 }
+        bitDepth: { type: integer, minimum: 0 }
+        aspectRatio: { type: string, maxLength: 16 }
+        container: { type: string, maxLength: 16 }
     EmbyEpisode:
       allOf:
         - $ref: '#/components/schemas/EmbyItem'
@@ -2314,6 +2349,7 @@ components:
           properties:
             externalUrl: { type: string, format: uri }
             appUrl: { type: string, format: uri, pattern: '^emby://items/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$' }
+            techSpecs: { $ref: '#/components/schemas/EmbyMediaTechSpecs' }
     EmbyEpisodeList:
       type: object
       required: [items, total]
@@ -2334,6 +2370,7 @@ components:
             mediaSourceCount: { type: integer, minimum: 0 }
             externalUrl: { type: string, format: uri }
             appUrl: { type: string, format: uri, pattern: '^emby://items/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$' }
+            techSpecs: { $ref: '#/components/schemas/EmbyMediaTechSpecs' }
     EmbyRefreshResponse:
       type: object
       required: [status]

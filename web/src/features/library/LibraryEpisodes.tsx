@@ -62,6 +62,19 @@ export function LibraryEpisodes({ seriesId, seriesTitle, inPagePlayback, onPlay 
                   ? '继续观看'
                   : '接续观看'}
             </span>
+            {upNextEpisode.techSpecs?.resolution ? (
+              <span className="tech-badge tech-badge-res" style={{ height: '20px', fontSize: '10px', padding: '0 6px' }}>
+                {upNextEpisode.techSpecs.resolution}
+              </span>
+            ) : null}
+            {upNextEpisode.techSpecs?.videoRange && upNextEpisode.techSpecs.videoRange !== 'SDR' ? (
+              <span
+                className={upNextEpisode.techSpecs.videoRange === 'Dolby Vision' ? 'tech-badge tech-badge-dovi' : 'tech-badge tech-badge-hdr'}
+                style={{ height: '20px', fontSize: '10px', padding: '0 6px' }}
+              >
+                {upNextEpisode.techSpecs.videoRange === 'Dolby Vision' ? 'VISION' : upNextEpisode.techSpecs.videoRange}
+              </span>
+            ) : null}
             <span className="up-next-status-text">{playbackStatus(upNextEpisode)}</span>
           </div>
           <div className="up-next-body">
@@ -107,6 +120,12 @@ export function LibraryEpisodes({ seriesId, seriesTitle, inPagePlayback, onPlay 
                     </span>
                   ) : null}
                   <strong>{name}</strong>
+                  {episode.techSpecs?.resolution ? (
+                    <span className="episode-spec-pill">
+                      {episode.techSpecs.resolution}
+                      {episode.techSpecs.videoRange && episode.techSpecs.videoRange !== 'SDR' ? ` · ${episode.techSpecs.videoRange === 'Dolby Vision' ? 'DV' : episode.techSpecs.videoRange}` : ''}
+                    </span>
+                  ) : null}
                 </div>
                 <small>{playbackStatus(episode)}</small>
               </div>

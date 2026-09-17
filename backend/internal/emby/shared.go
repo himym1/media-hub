@@ -307,6 +307,7 @@ func (c *Client) sharedItemDetails(ctx context.Context, itemID string) (ItemDeta
 			RuntimeMinutes:   int(item.RunTimeTicks / 600_000_000),
 			Genres:           boundedStrings(item.Genres, 32, 100),
 			MediaSourceCount: len(item.MediaSources),
+			TechSpecs:        extractMediaTechSpecs(item.MediaSources),
 		}
 		detail.ID = sharedPublicID(detail.ID)
 		return nil
@@ -350,6 +351,7 @@ func (c *Client) sharedEpisodes(ctx context.Context, seriesID string) ([]Episode
 					PlaybackPositionMS: item.UserData.PlaybackPositionTicks / 10_000,
 					Played:             item.UserData.Played,
 				},
+				TechSpecs: extractMediaTechSpecs(item.MediaSources),
 			})
 		}
 		episodes = next
@@ -367,6 +369,20 @@ func (c *Client) sharedPrimaryImage(ctx context.Context, itemID string, maxWidth
 	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
 		var err error
 		image, err = c.primaryImageWith(ctx, configuration, nativeID, maxWidth)
+		return err
+	})
+	return image, err
+}
+
+func (c *Client) sharedBackdropImage(ctx context.Context, itemID string, maxWidth int) (PrimaryImage, error) {
+	nativeID, ok := sharedNativeID(itemID)
+	if !ok {
+		return PrimaryImage{}, ErrItemNotFound
+	}
+	var image PrimaryImage
+	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
+		var err error
+		image, err = c.backdropImageWith(ctx, configuration, nativeID, maxWidth)
 		return err
 	})
 	return image, err

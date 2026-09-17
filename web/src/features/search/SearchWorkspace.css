@@ -1741,6 +1741,176 @@ h1 em { color: var(--accent); font-style: normal; }
   font-weight: 400;
 }
 
+/* 电影与剧集全景背景横幅 (Infuse / Apple TV 级) */
+.detail-hero-backdrop-wrap {
+  position: absolute;
+  top: -24px;
+  left: -28px;
+  right: -28px;
+  height: 380px;
+  overflow: hidden;
+  border-radius: 18px 18px 0 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.detail-hero-backdrop {
+  position: absolute;
+  inset: -12px;
+  background-size: cover;
+  background-position: center 22%;
+  filter: brightness(0.42) saturate(1.25);
+  opacity: 0.72;
+  transform: scale(1.04);
+}
+
+.detail-backdrop-tester {
+  display: none;
+}
+
+.detail-backdrop-gradient-bottom {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 0%, rgba(12, 14, 17, 0.4) 50%, var(--bg, #0b0f17) 100%);
+}
+
+.detail-backdrop-gradient-left {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, rgba(12, 14, 17, 0.95) 0%, rgba(12, 14, 17, 0.7) 35%, transparent 75%);
+}
+
+.library-heading-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.rating-pill-gold {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 25px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.16) 0%, rgba(161, 98, 7, 0.08) 100%);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.rating-pill-gold .rating-star {
+  color: #facc15;
+  fill: #facc15;
+}
+
+.rating-pill-gold .rating-score {
+  color: #fef08a;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 视听工业级金属质感铭牌 (Infuse / Popcorn 级) */
+.tech-specs-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin: 12px 0 2px;
+}
+
+.tech-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* 4K UHD / 1080p 纯银高光 */
+.tech-badge-res {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  color: #f8fafc;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* 杜比视界 Dolby Vision 鎏金光泽 */
+.tech-badge-dovi {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.22) 0%, rgba(161, 98, 7, 0.1) 100%);
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  color: #fde047;
+  text-shadow: 0 0 8px rgba(250, 204, 21, 0.45);
+  box-shadow: inset 0 1px 0 rgba(250, 204, 21, 0.25), 0 2px 8px rgba(202, 138, 4, 0.25);
+}
+
+/* HDR10 / HDR 天空蓝冷光 */
+.tech-badge-hdr {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(3, 105, 161, 0.08) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  color: #7dd3fc;
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+  box-shadow: inset 0 1px 0 rgba(56, 189, 248, 0.25), 0 2px 8px rgba(14, 116, 144, 0.2);
+}
+
+/* 杜比全景声 / DTS:X 极光紫 */
+.tech-badge-atmos {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.22) 0%, rgba(107, 33, 168, 0.08) 100%);
+  border: 1px solid rgba(192, 132, 252, 0.55);
+  color: #e9d5ff;
+  text-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+  box-shadow: inset 0 1px 0 rgba(192, 132, 252, 0.25), 0 2px 8px rgba(126, 34, 206, 0.2);
+}
+
+/* 音频编码 TrueHD / DTS-HD / 7.1 / 5.1 工业黑曜 */
+.tech-badge-audio {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* 视频编码 HEVC / H.264 / AV1 */
+.tech-badge-codec {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+}
+
+/* 辅助规格 10-Bit / 画幅比例 */
+.tech-badge-dim {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* 分集列表技术规格小药丸 */
+.episode-spec-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* Episodes Up Next & List Enhancement */
 .library-episodes-container {
   display: grid;

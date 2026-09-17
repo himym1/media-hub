@@ -73,6 +73,7 @@ type EmbyReader interface {
 	DeleteItem(context.Context, string) error
 	Episodes(context.Context, string) ([]emby.Episode, error)
 	PrimaryImage(context.Context, string, int) (emby.PrimaryImage, error)
+	BackdropImage(context.Context, string, int) (emby.PrimaryImage, error)
 	SearchRemoteSubtitles(context.Context, string, string) ([]emby.RemoteSubtitle, error)
 	DownloadRemoteSubtitle(context.Context, string, string) error
 }
@@ -252,6 +253,7 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/integrations/emby/items/{id}", h.protected(h.getEmbyItem))
 	mux.Handle("GET /api/v1/integrations/emby/items/{id}/episodes", h.protected(h.getEmbyEpisodes))
 	mux.Handle("GET /api/v1/integrations/emby/items/{id}/primary-image", h.protected(h.getEmbyPrimaryImage))
+	mux.Handle("GET /api/v1/integrations/emby/items/{id}/backdrop-image", h.protected(h.getEmbyBackdropImage))
 	mux.Handle("POST /api/v1/integrations/emby/items/{id}/refresh", h.protected(h.refreshEmbyItem))
 	mux.Handle("GET /api/v1/integrations/emby/items/{id}/remote-subtitles", h.protected(h.searchEmbyRemoteSubtitles))
 	mux.Handle("POST /api/v1/integrations/emby/items/{id}/remote-subtitles", h.protected(h.downloadEmbyRemoteSubtitle))

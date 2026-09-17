@@ -25,6 +25,7 @@ import {
 import {
   deleteEmbyItem,
   downloadEmbyRemoteSubtitle,
+  embyBackdropImageURL,
   embyPrimaryImageURL,
   fetchLocalSubtitle,
   getEmbyEpisodes,
@@ -41,6 +42,7 @@ import {
   type EmbyEpisode,
   type EmbyItem,
   type EmbyItemDetail,
+  type EmbyMediaTechSpecs,
   type EmbyRemoteSubtitle,
 } from '../../shared/api/mediaHub'
 import { canPlayNatively } from '../../shared/desktop/nativePlayback'
@@ -50,6 +52,7 @@ import { LibraryEpisodes } from './LibraryEpisodes'
 import { LibraryPlayer } from './LibraryPlayer'
 import { LibraryWatchAction } from './LibraryWatchAction'
 import { episodeLabel, playbackStatus } from './libraryPlayback'
+import { buildTechBadges } from './libraryTechSpecs'
 import { adultLibraryId, childLibraries, isSharedEmbyId, libraryDisplayName, libraryRootId, mineLibraries, rootLibraries, sharedLibraries } from './libraryGroups'
 
 const pageSize = 24
@@ -826,7 +829,7 @@ export function LibraryView() {
           </button>
           {detail.isLoading && !detail.data ? <div className="status-loading">正在读取媒体详情…</div> : null}
           {detail.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>详情读取失败</strong><span>{detail.error.message}</span></div><button onClick={() => void detail.refetch()} type="button">重试</button></div> : null}
-          {detail.data ? <LibraryItemDetail inPagePlayback={inPagePlayback} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} shared={isSharedEmbyId(detail.data.id)} /> : null}
+          {detail.data ? <LibraryItemDetail inPagePlayback={inPagePlayback} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} seriesEpisodes={episodes.data?.items} shared={isSharedEmbyId(detail.data.id)} /> : null}
         </aside>
       ) : null}
       {inPagePlayback && playTarget ? (
@@ -886,20 +889,39 @@ function LibraryPosterCard({ item, selected, onSelect }: { item: EmbyItem; selec
   )
 }
 
-function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh, refreshing, shared }: {
+function TechSpecsBadges({ specs }: { specs?: EmbyMediaTechSpecs | null }) {
+  const badges = buildTechBadges(specs)
+  if (badges.length === 0) return null
+
+  return (
+    <div aria-label="技术规格" className="tech-specs-strip">
+      {badges.map((b) => (
+        <span className={b.className} key={b.key}>
+          {b.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh, refreshing, seriesEpisodes, shared }: {
   item: EmbyItemDetail
   inPagePlayback: boolean
   onDeleted: () => void
   onPlay: (target: Pick<EmbyEpisode, 'id' | 'name' | 'externalUrl'>) => void
   onRefresh: (id: string) => void
   refreshing: boolean
+  seriesEpisodes?: EmbyEpisode[]
   shared: boolean
 }) {
   const queryClient = useQueryClient()
   const originalTitle = visibleOriginalTitle(item)
   const genres = localizedGenres(item.genres ?? [])
   const [posterFailed, setPosterFailed] = useState(false)
+  const [backdropFailed, setBackdropFailed] = useState(false)
   const [subtitleResults, setSubtitleResults] = useState<EmbyRemoteSubtitle[] | null>(null)
+  const effectiveSpecs = item.techSpecs ?? seriesEpisodes?.find((ep) => ep.techSpecs)?.techSpecs
+  const backdropUrl = !backdropFailed ? embyBackdropImageURL(item.id) : embyPrimaryImageURL(item.id)
   const previewDelete = useMutation({ mutationFn: () => previewEmbyItemDelete(item.id) })
   const confirmDelete = useMutation({
     mutationFn: () => deleteEmbyItem(item.id),
@@ -934,6 +956,23 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
   const canSearchSubtitles = item.type !== 'Series'
 
   return <>
+    <div aria-hidden="true" className="detail-hero-backdrop-wrap">
+      <div
+        className="detail-hero-backdrop"
+        style={{ backgroundImage: `url(${backdropUrl})` }}
+      />
+      {!backdropFailed ? (
+        <img
+          alt=""
+          aria-hidden="true"
+          className="detail-backdrop-tester"
+          onError={() => setBackdropFailed(true)}
+          src={embyBackdropImageURL(item.id)}
+        />
+      ) : null}
+      <div className="detail-backdrop-gradient-bottom" />
+      <div className="detail-backdrop-gradient-left" />
+    </div>
     <div
       aria-hidden="true"
       className="detail-ambient-backdrop"
@@ -957,8 +996,17 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
             <h2>{item.name}</h2>
             {originalTitle ? <span className="original-title">{originalTitle}</span> : null}
           </div>
-          <span className="media-type-chip">{mediaTypeLabel(item.type)}</span>
+          <div className="library-heading-tags">
+            {item.communityRating ? (
+              <span className="rating-pill-gold" title={`TMDB 评分: ${item.communityRating.toFixed(1)}`}>
+                <Star className="rating-star" size={13} />
+                <span className="rating-score">{item.communityRating.toFixed(1)}</span>
+              </span>
+            ) : null}
+            <span className="media-type-chip">{mediaTypeLabel(item.type)}</span>
+          </div>
         </div>
+        <TechSpecsBadges specs={effectiveSpecs} />
         <dl className="library-facts compact">
           <div><dt>年份</dt><dd>{item.year || '未知'}</dd></div>
           <div><dt>时长</dt><dd>{item.runtimeMinutes ? `${item.runtimeMinutes} 分钟` : '未提供'}</dd></div>

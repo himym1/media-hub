@@ -137,6 +137,9 @@ func (*embyStub) Episodes(_ context.Context, seriesID string) ([]emby.Episode, e
 func (*embyStub) PrimaryImage(context.Context, string, int) (emby.PrimaryImage, error) {
 	return emby.PrimaryImage{Data: []byte("image"), ContentType: "image/jpeg"}, nil
 }
+func (*embyStub) BackdropImage(context.Context, string, int) (emby.PrimaryImage, error) {
+	return emby.PrimaryImage{Data: []byte("backdrop"), ContentType: "image/jpeg"}, nil
+}
 func (stub *embyStub) RefreshLibrary(_ context.Context, id string) error {
 	stub.refreshedLibrary = id
 	return nil
@@ -561,6 +564,23 @@ func TestEmbyPrimaryImageUsesPosterCache(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, authenticatedRequest(http.MethodGet, "/api/v1/integrations/emby/items/item-1/primary-image"))
 	if recorder.Code != http.StatusOK || recorder.Header().Get("X-Poster-Cache") != "HIT" || recorder.Body.String() != "cached" {
+		t.Fatalf("status=%d cache=%q body=%q", recorder.Code, recorder.Header().Get("X-Poster-Cache"), recorder.Body.String())
+	}
+}
+
+func TestEmbyBackdropImageUsesPosterCache(t *testing.T) {
+	cache, err := emby.OpenPrimaryImageCache(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.Put("bd_item-1", 1280, emby.PrimaryImage{Data: []byte("cached-bd"), ContentType: "image/jpeg"}); err != nil {
+		t.Fatal(err)
+	}
+	provider := &embyStub{}
+	router := NewRouter("test-version", Dependencies{Auth: authStub{}, Emby: provider, EmbyPosterCache: cache})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, authenticatedRequest(http.MethodGet, "/api/v1/integrations/emby/items/item-1/backdrop-image"))
+	if recorder.Code != http.StatusOK || recorder.Header().Get("X-Poster-Cache") != "HIT" || recorder.Body.String() != "cached-bd" {
 		t.Fatalf("status=%d cache=%q body=%q", recorder.Code, recorder.Header().Get("X-Poster-Cache"), recorder.Body.String())
 	}
 }

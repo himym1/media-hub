@@ -167,6 +167,30 @@ func writeEmbyPrimaryImage(w http.ResponseWriter, image emby.PrimaryImage, cache
 	_, _ = w.Write(image.Data)
 }
 
+func (h *handler) getEmbyBackdropImage(w http.ResponseWriter, r *http.Request) {
+	itemID, ok := h.requireEmbyID(w, r)
+	if !ok {
+		return
+	}
+	const maxWidth = 1280
+	cacheKey := "bd_" + itemID
+	if h.dependencies.EmbyPosterCache != nil {
+		if image, ok := h.dependencies.EmbyPosterCache.Get(cacheKey, maxWidth); ok {
+			writeEmbyPrimaryImage(w, image, true)
+			return
+		}
+	}
+	image, err := h.dependencies.Emby.BackdropImage(r.Context(), itemID, maxWidth)
+	if err != nil {
+		writeIntegrationProblem(w, err)
+		return
+	}
+	if h.dependencies.EmbyPosterCache != nil {
+		_ = h.dependencies.EmbyPosterCache.Put(cacheKey, maxWidth, image)
+	}
+	writeEmbyPrimaryImage(w, image, false)
+}
+
 func (h *handler) refreshEmbyLibrary(w http.ResponseWriter, r *http.Request) {
 	h.refreshEmbyObject(w, r, true)
 }

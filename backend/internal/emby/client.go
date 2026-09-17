@@ -102,8 +102,23 @@ type ItemDetail struct {
 	RuntimeMinutes   int      `json:"runtimeMinutes,omitempty"`
 	Genres           []string `json:"genres,omitempty"`
 	MediaSourceCount int      `json:"mediaSourceCount"`
-	ExternalURL      string   `json:"externalUrl"`
-	AppURL           string   `json:"appUrl,omitempty"`
+	ExternalURL      string          `json:"externalUrl"`
+	AppURL           string          `json:"appUrl,omitempty"`
+	TechSpecs        *MediaTechSpecs `json:"techSpecs,omitempty"`
+}
+
+// MediaTechSpecs 描述媒体的技术规格（分辨率、色彩范围、音视频编码与声道等）
+type MediaTechSpecs struct {
+	Resolution        string `json:"resolution,omitempty"`
+	VideoCodec        string `json:"videoCodec,omitempty"`
+	VideoRange        string `json:"videoRange,omitempty"`
+	AudioCodec        string `json:"audioCodec,omitempty"`
+	AudioProfile      string `json:"audioProfile,omitempty"`
+	AudioChannels     string `json:"audioChannels,omitempty"`
+	AudioChannelCount int    `json:"audioChannelCount,omitempty"`
+	BitDepth          int    `json:"bitDepth,omitempty"`
+	AspectRatio       string `json:"aspectRatio,omitempty"`
+	Container         string `json:"container,omitempty"`
 }
 
 type SearchResult struct {
@@ -167,11 +182,37 @@ type userData struct {
 }
 
 type mediaSource struct {
-	ID                 string `json:"Id"`
-	Path               string `json:"Path"`
-	DirectStreamURL    string `json:"DirectStreamUrl"`
-	SupportsDirectPlay bool   `json:"SupportsDirectPlay"`
-	Container          string `json:"Container"`
+	ID                 string        `json:"Id"`
+	Path               string        `json:"Path"`
+	DirectStreamURL    string        `json:"DirectStreamUrl"`
+	SupportsDirectPlay bool          `json:"SupportsDirectPlay"`
+	Container          string        `json:"Container"`
+	MediaStreams       []mediaStream `json:"MediaStreams,omitempty"`
+}
+
+type mediaStream struct {
+	Type               string  `json:"Type"`
+	Codec              string  `json:"Codec"`
+	CodecTag           string  `json:"CodecTag"`
+	Language           string  `json:"Language"`
+	DisplayTitle       string  `json:"DisplayTitle"`
+	DisplayLanguage    string  `json:"DisplayLanguage"`
+	VideoRange         string  `json:"VideoRange"`
+	VideoRangeType     string  `json:"VideoRangeType"`
+	VideoDoViTitle     string  `json:"VideoDoViTitle"`
+	AudioSpatialFormat string  `json:"AudioSpatialFormat"`
+	Profile            string  `json:"Profile"`
+	Width              int     `json:"Width"`
+	Height             int     `json:"Height"`
+	AspectRatio        string  `json:"AspectRatio"`
+	AverageFrameRate   float64 `json:"AverageFrameRate"`
+	RealFrameRate      float64 `json:"RealFrameRate"`
+	Channels           int     `json:"Channels"`
+	ChannelLayout      string  `json:"ChannelLayout"`
+	BitRate            int64   `json:"BitRate"`
+	BitDepth           int     `json:"BitDepth"`
+	IsDefault          bool    `json:"IsDefault"`
+	IsForced           bool    `json:"IsForced"`
 }
 
 type playbackInfoResponse struct {
@@ -558,6 +599,7 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 		Overview: boundedText(item.Overview, 4000), CommunityRating: item.CommunityRating,
 		RuntimeMinutes: int(item.RunTimeTicks / 600_000_000), Genres: boundedStrings(item.Genres, 32, 100),
 		MediaSourceCount: len(item.MediaSources), ExternalURL: externalURL, AppURL: appURL,
+		TechSpecs: extractMediaTechSpecs(item.MediaSources),
 	}, nil
 }
 

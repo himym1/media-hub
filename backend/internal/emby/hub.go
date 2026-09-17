@@ -156,6 +156,19 @@ func (h *Hub) PrimaryImage(ctx context.Context, itemID string, maxWidth int) (Pr
 	return h.Local.PrimaryImage(ctx, itemID, maxWidth)
 }
 
+func (h *Hub) BackdropImage(ctx context.Context, itemID string, maxWidth int) (PrimaryImage, error) {
+	if IsSharedID(itemID) {
+		if h.Shared == nil {
+			return PrimaryImage{}, ErrNotConfigured
+		}
+		return h.Shared.sharedBackdropImage(ctx, itemID, maxWidth)
+	}
+	if h.Local == nil {
+		return PrimaryImage{}, ErrNotConfigured
+	}
+	return h.Local.BackdropImage(ctx, itemID, maxWidth)
+}
+
 func (h *Hub) RefreshLibrary(ctx context.Context, libraryID string) error {
 	if IsSharedID(libraryID) {
 		return ErrSharedReadOnly
