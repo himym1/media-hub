@@ -115,6 +115,10 @@ export async function controlNatively(action: string, value?: number, mode?: str
   await invokeNative('native_control', { action, value, mode })
 }
 
+export async function toggleNativeWindow(fullscreen?: boolean) {
+  await invokeNative('toggle_native_window', fullscreen === undefined ? {} : { fullscreen })
+}
+
 export async function nativeStatus(): Promise<NativeStatus | null> {
   try {
     return await invokeNative('native_status') as NativeStatus

@@ -9,6 +9,7 @@ import {
   nativeSubtitleFromBytes,
   playNatively,
   stopNatively,
+  toggleNativeWindow,
   type NativeSubtitle,
 } from '../../shared/desktop/nativePlayback'
 import { IconButton } from '../../shared/ui/IconButton'
@@ -164,6 +165,7 @@ export function LibraryPlayer({
   const [allowAutoHide, setAllowAutoHide] = useState(false)
   const [silentAudio, setSilentAudio] = useState(false)
   const [nativeActive, setNativeActive] = useState(false)
+  const [nativeFullscreen, setNativeFullscreen] = useState(false)
   const [webFullscreen, setWebFullscreen] = useState(false)
   const [subtitleHint, setSubtitleHint] = useState<string | null>(null)
   const [aspect, setAspect] = useState<PlayerAspectId>('fit')
@@ -310,6 +312,11 @@ export function LibraryPlayer({
         setQueueOpen((open) => !open)
         return
       }
+      if (nativeShell && (event.key === 'f' || event.key === 'F')) {
+        event.preventDefault()
+        void toggleNativeWindow()
+        return
+      }
       // mpv 自己一个窗口，播放键都归它，Hub 只留 Esc 收面板。
       if (nativeShell) return
       revealChrome()
@@ -373,6 +380,7 @@ export function LibraryPlayer({
     setChromeVisible(true)
     setChromePinned(false)
     setNativeActive(false)
+    setNativeFullscreen(false)
     setSubtitleHint(null)
     setAspect('fit')
     setPictureZoom(1)
@@ -534,6 +542,7 @@ export function LibraryPlayer({
         setPlaying(!status.paused)
         setCurrentSeconds(status.time)
         setDurationSeconds(status.duration)
+        setNativeFullscreen(Boolean(status.fullscreen))
         if (wasPaused !== status.paused && request.sessionId) {
           void reportPlaybackSessionEvent(
             request.sessionId,
@@ -627,6 +636,11 @@ export function LibraryPlayer({
             {onSelectQueueItem && queue.length > 1 ? (
               <button aria-controls="library-player-queue-list" aria-expanded={queueOpen} aria-label="播放列表" className={`icon-action ${queueOpen ? 'active' : ''}`} onClick={() => setQueueOpen((open) => !open)} type="button" title="播放列表 (P)">
                 <ListVideo size={16} />
+              </button>
+            ) : null}
+            {nativeActive && !error ? (
+              <button aria-label={nativeFullscreen ? '退出全屏' : '全屏'} className="icon-action" onClick={() => void toggleNativeWindow()} type="button" title={nativeFullscreen ? '退出全屏 (F)' : '全屏 (F / 双击画面)'}>
+                {nativeFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
               </button>
             ) : null}
             {externalUrl ? (

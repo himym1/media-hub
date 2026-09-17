@@ -146,7 +146,7 @@ fn input_conf_path() -> PathBuf {
 }
 
 pub(crate) fn input_conf_contents() -> &'static str {
-    // 左键交给 Hub OSC：进度条拖拽、单击暂停、双击全屏。其余保持 mpv 默认。
+    // 左键交给 Hub OSC：进度条拖拽、单击暂停、双击全屏。f 全屏。
     "# Hub OSC owns left click.\nMBTN_LEFT ignore\n"
 }
 

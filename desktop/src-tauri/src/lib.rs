@@ -176,6 +176,8 @@ pub(crate) fn mpv_args(
     ];
     if cfg!(target_os = "macos") {
         args.push("--macos-title-bar-material=ultraDark".to_string());
+        // 不用系统全屏空间，进全屏后铺满整块屏幕（含菜单栏和 Dock）。
+        args.push("--native-fs=no".to_string());
     }
     if let Some(agent) = user_agent.and_then(sanitized_user_agent) {
         // Only --user-agent. --http-header-fields is a comma list and would
@@ -356,6 +358,8 @@ mod tests {
         assert!(args.iter().any(|arg| arg == "--background=color"));
         #[cfg(target_os = "macos")]
         assert!(args.iter().any(|arg| arg == "--macos-title-bar-material=ultraDark"));
+        #[cfg(target_os = "macos")]
+        assert!(args.iter().any(|arg| arg == "--native-fs=no"));
         for embedded in ["--wid=", "--geometry=", "--no-border", "--ontop=", "--focus-on="] {
             assert!(args.iter().all(|arg| !arg.starts_with(embedded)), "{embedded} 不该再出现");
         }
@@ -369,6 +373,9 @@ mod tests {
         assert!(HUB_OSC_LUA.contains("create_osd_overlay"));
         assert!(HUB_OSC_LUA.contains("&H99D334&"));
         assert!(HUB_OSC_LUA.contains("mbtn_left"));
+        assert!(HUB_OSC_LUA.contains("table.concat(lines, \"\\n\")"));
+        assert!(HUB_OSC_LUA.contains("set_property_bool"));
+        assert!(HUB_OSC_LUA.contains("\"border\""));
     }
 
     #[test]
