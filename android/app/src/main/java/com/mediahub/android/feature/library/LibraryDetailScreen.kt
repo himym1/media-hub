@@ -29,7 +29,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -527,15 +526,13 @@ private fun CastPersonCard(person: EmbyPerson, posterLoader: PosterLoader) {
             color = MediaHubColors.TextStrong,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
         )
         MediaHubText(
             text = roleText,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             color = MediaHubColors.TextMuted,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
         )
     }
 }
