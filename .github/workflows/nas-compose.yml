@@ -2,6 +2,12 @@ name: nas-compose
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semver without v prefix; empty keeps current .env tag'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -15,6 +21,16 @@ jobs:
         run: |
           set -euo pipefail
           cd /volume1/docker/media-hub
+          version="${{ github.event.inputs.version }}"
+          version="${version#v}"
+          if [ -n "$version" ]; then
+            docker image inspect "ghcr.io/himym1/media-hub:${version}" >/dev/null
+            if grep -Eq '^MEDIA_HUB_IMAGE_TAG=' .env; then
+              sed -i.bak -E "s/^MEDIA_HUB_IMAGE_TAG=.*/MEDIA_HUB_IMAGE_TAG=${version}/" .env
+            else
+              printf '\nMEDIA_HUB_IMAGE_TAG=%s\n' "$version" >> .env
+            fi
+          fi
           grep -E '^MEDIA_HUB_IMAGE_TAG=' .env
           docker compose up -d --no-deps media-hub
           docker compose ps
