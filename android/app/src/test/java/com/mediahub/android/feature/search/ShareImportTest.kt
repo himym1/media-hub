@@ -8,7 +8,8 @@ class ShareImportTest {
     @Test
     fun accepts115ShareUrls() {
         assertTrue(canSubmitShareImport("https://115.com/s/shareABC123?password=ab12"))
-        assertTrue(canSubmitShareImport("anxia.com/s/shareABC123", "xy9z"))
+        assertTrue(canSubmitShareImport("https://cdn.example.com/clip.mkv"))
+        assertTrue(canSubmitShareImport("magnet:?xt=urn:btih:" + "a".repeat(40)))
     }
 
     @Test

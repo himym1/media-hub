@@ -1,6 +1,10 @@
 package adapter
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+)
 
 func TestParse115ShareURL(t *testing.T) {
 	code, receive, err := Parse115ShareURL("https://115.com/s/shareABC123?password=WENG&from=tg", "")
@@ -13,6 +17,27 @@ func TestParse115ShareURL(t *testing.T) {
 	}
 	if _, _, err := Parse115ShareURL("https://pan.quark.cn/s/nope", "abcd"); err == nil {
 		t.Fatal("quark URL should be rejected")
+	}
+}
+
+func TestParseAdultImport(t *testing.T) {
+	share, err := ParseAdultImport("https://115.com/s/shareABC123?password=ab12", "")
+	if err != nil || share.Kind != ImportKindShare || share.ShareCode != "shareABC123" || share.ReceiveCode != "ab12" {
+		t.Fatalf("share=%#v err=%v", share, err)
+	}
+	direct, err := ParseAdultImport("https://cdn.example.com/clip/SSIS-001.mkv?token=1", "")
+	if err != nil || direct.Kind != ImportKindURL || !strings.Contains(direct.URL, "SSIS-001.mkv") {
+		t.Fatalf("direct=%#v err=%v", direct, err)
+	}
+	magnet, err := ParseAdultImport("magnet:?xt=urn:btih:"+strings.Repeat("a", 40), "")
+	if err != nil || magnet.Kind != ImportKindURL {
+		t.Fatalf("magnet=%#v err=%v", magnet, err)
+	}
+	if _, err := ParseAdultImport("https://pan.quark.cn/s/nope", "abcd"); !errors.Is(err, ErrOtherCloudImport) {
+		t.Fatalf("quark err=%v", err)
+	}
+	if _, err := ParseAdultImport("https://115.com/?cid=1", ""); !errors.Is(err, ErrNeed115ShareOrFile) {
+		t.Fatalf("115 page err=%v", err)
 	}
 }
 

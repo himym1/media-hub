@@ -14,6 +14,7 @@ type shareReceiverStub struct {
 	receive     string
 	folderName  string
 	videoNames  []string
+	urls        []string
 }
 
 func (s *shareReceiverStub) ReceiveShare(_ context.Context, destinationID, shareCode, receiveCode string, _ []string) error {
@@ -32,10 +33,16 @@ func (s *shareReceiverStub) EnsureFolder(_ context.Context, parentID, name strin
 	return parentID + "-child", nil
 }
 
+func (s *shareReceiverStub) AddOfflineURLs(_ context.Context, destinationID string, urls []string) error {
+	s.destination = destinationID
+	s.urls = urls
+	return nil
+}
+
 func TestShareImportReceivesAdultFolder(t *testing.T) {
 	receiver := &shareReceiverStub{videoNames: []string{"SSIS-001.2160p.mkv", "sample.mp4"}}
 	source := NewShareImport(receiver)
-	reference, err := json.Marshal(shareReference{Kind: "share", Title: "115分享 abc", ShareCode: "shareABC123", ReceiveCode: "ab12"})
+	reference, err := json.Marshal(shareReference{Kind: ImportKindShare, Title: "115分享 abc", ShareCode: "shareABC123", ReceiveCode: "ab12"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,6 +54,24 @@ func TestShareImportReceivesAdultFolder(t *testing.T) {
 	}
 	if result.FileID != "dest-child" || result.Path != "SSIS-001" || receiver.folderName != "SSIS-001" || receiver.share != "shareABC123" {
 		t.Fatalf("result=%#v folder=%q share=%q", result, receiver.folderName, receiver.share)
+	}
+}
+
+func TestShareImportSubmitsOfflineURL(t *testing.T) {
+	receiver := &shareReceiverStub{}
+	source := NewShareImport(receiver)
+	reference, err := URLReferenceJSON("SSIS-001", "https://cdn.example.com/SSIS-001.mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := source.StartTransfer(context.Background(), search.TransferRequest{
+		Title: "SSIS-001", MediaType: "adult", Reference: reference, DestinationID: "dest", IdempotencyKey: "url-op",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "pending" || result.FileID != "dest-child" || result.Path != "SSIS-001" || len(receiver.urls) != 1 {
+		t.Fatalf("result=%#v urls=%q folder=%q", result, receiver.urls, receiver.folderName)
 	}
 }
 

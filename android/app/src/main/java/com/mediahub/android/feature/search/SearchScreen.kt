@@ -1544,13 +1544,13 @@ private fun ShareImportCard(
     var title by remember { mutableStateOf("") }
     MediaHubCard(modifier = modifier, insideMargin = PaddingValues(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            MediaHubSmallTitle(text = "导入 115 分享")
+            MediaHubSmallTitle(text = "导入视频")
             MediaHubText(
-                text = "只进成人影视库。有番号更容易刮封面。",
+                text = "贴 115 分享、磁力或视频直链。115 离线拉到成人库，文件不经过 Media Hub。",
                 color = MediaHubColors.TextMuted,
                 fontSize = 12.sp,
             )
-            MediaHubTextField(value = url, onValueChange = { url = it }, placeholder = "115 分享链接")
+            MediaHubTextField(value = url, onValueChange = { url = it }, placeholder = "115 分享、磁力或视频直链")
             MediaHubTextField(value = receiveCode, onValueChange = { receiveCode = it.take(8) }, placeholder = "提取码，可选")
             MediaHubTextField(value = title, onValueChange = { title = it }, placeholder = "番号或标题，可选")
             MediaHubButton(

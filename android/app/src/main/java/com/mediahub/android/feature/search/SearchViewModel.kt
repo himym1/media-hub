@@ -474,7 +474,7 @@ class SearchViewModel(
                     shareImportMessage = error.message ?: "导入失败",
                 )
             } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(shareImporting = false, shareImportMessage = "无法导入分享")
+                _uiState.value = _uiState.value.copy(shareImporting = false, shareImportMessage = "无法导入")
             }
         }
     }

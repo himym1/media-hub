@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.21.33
+  version: 0.21.34
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -1533,7 +1533,7 @@ paths:
   /share-imports:
     post:
       operationId: createShareImport
-      summary: Import a pasted 115 share into the adult library workflow
+      summary: Import a pasted 115 share, magnet, or download URL into the adult library
       security:
         - cookieAuth: []
         - bearerAuth: []
@@ -2741,7 +2741,7 @@ components:
         url:
           type: string
           minLength: 8
-          maxLength: 2048
+          maxLength: 8192
         receiveCode:
           type: string
           maxLength: 8

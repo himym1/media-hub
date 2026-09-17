@@ -37,18 +37,18 @@ export function ShareImportForm({ onImported }: Props) {
   return (
     <section className="share-import" aria-labelledby="share-import-heading">
       <div className="share-import-copy">
-        <h2 id="share-import-heading">导入 115 分享</h2>
-        <p>只进成人影视库。有番号更容易刮封面；没有就用文件名。</p>
+        <h2 id="share-import-heading">导入视频</h2>
+        <p>贴 115 分享、磁力或视频直链。115 离线拉到成人库，文件不经过 Media Hub。有番号更容易刮封面。</p>
       </div>
       <form className="share-import-form" onSubmit={handleSubmit}>
         <label>
-          <span className="sr-only">115 分享链接</span>
+          <span className="sr-only">导入链接</span>
           <input
             autoComplete="off"
-            maxLength={2048}
+            maxLength={8192}
             name="share-url"
             onChange={(event) => setUrl(event.target.value)}
-            placeholder="https://115.com/s/…"
+            placeholder="115 分享、磁力或视频直链"
             type="text"
             value={url}
           />

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -206,25 +205,29 @@ func (s *Service) SelectionToken(candidate search.Candidate) string {
 	return token
 }
 
-func (s *Service) EnqueueShareImport(ctx context.Context, userID int64, title, shareCode, receiveCode, idempotencyKey string) (Job, bool, error) {
-	title = strings.TrimSpace(title)
-	shareCode = strings.TrimSpace(shareCode)
-	receiveCode = strings.TrimSpace(receiveCode)
-	if title == "" {
-		title = "115分享 " + shareCode
+func (s *Service) EnqueueShareImport(ctx context.Context, userID int64, title, rawURL, receiveCode, idempotencyKey string) (Job, bool, error) {
+	parsed, err := adapter.ParseAdultImport(rawURL, receiveCode)
+	if err != nil {
+		return Job{}, false, ErrInvalidSelection
 	}
+	title = adapter.ImportDefaultTitle(title, parsed)
 	if _, ok := s.workflowConfiguration().Target("adult"); !ok {
 		return Job{}, false, ErrTargetUnavailable
 	}
 	if _, ok := s.search.TransferSource(adapter.ShareSourceID); !ok {
 		return Job{}, false, ErrSourceUnavailable
 	}
-	reference, err := adapter.ShareReferenceJSON(title, shareCode, receiveCode)
+	var reference string
+	if parsed.Kind == adapter.ImportKindShare {
+		reference, err = adapter.ShareReferenceJSON(title, parsed.ShareCode, parsed.ReceiveCode)
+	} else {
+		reference, err = adapter.URLReferenceJSON(title, parsed.URL)
+	}
 	if err != nil {
 		return Job{}, false, ErrInvalidSelection
 	}
 	token := s.SelectionToken(search.Candidate{
-		ID: "share-" + shareCode, Title: title, MediaType: "adult",
+		ID: adapter.ImportCandidateID(parsed), Title: title, MediaType: "adult",
 		SourceID: adapter.ShareSourceID, SourceRef: reference,
 		TransferState: "available", Revision: s.search.CurrentRevision(),
 	})

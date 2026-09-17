@@ -419,6 +419,19 @@ func TestCreateShareImportAccepts115URL(t *testing.T) {
 	}
 }
 
+func TestCreateShareImportAcceptsVideoURL(t *testing.T) {
+	provider := &workflowStub{}
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodPost, "/api/v1/share-imports")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "share_url_1")
+	request.Body = io.NopCloser(strings.NewReader(`{"url":"https://cdn.example.com/clip.mkv","title":"SSIS-001"}`))
+	NewRouter("test-version", Dependencies{Auth: authStub{}, Workflow: provider}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusAccepted || provider.idempotencyKey != "share_url_1" {
+		t.Fatalf("status=%d key=%q body=%s", recorder.Code, provider.idempotencyKey, recorder.Body.String())
+	}
+}
+
 func TestCreateShareImportRejectsOtherCloud(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := authenticatedRequest(http.MethodPost, "/api/v1/share-imports")

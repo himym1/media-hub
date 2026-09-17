@@ -166,9 +166,13 @@ func TestEnqueueShareImportCreatesAdultJob(t *testing.T) {
 		nil,
 		nil,
 	)
-	job, created, err := service.EnqueueShareImport(ctx, admin.ID, "SSIS-001", "shareABC123", "ab12", "share_job_1")
+	job, created, err := service.EnqueueShareImport(ctx, admin.ID, "SSIS-001", "https://115.com/s/shareABC123?password=ab12", "", "share_job_1")
 	if err != nil || !created || job.MediaType != "adult" || job.Source != "share" || job.Title != "SSIS-001" || job.TMDBID != "" {
 		t.Fatalf("job=%#v created=%v err=%v", job, created, err)
+	}
+	urlJob, urlCreated, err := service.EnqueueShareImport(ctx, admin.ID, "", "https://cdn.example.com/clip.mkv", "", "share_job_2")
+	if err != nil || !urlCreated || urlJob.MediaType != "adult" || urlJob.Title != "clip" {
+		t.Fatalf("url job=%#v created=%v err=%v", urlJob, urlCreated, err)
 	}
 }
 
