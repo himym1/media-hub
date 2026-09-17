@@ -146,6 +146,60 @@ func TestUpdateRejectsRecoverableTransferJobs(t *testing.T) {
 	}
 }
 
+func TestUpdateAllowsSharedEmbyDuringActiveTransfer(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "test-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, _ := securepayload.New(base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	service := NewService(dataStore, codec, Values{}, nil)
+	if _, err := service.Update(ctx, admin.ID, Update{
+		Workflow: workflowFromConfig(config.Workflow{SyncMode: config.SyncModeBuiltin}),
+		Sources:  sourceUpdates("framehdr", ""),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	job := store.TransferJob{
+		ID: "active-job", UserID: admin.ID, IdempotencyKey: "active_shared", RequestHash: []byte("request"),
+		SelectionToken: "encrypted", SourceID: "framehdr", CandidateID: "candidate", Title: "Movie",
+		MediaType: "movie", TMDBID: "1", State: "queued", CreatedAt: 1, UpdatedAt: 1,
+	}
+	if _, _, err := dataStore.CreateTransferJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	current := service.Values()
+	sources := make([]SourceUpdate, 0, len(current.Sources))
+	for _, source := range current.Sources {
+		sources = append(sources, SourceUpdate{ID: source.ID, BaseURL: source.BaseURL})
+	}
+	view, err := service.Update(ctx, admin.ID, Update{
+		QMediaSync: QMediaSyncUpdate{BaseURL: current.QMediaSync.BaseURL},
+		Emby:       EmbyUpdate{BaseURL: current.Emby.BaseURL, UserID: current.Emby.UserID},
+		SharedEmby: &SharedEmbyUpdate{
+			BaseURL: "https://shared.example", Username: "reader", Password: SecretUpdate{Value: "secret"},
+		},
+		Drive115: Drive115Update{ClientID: current.Drive115.ClientID},
+		TMDB:     TMDBUpdate{BaseURL: current.TMDB.BaseURL},
+		Workflow: workflowFromConfig(current.Workflow),
+		Sources:  sources,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.SharedEmby.Username != "reader" || !view.SharedEmby.Password.Configured {
+		t.Fatalf("shared emby view=%#v", view.SharedEmby)
+	}
+}
+
 func TestUpdateRejectsBlockingSubXCommand(t *testing.T) {
 	ctx := context.Background()
 	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))

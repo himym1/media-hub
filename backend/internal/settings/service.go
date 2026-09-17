@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -86,7 +87,11 @@ func (s *Service) Update(ctx context.Context, userID int64, input Update) (View,
 	if err != nil {
 		return View{}, err
 	}
-	if err := s.store.UpsertProviderCredentialWithOperationGuard(ctx, userID, ProviderKey, sealed, false, s.now()); err != nil {
+	if onlySharedEmbyChanged(current, value) {
+		if err := s.store.UpsertProviderCredential(ctx, userID, ProviderKey, sealed, s.now()); err != nil {
+			return View{}, err
+		}
+	} else if err := s.store.UpsertProviderCredentialWithOperationGuard(ctx, userID, ProviderKey, sealed, false, s.now()); err != nil {
 		if errors.Is(err, store.ErrActiveProviderOperations) {
 			return View{}, ErrActiveProviderOperations
 		}
@@ -527,4 +532,47 @@ func clone(value Values) Values {
 		value.CheckIn = &copied
 	}
 	return value
+}
+
+// onlySharedEmbyChanged 共享库只读，改账号不影响进行中的 115/STRM 任务。
+func onlySharedEmbyChanged(current, next Values) bool {
+	if reflect.DeepEqual(current.SharedEmby, next.SharedEmby) {
+		return false
+	}
+	return current.QMediaSync == next.QMediaSync &&
+		current.Emby == next.Emby &&
+		current.Drive115 == next.Drive115 &&
+		current.Workflow.Movie == next.Workflow.Movie &&
+		current.Workflow.Series == next.Workflow.Series &&
+		current.Workflow.Adult == next.Workflow.Adult &&
+		current.Workflow.StrmBaseURL == next.Workflow.StrmBaseURL &&
+		current.Workflow.StrmRootMount == next.Workflow.StrmRootMount &&
+		current.Workflow.QMediaSyncAccountID == next.Workflow.QMediaSyncAccountID &&
+		searchSourcesMatch(current.Sources, next.Sources)
+}
+
+func searchSourcesMatch(left, right []config.SearchSource) bool {
+	byID := make(map[string]config.SearchSource, len(left))
+	for _, source := range left {
+		byID[source.ID] = source
+	}
+	for _, source := range right {
+		previous, ok := byID[source.ID]
+		if !ok {
+			if source.BaseURL != "" || source.Account != "" || source.Token != "" {
+				return false
+			}
+			continue
+		}
+		if previous.BaseURL != source.BaseURL || previous.Account != source.Account || previous.Token != source.Token || previous.AuthMode != source.AuthMode {
+			return false
+		}
+		delete(byID, source.ID)
+	}
+	for _, source := range byID {
+		if source.BaseURL != "" || source.Account != "" || source.Token != "" {
+			return false
+		}
+	}
+	return true
 }
