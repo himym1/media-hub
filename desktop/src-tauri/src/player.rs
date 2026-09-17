@@ -11,7 +11,7 @@ use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindow, WindowEvent};
 
 use crate::{
     command_path_with_extras, decode_subtitle_base64, is_supported_playback_url, mpv_args,
-    resolve_mpv, sanitized_user_agent, write_subtitle_temp,
+    resolve_mpv, sanitized_user_agent, write_subtitle_temp, HUB_OSC_LUA,
 };
 
 pub const PLAYER_LABEL: &str = "player";
@@ -146,13 +146,23 @@ fn input_conf_path() -> PathBuf {
 }
 
 pub(crate) fn input_conf_contents() -> &'static str {
-    // 只改左键切暂停，其余保持 mpv 自带：双击和 f 全屏、ESC 退出全屏、滚轮音量。
-    "MBTN_LEFT cycle pause\n"
+    // 左键交给 Hub OSC：进度条拖拽、单击暂停、双击全屏。其余保持 mpv 默认。
+    "# Hub OSC owns left click.\nMBTN_LEFT ignore\n"
 }
 
 fn write_input_conf() -> Result<PathBuf, String> {
     let path = input_conf_path();
     std::fs::write(&path, input_conf_contents()).map_err(|_| "无法准备播放器。".to_string())?;
+    Ok(path)
+}
+
+fn osc_script_path() -> PathBuf {
+    std::env::temp_dir().join("media-hub-osc.lua")
+}
+
+fn write_osc_script() -> Result<PathBuf, String> {
+    let path = osc_script_path();
+    std::fs::write(&path, HUB_OSC_LUA).map_err(|_| "无法准备播放器。".to_string())?;
     Ok(path)
 }
 
@@ -286,6 +296,7 @@ fn spawn_mpv(
     }
     let ipc = ipc_path();
     let input = write_input_conf()?;
+    let osc = write_osc_script()?;
     let mut cmd = Command::new(mpv);
     cmd.args(mpv_args(
         title,
@@ -293,6 +304,7 @@ fn spawn_mpv(
         user_agent,
         Some(&ipc),
         Some(&input),
+        Some(&osc),
         sub_file,
     ))
     .arg(url)
@@ -707,8 +719,8 @@ mod tests {
     #[test]
     fn input_conf_leaves_mpv_defaults_alone() {
         let conf = input_conf_contents();
-        assert!(conf.contains("MBTN_LEFT cycle pause"));
-        assert!(!conf.contains("ignore"));
+        assert!(conf.contains("MBTN_LEFT ignore"));
+        assert!(!conf.contains("cycle pause"));
         assert!(!conf.contains("video-zoom"));
     }
 

@@ -144,26 +144,39 @@ pub(crate) fn decode_subtitle_base64(value: &str) -> Result<Vec<u8>, String> {
         .map_err(|_| "字幕内容无效。".to_string())
 }
 
+pub(crate) const HUB_OSC_LUA: &str = include_str!("../mpv/hub-osc.lua");
+
 pub(crate) fn mpv_args(
     title: &str,
     start_position_ms: u64,
     user_agent: Option<&str>,
     ipc: Option<&Path>,
     input_conf: Option<&Path>,
+    osc_script: Option<&Path>,
     sub_file: Option<&Path>,
 ) -> Vec<String> {
-    // mpv 自己开一个普通窗口：有边框、有进度条、自己管全屏，Hub 不再把画面嵌进网页。
+    // mpv 自己开窗口（有系统边框、自己管全屏）；画面不嵌进网页。
+    // 关掉自带灰条 OSC，改走 Hub 电影风脚本。
     let mut args = vec![
         "--force-window=yes".to_string(),
         "--keep-open=no".to_string(),
         "--ytdl=no".to_string(),
-        "--osc=yes".to_string(),
+        "--osc=no".to_string(),
+        "--osd-bar=no".to_string(),
+        "--osd-on-seek=no".to_string(),
         "--cache=yes".to_string(),
         "--network-timeout=20".to_string(),
+        "--autofit-larger=90%x90%".to_string(),
+        "--background=color".to_string(),
+        "--background-color=#FF07080A".to_string(),
+        "--cursor-autohide=1200".to_string(),
         format!("--title={}", title.replace(['\n', '\r'], " ")),
         "--no-terminal".to_string(),
         "--slang=zh,chi,zh-Hans,zh-CN,zh-TW,zh-HK".to_string(),
     ];
+    if cfg!(target_os = "macos") {
+        args.push("--macos-title-bar-material=ultraDark".to_string());
+    }
     if let Some(agent) = user_agent.and_then(sanitized_user_agent) {
         // Only --user-agent. --http-header-fields is a comma list and would
         // split a normal Mozilla UA into bogus headers, so 115 rejects the URL.
@@ -174,6 +187,9 @@ pub(crate) fn mpv_args(
     }
     if let Some(input_conf) = input_conf {
         args.push(format!("--input-conf={}", input_conf.display()));
+    }
+    if let Some(osc_script) = osc_script {
+        args.push(format!("--script={}", osc_script.display()));
     }
     if let Some(sub_file) = sub_file {
         args.push(format!("--sub-file={}", sub_file.display()));
@@ -313,7 +329,7 @@ mod tests {
     #[test]
     fn mpv_args_keep_comma_user_agent_out_of_header_lists() {
         let agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
-        let args = mpv_args("范海辛", 0, Some(agent), None, None, None);
+        let args = mpv_args("范海辛", 0, Some(agent), None, None, None, None);
         assert!(args.iter().any(|arg| arg == "--cache=yes"));
         assert!(args.iter().any(|arg| arg == "--network-timeout=20"));
         assert!(args.iter().any(|arg| arg == "--slang=zh,chi,zh-Hans,zh-CN,zh-TW,zh-HK"));
@@ -324,7 +340,7 @@ mod tests {
     #[test]
     fn mpv_args_attach_external_subtitle() {
         let path = PathBuf::from(r"C:\Temp\media-hub-sub.ass");
-        let args = mpv_args("片", 0, None, None, None, Some(&path));
+        let args = mpv_args("片", 0, None, None, None, None, Some(&path));
         assert!(args.iter().any(|arg| arg == &format!("--sub-file={}", path.display())));
         assert!(args.iter().any(|arg| arg == "--sid=auto"));
         assert!(args.iter().any(|arg| arg == "--sub-visibility=yes"));
@@ -333,12 +349,26 @@ mod tests {
 
     #[test]
     fn mpv_args_open_a_normal_player_window() {
-        let args = mpv_args("片", 0, None, None, None, None);
-        assert!(args.iter().any(|arg| arg == "--osc=yes"));
+        let args = mpv_args("片", 0, None, None, None, None, None);
+        assert!(args.iter().any(|arg| arg == "--osc=no"));
+        assert!(args.iter().any(|arg| arg == "--osd-bar=no"));
         assert!(args.iter().any(|arg| arg == "--force-window=yes"));
+        assert!(args.iter().any(|arg| arg == "--background=color"));
+        #[cfg(target_os = "macos")]
+        assert!(args.iter().any(|arg| arg == "--macos-title-bar-material=ultraDark"));
         for embedded in ["--wid=", "--geometry=", "--no-border", "--ontop=", "--focus-on="] {
             assert!(args.iter().all(|arg| !arg.starts_with(embedded)), "{embedded} 不该再出现");
         }
+    }
+
+    #[test]
+    fn mpv_args_load_hub_osc_script() {
+        let path = PathBuf::from("/tmp/media-hub-osc.lua");
+        let args = mpv_args("片", 0, None, None, None, Some(&path), None);
+        assert!(args.iter().any(|arg| arg == &format!("--script={}", path.display())));
+        assert!(HUB_OSC_LUA.contains("create_osd_overlay"));
+        assert!(HUB_OSC_LUA.contains("&H99D334&"));
+        assert!(HUB_OSC_LUA.contains("mbtn_left"));
     }
 
     #[test]
