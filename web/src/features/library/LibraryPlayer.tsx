@@ -300,12 +300,12 @@ export function LibraryPlayer({
         onClose()
         return
       }
-      if (event.key === 'n') {
+      if (event.key === 'n' || event.key === 'N') {
         event.preventDefault()
         onNextRef.current?.()
         return
       }
-      if (event.key === 'p') {
+      if (event.key === 'p' || event.key === 'P') {
         event.preventDefault()
         setQueueOpen((open) => !open)
         return
@@ -595,6 +595,13 @@ export function LibraryPlayer({
         role="region"
       >
         <div className="library-player-handoff">
+          <div aria-hidden="true" className="library-player-handoff-status-wrap">
+            <span
+              className={`library-player-handoff-dot ${
+                error ? 'is-error' : nativeActive && playing ? 'is-playing' : 'is-idle'
+              }`}
+            />
+          </div>
           <div className="library-player-handoff-info">
             <h2 id="library-player-title" title={title}>{title}</h2>
             {error ? (
