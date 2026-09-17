@@ -1,0 +1,29 @@
+name: nas-compose
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  up:
+    runs-on: [self-hosted, linux, x64, media-hub]
+    steps:
+      - name: Start media-hub without waiting on mikan egress
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /volume1/docker/media-hub
+          grep -E '^MEDIA_HUB_IMAGE_TAG=' .env
+          docker compose up -d --no-deps media-hub
+          docker compose ps
+          for _ in $(seq 1 15); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/api/v1/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs --tail 80 media-hub >&2
+          echo "NAS health check did not pass after compose up" >&2
+          exit 1
