@@ -176,6 +176,7 @@ type baseItem struct {
 	Genres            []string          `json:"Genres"`
 	People            []embyPerson      `json:"People,omitempty"`
 	MediaSources      []mediaSource     `json:"MediaSources"`
+	DateCreated       string            `json:"DateCreated"`
 	Path              string            `json:"Path"`
 	ParentID          string            `json:"ParentId"`
 	SeriesID          string            `json:"SeriesId"`
@@ -517,7 +518,7 @@ func (c *Client) searchItems(ctx context.Context, configuration clientConfig, qu
 	return publicItems(response), nil
 }
 
-func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limit int) (SearchResult, error) {
+func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limit int, sortValue string) (SearchResult, error) {
 	configuration := c.configuration()
 	if err := validateAuthenticated(configuration); err != nil {
 		return SearchResult{}, err
@@ -533,13 +534,13 @@ func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limi
 		limit = 50
 	}
 	if isAdultLibraryID(libraryID) {
-		return c.browseAdultItems(ctx, configuration, offset, limit)
+		return c.browseAdultItems(ctx, configuration, offset, limit, sortValue)
 	}
 	if adultGroupAllowed(c.listLocalLibraries(ctx, configuration), libraryID) {
-		return c.browseAdultGroup(ctx, configuration, libraryID, offset, limit)
+		return c.browseAdultGroup(ctx, configuration, libraryID, offset, limit, sortValue)
 	}
 	query := url.Values{
-		"Fields":           {"OfficialRating,Genres,ProviderIds,UserData,MediaSources,Path"},
+		"Fields":           {"OfficialRating,Genres,ProviderIds,UserData,MediaSources,Path,ProductionYear,DateCreated"},
 		"IncludeItemTypes": {"Movie,Series"},
 		"Limit":            {"10000"},
 		"ParentId":         {libraryID},
@@ -566,14 +567,9 @@ func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limi
 		filtered = catalogItems(response.Items)
 	}
 	filtered = excludeAdultItems(filtered)
-	if offset > len(filtered) {
-		offset = len(filtered)
-	}
-	end := offset + limit
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-	return publicItems(itemResponse{Items: filtered[offset:end], TotalRecordCount: len(filtered)}), nil
+	sortBaseItems(filtered, sortValue, false)
+	page := paginateBaseItems(filtered, offset, limit)
+	return publicItems(itemResponse{Items: page, TotalRecordCount: len(filtered)}), nil
 }
 
 func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, error) {

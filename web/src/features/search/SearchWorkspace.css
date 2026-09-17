@@ -2341,8 +2341,23 @@ h1 em { color: var(--accent); font-style: normal; }
 }
 
 
-.library-detail-back { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: 0 0 22px; padding: 0 8px 0 0; color: var(--text-muted); border: 0; background: transparent; font-size: 13px; }
-.library-detail-back:hover { color: var(--text); }
+.library-detail-back {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin: 0 0 18px;
+  padding: 0 10px 0 2px;
+  color: var(--text);
+  border: 0;
+  background: linear-gradient(to bottom, var(--canvas, #121417) 72%, transparent);
+  font-size: 14px;
+  font-weight: 550;
+}
+.library-detail-back:hover { color: var(--accent, #34d399); }
 .library-detail-hero { position: relative; display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 28px; align-items: start; }
 .library-detail-poster { position: relative; display: grid; place-items: center; width: 180px; aspect-ratio: 2 / 3; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: #0c0e10; box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55); }
 .library-detail-poster .detail-poster-foreground { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: cover; display: block; }

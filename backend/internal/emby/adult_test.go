@@ -134,11 +134,11 @@ func TestBrowseMovesAdultItemsIntoAggregateLibrary(t *testing.T) {
 	if _, err := client.Libraries(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	regular, err := client.BrowseItems(context.Background(), "pt-movies", 0, 10)
+	regular, err := client.BrowseItems(context.Background(), "pt-movies", 0, 10, "")
 	if err != nil || regular.Total != 1 || regular.Items[0].ID != "pt-1" {
 		t.Fatalf("regular browse=%#v err=%v", regular, err)
 	}
-	adult, err := client.BrowseItems(context.Background(), adultLibraryID, 0, 10)
+	adult, err := client.BrowseItems(context.Background(), adultLibraryID, 0, 10, "")
 	if err != nil || adult.Total != 3 {
 		t.Fatalf("adult browse=%#v err=%v", adult, err)
 	}
@@ -149,7 +149,7 @@ func TestBrowseMovesAdultItemsIntoAggregateLibrary(t *testing.T) {
 	if !ids["hidden-1"] || !ids["pt-adult"] || !ids["hidden-video"] {
 		t.Fatalf("adult ids=%v", ids)
 	}
-	group, err := client.BrowseItems(context.Background(), "adult-folder", 0, 10)
+	group, err := client.BrowseItems(context.Background(), "adult-folder", 0, 10, "")
 	if err != nil || group.Total != 2 {
 		t.Fatalf("adult group=%#v err=%v", group, err)
 	}
@@ -215,7 +215,7 @@ func TestAdultGroupsUseFirstLevelFolders(t *testing.T) {
 		libraries[3].ID != "group-eu" || libraries[3].ParentID != adultLibraryID {
 		t.Fatalf("libraries=%#v", libraries)
 	}
-	group, err := client.BrowseItems(context.Background(), "group-jp", 0, 10)
+	group, err := client.BrowseItems(context.Background(), "group-jp", 0, 10, "")
 	if err != nil || group.Total != 1 || group.Items[0].ID != "jp-1" {
 		t.Fatalf("group browse=%#v err=%v", group, err)
 	}

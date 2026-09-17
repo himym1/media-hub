@@ -620,9 +620,10 @@ export function searchEmbyItems(query: string, limit = 20) {
   )
 }
 
-export function getEmbyLibraryItems(libraryId: string, offset = 0, limit = 50) {
+export function getEmbyLibraryItems(libraryId: string, offset = 0, limit = 50, sort = '') {
+  const sortQuery = sort.trim() ? `&sort=${encodeURIComponent(sort.trim())}` : ''
   return requestJSON<EmbyItemSearch>(
-    `/api/v1/integrations/emby/libraries/${encodeURIComponent(libraryId)}/items?offset=${offset}&limit=${limit}`,
+    `/api/v1/integrations/emby/libraries/${encodeURIComponent(libraryId)}/items?offset=${offset}&limit=${limit}${sortQuery}`,
   )
 }
 

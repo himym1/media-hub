@@ -194,19 +194,25 @@
 }
 
 .library-player.is-handoff {
-  display: grid;
-  place-items: center;
-  padding: 24px;
+  inset: auto 16px 16px 16px;
+  top: auto;
+  display: block;
+  padding: 0;
+  background: transparent;
+  pointer-events: none;
 }
 
 .library-player-handoff {
   display: grid;
-  gap: 12px;
-  width: min(560px, 100%);
-  padding: 24px;
+  gap: 10px;
+  width: min(440px, 100%);
+  margin-left: auto;
+  padding: 16px 18px;
+  pointer-events: auto;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
-  background: rgba(16, 18, 20, 0.92);
+  background: rgba(16, 18, 20, 0.94);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
 .library-player-handoff h2 {
@@ -546,7 +552,7 @@
 }
 
 .library-player-handoff .library-player-queue-list {
-  max-height: min(36vh, 320px);
+  max-height: min(28vh, 240px);
 }
 
 .library-player-volume,
@@ -640,6 +646,15 @@
 }
 
 @media (max-width: 720px) {
+  .library-player.is-handoff {
+    inset: auto 12px 12px 12px;
+  }
+
+  .library-player-handoff {
+    width: 100%;
+    margin-left: 0;
+  }
+
   .library-player-toolbar {
     min-height: 56px;
     padding: 8px 12px 22px;

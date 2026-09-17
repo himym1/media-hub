@@ -101,15 +101,15 @@ func TestBrowseAndSearchKeep115FilterAndExposeLocalLibraries(t *testing.T) {
 		BaseURL: server.URL, APIKey: "test-key", UserID: "user-1", MovieLibraryID: "library-1",
 	})
 
-	cloud, err := client.BrowseItems(context.Background(), "library-1", 0, 10)
+	cloud, err := client.BrowseItems(context.Background(), "library-1", 0, 10, "")
 	if err != nil || cloud.Total != 1 || len(cloud.Items) != 1 || cloud.Items[0].ID != "cloud" {
 		t.Fatalf("115 browse=%#v err=%v", cloud, err)
 	}
-	local, err := client.BrowseItems(context.Background(), "pt-movies", 0, 10)
+	local, err := client.BrowseItems(context.Background(), "pt-movies", 0, 10, "")
 	if err != nil || local.Total != 1 || local.Items[0].ID != "pt-1" {
 		t.Fatalf("pt browse=%#v err=%v", local, err)
 	}
-	if _, err := client.BrowseItems(context.Background(), "metube", 0, 10); !errors.Is(err, ErrItemNotFound) {
+	if _, err := client.BrowseItems(context.Background(), "metube", 0, 10, ""); !errors.Is(err, ErrItemNotFound) {
 		t.Fatalf("junk browse err=%v", err)
 	}
 

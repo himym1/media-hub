@@ -104,7 +104,7 @@ func (h *Hub) SearchItems(ctx context.Context, queryText string, limit int) (Sea
 	return merged, nil
 }
 
-func (h *Hub) BrowseItems(ctx context.Context, libraryID string, offset, limit int) (SearchResult, error) {
+func (h *Hub) BrowseItems(ctx context.Context, libraryID string, offset, limit int, sort string) (SearchResult, error) {
 	if IsSharedID(libraryID) {
 		if h.Shared == nil {
 			return SearchResult{}, ErrNotConfigured
@@ -114,7 +114,7 @@ func (h *Hub) BrowseItems(ctx context.Context, libraryID string, offset, limit i
 	if h.Local == nil {
 		return SearchResult{}, ErrNotConfigured
 	}
-	return h.Local.BrowseItems(ctx, libraryID, offset, limit)
+	return h.Local.BrowseItems(ctx, libraryID, offset, limit, sort)
 }
 
 func (h *Hub) ItemDetails(ctx context.Context, itemID string) (ItemDetail, error) {

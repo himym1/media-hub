@@ -96,7 +96,8 @@ func (h *handler) browseEmbyLibraryItems(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	result, err := h.dependencies.Emby.BrowseItems(r.Context(), libraryID, offset, limit)
+	sortBy := strings.TrimSpace(r.URL.Query().Get("sort"))
+	result, err := h.dependencies.Emby.BrowseItems(r.Context(), libraryID, offset, limit, sortBy)
 	if err != nil {
 		writeIntegrationProblem(w, err)
 		return

@@ -105,7 +105,7 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 	if result.Total != 1 || len(result.Items) != 1 || result.Items[0].ProviderIDs["Tmdb"] != "7131" {
 		t.Fatalf("unexpected result: %#v", result)
 	}
-	browse, err := client.BrowseItems(context.Background(), "library-1", 0, 10)
+	browse, err := client.BrowseItems(context.Background(), "library-1", 0, 10, "")
 	if err != nil || browse.Total != 1 || len(browse.Items) != 1 || browse.Items[0].ID != "item-2" || browse.Items[0].PlaybackPositionMS != 2_500_000 {
 		t.Fatalf("browse items: result=%#v err=%v", browse, err)
 	}

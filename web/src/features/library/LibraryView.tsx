@@ -57,6 +57,7 @@ import { episodeLabel, playbackStatus } from './libraryPlayback'
 import { buildTechBadges } from './libraryTechSpecs'
 import { adultLibraryId, childLibraries, isSharedEmbyId, libraryDisplayName, libraryRootId, mineLibraries, rootLibraries, sharedLibraries } from './libraryGroups'
 import { ensureQueueContains, episodeQueue, playableLibraryQueue } from './libraryPlaylist'
+import { libraryBrowseSort, librarySortLabel, nextLibrarySort, type LibrarySort } from './librarySort'
 
 const pageSize = 24
 const playQueueLimit = 100 // Emby 浏览上限；分组播放列表一次最多装这么多
@@ -75,7 +76,7 @@ export function LibraryView() {
   const [page, setPage] = useState(0)
   const [queryText, setQueryText] = useState('')
   const [submittedQuery, setSubmittedQuery] = useState('')
-  const [sortBy, setSortBy] = useState<'default' | 'year-desc' | 'year-asc' | 'name-asc'>('default')
+  const [sortBy, setSortBy] = useState<LibrarySort>('default')
   const [typeFilter, setTypeFilter] = useState<'all' | 'Movie' | 'Series'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'unplayed' | 'played'>('all')
   const [spotlightIndex, setSpotlightIndex] = useState(0)
@@ -115,9 +116,11 @@ export function LibraryView() {
   const topLibraries = useMemo(() => rootLibraries(scopeLibraries), [scopeLibraries])
   const adultGroups = useMemo(() => childLibraries(scopeLibraries, adultLibraryId), [scopeLibraries])
   const selectedRootId = libraryRootId(scopeLibraries, libraryId)
+  const adultBrowsing = selectedRootId === adultLibraryId
+  const browseSort = libraryBrowseSort(sortBy, adultBrowsing)
   const libraryItems = useQuery({
-    queryKey: ['emby-library-items', libraryId, page],
-    queryFn: () => getEmbyLibraryItems(libraryId!, page * pageSize, pageSize),
+    queryKey: ['emby-library-items', libraryId, page, browseSort],
+    queryFn: () => getEmbyLibraryItems(libraryId!, page * pageSize, pageSize, browseSort),
     enabled: Boolean(libraryId) && !submittedQuery,
   })
   const search = useQuery({
@@ -137,8 +140,8 @@ export function LibraryView() {
   })
   const inPagePlayback = canPlayNatively()
   const libraryPlayQueue = useQuery({
-    queryKey: ['emby-library-play-queue', libraryId],
-    queryFn: () => getEmbyLibraryItems(libraryId!, 0, playQueueLimit),
+    queryKey: ['emby-library-play-queue', libraryId, browseSort],
+    queryFn: () => getEmbyLibraryItems(libraryId!, 0, playQueueLimit, browseSort),
     enabled: Boolean(inPagePlayback && playId && libraryId && !submittedQuery && detail.data?.type !== 'Series'),
   })
   const refreshLibrary = useMutation({
@@ -305,7 +308,10 @@ export function LibraryView() {
   const items = useMemo(() => {
     let list = [...rawItems]
     if (typeFilter !== 'all') {
-      list = list.filter((item) => item.type === typeFilter)
+      list = list.filter((item) => {
+        if (typeFilter === 'Movie' && adultBrowsing) return item.type === 'Movie' || item.type === 'Video'
+        return item.type === typeFilter
+      })
     }
     if (statusFilter === 'in-progress') {
       list = list.filter((item) => (item.playbackPositionMs ?? 0) >= 30_000 && !item.played)
@@ -315,15 +321,8 @@ export function LibraryView() {
       list = list.filter((item) => !item.played && (item.playbackPositionMs ?? 0) < 30_000)
     }
 
-    if (sortBy === 'year-desc') {
-      list.sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
-    } else if (sortBy === 'year-asc') {
-      list.sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999))
-    } else if (sortBy === 'name-asc') {
-      list.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
-    }
     return list
-  }, [rawItems, typeFilter, statusFilter, sortBy])
+  }, [rawItems, typeFilter, statusFilter, adultBrowsing])
 
   const total = submittedQuery ? items.length : (result.data?.total ?? 0)
   const hasActiveFilters = typeFilter !== 'all' || statusFilter !== 'all' || sortBy !== 'default'
@@ -810,24 +809,12 @@ export function LibraryView() {
             <button
               className="sort-select-btn"
               onClick={() => {
-                const cycle: Array<'default' | 'year-desc' | 'year-asc' | 'name-asc'> = [
-                  'default',
-                  'year-desc',
-                  'year-asc',
-                  'name-asc',
-                ]
-                const next = cycle[(cycle.indexOf(sortBy) + 1) % cycle.length]
-                setSortBy(next)
+                setSortBy(nextLibrarySort(sortBy, adultBrowsing))
+                setPage(0)
               }}
               type="button"
             >
-              {sortBy === 'default'
-                ? '排序：默认推荐'
-                : sortBy === 'year-desc'
-                  ? '排序：最新年份'
-                  : sortBy === 'year-asc'
-                    ? '排序：经典上映'
-                    : '排序：名称 A-Z'}
+              {librarySortLabel(sortBy, adultBrowsing)}
             </button>
             {hasActiveFilters ? (
               <button className="filter-reset-btn" onClick={resetFilters} title="重置所有筛选" type="button">

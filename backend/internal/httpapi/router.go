@@ -66,7 +66,7 @@ type Authenticator interface {
 type EmbyReader interface {
 	Libraries(context.Context) ([]emby.Library, error)
 	SearchItems(context.Context, string, int) (emby.SearchResult, error)
-	BrowseItems(context.Context, string, int, int) (emby.SearchResult, error)
+	BrowseItems(context.Context, string, int, int, string) (emby.SearchResult, error)
 	ItemDetails(context.Context, string) (emby.ItemDetail, error)
 	RefreshLibrary(context.Context, string) error
 	RefreshItem(context.Context, string) error

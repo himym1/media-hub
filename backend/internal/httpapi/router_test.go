@@ -138,7 +138,7 @@ func (*embyStub) Libraries(context.Context) ([]emby.Library, error) {
 func (*embyStub) SearchItems(context.Context, string, int) (emby.SearchResult, error) {
 	return emby.SearchResult{}, nil
 }
-func (*embyStub) BrowseItems(_ context.Context, libraryID string, offset, limit int) (emby.SearchResult, error) {
+func (*embyStub) BrowseItems(_ context.Context, libraryID string, offset, limit int, _ string) (emby.SearchResult, error) {
 	return emby.SearchResult{Items: []emby.Item{{ID: libraryID + "-item", Name: "Movie", Type: "Movie"}}, Total: offset + limit + 1}, nil
 }
 func (*embyStub) ItemDetails(_ context.Context, itemID string) (emby.ItemDetail, error) {

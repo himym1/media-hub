@@ -167,14 +167,15 @@ export function LibraryPlayer({
   const [isMini, setIsMini] = useState(false)
   const [hoverTime, setHoverTime] = useState<number | null>(null)
   const [hoverRatio, setHoverRatio] = useState<number | null>(null)
-  const [queueOpen, setQueueOpen] = useState(queue.length > 1)
+  const [queueOpen, setQueueOpen] = useState(false)
   const nextItem = nextQueueItem(queue, itemId)
   const onNextRef = useRef<(() => void) | undefined>(undefined)
   onNextRef.current = nextItem && onSelectQueueItem ? () => onSelectQueueItem(nextItem.id) : undefined
 
   useEffect(() => {
+    if (nativeShell) return
     setQueueOpen(queue.length > 1)
-  }, [queue.length])
+  }, [nativeShell, queue.length])
 
   const clearIdleTimer = () => {
     if (idleTimer.current != null) {
@@ -586,9 +587,8 @@ export function LibraryPlayer({
     return (
       <div
         aria-labelledby="library-player-title"
-        aria-modal="true"
         className="library-player is-handoff"
-        role="dialog"
+        role="region"
       >
         <div className="library-player-handoff">
           <h2 id="library-player-title">{title}</h2>
@@ -600,7 +600,7 @@ export function LibraryPlayer({
             </p>
           )}
           <p className="library-player-handoff-hint">
-            画面在 mpv 窗口里，全屏、进度、音轨和字幕都用 mpv 自己的控制。
+            画面在 mpv 里。N 下一个，P 播放列表。
           </p>
           {subtitleHint && !error ? (
             <p className="library-player-handoff-hint" role="status">{subtitleHint}</p>
@@ -614,7 +614,7 @@ export function LibraryPlayer({
             ) : null}
             <button className="secondary-action" onClick={onClose} type="button">
               <X size={17} />
-              停止播放
+              关闭
             </button>
             {nextItem && onSelectQueueItem ? (
               <button className="secondary-action" onClick={() => onSelectQueueItem(nextItem.id)} type="button">
@@ -626,11 +626,6 @@ export function LibraryPlayer({
               <a className="secondary-action" href={externalUrl} rel="noreferrer" target="_blank">在 Emby 打开</a>
             ) : null}
           </div>
-          {queue.length > 1 ? (
-            <p className="library-player-handoff-hint">
-              播完自动播下一个。快捷键 N 下一个，P 播放列表。
-            </p>
-          ) : null}
           {onSelectQueueItem ? (
             <PlayerQueuePanel
               currentId={itemId}

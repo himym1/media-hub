@@ -3,7 +3,6 @@ package emby
 import (
 	"context"
 	"net/url"
-	"sort"
 	"strings"
 )
 
@@ -194,23 +193,15 @@ func (c *Client) listImmediateFolders(ctx context.Context, configuration clientC
 	return folders, nil
 }
 
-func (c *Client) browseAdultGroup(ctx context.Context, configuration clientConfig, folderID string, offset, limit int) (SearchResult, error) {
+func (c *Client) browseAdultGroup(ctx context.Context, configuration clientConfig, folderID string, offset, limit int, sortValue string) (SearchResult, error) {
 	items, err := c.listFolderCatalog(ctx, configuration, folderID, false)
 	if err != nil {
 		return SearchResult{}, err
 	}
 	collected := catalogAdultItems(items)
-	sort.SliceStable(collected, func(i, j int) bool {
-		return strings.ToLower(collected[i].Name) < strings.ToLower(collected[j].Name)
-	})
-	if offset > len(collected) {
-		offset = len(collected)
-	}
-	end := offset + limit
-	if end > len(collected) {
-		end = len(collected)
-	}
-	return publicItems(itemResponse{Items: collected[offset:end], TotalRecordCount: len(collected)}), nil
+	sortBaseItems(collected, sortValue, true)
+	page := paginateBaseItems(collected, offset, limit)
+	return publicItems(itemResponse{Items: page, TotalRecordCount: len(collected)}), nil
 }
 
 func (c *Client) cachedAdultFolderIDs() []string {
@@ -219,7 +210,7 @@ func (c *Client) cachedAdultFolderIDs() []string {
 	return append([]string(nil), c.adultFolderIDs...)
 }
 
-func (c *Client) browseAdultItems(ctx context.Context, configuration clientConfig, offset, limit int) (SearchResult, error) {
+func (c *Client) browseAdultItems(ctx context.Context, configuration clientConfig, offset, limit int, sortValue string) (SearchResult, error) {
 	collected := make([]baseItem, 0, 64)
 	seen := make(map[string]struct{})
 	appendUnique := func(items []baseItem) {
@@ -258,22 +249,14 @@ func (c *Client) browseAdultItems(ctx context.Context, configuration clientConfi
 			appendUnique([]baseItem{item})
 		}
 	}
-	sort.SliceStable(collected, func(i, j int) bool {
-		return strings.ToLower(collected[i].Name) < strings.ToLower(collected[j].Name)
-	})
-	if offset > len(collected) {
-		offset = len(collected)
-	}
-	end := offset + limit
-	if end > len(collected) {
-		end = len(collected)
-	}
-	return publicItems(itemResponse{Items: collected[offset:end], TotalRecordCount: len(collected)}), nil
+	sortBaseItems(collected, sortValue, true)
+	page := paginateBaseItems(collected, offset, limit)
+	return publicItems(itemResponse{Items: page, TotalRecordCount: len(collected)}), nil
 }
 
 func (c *Client) listFolderCatalog(ctx context.Context, configuration clientConfig, folderID string, withUser bool) ([]baseItem, error) {
 	query := url.Values{
-		"Fields":           {"OfficialRating,Genres,ProviderIds,UserData,MediaSources,Path"},
+		"Fields":           {"OfficialRating,Genres,ProviderIds,UserData,MediaSources,Path,ProductionYear,DateCreated"},
 		"IncludeItemTypes": {"Movie,Series,Video"},
 		"Limit":            {"10000"},
 		"ParentId":         {folderID},
@@ -294,7 +277,7 @@ func (c *Client) listFolderCatalog(ctx context.Context, configuration clientConf
 
 func (c *Client) listTaggedAdultItems(ctx context.Context, configuration clientConfig) ([]baseItem, error) {
 	query := url.Values{
-		"Fields":           {"OfficialRating,Genres,ProviderIds,UserData,MediaSources,Path"},
+		"Fields":           {"OfficialRating,Genres,ProviderIds,UserData,MediaSources,Path,ProductionYear,DateCreated"},
 		"IncludeItemTypes": {"Movie,Series,Video"},
 		"Limit":            {"10000"},
 		"Recursive":        {"true"},
