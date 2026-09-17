@@ -9,6 +9,7 @@ import (
 	"media-hub/backend/internal/androidrelease"
 	"media-hub/backend/internal/archive"
 	"media-hub/backend/internal/auth"
+	"media-hub/backend/internal/captureupload"
 	"media-hub/backend/internal/desktoprelease"
 	"media-hub/backend/internal/drive115"
 	"media-hub/backend/internal/emby"
@@ -133,6 +134,11 @@ type LocalUploadService interface {
 	Retry(context.Context, int64, string, string) (localupload.Job, error)
 }
 
+type CaptureUploadService interface {
+	Init(context.Context, string, int64, string) (captureupload.Ticket, error)
+	Complete(context.Context, int64, string, string, string, string) (workflow.Job, bool, error)
+}
+
 type TransferWorkflow interface {
 	SelectionToken(search.Candidate) string
 	Enqueue(context.Context, int64, string, string) (workflow.Job, bool, error)
@@ -190,6 +196,7 @@ type Dependencies struct {
 	Drive115Commands Drive115CommandService
 	Playback         PlaybackService
 	LocalUploads     LocalUploadService
+	CaptureUploads   CaptureUploadService
 	Archive          ArchiveService
 	Workflow         TransferWorkflow
 	Subscriptions    SubscriptionManager
@@ -301,6 +308,8 @@ func NewRouter(version string, dependencies Dependencies) http.Handler {
 	mux.Handle("GET /api/v1/transfers", h.protected(h.listTransfers))
 	mux.Handle("POST /api/v1/transfers", h.protected(h.createTransfer))
 	mux.Handle("POST /api/v1/share-imports", h.protected(h.createShareImport))
+	mux.Handle("POST /api/v1/capture-uploads/init", h.protected(h.initCaptureUpload))
+	mux.Handle("POST /api/v1/capture-uploads", h.protected(h.completeCaptureUpload))
 	mux.Handle("GET /api/v1/transfers/{id}", h.protected(h.getTransfer))
 	mux.Handle("POST /api/v1/transfers/{id}/retry", h.protected(h.retryTransfer))
 	mux.Handle("PATCH /api/v1/transfers/{id}/archived", h.protected(h.setTransferArchived))

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -228,6 +229,33 @@ func (s *Service) EnqueueShareImport(ctx context.Context, userID int64, title, r
 	}
 	token := s.SelectionToken(search.Candidate{
 		ID: adapter.ImportCandidateID(parsed), Title: title, MediaType: "adult",
+		SourceID: adapter.ShareSourceID, SourceRef: reference,
+		TransferState: "available", Revision: s.search.CurrentRevision(),
+	})
+	if token == "" {
+		return Job{}, false, ErrInvalidSelection
+	}
+	return s.Enqueue(ctx, userID, token, idempotencyKey)
+}
+
+func (s *Service) EnqueueUploadedImport(ctx context.Context, userID int64, title, folderID, idempotencyKey string) (Job, bool, error) {
+	title = strings.TrimSpace(title)
+	folderID = strings.TrimSpace(folderID)
+	if title == "" || folderID == "" {
+		return Job{}, false, ErrInvalidSelection
+	}
+	if _, ok := s.workflowConfiguration().Target("adult"); !ok {
+		return Job{}, false, ErrTargetUnavailable
+	}
+	if _, ok := s.search.TransferSource(adapter.ShareSourceID); !ok {
+		return Job{}, false, ErrSourceUnavailable
+	}
+	reference, err := adapter.UploadedReferenceJSON(title, folderID)
+	if err != nil {
+		return Job{}, false, ErrInvalidSelection
+	}
+	token := s.SelectionToken(search.Candidate{
+		ID: "uploaded-" + folderID, Title: title, MediaType: "adult",
 		SourceID: adapter.ShareSourceID, SourceRef: reference,
 		TransferState: "available", Revision: s.search.CurrentRevision(),
 	})

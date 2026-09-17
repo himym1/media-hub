@@ -52,6 +52,8 @@ pub struct CaptureSnapshot {
 pub struct CaptureDownload {
     pub kind: String,
     pub path: String,
+    pub size: u64,
+    pub title: String,
     pub share_import_url: Option<String>,
 }
 
@@ -483,12 +485,15 @@ async fn download_selected(app: &AppHandle, url: &str) -> Result<CaptureDownload
             MediaKind::Hls => download_hls(&client, &media_url, &referer, &cookie, &dest_dir, 0)?,
             MediaKind::File => download_file(&client, &media_url, &referer, &cookie, &dest_dir)?,
         };
+        let meta = fs::metadata(&path).map_err(|_| "无法读取下载文件。".to_string())?;
         Ok(CaptureDownload {
             kind: match kind {
                 MediaKind::Hls => "hls".into(),
                 MediaKind::File => "file".into(),
             },
             path: path.to_string_lossy().into_owned(),
+            size: meta.len(),
+            title: String::new(),
             share_import_url: match kind {
                 MediaKind::File => Some(media_url),
                 MediaKind::Hls => None,
@@ -516,12 +521,39 @@ async fn capture_and_download(app: &AppHandle, url: &str) -> Result<CaptureDownl
         }
     };
     match download_selected(app, &item.url).await {
-        Ok(result) => Ok(result),
+        Ok(mut result) => {
+            result.title = capture_title(&snapshot.page, Path::new(&result.path));
+            Ok(result)
+        }
         Err(error) => {
             close_capture(app);
             Err(error)
         }
     }
+}
+
+fn capture_title(page: &str, path: &Path) -> String {
+    let file = path
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or("视频")
+        .trim()
+        .to_string();
+    if let Ok(parsed) = Url::parse(page) {
+        if let Some(host) = parsed.host_str() {
+            let segment = parsed
+                .path_segments()
+                .and_then(|parts| parts.filter(|part| !part.is_empty()).last())
+                .unwrap_or("");
+            if !segment.is_empty() && segment.len() < 120 {
+                return segment.to_string();
+            }
+            if !host.is_empty() {
+                return host.to_string();
+            }
+        }
+    }
+    file
 }
 
 #[tauri::command]
@@ -555,6 +587,18 @@ pub async fn reveal_page_capture(app: AppHandle, path: String) -> Result<(), Str
         return Err("找不到下载文件。".into());
     }
     reveal_path(&file)
+}
+
+#[tauri::command]
+pub async fn upload_page_capture(app: AppHandle, path: String, ticket: crate::oss_upload::OssTicket) -> Result<(), String> {
+    let dest_dir = capture_output_dir(&app)?;
+    let file = PathBuf::from(path);
+    if !file.is_file() || !is_under_dir(&file, &dest_dir) {
+        return Err("找不到下载文件。".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || crate::oss_upload::post_file(&file, &ticket))
+        .await
+        .map_err(|_| "上传失败。".to_string())?
 }
 
 #[cfg(test)]
@@ -598,6 +642,18 @@ mod tests {
         assert!(parse_http_url("javascript:alert(1)").is_err());
         assert!(parse_http_url("file:///tmp/x").is_err());
         assert!(parse_http_url("https://site.example/watch").is_ok());
+    }
+
+    #[test]
+    fn capture_title_prefers_page_path() {
+        assert_eq!(
+            capture_title("https://site.example/watch/SSIS-001", Path::new("/tmp/media-hub-capture-1.ts")),
+            "SSIS-001"
+        );
+        assert_eq!(
+            capture_title("https://cdn.example/", Path::new("/tmp/media-hub-capture-1.ts")),
+            "cdn.example"
+        );
     }
 
     #[test]

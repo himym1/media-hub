@@ -174,6 +174,10 @@ func TestEnqueueShareImportCreatesAdultJob(t *testing.T) {
 	if err != nil || !urlCreated || urlJob.MediaType != "adult" || urlJob.Title != "clip" {
 		t.Fatalf("url job=%#v created=%v err=%v", urlJob, urlCreated, err)
 	}
+	uploaded, uploadedCreated, err := service.EnqueueUploadedImport(ctx, admin.ID, "SSIS-002", "9001", "share_job_3")
+	if err != nil || !uploadedCreated || uploaded.MediaType != "adult" || uploaded.Title != "SSIS-002" {
+		t.Fatalf("uploaded job=%#v created=%v err=%v", uploaded, uploadedCreated, err)
+	}
 }
 
 type downloadSourceStub struct{}

@@ -1,3 +1,5 @@
+import { ApiError, completeCaptureUpload, type CaptureUploadTicket } from '../api/mediaHub'
+
 type TauriInvoke = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>
 
 export type CaptureKind = 'hls' | 'file'
@@ -10,6 +12,8 @@ export type CaptureItem = {
 export type CaptureDownload = {
   kind: CaptureKind
   path: string
+  size?: number
+  title?: string
   share_import_url?: string | null
 }
 
@@ -91,4 +95,33 @@ export async function revealPageCapture(path: string) {
   const invoke = tauriInvoke()
   if (!invoke) throw new Error('只有桌面壳能打开下载目录。')
   await invoke('reveal_page_capture', { path })
+}
+
+export function captureFileName(path: string) {
+  const parts = path.split(/[/\\]/).filter(Boolean)
+  return parts.at(-1) ?? ''
+}
+
+export async function uploadPageCapture(path: string, ticket: CaptureUploadTicket) {
+  const invoke = tauriInvoke()
+  if (!invoke) throw new Error('只有桌面壳能上传抓取文件。')
+  await invoke('upload_page_capture', { path, ticket })
+}
+
+export async function completeCaptureUploadWhenReady(
+  input: { destinationId: string; filename: string; title?: string },
+  idempotencyKey: string,
+) {
+  const deadline = Date.now() + 45_000
+  let last: unknown
+  while (Date.now() < deadline) {
+    try {
+      return await completeCaptureUpload(input, idempotencyKey)
+    } catch (cause) {
+      last = cause
+      if (!(cause instanceof ApiError) || cause.code !== 'capture_upload_not_ready') throw cause
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+    }
+  }
+  throw last instanceof Error ? last : new Error('115 还没有收到抓取文件')
 }

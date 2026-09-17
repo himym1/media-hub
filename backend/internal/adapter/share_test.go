@@ -83,3 +83,20 @@ func TestShareImportRejectsInvalidReference(t *testing.T) {
 		t.Fatal("expected invalid reference")
 	}
 }
+
+func TestShareImportMarksUploadedFolderComplete(t *testing.T) {
+	source := NewShareImport(&shareReceiverStub{})
+	reference, err := UploadedReferenceJSON("SSIS-001", "9001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := source.StartTransfer(context.Background(), search.TransferRequest{
+		Title: "SSIS-001", MediaType: "adult", Reference: reference, DestinationID: "dest", IdempotencyKey: "up-op",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "completed" || result.FileID != "9001" || result.Path != "SSIS-001" || result.IsFile {
+		t.Fatalf("result=%#v", result)
+	}
+}

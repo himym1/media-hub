@@ -1,12 +1,15 @@
 import { useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { CircleAlert, FolderOpen, Radar } from 'lucide-react'
-import { createShareImport } from '../../shared/api/mediaHub'
+import { createShareImport, initCaptureUpload } from '../../shared/api/mediaHub'
 import {
   canCapturePages,
+  captureFileName,
+  completeCaptureUploadWhenReady,
   isCapturablePageUrl,
   revealPageCapture,
   runPageCapture,
+  uploadPageCapture,
   type CaptureDownload,
 } from '../../shared/desktop/pageCapture'
 
@@ -36,11 +39,23 @@ export function PageCaptureForm({ onImported }: Props) {
         const result = await runPageCapture(url.trim())
         setDownload(result)
         if (result.share_import_url) {
-          await createShareImport({ url: result.share_import_url }, crypto.randomUUID())
-          await queryClient.invalidateQueries({ queryKey: ['transfers'] })
-          setImported(true)
-          onImported()
+          await createShareImport({ url: result.share_import_url, title: result.title }, crypto.randomUUID())
+        } else {
+          const filename = captureFileName(result.path)
+          const ticket = await initCaptureUpload({
+            filename,
+            size: result.size ?? 0,
+            title: result.title,
+          })
+          await uploadPageCapture(result.path, ticket)
+          await completeCaptureUploadWhenReady(
+            { destinationId: ticket.destinationId, filename: ticket.filename, title: ticket.title },
+            crypto.randomUUID(),
+          )
         }
+        await queryClient.invalidateQueries({ queryKey: ['transfers'] })
+        setImported(true)
+        onImported()
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : '抓取失败。')
       } finally {
@@ -53,7 +68,7 @@ export function PageCaptureForm({ onImported }: Props) {
     <section className="share-import page-capture" aria-labelledby="page-capture-heading">
       <div className="share-import-copy">
         <h2 id="page-capture-heading">网页抓取</h2>
-        <p>贴播放页地址后，桌面壳在后台打开页面、嗅探明文 m3u8 / mp4 并下载。直链会送进成人库；HLS 拼到本机下载目录。加密分片、登录墙或同意页会失败。</p>
+        <p>贴播放页地址后，桌面壳在后台打开页面、嗅探明文 m3u8 / mp4。直链走 115 离线；HLS 分片在本机合并后直传 115，再进成人库。加密分片、登录墙或同意页会失败。</p>
       </div>
       <form className="page-capture-form" onSubmit={handleSubmit}>
         <label>
@@ -73,9 +88,9 @@ export function PageCaptureForm({ onImported }: Props) {
           {busy ? '正在抓取…' : '开始抓取'}
         </button>
       </form>
-      {busy ? <p className="page-capture-empty" role="status">后台打开页面、等待明文地址并下载，不用再点播放。</p> : null}
+      {busy ? <p className="page-capture-empty" role="status">后台打开页面、等待明文地址、下载或合并后再导入成人库。</p> : null}
       {error ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{error}</span></div> : null}
-      {imported ? <p className="share-import-success" role="status">直链已加入转存队列</p> : null}
+      {imported ? <p className="share-import-success" role="status">已加入转存队列</p> : null}
       {download ? (
         <p className="share-import-success page-capture-saved" role="status">
           已存到本机

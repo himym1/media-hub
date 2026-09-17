@@ -822,6 +822,41 @@ export function createShareImport(input: { url: string; receiveCode?: string; ti
   })
 }
 
+export type CaptureUploadTicket = {
+  destinationId: string
+  filename: string
+  title: string
+  target: string
+  host: string
+  object: string
+  accessid: string
+  policy: string
+  signature: string
+  callback: string
+}
+
+export function initCaptureUpload(input: { filename: string; size: number; title?: string }) {
+  return requestJSON<CaptureUploadTicket>('/api/v1/capture-uploads/init', {
+    method: 'POST',
+    headers: writeHeaders(),
+    body: JSON.stringify(input),
+  })
+}
+
+export function completeCaptureUpload(
+  input: { destinationId: string; filename: string; title?: string },
+  idempotencyKey: string,
+) {
+  return requestJSON<TransferJob>('/api/v1/capture-uploads', {
+    method: 'POST',
+    headers: {
+      ...writeHeaders(),
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify(input),
+  })
+}
+
 export function createTransfer(transferToken: string, idempotencyKey: string) {
   return requestJSON<TransferJob>('/api/v1/transfers', {
     method: 'POST',

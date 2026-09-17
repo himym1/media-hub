@@ -20,9 +20,10 @@ var (
 )
 
 const (
-	ImportKindShare = "share"
-	ImportKindURL   = "url"
-	maxImportURLLen = 8192
+	ImportKindShare    = "share"
+	ImportKindURL      = "url"
+	ImportKindUploaded = "uploaded"
+	maxImportURLLen    = 8192
 )
 
 var otherCloudImportHosts = map[string]struct{}{
@@ -202,6 +203,10 @@ func extractAdultCode(value string) string {
 		return match[1]
 	}
 	return ""
+}
+
+func AdultLibraryTitle(preferred string, names ...string) string {
+	return adultLibraryTitle(preferred, names...)
 }
 
 func adultLibraryTitle(preferred string, names ...string) string {

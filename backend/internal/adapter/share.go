@@ -18,6 +18,7 @@ type shareReference struct {
 	ShareCode   string `json:"shareCode,omitempty"`
 	ReceiveCode string `json:"receiveCode,omitempty"`
 	URL         string `json:"url,omitempty"`
+	FolderID    string `json:"folderId,omitempty"`
 }
 
 // ShareImport receives a pasted 115 share, magnet, or download URL into the adult workflow.
@@ -51,6 +52,8 @@ func (s *ShareImport) StartTransfer(ctx context.Context, input search.TransferRe
 		return s.receiveShare(ctx, input, reference)
 	case ImportKindURL:
 		return s.offlineURL(ctx, input, reference)
+	case ImportKindUploaded:
+		return s.uploadedFolder(ctx, input, reference)
 	default:
 		return search.TransferResult{}, search.Failure{Code: "invalid_selection", Message: "资源引用无效", Retryable: false}
 	}
@@ -127,6 +130,26 @@ func URLReferenceJSON(title, downloadURL string) (string, error) {
 	return marshalShareReference(shareReference{
 		Kind: ImportKindURL, Title: strings.TrimSpace(title), URL: downloadURL,
 	})
+}
+
+func UploadedReferenceJSON(title, folderID string) (string, error) {
+	return marshalShareReference(shareReference{
+		Kind: ImportKindUploaded, Title: strings.TrimSpace(title), FolderID: strings.TrimSpace(folderID),
+	})
+}
+
+func (s *ShareImport) uploadedFolder(_ context.Context, input search.TransferRequest, reference shareReference) (search.TransferResult, error) {
+	folderID := strings.TrimSpace(reference.FolderID)
+	if folderID == "" || folderID == "0" {
+		return search.TransferResult{}, search.Failure{Code: "invalid_selection", Message: "资源引用无效", Retryable: false}
+	}
+	for _, r := range folderID {
+		if r < '0' || r > '9' {
+			return search.TransferResult{}, search.Failure{Code: "invalid_selection", Message: "资源引用无效", Retryable: false}
+		}
+	}
+	title := adultLibraryTitle(input.Title, reference.Title)
+	return search.TransferResult{OperationID: input.IdempotencyKey, Status: "completed", FileID: folderID, Path: title, IsFile: false}, nil
 }
 
 func marshalShareReference(value shareReference) (string, error) {

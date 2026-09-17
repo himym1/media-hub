@@ -41,23 +41,24 @@ var (
 )
 
 type Client struct {
-	mu                sync.RWMutex
-	cookie            string
-	sessionPersister  func(string)
-	userInfoURL       string
-	userProfileURL    string
-	filesURL          string
-	fileInfoURL       string
-	downloadURL       string
-	folderAddURL      string
-	fileMoveURL       string
-	fileRenameURL     string
-	fileDeleteURL     string
-	offlineInfoURL    string
-	offlineAddURL     string
-	shareSnapURL      string
-	shareReceiveURL   string
-	client            *http.Client
+	mu               sync.RWMutex
+	cookie           string
+	sessionPersister func(string)
+	userInfoURL      string
+	userProfileURL   string
+	filesURL         string
+	fileInfoURL      string
+	downloadURL      string
+	folderAddURL     string
+	fileMoveURL      string
+	fileRenameURL    string
+	fileDeleteURL    string
+	offlineInfoURL   string
+	offlineAddURL    string
+	shareSnapURL     string
+	shareReceiveURL  string
+	sampleInitURL    string
+	client           *http.Client
 }
 
 type Status struct {

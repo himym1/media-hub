@@ -492,3 +492,10 @@ func (s *AuthService) ExecuteFileCommand(ctx context.Context, operation string, 
 func (s *AuthService) UploadLocalFile(ctx context.Context, userID int64, path, destinationID string, progress func(int64, int64)) error {
 	return ErrLocalUploadUnavailable
 }
+
+func (s *AuthService) InitSampleUpload(ctx context.Context, destinationID, filename string, size int64) (SampleUpload, error) {
+	if err := s.prepareSession(ctx); err != nil {
+		return SampleUpload{}, err
+	}
+	return s.drive.InitSampleUpload(ctx, destinationID, filename, size)
+}

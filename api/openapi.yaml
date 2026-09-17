@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.21.39
+  version: 0.21.40
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -1567,6 +1567,82 @@ paths:
           $ref: '#/components/responses/ProblemResponse'
         '409':
           $ref: '#/components/responses/ProblemResponse'
+  /capture-uploads/init:
+    post:
+      operationId: initCaptureUpload
+      summary: Create an adult-library 115 OSS PostObject ticket for a desktop-captured file
+      description: Returns short-lived OSS form fields. Media bytes are uploaded by the desktop client, never through Media Hub.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitCaptureUploadRequest'
+      responses:
+        '200':
+          description: OSS PostObject ticket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptureUploadTicket'
+        '400':
+          $ref: '#/components/responses/ProblemResponse'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '403':
+          $ref: '#/components/responses/ProblemResponse'
+        '409':
+          $ref: '#/components/responses/ProblemResponse'
+        '502':
+          $ref: '#/components/responses/ProblemResponse'
+        '503':
+          $ref: '#/components/responses/ProblemResponse'
+  /capture-uploads:
+    post:
+      operationId: completeCaptureUpload
+      summary: Queue an adult-library job after a captured file has landed in 115
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteCaptureUploadRequest'
+      responses:
+        '200':
+          description: Existing job for the same idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferJob'
+        '202':
+          description: Import job persisted and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferJob'
+        '400':
+          $ref: '#/components/responses/ProblemResponse'
+        '401':
+          $ref: '#/components/responses/ProblemResponse'
+        '403':
+          $ref: '#/components/responses/ProblemResponse'
+        '409':
+          $ref: '#/components/responses/ProblemResponse'
+        '502':
+          $ref: '#/components/responses/ProblemResponse'
+        '503':
+          $ref: '#/components/responses/ProblemResponse'
   /transfers/{transferId}:
     get:
       operationId: getTransfer
@@ -2752,6 +2828,53 @@ components:
         title:
           type: string
           maxLength: 300
+    InitCaptureUploadRequest:
+      type: object
+      required: [filename, size]
+      additionalProperties: false
+      properties:
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 200
+        size:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 5368709120
+        title:
+          type: string
+          maxLength: 300
+    CompleteCaptureUploadRequest:
+      type: object
+      required: [destinationId, filename]
+      additionalProperties: false
+      properties:
+        destinationId:
+          type: string
+          pattern: '^[0-9]+$'
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 200
+        title:
+          type: string
+          maxLength: 300
+    CaptureUploadTicket:
+      type: object
+      required: [destinationId, filename, title, target, host, object, accessid, policy, signature, callback]
+      additionalProperties: false
+      properties:
+        destinationId: { type: string }
+        filename: { type: string }
+        title: { type: string }
+        target: { type: string }
+        host: { type: string }
+        object: { type: string }
+        accessid: { type: string }
+        policy: { type: string }
+        signature: { type: string }
+        callback: { type: string }
     SetTransferArchivedRequest:
       type: object
       required: [archived]

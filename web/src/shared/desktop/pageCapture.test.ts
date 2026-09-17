@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   canCapturePages,
+  captureFileName,
   captureItemLabel,
   isCapturablePageUrl,
   pickAutoCaptureItem,
   runPageCapture,
+  uploadPageCapture,
 } from './pageCapture'
 
 afterEach(() => {
@@ -68,5 +70,29 @@ describe('pageCapture', () => {
       { url: 'https://cdn.example/master.m3u8', kind: 'hls' },
       { url: 'https://cdn.example/media.m3u8', kind: 'hls' },
     ])?.url).toBe('https://cdn.example/media.m3u8')
+  })
+
+  it('reads the capture file name from local paths', () => {
+    expect(captureFileName('/Users/me/Downloads/MediaHubCapture/clip.ts')).toBe('clip.ts')
+    expect(captureFileName('C:\\Temp\\MediaHubCapture\\clip.ts')).toBe('clip.ts')
+  })
+
+  it('uploads the captured file through Tauri', async () => {
+    const invoke = vi.fn(async () => undefined)
+    ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
+    const ticket = {
+      destinationId: '9001',
+      filename: 'clip.ts',
+      title: 'clip',
+      target: 'U_1_9001',
+      host: 'https://bucket.oss-cn-shenzhen.aliyuncs.com',
+      object: 'obj',
+      accessid: 'id',
+      policy: 'p',
+      signature: 's',
+      callback: 'cb',
+    }
+    await uploadPageCapture('/tmp/clip.ts', ticket)
+    expect(invoke).toHaveBeenCalledWith('upload_page_capture', { path: '/tmp/clip.ts', ticket })
   })
 })

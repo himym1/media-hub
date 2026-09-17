@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"media-hub/backend/internal/auth"
+	"media-hub/backend/internal/captureupload"
 	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/integration"
 	"media-hub/backend/internal/search"
@@ -101,6 +102,26 @@ func (*workflowStub) ListNotifications(context.Context, int64, int) ([]workflow.
 }
 func (*workflowStub) RetryNotification(context.Context, int64, string, string, string) (workflow.Notification, error) {
 	return workflow.Notification{}, nil
+}
+
+type captureUploadStub struct {
+	filename string
+	size     int64
+	title    string
+}
+
+func (stub *captureUploadStub) Init(_ context.Context, filename string, size int64, title string) (captureupload.Ticket, error) {
+	stub.filename, stub.size, stub.title = filename, size, title
+	return captureupload.Ticket{
+		DestinationID: "9001", Filename: filename, Title: "SSIS-001", Target: "U_1_9001",
+		Host: "https://bucket.oss-cn-shenzhen.aliyuncs.com", Object: "obj", AccessID: "id",
+		Policy: "p", Signature: "s", Callback: "cb",
+	}, nil
+}
+
+func (stub *captureUploadStub) Complete(_ context.Context, _ int64, destinationID, filename, title, key string) (workflow.Job, bool, error) {
+	stub.title = title
+	return workflow.Job{ID: "job-capture", Title: filename, MediaType: "adult", Source: "share", State: "queued"}, true, nil
 }
 
 type embyStub struct {
@@ -441,6 +462,31 @@ func TestCreateShareImportRejectsOtherCloud(t *testing.T) {
 	NewRouter("test-version", Dependencies{Auth: authStub{}, Workflow: &workflowStub{}}).ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", recorder.Code)
+	}
+}
+
+func TestInitCaptureUploadReturnsTicket(t *testing.T) {
+	provider := &captureUploadStub{}
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodPost, "/api/v1/capture-uploads/init")
+	request.Header.Set("Content-Type", "application/json")
+	request.Body = io.NopCloser(strings.NewReader(`{"filename":"clip.ts","size":8,"title":"SSIS-001"}`))
+	NewRouter("test-version", Dependencies{Auth: authStub{}, CaptureUploads: provider}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || provider.filename != "clip.ts" || provider.size != 8 {
+		t.Fatalf("status=%d body=%s dest=%q", recorder.Code, recorder.Body.String(), provider.filename)
+	}
+}
+
+func TestCompleteCaptureUploadQueuesAdultJob(t *testing.T) {
+	provider := &captureUploadStub{}
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodPost, "/api/v1/capture-uploads")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "capture_one_1")
+	request.Body = io.NopCloser(strings.NewReader(`{"destinationId":"9001","filename":"clip.ts","title":"SSIS-001"}`))
+	NewRouter("test-version", Dependencies{Auth: authStub{}, CaptureUploads: provider}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 
