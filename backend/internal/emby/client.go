@@ -700,16 +700,36 @@ func (c *Client) FindIndexedItem(ctx context.Context, title, mediaType string, y
 	return c.findIndexedItem(ctx, c.configuration(), title, mediaType, year, tmdbID)
 }
 
-func (c *Client) findIndexedItem(ctx context.Context, configuration clientConfig, title, mediaType string, year int, tmdbID string) (Item, bool, error) {
-	expectedType := "Movie"
-	if mediaType == "series" {
-		expectedType = "Series"
+// indexedItemTypes 返回入库轮询要找的 Emby 条目类型。成人库常见 Movie 或 Video。
+func indexedItemTypes(mediaType string) string {
+	switch mediaType {
+	case "series":
+		return "Series"
+	case "adult":
+		return "Movie,Video"
+	default:
+		return "Movie"
 	}
+}
+
+func indexedItemTypeOK(mediaType, itemType string) bool {
+	switch mediaType {
+	case "series":
+		return itemType == "Series"
+	case "adult":
+		return itemType == "Movie" || itemType == "Video"
+	default:
+		return itemType == "Movie"
+	}
+}
+
+func (c *Client) findIndexedItem(ctx context.Context, configuration clientConfig, title, mediaType string, year int, tmdbID string) (Item, bool, error) {
+	itemTypes := indexedItemTypes(mediaType)
 	if tmdbID != "" {
 		query := url.Values{
 			"AnyProviderIdEquals": {"Tmdb." + tmdbID},
 			"Fields":              {"ProviderIds,OriginalTitle,Path"},
-			"IncludeItemTypes":    {expectedType},
+			"IncludeItemTypes":    {itemTypes},
 			"Limit":               {"10"},
 			"Recursive":           {"true"},
 		}
@@ -721,7 +741,7 @@ func (c *Client) findIndexedItem(ctx context.Context, configuration clientConfig
 			return Item{}, false, err
 		}
 		for _, item := range response.Items {
-			if item.ID != "" && item.Type == expectedType && item.ProviderIDs["Tmdb"] == tmdbID {
+			if item.ID != "" && indexedItemTypeOK(mediaType, item.Type) && item.ProviderIDs["Tmdb"] == tmdbID {
 				return publicItem(item), true, nil
 			}
 		}
@@ -735,7 +755,7 @@ func (c *Client) findIndexedItem(ctx context.Context, configuration clientConfig
 	}
 	query := url.Values{
 		"Fields":           {"ProviderIds,OriginalTitle,Path"},
-		"IncludeItemTypes": {expectedType},
+		"IncludeItemTypes": {itemTypes},
 		"Limit":            {"50"},
 		"Recursive":        {"true"},
 		"SearchTerm":       {title},
@@ -750,7 +770,7 @@ func (c *Client) findIndexedItem(ctx context.Context, configuration clientConfig
 	var best baseItem
 	bestScore := 0
 	for _, item := range response.Items {
-		if item.ID == "" || item.Type != expectedType {
+		if item.ID == "" || !indexedItemTypeOK(mediaType, item.Type) {
 			continue
 		}
 		score, ok := indexedTitleMatchScore(title, year, item)
@@ -759,6 +779,41 @@ func (c *Client) findIndexedItem(ctx context.Context, configuration clientConfig
 		}
 		best = item
 		bestScore = score
+	}
+	if bestScore == 0 {
+		if mediaType == "adult" {
+			return c.findAdultFolderIndexedItem(ctx, configuration, title, year)
+		}
+		return Item{}, false, nil
+	}
+	return publicItem(best), true, nil
+}
+
+// findAdultFolderIndexedItem 在成人媒体文件夹里按标题或路径匹配，不依赖 SearchTerm。
+func (c *Client) findAdultFolderIndexedItem(ctx context.Context, configuration clientConfig, title string, year int) (Item, bool, error) {
+	_ = c.listLocalLibraries(ctx, configuration)
+	folderIDs := c.cachedAdultFolderIDs()
+	if len(folderIDs) == 0 {
+		return Item{}, false, nil
+	}
+	var best baseItem
+	bestScore := 0
+	for _, folderID := range folderIDs {
+		items, err := c.listFolderCatalog(ctx, configuration, folderID, configuration.userID != "")
+		if err != nil {
+			return Item{}, false, err
+		}
+		for _, item := range items {
+			if item.ID == "" || !indexedItemTypeOK("adult", item.Type) {
+				continue
+			}
+			score, ok := indexedTitleMatchScore(title, year, item)
+			if !ok || score < bestScore {
+				continue
+			}
+			best = item
+			bestScore = score
+		}
 	}
 	if bestScore == 0 {
 		return Item{}, false, nil

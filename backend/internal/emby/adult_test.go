@@ -220,3 +220,46 @@ func TestAdultGroupsUseFirstLevelFolders(t *testing.T) {
 		t.Fatalf("group browse=%#v err=%v", group, err)
 	}
 }
+
+func TestFindIndexedItemMatchesAdultVideoByFolderPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/Users/user-1/Views":
+			_ = json.NewEncoder(w).Encode(map[string]any{"Items": []map[string]any{}})
+		case "/Library/MediaFolders":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"Items": []map[string]any{
+					{"Id": "adult-folder", "Name": "成人电影", "CollectionType": "homevideos"},
+				},
+			})
+		case "/Items":
+			query := request.URL.Query()
+			if query.Get("SearchTerm") != "" {
+				if query.Get("IncludeItemTypes") != "Movie,Video" {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"Items": []any{}, "TotalRecordCount": 0})
+				return
+			}
+			if query.Get("ParentId") == "adult-folder" {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"Items": []map[string]any{
+						{"Id": "clip-1", "Name": "media-hub-capture-1", "Type": "Video", "Path": "/media2/av/127.0.0.1/media-hub-capture-1.strm"},
+					},
+				})
+				return
+			}
+			w.WriteHeader(http.StatusBadRequest)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key", time.Second, "user-1")
+	item, found, err := client.FindIndexedItem(context.Background(), "127.0.0.1", "adult", 0, "")
+	if err != nil || !found || item.ID != "clip-1" {
+		t.Fatalf("adult video folder match: item=%#v found=%v err=%v", item, found, err)
+	}
+}
