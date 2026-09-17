@@ -328,7 +328,7 @@ func (c *Client) sharedEpisodes(ctx context.Context, seriesID string) ([]Episode
 	var episodes []Episode
 	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
 		query := url.Values{
-			"Fields":           {"ProviderIds,UserData,MediaSources,Path"},
+			"Fields":           {"ProviderIds,UserData,MediaSources,Path,Overview,RunTimeTicks,CommunityRating,PrimaryImageTag"},
 			"IncludeItemTypes": {"Episode"},
 			"ParentId":         {nativeID},
 			"Recursive":        {"true"},
@@ -345,6 +345,10 @@ func (c *Client) sharedEpisodes(ctx context.Context, seriesID string) ([]Episode
 			if item.Type != "Episode" || item.ID == "" || item.Name == "" {
 				continue
 			}
+			var runtimeMinutes int
+			if item.RunTimeTicks > 0 {
+				runtimeMinutes = int(item.RunTimeTicks / 600_000_000)
+			}
 			next = append(next, Episode{
 				Item: Item{
 					ID:                 sharedPublicID(item.ID),
@@ -356,7 +360,11 @@ func (c *Client) sharedEpisodes(ctx context.Context, seriesID string) ([]Episode
 					PlaybackPositionMS: item.UserData.PlaybackPositionTicks / 10_000,
 					Played:             item.UserData.Played,
 				},
-				TechSpecs: extractMediaTechSpecs(item.MediaSources),
+				TechSpecs:       extractMediaTechSpecs(item.MediaSources),
+				Overview:        item.Overview,
+				RuntimeMinutes:  runtimeMinutes,
+				CommunityRating: item.CommunityRating,
+				PrimaryImageTag: item.PrimaryImageTag,
 			})
 		}
 		episodes = next

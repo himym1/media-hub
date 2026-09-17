@@ -180,6 +180,7 @@ type baseItem struct {
 	ParentID          string            `json:"ParentId"`
 	SeriesID          string            `json:"SeriesId"`
 	SeriesName        string            `json:"SeriesName"`
+	PrimaryImageTag   string            `json:"PrimaryImageTag,omitempty"`
 	UserData          userData          `json:"UserData"`
 }
 

@@ -2020,6 +2020,317 @@ h1 em { color: var(--accent); font-style: normal; }
   flex-shrink: 0;
 }
 
+/* 剧集分季药丸切换器 (Infuse / 网易爆米花风格) */
+.season-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.season-tabs-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.season-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.season-pill-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+
+.season-pill-btn.active {
+  color: #ffffff;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(52, 211, 153, 0.28);
+}
+
+.season-ep-count {
+  font-size: 11px;
+  opacity: 0.75;
+  font-weight: 400;
+}
+
+.season-pill-btn.active .season-ep-count {
+  color: #ffffff;
+  opacity: 0.9;
+}
+
+/* 16:9 画幅单集剧照流卡片 (Infuse / 网易爆米花级) */
+.library-episode-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.episode-card-item {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.episode-card-item:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.episode-card-item.played {
+  opacity: 0.75;
+}
+
+.episode-card-item.in-progress {
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+/* 16:9 剧照画幅缩略图包装器 */
+.episode-still-thumb-wrap {
+  position: relative;
+  width: 160px;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0b0d10;
+  cursor: pointer;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.episode-still-thumb-wrap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.episode-still-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.28s ease;
+}
+
+.episode-card-item:hover .episode-still-img {
+  transform: scale(1.04);
+}
+
+.episode-still-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #181c22 0%, #0f1115 100%);
+  color: var(--text-muted);
+}
+
+.episode-still-fallback-icon {
+  opacity: 0.45;
+}
+
+/* 剧照悬停播放图层 */
+.episode-still-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.38);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  z-index: 2;
+}
+
+.episode-still-thumb-wrap:hover .episode-still-play-overlay,
+.episode-still-thumb-wrap:focus-visible .episode-still-play-overlay {
+  opacity: 1;
+}
+
+.episode-play-circle {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+
+.episode-still-thumb-wrap:hover .episode-play-circle {
+  transform: scale(1.1);
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+
+/* 剧照右上角“已看”徽标 */
+.episode-still-badge-played {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-ink);
+  background: var(--accent);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* 剧照底部播放进度条 */
+.episode-still-progress-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.22);
+  z-index: 3;
+}
+
+.episode-still-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+
+/* 分集卡片主体右侧内容 */
+.episode-card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 6px;
+}
+
+.episode-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.episode-card-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.episode-card-number {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.episode-card-name {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.episode-card-meta-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.episode-card-meta-pills .episode-spec-pill {
+  margin-left: 0;
+}
+
+.episode-runtime-pill {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.episode-rating-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f59e0b;
+}
+
+.episode-card-overview {
+  margin: 2px 0 6px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.episode-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.episode-card-status {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .episode-card-item {
+    grid-template-columns: 1fr;
+  }
+  .episode-still-thumb-wrap {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+  }
+}
+
+
 .library-detail-back { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: 0 0 22px; padding: 0 8px 0 0; color: var(--text-muted); border: 0; background: transparent; font-size: 13px; }
 .library-detail-back:hover { color: var(--text); }
 .library-detail-hero { position: relative; display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 28px; align-items: start; }

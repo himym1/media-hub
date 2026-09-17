@@ -382,6 +382,10 @@ data class EmbyEpisode(
     val item: EmbyItem,
     val externalUrl: String,
     val appUrl: String?,
+    val overview: String? = null,
+    val runtimeMinutes: Int? = null,
+    val communityRating: Double? = null,
+    val primaryImageTag: String? = null,
 )
 
 data class EmbyPerson(

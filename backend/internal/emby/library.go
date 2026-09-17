@@ -14,9 +14,13 @@ import (
 
 type Episode struct {
 	Item
-	ExternalURL string          `json:"externalUrl"`
-	AppURL      string          `json:"appUrl,omitempty"`
-	TechSpecs   *MediaTechSpecs `json:"techSpecs,omitempty"`
+	ExternalURL     string          `json:"externalUrl"`
+	AppURL          string          `json:"appUrl,omitempty"`
+	TechSpecs       *MediaTechSpecs `json:"techSpecs,omitempty"`
+	Overview        string          `json:"overview,omitempty"`
+	RuntimeMinutes  int             `json:"runtimeMinutes,omitempty"`
+	CommunityRating float64         `json:"communityRating,omitempty"`
+	PrimaryImageTag string          `json:"primaryImageTag,omitempty"`
 }
 
 type PrimaryImage struct {
@@ -34,7 +38,7 @@ func (c *Client) Episodes(ctx context.Context, seriesID string) ([]Episode, erro
 		return nil, ErrItemNotFound
 	}
 	query := url.Values{
-		"Fields":    {"ProviderIds,MediaSources,UserData,Path,SeriesName"},
+		"Fields":    {"ProviderIds,MediaSources,UserData,Path,SeriesName,Overview,RunTimeTicks,CommunityRating,PrimaryImageTag"},
 		"IsMissing": {"false"},
 		"SortBy":    {"ParentIndexNumber,IndexNumber"},
 		"SortOrder": {"Ascending"},
@@ -61,9 +65,17 @@ func (c *Client) Episodes(ctx context.Context, seriesID string) ([]Episode, erro
 		if err != nil {
 			return nil, err
 		}
+		var runtimeMinutes int
+		if item.RunTimeTicks > 0 {
+			runtimeMinutes = int(item.RunTimeTicks / 600_000_000)
+		}
 		items = append(items, Episode{
 			Item: publicItem(item), ExternalURL: externalURL, AppURL: itemAppURL(server.ID, item.ID),
-			TechSpecs: extractMediaTechSpecs(item.MediaSources),
+			TechSpecs:       extractMediaTechSpecs(item.MediaSources),
+			Overview:        item.Overview,
+			RuntimeMinutes:  runtimeMinutes,
+			CommunityRating: item.CommunityRating,
+			PrimaryImageTag: item.PrimaryImageTag,
 		})
 	}
 	sort.SliceStable(items, func(i, j int) bool {

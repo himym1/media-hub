@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Media Hub API
-  version: 0.21.35
+  version: 0.21.36
   description: Control-plane API for private media search, subscriptions, and automation.
 servers:
   - url: /api/v1
@@ -2350,6 +2350,10 @@ components:
             externalUrl: { type: string, format: uri }
             appUrl: { type: string, format: uri, pattern: '^emby://items/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$' }
             techSpecs: { $ref: '#/components/schemas/EmbyMediaTechSpecs' }
+            overview: { type: string, maxLength: 4000 }
+            runtimeMinutes: { type: integer, minimum: 0 }
+            communityRating: { type: number, format: double }
+            primaryImageTag: { type: string, maxLength: 100 }
     EmbyEpisodeList:
       type: object
       required: [items, total]

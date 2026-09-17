@@ -313,6 +313,10 @@ export type EmbyEpisode = EmbyItem & {
   externalUrl: string
   appUrl?: string
   techSpecs?: EmbyMediaTechSpecs
+  overview?: string
+  runtimeMinutes?: number
+  communityRating?: number
+  primaryImageTag?: string
 }
 
 export type PlaybackDescriptor = {

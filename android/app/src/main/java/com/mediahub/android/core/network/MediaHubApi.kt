@@ -371,6 +371,10 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
                 item = parseEmbyItem(value),
                 externalUrl = value.getString("externalUrl"),
                 appUrl = value.optionalString("appUrl"),
+                overview = value.optionalString("overview"),
+                runtimeMinutes = if (value.has("runtimeMinutes") && !value.isNull("runtimeMinutes")) value.getInt("runtimeMinutes") else null,
+                communityRating = value.optionalDouble("communityRating"),
+                primaryImageTag = value.optionalString("primaryImageTag"),
             )
         }
     }
