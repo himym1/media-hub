@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,6 +63,7 @@ import com.mediahub.android.core.image.PosterLoader
 import com.mediahub.android.core.network.EmbyDeletePreview
 import com.mediahub.android.core.network.EmbyItemDetail
 import com.mediahub.android.core.network.EmbyItem
+import com.mediahub.android.core.network.EmbyPerson
 import com.mediahub.android.core.network.EmbyRemoteSubtitle
 import com.mediahub.android.feature.subtitles.RemoteSubtitleUiState
 import com.mediahub.android.playback.PlaybackFallback
@@ -170,6 +175,11 @@ internal fun LibraryDetailScreen(
                         color = MediaHubColors.TextSecondary,
                         fontSize = 14.sp,
                     )
+                }
+                if (detail.people.isNotEmpty()) {
+                    item {
+                        CastCrewSection(people = detail.people, posterLoader = posterLoader)
+                    }
                 }
                 item { TechnicalDetails(detail) }
                 if (shared) {
@@ -456,5 +466,91 @@ internal fun deletePreviewCopy(preview: EmbyDeletePreview): String {
         "将从 Emby 移除「${preview.name}」$versions$series。\n\nNAS 上约 ${preview.fileCount} 个 STRM 和同名字幕会被清掉，115 网盘上的原始文件不会被删除。本机字幕缓存也会一并删除。"
     } else {
         "将从 Emby 移除「${preview.name}」$versions$series。\n\nNAS 上约 ${preview.fileCount} 个本地媒体文件会被删除，此操作不可恢复。"
+    }
+}
+
+@Composable
+private fun CastCrewSection(people: List<EmbyPerson>, posterLoader: PosterLoader) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MediaHubSmallTitle(text = "演职人员")
+            MediaHubText(
+                text = "${people.size} 位",
+                color = MediaHubColors.TextMuted,
+                fontSize = 12.sp,
+            )
+        }
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
+        ) {
+            items(people, key = { "${it.id}-${it.role.orEmpty()}" }) { person ->
+                CastPersonCard(person = person, posterLoader = posterLoader)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CastPersonCard(person: EmbyPerson, posterLoader: PosterLoader) {
+    val roleText = formatPersonRole(person)
+    Column(
+        modifier = Modifier.width(76.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(60.dp)
+                .clip(CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            EmbyPoster(
+                itemId = person.id,
+                loader = posterLoader,
+                contentDescription = "${person.name} 头像",
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        MediaHubText(
+            text = person.name,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = MediaHubColors.TextStrong,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
+        MediaHubText(
+            text = roleText,
+            fontSize = 11.sp,
+            color = MediaHubColors.TextMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+private fun formatPersonRole(person: EmbyPerson): String {
+    val type = (person.type ?: "").trim().lowercase()
+    val role = person.role?.trim().orEmpty()
+    return when {
+        type == "director" || role.equals("director", ignoreCase = true) -> "导演"
+        type == "writer" || role.equals("writer", ignoreCase = true) -> "编剧"
+        type == "producer" -> "制片人"
+        type == "creator" -> "主创"
+        role.isNotBlank() -> "饰 $role"
+        type == "actor" -> "演员"
+        type == "gueststar" -> "客串"
+        else -> person.type?.takeIf(String::isNotBlank) ?: "演职员"
     }
 }

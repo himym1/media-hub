@@ -290,7 +290,7 @@ func (c *Client) sharedItemDetails(ctx context.Context, itemID string) (ItemDeta
 	var detail ItemDetail
 	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
 		query := url.Values{
-			"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,Path,ProviderIds,RunTimeTicks,SeriesName,UserData"},
+			"Fields": {"CommunityRating,Genres,MediaSources,OriginalTitle,Overview,Path,ProviderIds,RunTimeTicks,SeriesName,UserData,People"},
 		}
 		var item baseItem
 		if err := c.getJSONWithNotFound(ctx, configuration, path.Join("Users", configuration.userID, "Items", nativeID), query, true, &item); err != nil {
@@ -299,6 +299,10 @@ func (c *Client) sharedItemDetails(ctx context.Context, itemID string) (ItemDeta
 		if item.ID != nativeID || item.Name == "" {
 			return ErrItemNotFound
 		}
+		people := extractPeople(item.People)
+		for i := range people {
+			people[i].ID = sharedPublicID(people[i].ID)
+		}
 		detail = ItemDetail{
 			Item:             publicItem(item),
 			OriginalTitle:    boundedText(item.OriginalTitle, 300),
@@ -306,6 +310,7 @@ func (c *Client) sharedItemDetails(ctx context.Context, itemID string) (ItemDeta
 			CommunityRating:  item.CommunityRating,
 			RuntimeMinutes:   int(item.RunTimeTicks / 600_000_000),
 			Genres:           boundedStrings(item.Genres, 32, 100),
+			People:           people,
 			MediaSourceCount: len(item.MediaSources),
 			TechSpecs:        extractMediaTechSpecs(item.MediaSources),
 		}

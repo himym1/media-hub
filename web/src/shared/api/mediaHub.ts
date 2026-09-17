@@ -329,6 +329,14 @@ export type EmbyItemSearch = {
   total: number
 }
 
+export interface EmbyPerson {
+  id: string
+  name: string
+  role?: string
+  type?: string
+  primaryImageTag?: string
+}
+
 export type EmbyItemDetail = EmbyItem & {
   originalTitle?: string
   overview?: string
@@ -339,6 +347,7 @@ export type EmbyItemDetail = EmbyItem & {
   externalUrl: string
   appUrl?: string
   techSpecs?: EmbyMediaTechSpecs
+  people?: EmbyPerson[]
 }
 
 export type EmbyDeletePreview = {

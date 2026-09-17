@@ -357,6 +357,7 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
             mediaSourceCount = payload.getInt("mediaSourceCount"),
             externalUrl = payload.getString("externalUrl"),
             appUrl = payload.optionalString("appUrl"),
+            people = payload.optJSONArray("people")?.objects(::parseEmbyPerson).orEmpty(),
         )
     }
 
@@ -760,6 +761,14 @@ class MediaHubApi(private val http: MediaHubHttpClient) {
         episode = item.optInt("episode", 0),
         playbackPositionMs = item.optLong("playbackPositionMs", 0L).coerceAtLeast(0L),
         played = item.optBoolean("played", false),
+    )
+
+    private fun parseEmbyPerson(item: JSONObject) = EmbyPerson(
+        id = item.getString("id"),
+        name = item.getString("name"),
+        role = item.optionalString("role"),
+        type = item.optionalString("type"),
+        primaryImageTag = item.optionalString("primaryImageTag"),
     )
 
 

@@ -384,6 +384,14 @@ data class EmbyEpisode(
     val appUrl: String?,
 )
 
+data class EmbyPerson(
+    val id: String,
+    val name: String,
+    val role: String? = null,
+    val type: String? = null,
+    val primaryImageTag: String? = null,
+)
+
 data class EmbyItemDetail(
     val item: EmbyItem,
     val originalTitle: String?,
@@ -394,6 +402,7 @@ data class EmbyItemDetail(
     val mediaSourceCount: Int,
     val externalUrl: String,
     val appUrl: String? = null,
+    val people: List<EmbyPerson> = emptyList(),
 )
 
 data class EmbyDeletePreview(

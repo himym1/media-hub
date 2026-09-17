@@ -49,6 +49,7 @@ import { canPlayNatively } from '../../shared/desktop/nativePlayback'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
 import { LibraryEpisodes } from './LibraryEpisodes'
+import { LibraryCastGallery } from './LibraryCastGallery'
 import { LibraryPlayer } from './LibraryPlayer'
 import { LibraryWatchAction } from './LibraryWatchAction'
 import { episodeLabel, playbackStatus } from './libraryPlayback'
@@ -241,6 +242,17 @@ export function LibraryView() {
     setSubmittedQuery('')
     setItemId(null)
     setPlayId(null)
+    setSpotlightIndex(0)
+    commitUrl({ media: null, play: null })
+  }
+  const selectPerson = (name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setQueryText(trimmed)
+    setSubmittedQuery(trimmed)
+    setItemId(null)
+    setPlayId(null)
+    setPage(0)
     setSpotlightIndex(0)
     commitUrl({ media: null, play: null })
   }
@@ -829,7 +841,7 @@ export function LibraryView() {
           </button>
           {detail.isLoading && !detail.data ? <div className="status-loading">正在读取媒体详情…</div> : null}
           {detail.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>详情读取失败</strong><span>{detail.error.message}</span></div><button onClick={() => void detail.refetch()} type="button">重试</button></div> : null}
-          {detail.data ? <LibraryItemDetail inPagePlayback={inPagePlayback} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} refreshing={refreshItem.isPending} seriesEpisodes={episodes.data?.items} shared={isSharedEmbyId(detail.data.id)} /> : null}
+          {detail.data ? <LibraryItemDetail inPagePlayback={inPagePlayback} item={detail.data} onDeleted={closeItem} onPlay={startPlay} onRefresh={(id) => refreshItem.mutate(id)} onSelectPerson={selectPerson} refreshing={refreshItem.isPending} seriesEpisodes={episodes.data?.items} shared={isSharedEmbyId(detail.data.id)} /> : null}
         </aside>
       ) : null}
       {inPagePlayback && playTarget ? (
@@ -904,12 +916,13 @@ function TechSpecsBadges({ specs }: { specs?: EmbyMediaTechSpecs | null }) {
   )
 }
 
-function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh, refreshing, seriesEpisodes, shared }: {
+function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh, onSelectPerson, refreshing, seriesEpisodes, shared }: {
   item: EmbyItemDetail
   inPagePlayback: boolean
   onDeleted: () => void
   onPlay: (target: Pick<EmbyEpisode, 'id' | 'name' | 'externalUrl'>) => void
   onRefresh: (id: string) => void
+  onSelectPerson?: (name: string) => void
   refreshing: boolean
   seriesEpisodes?: EmbyEpisode[]
   shared: boolean
@@ -1047,6 +1060,7 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
       </div>
     </div>
     <p className="library-overview">{item.overview || '暂未提供简介。'}</p>
+    <LibraryCastGallery onSelectPerson={onSelectPerson} people={item.people} />
     <details className="library-more">
       <summary>更多信息</summary>
       <dl>

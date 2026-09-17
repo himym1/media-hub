@@ -28,7 +28,7 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"范海辛","OriginalTitle":"Van Helsing","Overview":"Monster hunter","Type":"Movie","ProductionYear":2004,"Path":"/private/movie.strm","ProviderIds":{"Tmdb":"7131"},"CommunityRating":7.2,"RunTimeTicks":79200000000,"Genres":["Action"],"MediaSources":[{"Id":"source-1","Path":"/private/movie.strm","Container":"strm"}]}`))
+			_, _ = w.Write([]byte(`{"Id":"item-1","Name":"范海辛","OriginalTitle":"Van Helsing","Overview":"Monster hunter","Type":"Movie","ProductionYear":2004,"Path":"/private/movie.strm","ProviderIds":{"Tmdb":"7131"},"CommunityRating":7.2,"RunTimeTicks":79200000000,"Genres":["Action"],"People":[{"Id":"person-1","Name":"Hugh Jackman","Role":"Van Helsing","Type":"Actor","PrimaryImageTag":"tag-1"},{"Id":"person-2","Name":"Stephen Sommers","Role":"Director","Type":"Director"}],"MediaSources":[{"Id":"source-1","Path":"/private/movie.strm","Container":"strm"}]}`))
 		case "/System/Info":
 			_, _ = w.Write([]byte(`{"Id":"server-1","ServerName":"Test Emby","Version":"4.9.3"}`))
 		case "/Items":
@@ -112,6 +112,9 @@ func TestClientReadsLibrariesAndSearchesWithoutExposingPaths(t *testing.T) {
 	detail, err := client.ItemDetails(context.Background(), "item-1")
 	if err != nil || detail.MediaSourceCount != 1 || detail.RuntimeMinutes != 132 || detail.ProviderIDs["Tmdb"] != "7131" {
 		t.Fatalf("item details: detail=%#v err=%v", detail, err)
+	}
+	if len(detail.People) != 2 || detail.People[0].Name != "Hugh Jackman" || detail.People[0].Role != "Van Helsing" || detail.People[1].Name != "Stephen Sommers" || detail.People[1].Type != "Director" {
+		t.Fatalf("unexpected people in detail: %#v", detail.People)
 	}
 	if strings.Contains(detail.ExternalURL, "test-key") || !strings.Contains(detail.ExternalURL, "item?id=item-1") {
 		t.Fatalf("unsafe or invalid external URL: %q", detail.ExternalURL)
@@ -380,5 +383,33 @@ func TestLibrariesFallsBackToConfiguredFoldersWhenViewsFail(t *testing.T) {
 		libraries[1].ID != "library-shows" || libraries[1].Name != "115电视剧" ||
 		libraries[2].ID != adultLibraryID {
 		t.Fatalf("unexpected libraries: %#v", libraries)
+	}
+}
+
+func TestExtractPeople(t *testing.T) {
+	// 空输入
+	if res := extractPeople(nil); res != nil {
+		t.Fatalf("expected nil, got %#v", res)
+	}
+
+	// 包含有效人员、无效人员、重复人员
+	input := []embyPerson{
+		{ID: "p1", Name: "Actor One", Role: "Hero", Type: "Actor", PrimaryImageTag: "tag1"},
+		{ID: "p2", Name: "Director One", Role: "Director", Type: "Director"},
+		{ID: "p1", Name: "Actor One", Role: "Hero", Type: "Actor"}, // 重复
+		{ID: "", Name: "Invalid No ID", Type: "Actor"},              // 无效
+		{ID: "p3", Name: "", Type: "Actor"},                         // 无名字
+		{ID: "bad id!@#", Name: "Bad ID", Type: "Actor"},           // 非法字符
+	}
+
+	people := extractPeople(input)
+	if len(people) != 2 {
+		t.Fatalf("expected 2 people, got %d: %#v", len(people), people)
+	}
+	if people[0].ID != "p1" || people[0].Name != "Actor One" || people[0].Role != "Hero" || people[0].PrimaryImageTag != "tag1" {
+		t.Fatalf("unexpected person 0: %#v", people[0])
+	}
+	if people[1].ID != "p2" || people[1].Name != "Director One" || people[1].Type != "Director" {
+		t.Fatalf("unexpected person 1: %#v", people[1])
 	}
 }

@@ -96,15 +96,33 @@ type Item struct {
 
 type ItemDetail struct {
 	Item
-	OriginalTitle    string   `json:"originalTitle,omitempty"`
-	Overview         string   `json:"overview,omitempty"`
-	CommunityRating  float64  `json:"communityRating,omitempty"`
-	RuntimeMinutes   int      `json:"runtimeMinutes,omitempty"`
-	Genres           []string `json:"genres,omitempty"`
-	MediaSourceCount int      `json:"mediaSourceCount"`
+	OriginalTitle    string          `json:"originalTitle,omitempty"`
+	Overview         string          `json:"overview,omitempty"`
+	CommunityRating  float64         `json:"communityRating,omitempty"`
+	RuntimeMinutes   int             `json:"runtimeMinutes,omitempty"`
+	Genres           []string        `json:"genres,omitempty"`
+	People           []Person        `json:"people,omitempty"`
+	MediaSourceCount int             `json:"mediaSourceCount"`
 	ExternalURL      string          `json:"externalUrl"`
 	AppURL           string          `json:"appUrl,omitempty"`
 	TechSpecs        *MediaTechSpecs `json:"techSpecs,omitempty"`
+}
+
+// Person 描述演职人员（演员、导演、编剧等）
+type Person struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Role            string `json:"role,omitempty"`
+	Type            string `json:"type,omitempty"`
+	PrimaryImageTag string `json:"primaryImageTag,omitempty"`
+}
+
+type embyPerson struct {
+	ID              string `json:"Id"`
+	Name            string `json:"Name"`
+	Role            string `json:"Role"`
+	Type            string `json:"Type"`
+	PrimaryImageTag string `json:"PrimaryImageTag"`
 }
 
 // MediaTechSpecs 描述媒体的技术规格（分辨率、色彩范围、音视频编码与声道等）
@@ -156,6 +174,7 @@ type baseItem struct {
 	OfficialRating    string            `json:"OfficialRating"`
 	RunTimeTicks      int64             `json:"RunTimeTicks"`
 	Genres            []string          `json:"Genres"`
+	People            []embyPerson      `json:"People,omitempty"`
 	MediaSources      []mediaSource     `json:"MediaSources"`
 	Path              string            `json:"Path"`
 	ParentID          string            `json:"ParentId"`
@@ -566,7 +585,7 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 		return ItemDetail{}, ErrUpstreamResponse
 	}
 	query := url.Values{
-		"Fields": {"CommunityRating,Genres,OfficialRating,MediaSources,OriginalTitle,Overview,ParentId,Path,ProviderIds,RunTimeTicks,SeriesName,UserData"},
+		"Fields": {"CommunityRating,Genres,OfficialRating,MediaSources,OriginalTitle,Overview,ParentId,Path,ProviderIds,RunTimeTicks,SeriesName,UserData,People"},
 	}
 	endpointPath := path.Join("Items", itemID)
 	if configuration.userID != "" {
@@ -598,9 +617,44 @@ func (c *Client) ItemDetails(ctx context.Context, itemID string) (ItemDetail, er
 		Item: publicItem(item), OriginalTitle: boundedText(item.OriginalTitle, 300),
 		Overview: boundedText(item.Overview, 4000), CommunityRating: item.CommunityRating,
 		RuntimeMinutes: int(item.RunTimeTicks / 600_000_000), Genres: boundedStrings(item.Genres, 32, 100),
+		People:           extractPeople(item.People),
 		MediaSourceCount: len(item.MediaSources), ExternalURL: externalURL, AppURL: appURL,
 		TechSpecs: extractMediaTechSpecs(item.MediaSources),
 	}, nil
+}
+
+func extractPeople(people []embyPerson) []Person {
+	if len(people) == 0 {
+		return nil
+	}
+	result := make([]Person, 0, len(people))
+	seen := make(map[string]struct{}, len(people))
+	for _, p := range people {
+		name := strings.TrimSpace(p.Name)
+		id := strings.TrimSpace(p.ID)
+		if name == "" || id == "" || !validEmbyIdentifier(id) {
+			continue
+		}
+		key := id + ":" + strings.TrimSpace(p.Role) + ":" + strings.TrimSpace(p.Type)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, Person{
+			ID:              id,
+			Name:            boundedText(name, 200),
+			Role:            boundedText(strings.TrimSpace(p.Role), 200),
+			Type:            boundedText(strings.TrimSpace(p.Type), 50),
+			PrimaryImageTag: boundedText(strings.TrimSpace(p.PrimaryImageTag), 100),
+		})
+		if len(result) >= 30 {
+			break
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 func (c *Client) SubtitleTarget(ctx context.Context, itemID string) (SubtitleTarget, error) {
