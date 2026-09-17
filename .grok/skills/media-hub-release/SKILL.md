@@ -28,6 +28,7 @@ One private release path. Web is baked into the image. Android is the signed APK
 - Do not drop SQLite tables
 - Backup NAS before `compose up`
 - After a user-facing fix is complete, ship the next patch without asking.
+- Compose must not wait on `mikan-egress`. Release uses `docker compose up -d --no-deps media-hub`. If Hub is 502 after a failed compose, dispatch `.github/workflows/nas-compose.yml`.
 
 ## Where releases actually stall
 
