@@ -51,4 +51,7 @@ func TestAdultLibraryTitlePrefersCode(t *testing.T) {
 	if got := adultLibraryTitle("自制标题", "clip.mp4"); got != "自制标题" {
 		t.Fatalf("title=%q", got)
 	}
+	if ExtractAdultCode("SSIS-001.1080p") != "SSIS-001" || ExtractAdultCode("127.0.0.1") != "" {
+		t.Fatal("extract adult code")
+	}
 }

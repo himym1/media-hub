@@ -548,12 +548,20 @@ fn capture_title(page: &str, path: &Path) -> String {
             if !segment.is_empty() && segment.len() < 120 {
                 return segment.to_string();
             }
-            if !host.is_empty() {
+            if capture_host_usable(host) {
                 return host.to_string();
             }
         }
     }
     file
+}
+
+fn capture_host_usable(host: &str) -> bool {
+    let host = host.trim();
+    if host.is_empty() || host.eq_ignore_ascii_case("localhost") {
+        return false;
+    }
+    host.parse::<std::net::IpAddr>().is_err()
 }
 
 #[tauri::command]
@@ -653,6 +661,14 @@ mod tests {
         assert_eq!(
             capture_title("https://cdn.example/", Path::new("/tmp/media-hub-capture-1.ts")),
             "cdn.example"
+        );
+        assert_eq!(
+            capture_title("http://127.0.0.1:63739/", Path::new("/tmp/media-hub-capture-1.ts")),
+            "media-hub-capture-1"
+        );
+        assert_eq!(
+            capture_title("http://localhost/", Path::new("/tmp/clip.ts")),
+            "clip"
         );
     }
 

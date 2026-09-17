@@ -205,6 +205,10 @@ func extractAdultCode(value string) string {
 	return ""
 }
 
+func ExtractAdultCode(value string) string {
+	return extractAdultCode(value)
+}
+
 func AdultLibraryTitle(preferred string, names ...string) string {
 	return adultLibraryTitle(preferred, names...)
 }

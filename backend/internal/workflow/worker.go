@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"media-hub/backend/internal/adapter"
 	"media-hub/backend/internal/config"
 	"media-hub/backend/internal/emby"
 	"media-hub/backend/internal/search"
@@ -504,6 +505,9 @@ func (s *Service) refreshEmby(ctx context.Context, job store.TransferJob) error 
 }
 
 func (s *Service) pollEmbyIndex(ctx context.Context, job store.TransferJob) error {
+	if job.MediaType == "adult" {
+		return s.finishAdultLibrary(ctx, job)
+	}
 	item, found, err := s.findIndexedLibraryItem(ctx, job)
 	if err != nil {
 		slog.Default().Warn("emby index lookup failed", "job_id", job.ID, "error", err)
@@ -519,16 +523,7 @@ func (s *Service) pollEmbyIndex(ctx context.Context, job store.TransferJob) erro
 		return s.save(ctx, &job, "indexing_emby", "")
 	}
 	job.EmbyItemID = item.ID
-	if job.MediaType == "adult" {
-		if err := s.emby.RefreshItemMetadata(ctx, item.ID); err != nil {
-			slog.Default().Warn("emby adult metadata refresh failed", "job_id", job.ID, "error", err)
-			if saveErr := s.save(ctx, &job, "indexing_emby", "Emby 成人刮削未完成，继续入库"); saveErr != nil {
-				return saveErr
-			}
-		} else if saveErr := s.save(ctx, &job, "indexing_emby", "已触发 Emby 成人刮削"); saveErr != nil {
-			return saveErr
-		}
-	} else if emby.NeedsTMDBIdentify(item, job.TMDBID) {
+	if emby.NeedsTMDBIdentify(item, job.TMDBID) {
 		if err := s.emby.ApplyTMDBMetadata(ctx, item.ID, job.MediaType, job.Title, job.Year, job.TMDBID, true); err != nil {
 			slog.Default().Warn("emby metadata apply failed", "job_id", job.ID, "error", err)
 			if saveErr := s.save(ctx, &job, "indexing_emby", "Emby 元数据识别失败，继续完成入库"); saveErr != nil {
@@ -542,6 +537,37 @@ func (s *Service) pollEmbyIndex(ctx context.Context, job store.TransferJob) erro
 	job.State = "verifying_playback"
 	job.NextAttemptAt = 0
 	return s.save(ctx, &job, "indexing_emby", "Emby 已完成入库")
+}
+
+// finishAdultLibrary 成人库不阻塞刮削：有番号才触发一次元数据刷新，否则按已写好的标题和分组完成任务。
+func (s *Service) finishAdultLibrary(ctx context.Context, job store.TransferJob) error {
+	item, found, err := s.findIndexedLibraryItem(ctx, job)
+	if err != nil {
+		slog.Default().Warn("emby index lookup failed", "job_id", job.ID, "error", err)
+		job.Attempts++
+		return s.retryExternalStage(ctx, &job, "indexing_emby", "emby_index_unavailable", "无法读取 Emby 入库状态")
+	}
+	job.Attempts = 0
+	message := "未识别到番号，已按标题写入成人库"
+	if found {
+		job.EmbyItemID = item.ID
+		if adapter.ExtractAdultCode(job.Title) != "" {
+			if err := s.emby.RefreshItemMetadata(ctx, item.ID); err != nil {
+				slog.Default().Warn("emby adult metadata refresh failed", "job_id", job.ID, "error", err)
+				message = "未刮削到元数据，已按番号写入成人库"
+			} else {
+				message = "已按番号写入成人库"
+			}
+		}
+	} else {
+		message = "Emby 未刮削到条目，已按标题写入成人库"
+	}
+	job.State = "completed"
+	job.NextAttemptAt = 0
+	job.ErrorCode = ""
+	job.ErrorMessage = ""
+	job.Retryable = false
+	return s.save(ctx, &job, "indexing_emby", message)
 }
 
 func (s *Service) attachLibrarySubtitles(ctx context.Context, job *store.TransferJob) {
@@ -652,6 +678,13 @@ func (s *Service) findIndexedLibraryItem(ctx context.Context, job store.Transfer
 }
 
 func (s *Service) verifyPlayback(ctx context.Context, job store.TransferJob) error {
+	if job.MediaType == "adult" {
+		job.State = "completed"
+		job.NextAttemptAt = 0
+		job.ErrorCode = ""
+		job.ErrorMessage = ""
+		return s.save(ctx, &job, "verifying_playback", "成人库按标题入库，跳过播放验证")
+	}
 	ready, err := s.emby.PlaybackReady(ctx, job.EmbyItemID)
 	if err != nil {
 		job.Attempts++

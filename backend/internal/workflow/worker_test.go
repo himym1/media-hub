@@ -540,6 +540,164 @@ func TestMovieEmbyIndexDoesNotRequirePlaybackInfo(t *testing.T) {
 	}
 }
 
+func TestAdultIndexCompletesWithoutScrapeWhenUndetected(t *testing.T) {
+	ctx := context.Background()
+	refreshHits := 0
+	embyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("X-Emby-Token") != "emby-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if strings.HasSuffix(request.URL.Path, "/Refresh") {
+			refreshHits++
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		switch request.URL.Path {
+		case "/Items", "/Users/user-1/Views", "/Library/MediaFolders":
+			_, _ = w.Write([]byte(`{"Items":[],"TotalRecordCount":0}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer embyServer.Close()
+
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(
+		dataStore, search.NewService(transferSourceStub{}), codec,
+		emby.NewClient(embyServer.URL, "emby-key", time.Second),
+		nil,
+		config.Workflow{
+			Adult: config.WorkflowTarget{DestinationID: "300", QMediaSyncTargetPath: "/strm/adult", EmbyLibraryID: "adult"},
+		},
+		nil, nil, nil,
+	)
+	job := store.TransferJob{
+		ID: "job-adult-skip-scrape", UserID: admin.ID, IdempotencyKey: "request_adult_skip",
+		RequestHash: []byte("hash"), SelectionToken: "encrypted", SourceID: "share",
+		CandidateID: "uploaded-1", Title: "127.0.0.1", MediaType: "adult",
+		State: "queued", CreatedAt: 1, UpdatedAt: 1,
+	}
+	if _, _, err := dataStore.CreateTransferJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	job.State = "indexing_emby"
+	job.UpdatedAt = 2
+	if updated, err := dataStore.UpdateTransferJob(ctx, job, "queued", "setup index"); err != nil || !updated {
+		t.Fatalf("prepare index job: updated=%v err=%v", updated, err)
+	}
+	loaded, err := dataStore.TransferJob(ctx, admin.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.processJob(ctx, loaded); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = dataStore.TransferJob(ctx, admin.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.State != "completed" || loaded.EmbyItemID != "" || refreshHits != 0 {
+		t.Fatalf("state=%q emby=%q refresh=%d", loaded.State, loaded.EmbyItemID, refreshHits)
+	}
+}
+
+func TestAdultIndexScrapesOnceWhenCodeDetected(t *testing.T) {
+	ctx := context.Background()
+	refreshHits := 0
+	embyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("X-Emby-Token") != "emby-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if request.URL.Path == "/Items/emby-adult/Refresh" {
+			refreshHits++
+			if request.URL.Query().Get("MetadataRefreshMode") != "FullRefresh" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		switch request.URL.Path {
+		case "/Items":
+			_, _ = w.Write([]byte(`{"Items":[{"Id":"emby-adult","Name":"SSIS-001","Type":"Video","Path":"/strm/adult/SSIS-001/clip.strm"}],"TotalRecordCount":1}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer embyServer.Close()
+
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	if _, err := dataStore.EnsureAdmin(ctx, "password-hash"); err != nil {
+		t.Fatal(err)
+	}
+	admin, _, err := dataStore.Admin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := selection.NewCodec(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(
+		dataStore, search.NewService(transferSourceStub{}), codec,
+		emby.NewClient(embyServer.URL, "emby-key", time.Second),
+		nil,
+		config.Workflow{
+			Adult: config.WorkflowTarget{DestinationID: "300", QMediaSyncTargetPath: "/strm/adult", EmbyLibraryID: "adult"},
+		},
+		nil, nil, nil,
+	)
+	job := store.TransferJob{
+		ID: "job-adult-code", UserID: admin.ID, IdempotencyKey: "request_adult_code",
+		RequestHash: []byte("hash"), SelectionToken: "encrypted", SourceID: "share",
+		CandidateID: "uploaded-2", Title: "SSIS-001", MediaType: "adult",
+		State: "queued", CreatedAt: 1, UpdatedAt: 1,
+	}
+	if _, _, err := dataStore.CreateTransferJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	job.State = "indexing_emby"
+	job.UpdatedAt = 2
+	if updated, err := dataStore.UpdateTransferJob(ctx, job, "queued", "setup index"); err != nil || !updated {
+		t.Fatalf("prepare index job: updated=%v err=%v", updated, err)
+	}
+	loaded, err := dataStore.TransferJob(ctx, admin.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.processJob(ctx, loaded); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = dataStore.TransferJob(ctx, admin.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.State != "completed" || loaded.EmbyItemID != "emby-adult" || refreshHits != 1 {
+		t.Fatalf("state=%q emby=%q refresh=%d", loaded.State, loaded.EmbyItemID, refreshHits)
+	}
+}
+
 type offlineFolderSourceStub struct{ starts *int }
 
 func (s offlineFolderSourceStub) ID() string    { return "sidhub" }
