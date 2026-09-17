@@ -7,11 +7,6 @@ export type CaptureItem = {
   kind: CaptureKind
 }
 
-export type CaptureSnapshot = {
-  page: string
-  items: CaptureItem[]
-}
-
 export type CaptureDownload = {
   kind: CaptureKind
   path: string
@@ -55,30 +50,41 @@ export function captureItemLabel(item: CaptureItem) {
   }
 }
 
-export function captureKindLabel(kind: CaptureKind) {
-  return kind === 'file' ? '直链' : 'HLS'
+export function pickAutoCaptureItem(items: CaptureItem[]) {
+  return [...items].reverse().find((item) => item.kind === 'hls')
+    ?? [...items].reverse().find((item) => item.kind === 'file')
 }
 
-export async function openPageCapture(url: string) {
-  const invoke = tauriInvoke()
-  if (!invoke) throw new Error('只有桌面壳能打开抓取窗口。')
-  await invoke('open_page_capture', { url: normalizePageCaptureUrl(url) })
+function isMissingCommand(cause: unknown) {
+  const message = cause instanceof Error ? cause.message : String(cause)
+  return /run_page_capture/i.test(message) && /not found|unknown/i.test(message)
 }
 
-export async function listPageCapture() {
-  const invoke = tauriInvoke()
-  if (!invoke) throw new Error('只有桌面壳能读取抓取结果。')
-  const snapshot = await invoke('list_page_capture') as CaptureSnapshot
-  return {
-    page: snapshot.page ?? '',
-    items: Array.isArray(snapshot.items) ? snapshot.items : [],
-  } satisfies CaptureSnapshot
+async function runLegacyPageCapture(invoke: TauriInvoke, url: string) {
+  await invoke('open_page_capture', { url })
+  const deadline = Date.now() + 45_000
+  let items: CaptureItem[] = []
+  while (Date.now() < deadline) {
+    const snapshot = await invoke('list_page_capture') as { items?: CaptureItem[] }
+    items = Array.isArray(snapshot.items) ? snapshot.items : []
+    if (pickAutoCaptureItem(items)) break
+    await new Promise((resolve) => setTimeout(resolve, 400))
+  }
+  const item = pickAutoCaptureItem(items)
+  if (!item) throw new Error('页面里没有明文 m3u8/mp4。可能是登录墙、同意页，或分片加密。')
+  return await invoke('download_page_capture', { url: item.url }) as CaptureDownload
 }
 
-export async function downloadPageCapture(url: string) {
+export async function runPageCapture(url: string) {
   const invoke = tauriInvoke()
-  if (!invoke) throw new Error('只有桌面壳能下载抓到的地址。')
-  return await invoke('download_page_capture', { url }) as CaptureDownload
+  if (!invoke) throw new Error('只有桌面壳能抓取网页。')
+  const normalized = normalizePageCaptureUrl(url)
+  try {
+    return await invoke('run_page_capture', { url: normalized }) as CaptureDownload
+  } catch (cause) {
+    if (!isMissingCommand(cause)) throw cause
+    return await runLegacyPageCapture(invoke, normalized)
+  }
 }
 
 export async function revealPageCapture(path: string) {

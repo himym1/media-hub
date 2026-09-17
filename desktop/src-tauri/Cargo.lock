@@ -1850,7 +1850,7 @@ dependencies = [
 
 [[package]]
 name = "media-hub-desktop"
-version = "0.21.37"
+version = "0.21.38"
 dependencies = [
  "base64 0.22.1",
  "reqwest 0.12.28",

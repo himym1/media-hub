@@ -195,6 +195,7 @@ pub fn run() {
             capture::open_page_capture,
             capture::list_page_capture,
             capture::download_page_capture,
+            capture::run_page_capture,
             capture::reveal_page_capture,
             updater::desktop_app_version,
             updater::desktop_app_platform,
