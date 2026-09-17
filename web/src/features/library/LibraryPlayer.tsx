@@ -1,4 +1,4 @@
-import { Captions, ListVideo, Maximize2, Minimize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Captions, ExternalLink, ListVideo, Maximize2, Minimize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ApiError, createEmbyPlaybackDescriptor, fetchLocalSubtitle, reportPlaybackSessionEvent } from '../../shared/api/mediaHub'
 import {
@@ -37,7 +37,7 @@ import {
   shouldClosePlayerOnEscape,
   toggleDocumentFullscreen,
 } from './playerFullscreen'
-import { handoffEnded, handoffStatusText, playbackNearEnd } from './playerHandoff'
+import { handoffEnded, playbackNearEnd } from './playerHandoff'
 import { nextQueueButtonLabel, nextQueueItem, type PlayerQueueItem } from './libraryPlaylist'
 import { looksLikeSilentDirectPlay } from './silentAudio'
 import './LibraryPlayer.css'
@@ -65,12 +65,14 @@ type NativeRequest = {
 
 function PlayerQueuePanel({
   currentId,
+  hideToggle = false,
   open,
   queue,
   onSelect,
   onToggle,
 }: {
   currentId: string
+  hideToggle?: boolean
   open: boolean
   queue: PlayerQueueItem[]
   onSelect: (id: string) => void
@@ -84,6 +86,7 @@ function PlayerQueuePanel({
   if (queue.length < 2) return null
   return (
     <div className="library-player-queue">
+      {hideToggle ? null : (
       <button
         aria-controls="library-player-queue-list"
         aria-expanded={open}
@@ -95,6 +98,7 @@ function PlayerQueuePanel({
         <ListVideo size={16} />
         播放列表 {queue.length}
       </button>
+      )}
       {open ? (
         <ol className="library-player-queue-list" id="library-player-queue-list">
           {queue.map((item, index) => {
@@ -591,51 +595,55 @@ export function LibraryPlayer({
         role="region"
       >
         <div className="library-player-handoff">
-          <h2 id="library-player-title">{title}</h2>
-          {error ? (
-            <p className="library-player-handoff-state" role="alert">{error}</p>
-          ) : (
-            <p className="library-player-handoff-state" role="status">
-              {nativeActive ? handoffStatusText(playing, currentSeconds, durationSeconds) : '正在准备播放…'}
-            </p>
-          )}
-          <p className="library-player-handoff-hint">
-            画面在 mpv 里。N 下一个，P 播放列表。
-          </p>
-          {subtitleHint && !error ? (
-            <p className="library-player-handoff-hint" role="status">{subtitleHint}</p>
-          ) : null}
+          <div className="library-player-handoff-info">
+            <h2 id="library-player-title" title={title}>{title}</h2>
+            {error ? (
+              <span className="library-player-handoff-state error" role="alert">{error}</span>
+            ) : (
+              <span className="library-player-handoff-state" role="status">
+                {nativeActive ? (playing ? '正在播放' : '已暂停') : '正在准备播放…'}
+                {subtitleHint ? ` · ${subtitleHint}` : ''}
+              </span>
+            )}
+          </div>
           <div className="library-player-handoff-actions">
             {nativeActive && !error ? (
-              <button className="primary-action" onClick={togglePlayback} type="button">
-                {playing ? <Pause size={17} /> : <Play size={17} />}
-                {playing ? '暂停' : '继续'}
+              <button aria-label={playing ? '暂停' : '继续'} className="icon-action" onClick={togglePlayback} type="button" title={playing ? '暂停' : '继续'}>
+                {playing ? <Pause size={16} /> : <Play size={16} />}
               </button>
             ) : null}
-            <button className="secondary-action" onClick={onClose} type="button">
-              <X size={17} />
-              关闭
-            </button>
             {nextItem && onSelectQueueItem ? (
-              <button className="secondary-action" onClick={() => onSelectQueueItem(nextItem.id)} type="button">
+              <button aria-label={nextQueueButtonLabel(nextItem, queueIsEpisodes)} className="icon-action" onClick={() => onSelectQueueItem(nextItem.id)} type="button" title={nextQueueButtonLabel(nextItem, queueIsEpisodes)}>
                 <SkipForward size={16} />
-                {nextQueueButtonLabel(nextItem, queueIsEpisodes)}
+              </button>
+            ) : null}
+            {onSelectQueueItem && queue.length > 1 ? (
+              <button aria-controls="library-player-queue-list" aria-expanded={queueOpen} aria-label="播放列表" className={`icon-action ${queueOpen ? 'active' : ''}`} onClick={() => setQueueOpen((open) => !open)} type="button" title="播放列表 (P)">
+                <ListVideo size={16} />
               </button>
             ) : null}
             {externalUrl ? (
-              <a className="secondary-action" href={externalUrl} rel="noreferrer" target="_blank">在 Emby 打开</a>
+              <a aria-label="在 Emby 打开" className="icon-action" href={externalUrl} rel="noreferrer" target="_blank" title="在 Emby 打开">
+                <ExternalLink size={16} />
+              </a>
             ) : null}
+            <button aria-label="关闭" className="icon-action" onClick={onClose} type="button" title="关闭 (Esc)">
+              <X size={16} />
+            </button>
           </div>
-          {onSelectQueueItem ? (
+        </div>
+        {onSelectQueueItem && queue.length > 1 && queueOpen ? (
+          <div className="library-player-handoff-queue">
             <PlayerQueuePanel
               currentId={itemId}
+              hideToggle
               onSelect={onSelectQueueItem}
               onToggle={() => setQueueOpen((open) => !open)}
               open={queueOpen}
               queue={queue}
             />
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
     )
   }

@@ -196,64 +196,99 @@
 .library-player.is-handoff {
   inset: auto 16px 16px 16px;
   top: auto;
-  display: block;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  gap: 8px;
   padding: 0;
   background: transparent;
   pointer-events: none;
 }
 
 .library-player-handoff {
-  display: grid;
-  gap: 10px;
-  width: min(440px, 100%);
-  margin-left: auto;
-  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 100%;
+  padding: 6px 6px 6px 18px;
   pointer-events: auto;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
+  border-radius: 32px;
   background: rgba(16, 18, 20, 0.94);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.library-player-handoff-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
 }
 
 .library-player-handoff h2 {
   margin: 0;
   color: #f2f1eb;
-  font-size: 20px;
-  line-height: 1.3;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
 }
 
 .library-player-handoff-state {
   margin: 0;
-  color: #f2f1eb;
-  font-size: 15px;
+  color: rgba(242, 241, 235, 0.6);
+  font-size: 12px;
+  line-height: 1.2;
 }
 
-.library-player-handoff-hint {
-  margin: 0;
-  color: #c4c6bf;
-  font-size: 13px;
-  line-height: 1.6;
+.library-player-handoff-state.error {
+  color: #fca5a5;
 }
 
 .library-player-handoff-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 4px;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
-.library-player-handoff-actions .primary-action,
-.library-player-handoff-actions .secondary-action {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-  width: auto;
-  min-height: 44px;
+.library-player-handoff-actions .icon-action {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
   margin: 0;
-  padding: 0 16px;
-  font-size: 14px;
+  padding: 0;
+  color: #f2f1eb;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
   text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+
+.library-player-handoff-actions .icon-action:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.library-player-handoff-actions .icon-action.active {
+  color: var(--accent-ink, #022c22);
+  background: var(--accent, #34d399);
+}
+
+.library-player-handoff-queue {
+  width: min(320px, 100%);
+  pointer-events: auto;
+}
+
+.library-player-handoff-queue .library-player-queue-list {
+  max-height: min(28vh, 240px);
 }
 
 .library-player.chrome-hidden,
@@ -653,6 +688,12 @@
   .library-player-handoff {
     width: 100%;
     margin-left: 0;
+    border-radius: 20px;
+    flex-wrap: wrap;
+  }
+
+  .library-player-handoff h2 {
+    max-width: none;
   }
 
   .library-player-toolbar {
