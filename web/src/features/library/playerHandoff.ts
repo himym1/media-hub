@@ -12,3 +12,9 @@ export function handoffStatusText(playing: boolean, currentSeconds: number, dura
 export function handoffEnded(seenRunning: boolean, running?: boolean) {
   return seenRunning && running === false
 }
+
+/// 接近片尾才自动播下一个；中途关掉 mpv 仍结束播放器。
+export function playbackNearEnd(time: number, duration: number) {
+  if (!Number.isFinite(time) || !Number.isFinite(duration) || duration < 2) return false
+  return time >= duration - 2 || time / duration >= 0.92
+}

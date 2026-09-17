@@ -7,6 +7,7 @@ import { commitUrl } from '../../shared/navigation/urlState'
 import { LibraryPlayer } from './LibraryPlayer'
 import './LibraryPlayer.css'
 import { episodeLabel } from './libraryPlayback'
+import { episodeQueue } from './libraryPlaylist'
 import { playerItemId, playerSeriesId } from './playerRoute'
 
 function locationPlayId() {
@@ -54,11 +55,11 @@ export function PlayerShell() {
     ? episodeLabel(playEpisode, seriesTitle)
     : item.data?.name ?? '播放'
   const externalUrl = playEpisode?.externalUrl ?? item.data?.externalUrl ?? ''
-  const nextEpisode = playEpisode
-    ? episodes.data?.items.find((episode) => (
-      episode.season === playEpisode.season && (episode.episode ?? 0) === (playEpisode.episode ?? 0) + 1
-    ))
-    : undefined
+  const queue = playEpisode && episodes.data?.items.length
+    ? episodeQueue(episodes.data.items, seriesTitle)
+    : item.data && (item.data.type === 'Movie' || item.data.type === 'Video')
+      ? [{ id: item.data.id, title: item.data.name }]
+      : []
 
   useEffect(() => {
     if (title) document.title = title
@@ -67,10 +68,10 @@ export function PlayerShell() {
   const close = () => {
     void closePlayerWindow()
   }
-  const startNext = () => {
-    if (!nextEpisode) return
-    setPlayId(nextEpisode.id)
-    commitUrl({ play: nextEpisode.id }, 'replace')
+  const startQueueItem = (id: string) => {
+    if (id === playId) return
+    setPlayId(id)
+    commitUrl({ play: id }, 'replace')
   }
 
   if (!playId) {
@@ -121,9 +122,10 @@ export function PlayerShell() {
       externalUrl={externalUrl}
       itemId={playId}
       key={playId}
-      nextEpisodeLabel={nextEpisode ? episodeLabel(nextEpisode, seriesTitle) : undefined}
       onClose={close}
-      onNextEpisode={nextEpisode ? startNext : undefined}
+      onSelectQueueItem={startQueueItem}
+      queue={queue}
+      queueIsEpisodes={Boolean(playEpisode)}
       title={title}
     />
   )

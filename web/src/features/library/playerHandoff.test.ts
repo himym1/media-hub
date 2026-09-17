@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { handoffEnded, handoffStatusText } from './playerHandoff'
+import { handoffEnded, handoffStatusText, playbackNearEnd } from './playerHandoff'
 
 describe('playerHandoff', () => {
   it('names the mpv window and shows the clock once mpv reports a duration', () => {
@@ -14,5 +14,12 @@ describe('playerHandoff', () => {
     expect(handoffEnded(true, undefined)).toBe(false)
     expect(handoffEnded(true, true)).toBe(false)
     expect(handoffEnded(true, false)).toBe(true)
+  })
+
+  it('treats near-end clocks as finished so the next item can start', () => {
+    expect(playbackNearEnd(0, 0)).toBe(false)
+    expect(playbackNearEnd(10, 120)).toBe(false)
+    expect(playbackNearEnd(119, 120)).toBe(true)
+    expect(playbackNearEnd(111, 120)).toBe(true)
   })
 })

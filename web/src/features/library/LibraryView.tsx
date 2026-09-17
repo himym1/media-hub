@@ -56,8 +56,10 @@ import { LibraryWatchAction } from './LibraryWatchAction'
 import { episodeLabel, playbackStatus } from './libraryPlayback'
 import { buildTechBadges } from './libraryTechSpecs'
 import { adultLibraryId, childLibraries, isSharedEmbyId, libraryDisplayName, libraryRootId, mineLibraries, rootLibraries, sharedLibraries } from './libraryGroups'
+import { ensureQueueContains, episodeQueue, playableLibraryQueue } from './libraryPlaylist'
 
 const pageSize = 24
+const playQueueLimit = 100 // Emby 浏览上限；分组播放列表一次最多装这么多
 
 type LibraryScope = 'mine' | 'shared'
 
@@ -133,6 +135,12 @@ export function LibraryView() {
     queryFn: () => getEmbyEpisodes(itemId!),
     enabled: Boolean(itemId) && detail.data?.type === 'Series',
   })
+  const inPagePlayback = canPlayNatively()
+  const libraryPlayQueue = useQuery({
+    queryKey: ['emby-library-play-queue', libraryId],
+    queryFn: () => getEmbyLibraryItems(libraryId!, 0, playQueueLimit),
+    enabled: Boolean(inPagePlayback && playId && libraryId && !submittedQuery && detail.data?.type !== 'Series'),
+  })
   const refreshLibrary = useMutation({
     mutationFn: refreshEmbyLibrary,
     onSuccess: async () => {
@@ -147,8 +155,6 @@ export function LibraryView() {
       await queryClient.invalidateQueries({ queryKey: ['emby-search'] })
     },
   })
-
-  const inPagePlayback = canPlayNatively()
 
   useEffect(() => {
     const restoreLocation = () => {
@@ -224,6 +230,17 @@ export function LibraryView() {
     if (!inPagePlayback) return
     setPlayId(target.id)
     commitUrl({ play: target.id })
+  }
+  const startQueueItem = (id: string) => {
+    if (!inPagePlayback || id === playId) return
+    const episode = episodes.data?.items.find((item) => item.id === id)
+    if (episode) {
+      startPlay(episode)
+      return
+    }
+    setItemId(id)
+    setPlayId(id)
+    commitUrl({ media: id, play: id })
   }
   const closePlay = () => {
     setPlayId(null)
@@ -318,14 +335,32 @@ export function LibraryView() {
   const selectedLibrary = allLibraries.find((library) => library.id === libraryId)
   const mutationError = refreshLibrary.error ?? refreshItem.error
   const playEpisode = episodes.data?.items.find((episode) => episode.id === playId)
-  const playTarget = playId && detail.data && detail.data.type !== 'Series' && detail.data.id === playId
-    ? { id: detail.data.id, title: detail.data.name, externalUrl: detail.data.externalUrl }
-    : playEpisode
-      ? { id: playEpisode.id, title: episodeLabel(playEpisode, detail.data?.name ?? ''), externalUrl: playEpisode.externalUrl }
-      : null
-  const nextEpisode = playEpisode
-    ? episodes.data?.items.find((episode) => episode.season === playEpisode.season && (episode.episode ?? 0) === (playEpisode.episode ?? 0) + 1)
-    : undefined
+  const playingId = playEpisode?.id
+    ?? (playId && detail.data && detail.data.type !== 'Series' && detail.data.id === playId ? detail.data.id : playId)
+  const playingTitle = playEpisode
+    ? episodeLabel(playEpisode, detail.data?.name ?? '')
+    : playId && detail.data && detail.data.type !== 'Series' && detail.data.id === playId
+      ? detail.data.name
+      : items.find((item) => item.id === playId)?.name ?? (playId ? '播放' : '')
+  const playingUrl = playEpisode?.externalUrl
+    ?? (playId && detail.data && detail.data.type !== 'Series' && detail.data.id === playId ? detail.data.externalUrl : '')
+  const playerQueue = useMemo(() => {
+    if (playEpisode && episodes.data?.items.length) {
+      return episodeQueue(episodes.data.items, detail.data?.name ?? '')
+    }
+    const source = submittedQuery ? (search.data?.items ?? []) : (libraryPlayQueue.data?.items ?? rawItems)
+    return ensureQueueContains(
+      playableLibraryQueue(source),
+      playingId ? { id: playingId, title: playingTitle } : null,
+    )
+  }, [detail.data?.name, episodes.data?.items, libraryPlayQueue.data?.items, playEpisode, playingId, playingTitle, rawItems, search.data?.items, submittedQuery])
+  const playTarget = playingId
+    ? {
+      id: playingId,
+      title: playerQueue.find((item) => item.id === playingId)?.title ?? playingTitle,
+      externalUrl: playingUrl,
+    }
+    : null
 
   return (
     <section className={itemId ? 'library-page has-detail' : 'library-page'}>
@@ -842,9 +877,10 @@ export function LibraryView() {
         <LibraryPlayer
           externalUrl={playTarget.externalUrl}
           itemId={playTarget.id}
-          nextEpisodeLabel={nextEpisode ? episodeLabel(nextEpisode, detail.data?.name ?? '') : undefined}
           onClose={closePlay}
-          onNextEpisode={nextEpisode ? () => startPlay(nextEpisode) : undefined}
+          onSelectQueueItem={startQueueItem}
+          queue={playerQueue}
+          queueIsEpisodes={Boolean(playEpisode)}
           title={playTarget.title}
         />
       ) : null}

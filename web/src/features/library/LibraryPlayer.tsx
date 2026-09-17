@@ -1,4 +1,4 @@
-import { Captions, Maximize2, Minimize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Captions, ListVideo, Maximize2, Minimize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ApiError, createEmbyPlaybackDescriptor, fetchLocalSubtitle, reportPlaybackSessionEvent } from '../../shared/api/mediaHub'
 import {
@@ -37,7 +37,8 @@ import {
   shouldClosePlayerOnEscape,
   toggleDocumentFullscreen,
 } from './playerFullscreen'
-import { handoffEnded, handoffStatusText } from './playerHandoff'
+import { handoffEnded, handoffStatusText, playbackNearEnd } from './playerHandoff'
+import { nextQueueButtonLabel, nextQueueItem, type PlayerQueueItem } from './libraryPlaylist'
 import { looksLikeSilentDirectPlay } from './silentAudio'
 import './LibraryPlayer.css'
 
@@ -47,9 +48,10 @@ type LibraryPlayerProps = {
   itemId: string
   title: string
   externalUrl: string
-  nextEpisodeLabel?: string
+  queue?: PlayerQueueItem[]
+  queueIsEpisodes?: boolean
   onClose: () => void
-  onNextEpisode?: () => void
+  onSelectQueueItem?: (id: string) => void
 }
 
 type NativeRequest = {
@@ -61,13 +63,73 @@ type NativeRequest = {
   subtitle?: NativeSubtitle | null
 }
 
+function PlayerQueuePanel({
+  currentId,
+  open,
+  queue,
+  onSelect,
+  onToggle,
+}: {
+  currentId: string
+  open: boolean
+  queue: PlayerQueueItem[]
+  onSelect: (id: string) => void
+  onToggle: () => void
+}) {
+  const currentRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!open) return
+    currentRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [currentId, open])
+  if (queue.length < 2) return null
+  return (
+    <div className="library-player-queue">
+      <button
+        aria-controls="library-player-queue-list"
+        aria-expanded={open}
+        className="library-player-queue-toggle"
+        onClick={onToggle}
+        title="播放列表 (P)"
+        type="button"
+      >
+        <ListVideo size={16} />
+        播放列表 {queue.length}
+      </button>
+      {open ? (
+        <ol className="library-player-queue-list" id="library-player-queue-list">
+          {queue.map((item, index) => {
+            const current = item.id === currentId
+            return (
+              <li key={item.id}>
+                <button
+                  aria-current={current ? 'true' : undefined}
+                  className={current ? 'is-current' : undefined}
+                  onClick={() => {
+                    if (!current) onSelect(item.id)
+                  }}
+                  ref={current ? currentRef : undefined}
+                  type="button"
+                >
+                  <span className="library-player-queue-index">{index + 1}</span>
+                  <span className="library-player-queue-title">{item.title}</span>
+                </button>
+              </li>
+            )
+          })}
+        </ol>
+      ) : null}
+    </div>
+  )
+}
+
 export function LibraryPlayer({
   itemId,
   title,
   externalUrl,
-  nextEpisodeLabel,
+  queue = [],
+  queueIsEpisodes = false,
   onClose,
-  onNextEpisode,
+  onSelectQueueItem,
 }: LibraryPlayerProps) {
   const nativeShell = canPlayNatively()
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -78,9 +140,10 @@ export function LibraryPlayer({
   const idleTimer = useRef<number | null>(null)
   const clickTimer = useRef<number | null>(null)
   const nativeRequest = useRef<NativeRequest | null>(null)
-  const nativeClock = useRef({ seconds: 0, paused: false })
+  const nativeClock = useRef({ seconds: 0, paused: false, duration: 0 })
   const nativeStarted = useRef(false)
   const nativeSeenRunning = useRef(false)
+  const nativeEndedRef = useRef(false)
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
   const [error, setError] = useState<string | null>(null)
@@ -104,6 +167,14 @@ export function LibraryPlayer({
   const [isMini, setIsMini] = useState(false)
   const [hoverTime, setHoverTime] = useState<number | null>(null)
   const [hoverRatio, setHoverRatio] = useState<number | null>(null)
+  const [queueOpen, setQueueOpen] = useState(queue.length > 1)
+  const nextItem = nextQueueItem(queue, itemId)
+  const onNextRef = useRef<(() => void) | undefined>(undefined)
+  onNextRef.current = nextItem && onSelectQueueItem ? () => onSelectQueueItem(nextItem.id) : undefined
+
+  useEffect(() => {
+    setQueueOpen(queue.length > 1)
+  }, [queue.length])
 
   const clearIdleTimer = () => {
     if (idleTimer.current != null) {
@@ -222,6 +293,16 @@ export function LibraryPlayer({
         }
         event.preventDefault()
         onClose()
+        return
+      }
+      if (event.key === 'n') {
+        event.preventDefault()
+        onNextRef.current?.()
+        return
+      }
+      if (event.key === 'p') {
+        event.preventDefault()
+        setQueueOpen((open) => !open)
         return
       }
       // mpv 自己一个窗口，播放键都归它，Hub 只留 Esc 收面板。
@@ -397,12 +478,14 @@ export function LibraryPlayer({
     let cancelled = false
     let detachSession = () => {}
     const request = nativeRequest.current
-    nativeClock.current = {
+        nativeClock.current = {
       seconds: (request.startPositionMs ?? 0) / 1000,
       paused: false,
+      duration: 0,
     }
     setCurrentSeconds(nativeClock.current.seconds)
     nativeSeenRunning.current = false
+    nativeEndedRef.current = false
     void (async () => {
       try {
         nativeStarted.current = true
@@ -432,12 +515,17 @@ export function LibraryPlayer({
       void nativeStatus().then((status) => {
         if (!status || cancelled) return
         if (status.running) nativeSeenRunning.current = true
-        else if (handoffEnded(nativeSeenRunning.current, status.running)) {
-          onCloseRef.current()
+        else if (handoffEnded(nativeSeenRunning.current, status.running) && !nativeEndedRef.current) {
+          nativeEndedRef.current = true
+          if (playbackNearEnd(status.time || nativeClock.current.seconds, status.duration || nativeClock.current.duration) && onNextRef.current) {
+            onNextRef.current()
+          } else {
+            onCloseRef.current()
+          }
           return
         }
         const wasPaused = nativeClock.current.paused
-        nativeClock.current = { seconds: status.time, paused: status.paused }
+        nativeClock.current = { seconds: status.time, paused: status.paused, duration: status.duration || nativeClock.current.duration }
         setPlaying(!status.paused)
         setCurrentSeconds(status.time)
         setDurationSeconds(status.duration)
@@ -477,7 +565,7 @@ export function LibraryPlayer({
     const stage = stageRef.current
     if (!stage) return
     const onWheel = (event: WheelEvent) => {
-      if ((event.target as HTMLElement | null)?.closest('input, select, button, label')) return
+      if ((event.target as HTMLElement | null)?.closest('input, select, button, label, .library-player-queue')) return
       event.preventDefault()
       revealChrome(false, true)
       applyZoom(stepPictureZoom(pictureZoom, event.deltaY > 0 ? -1 : 1))
@@ -528,14 +616,30 @@ export function LibraryPlayer({
               <X size={17} />
               停止播放
             </button>
-            {onNextEpisode && nextEpisodeLabel ? (
-              <button className="secondary-action" onClick={onNextEpisode} type="button">
+            {nextItem && onSelectQueueItem ? (
+              <button className="secondary-action" onClick={() => onSelectQueueItem(nextItem.id)} type="button">
                 <SkipForward size={16} />
-                下一集 {nextEpisodeLabel}
+                {nextQueueButtonLabel(nextItem, queueIsEpisodes)}
               </button>
             ) : null}
-            <a className="secondary-action" href={externalUrl} rel="noreferrer" target="_blank">在 Emby 打开</a>
+            {externalUrl ? (
+              <a className="secondary-action" href={externalUrl} rel="noreferrer" target="_blank">在 Emby 打开</a>
+            ) : null}
           </div>
+          {queue.length > 1 ? (
+            <p className="library-player-handoff-hint">
+              播完自动播下一个。快捷键 N 下一个，P 播放列表。
+            </p>
+          ) : null}
+          {onSelectQueueItem ? (
+            <PlayerQueuePanel
+              currentId={itemId}
+              onSelect={onSelectQueueItem}
+              onToggle={() => setQueueOpen((open) => !open)}
+              open={queueOpen}
+              queue={queue}
+            />
+          ) : null}
         </div>
       </div>
     )
@@ -641,6 +745,20 @@ export function LibraryPlayer({
                 >
                   <Maximize2 size={14} />
                 </button>
+                {nextItem && onSelectQueueItem ? (
+                  <button
+                    aria-label={nextQueueButtonLabel(nextItem, queueIsEpisodes)}
+                    className="mini-action-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectQueueItem(nextItem.id)
+                    }}
+                    title={nextQueueButtonLabel(nextItem, queueIsEpisodes)}
+                    type="button"
+                  >
+                    <SkipForward size={14} />
+                  </button>
+                ) : null}
                 <button
                   aria-label="关闭播放器"
                   className="mini-action-btn"
@@ -686,6 +804,7 @@ export function LibraryPlayer({
             onClick={onSurfaceClick}
             onDoubleClick={onSurfaceDoubleClick}
             onDurationChange={(event) => setDurationSeconds(event.currentTarget.duration || 0)}
+            onEnded={() => onNextRef.current?.()}
             onPause={() => setPlaying(false)}
             onPlay={() => setPlaying(true)}
             onRateChange={(event) => setRate(event.currentTarget.playbackRate || 1)}
@@ -945,14 +1064,37 @@ export function LibraryPlayer({
               <span aria-hidden="true">全屏</span>
             </button>
 
-            {onNextEpisode && nextEpisodeLabel ? (
-              <button className="library-player-next" onClick={onNextEpisode} type="button">
+            {nextItem && onSelectQueueItem ? (
+              <button className="library-player-next" onClick={() => onSelectQueueItem(nextItem.id)} type="button">
                 <SkipForward size={16} />
-                下一集 {nextEpisodeLabel}
+                {nextQueueButtonLabel(nextItem, queueIsEpisodes)}
               </button>
             ) : null}
           </div>
         </div>
+
+        {!isMini && onSelectQueueItem ? (
+          <div
+            className="library-player-queue-host"
+            onFocusCapture={() => revealChrome(true)}
+            onMouseEnter={() => revealChrome(true)}
+            onMouseLeave={() => {
+              setChromePinned(false)
+              revealChrome()
+            }}
+          >
+            <PlayerQueuePanel
+              currentId={itemId}
+              onSelect={onSelectQueueItem}
+              onToggle={() => {
+                revealChrome(true)
+                setQueueOpen((open) => !open)
+              }}
+              open={queueOpen}
+              queue={queue}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   )
