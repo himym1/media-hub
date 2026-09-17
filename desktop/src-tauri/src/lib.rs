@@ -6,6 +6,8 @@ use tauri::webview::{DownloadEvent, WebviewWindowBuilder};
 use tauri::{Manager, WebviewUrl};
 
 mod browser;
+mod capture;
+mod hls;
 mod player;
 mod updater;
 
@@ -190,6 +192,10 @@ pub fn run() {
         .manage(player::PlayerState::default())
         .invoke_handler(tauri::generate_handler![
             browser::open_in_app,
+            capture::open_page_capture,
+            capture::list_page_capture,
+            capture::download_page_capture,
+            capture::reveal_page_capture,
             updater::desktop_app_version,
             updater::desktop_app_platform,
             updater::install_desktop_update,
@@ -279,7 +285,7 @@ mod tests {
         assert_eq!(DESKTOP_ORIGIN, "https://media.himym.us.ci");
         let capabilities: serde_json::Value =
             serde_json::from_str(include_str!("../capabilities/default.json")).expect("capabilities");
-        assert_eq!(capabilities["windows"], serde_json::json!(["main", "browser", "player"]));
+        assert_eq!(capabilities["windows"], serde_json::json!(["main", "browser", "player", "capture"]));
     }
 
     #[test]

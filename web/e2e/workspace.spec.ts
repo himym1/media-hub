@@ -55,6 +55,8 @@ test('discovery preserves search state through browser history', async ({ page }
   await installApiFixtures(page)
   await page.goto('/?view=discover')
   await expect(page.getByRole('heading', { name: '发现', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '导入视频' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '网页抓取' })).toHaveCount(0)
   if (testInfo.project.name === 'desktop') {
     await page.setViewportSize({ width: 1280, height: 800 })
     await expect(page.getByRole('button', { name: '全部类型' })).toBeVisible()

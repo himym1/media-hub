@@ -1,7 +1,7 @@
 {
   "identifier": "default",
   "description": "Media Hub desktop window",
-  "windows": ["main", "browser", "player"],
+  "windows": ["main", "browser", "player", "capture"],
   "remote": {
     "urls": ["https://media.himym.us.ci/*"]
   },

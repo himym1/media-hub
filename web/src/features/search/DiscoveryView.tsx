@@ -15,6 +15,7 @@ import {
 } from '../../shared/api/mediaHub'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
+import { PageCaptureForm } from './PageCaptureForm'
 import { ShareImportForm } from './ShareImportForm'
 import {
   discoveryFocusSubtitle,
@@ -342,6 +343,7 @@ export function DiscoveryView({
         </form>
         <div className="search-meta"><span>{sourceIntegration?.detail ?? '资源源尚未配置'}</span>{submittedQuery ? <><span>·</span><span>{search.data?.partial ? '部分结果' : '已列出可获取版本'}</span></> : null}</div>
         <ShareImportForm onImported={onTransferCreated} />
+        <PageCaptureForm onImported={onTransferCreated} />
       </section>
 
       {!submittedQuery ? (

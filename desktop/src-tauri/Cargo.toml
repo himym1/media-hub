@@ -1,6 +1,6 @@
 [package]
 name = "media-hub-desktop"
-version = "0.21.36"
+version = "0.21.37"
 description = "Media Hub desktop shell"
 authors = ["Media Hub"]
 edition = "2021"
@@ -15,8 +15,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 base64 = "0.22"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "gzip", "deflate", "rustls-tls"] }
 sha2 = "0.10"
 tauri = { version = "2", features = ["unstable"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+url = "2"
