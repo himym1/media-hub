@@ -21,10 +21,7 @@ var (
 	ErrInvalidPassword    = errors.New("invalid new password")
 )
 
-const (
-	webSessionDuration     = 24 * time.Hour
-	androidSessionDuration = 30 * 24 * time.Hour
-)
+const sessionDuration = 30 * 24 * time.Hour
 
 type Service struct {
 	store     *store.Store
@@ -95,17 +92,15 @@ func (s *Service) Login(ctx context.Context, password, client string) (SessionTo
 	if err != nil {
 		return SessionToken{}, err
 	}
-	duration := androidSessionDuration
 	var csrfToken string
 	var csrfHash []byte
 	if client == "web" {
-		duration = webSessionDuration
 		csrfToken, csrfHash, err = generateToken()
 		if err != nil {
 			return SessionToken{}, err
 		}
 	}
-	expiresAt := s.now().UTC().Add(duration)
+	expiresAt := s.now().UTC().Add(sessionDuration)
 	if err := s.store.CreateSession(ctx, store.Session{
 		TokenHash:  tokenHash,
 		UserID:     admin.ID,

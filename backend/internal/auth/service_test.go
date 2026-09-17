@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"media-hub/backend/internal/store"
 )
@@ -88,5 +89,34 @@ func TestChangePasswordRevokesOtherSessions(t *testing.T) {
 	}
 	if _, err := service.Login(ctx, replacement, "web"); err != nil {
 		t.Fatalf("new password: %v", err)
+	}
+}
+
+func TestLoginSessionsLastThirtyDays(t *testing.T) {
+	ctx := context.Background()
+	dataStore, err := store.Open(ctx, filepath.Join(t.TempDir(), "media-hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dataStore.Close()
+	service, err := NewService(dataStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	password := strings.Repeat("a", 16)
+	if created, err := service.Bootstrap(ctx, password); err != nil || !created {
+		t.Fatalf("bootstrap=%v err=%v", created, err)
+	}
+	now := time.Date(2026, 9, 17, 8, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return now }
+	want := now.Add(30 * 24 * time.Hour)
+	for _, client := range []string{"web", "android"} {
+		session, err := service.Login(ctx, password, client)
+		if err != nil {
+			t.Fatalf("%s login: %v", client, err)
+		}
+		if !session.ExpiresAt.Equal(want) {
+			t.Fatalf("%s expiresAt = %s, want %s", client, session.ExpiresAt, want)
+		}
 	}
 }
