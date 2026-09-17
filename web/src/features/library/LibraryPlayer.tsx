@@ -1,18 +1,14 @@
-import { AudioLines, Captions, Maximize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Captions, Maximize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ApiError, createEmbyPlaybackDescriptor, fetchLocalSubtitle, reportPlaybackSessionEvent } from '../../shared/api/mediaHub'
 import {
-  boundsFromElement,
   attachNativeSubtitle,
   canPlayNatively,
   controlNatively,
-  layoutNatively,
   nativeStatus,
   nativeSubtitleFromBytes,
   playNatively,
-  setNativeCursorVisible,
   stopNatively,
-  toggleNativeWindow,
   type NativeSubtitle,
 } from '../../shared/desktop/nativePlayback'
 import { IconButton } from '../../shared/ui/IconButton'
@@ -31,12 +27,7 @@ import {
   playerAspectClassName,
   playerAspectModes,
   schedulePlayerClick,
-  nativeEmbedRect,
-  nativePointerFromStatus,
-  playerChromeInsets,
-  shouldArmNativeChromeHide,
   shouldAutoHidePlayerChrome,
-  shouldRevealChromeFromNativePointer,
   stepPictureZoom,
   type PlayerAspectId,
 } from './playerChrome'
@@ -46,6 +37,7 @@ import {
   shouldClosePlayerOnEscape,
   toggleDocumentFullscreen,
 } from './playerFullscreen'
+import { handoffEnded, handoffStatusText } from './playerHandoff'
 import { looksLikeSilentDirectPlay } from './silentAudio'
 import './LibraryPlayer.css'
 
@@ -77,8 +69,8 @@ export function LibraryPlayer({
   onClose,
   onNextEpisode,
 }: LibraryPlayerProps) {
+  const nativeShell = canPlayNatively()
   const videoRef = useRef<HTMLVideoElement>(null)
-  const holeRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLElement>(null)
   const chromeBarRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -87,7 +79,10 @@ export function LibraryPlayer({
   const clickTimer = useRef<number | null>(null)
   const nativeRequest = useRef<NativeRequest | null>(null)
   const nativeClock = useRef({ seconds: 0, paused: false })
-  const nativePointer = useRef<ReturnType<typeof nativePointerFromStatus>>(null)
+  const nativeStarted = useRef(false)
+  const nativeSeenRunning = useRef(false)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
   const [error, setError] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
   const [muted, setMuted] = useState(false)
@@ -102,10 +97,7 @@ export function LibraryPlayer({
   const [allowAutoHide, setAllowAutoHide] = useState(false)
   const [silentAudio, setSilentAudio] = useState(false)
   const [nativeActive, setNativeActive] = useState(false)
-  const [nativeFullscreen, setNativeFullscreen] = useState(false)
   const [webFullscreen, setWebFullscreen] = useState(false)
-  const nativeFullscreenRef = useRef(false)
-  const [nativePointerReady, setNativePointerReady] = useState(false)
   const [subtitleHint, setSubtitleHint] = useState<string | null>(null)
   const [aspect, setAspect] = useState<PlayerAspectId>('fit')
   const [pictureZoom, setPictureZoom] = useState(1)
@@ -127,15 +119,7 @@ export function LibraryPlayer({
       setChromeVisible(false)
     }, chromeIdleMs)
   }, [allowAutoHide, playing])
-  const revealChromeRef = useRef(revealChrome)
-  revealChromeRef.current = revealChrome
   chromeVisibleRef.current = chromeVisible
-
-  const nativeSurfaceBounds = () => {
-    const hole = holeRef.current
-    if (!hole) return null
-    return nativeEmbedRect(hole, playerChromeInsets(chromeVisibleRef.current, toolbarRef.current, chromeBarRef.current))
-  }
 
   useEffect(() => {
     setPipAvailable(Boolean(document.pictureInPictureEnabled))
@@ -147,44 +131,29 @@ export function LibraryPlayer({
   }, [])
 
   useEffect(() => {
-    if (!shouldAutoHidePlayerChrome(nativeActive, playing, chromePinned, Boolean(error), !nativeActive || nativePointerReady)) {
+    if (nativeShell) return
+    if (!shouldAutoHidePlayerChrome(false, playing, chromePinned, Boolean(error))) {
       clearIdleTimer()
       setChromeVisible(true)
       return
     }
     revealChrome(false, true)
-  }, [chromePinned, error, nativeActive, nativePointerReady, playing, revealChrome])
-
-  useEffect(() => {
-    if (!nativeActive) return
-    const hide = !chromeVisible && playing && !error
-    void setNativeCursorVisible(!hide)
-    return () => {
-      void setNativeCursorVisible(true)
-    }
-  }, [chromeVisible, error, nativeActive, playing])
+  }, [chromePinned, error, nativeShell, playing, revealChrome])
 
   const seekBy = useCallback((delta: number) => {
-    if (nativeActive) {
-      void controlNatively('seek', Math.max(0, currentSeconds + delta)).catch(() => undefined)
-      return
-    }
     const video = videoRef.current
     if (!video) return
     const duration = video.duration || video.currentTime + Math.abs(delta)
     video.currentTime = Math.min(duration, Math.max(0, video.currentTime + delta))
-  }, [currentSeconds, nativeActive])
+  }, [])
 
   const applyAspect = useCallback((next: PlayerAspectId) => {
     setAspect(next)
-    if (nativeActive) void controlNatively('aspect', undefined, next).catch(() => undefined)
-  }, [nativeActive])
+  }, [])
 
   const applyZoom = useCallback((next: number) => {
-    const zoom = clampPictureZoom(next)
-    setPictureZoom(zoom)
-    if (nativeActive) void controlNatively('zoom', zoom).catch(() => undefined)
-  }, [nativeActive])
+    setPictureZoom(clampPictureZoom(next))
+  }, [])
 
   const togglePlayback = useCallback(() => {
     if (nativeActive) {
@@ -199,42 +168,18 @@ export function LibraryPlayer({
 
   const toggleCaptions = useCallback(() => {
     const next = captions === 'off' ? 'on' : 'off'
-    if (nativeActive) {
-      void controlNatively('subtitles', next === 'on' ? 1 : 0).catch(() => undefined)
-      setCaptions(next)
-      return
-    }
     if (captions !== 'on' && captions !== 'off') return
     const video = videoRef.current
     if (!video) return
     setSubtitleMode(video, next === 'on')
     setCaptions(next)
-  }, [captions, nativeActive])
+  }, [captions])
 
-  const toggleFullscreen = useCallback(() => {
-    const root = holeRef.current?.closest('.library-player') ?? videoRef.current
+  const togglePresentation = useCallback(() => {
+    const root = stageRef.current?.closest('.library-player') ?? videoRef.current
     if (!root) return
     void toggleDocumentFullscreen(root).catch(() => undefined)
   }, [])
-
-  const togglePresentation = useCallback(() => {
-    if (canPlayNatively()) {
-      const next = !nativeFullscreenRef.current
-      nativeFullscreenRef.current = next
-      setNativeFullscreen(next)
-      void toggleNativeWindow(next)
-        .then(() => {
-          const bounds = nativeSurfaceBounds()
-          if (bounds) void layoutNatively(bounds).catch(() => undefined)
-        })
-        .catch(() => {
-          nativeFullscreenRef.current = !next
-          setNativeFullscreen(!next)
-        })
-      return
-    }
-    toggleFullscreen()
-  }, [toggleFullscreen])
 
   const onSurfaceClick = useCallback(() => {
     revealChrome(false, true)
@@ -254,12 +199,8 @@ export function LibraryPlayer({
       const video = videoRef.current
       if (event.key === 'Escape') {
         const inDocumentFullscreen = documentFullscreenElement() !== null
-        if (!shouldClosePlayerOnEscape(Boolean(nativeActive && nativeFullscreenRef.current), inDocumentFullscreen)) {
+        if (!shouldClosePlayerOnEscape(false, inDocumentFullscreen)) {
           event.preventDefault()
-          if (nativeActive && nativeFullscreenRef.current) {
-            togglePresentation()
-            return
-          }
           void exitDocumentFullscreen().catch(() => undefined)
           return
         }
@@ -267,6 +208,8 @@ export function LibraryPlayer({
         onClose()
         return
       }
+      // mpv 自己一个窗口，播放键都归它，Hub 只留 Esc 收面板。
+      if (nativeShell) return
       revealChrome()
       if (event.key === ' ' || event.key === 'k') {
         event.preventDefault()
@@ -282,8 +225,7 @@ export function LibraryPlayer({
         togglePresentation()
       } else if (event.key === 'm') {
         event.preventDefault()
-        if (nativeActive) void controlNatively('mute').catch(() => undefined)
-        else if (video) {
+        if (video) {
           video.muted = !video.muted
           setMuted(video.muted)
         }
@@ -306,7 +248,7 @@ export function LibraryPlayer({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [applyAspect, applyZoom, aspect, nativeActive, onClose, pictureZoom, revealChrome, seekBy, toggleCaptions, togglePlayback, togglePresentation])
+  }, [applyAspect, applyZoom, aspect, nativeActive, nativeShell, onClose, pictureZoom, revealChrome, seekBy, toggleCaptions, togglePlayback, togglePresentation])
 
   useEffect(() => {
     const sync = () => setWebFullscreen(documentFullscreenElement() !== null)
@@ -326,15 +268,47 @@ export function LibraryPlayer({
     setChromeVisible(true)
     setChromePinned(false)
     setNativeActive(false)
-    setNativeFullscreen(false)
-    nativeFullscreenRef.current = false
     setSubtitleHint(null)
     setAspect('fit')
     setPictureZoom(1)
     nativeRequest.current = null
+    nativeStarted.current = false
+    let cancelled = false
+    if (nativeShell) {
+      void (async () => {
+        try {
+          const descriptor = await createEmbyPlaybackDescriptor(itemId, navigator.userAgent)
+          if (cancelled) return
+          nativeRequest.current = {
+            url: descriptor.streamUrl,
+            title,
+            startPositionMs: descriptor.startPositionMs,
+            userAgent: descriptor.userAgent,
+            sessionId: descriptor.sessionId,
+          }
+          setNativeActive(true)
+          const subtitle = await fetchLocalSubtitle(itemId).catch(() => null)
+          if (cancelled || !subtitle) return
+          const nativeSubtitle = nativeSubtitleFromBytes(subtitle.bytes, subtitle.fileName)
+          if (!nativeSubtitle) return
+          setSubtitleHint(subtitleStartHint(subtitle.bytes))
+          if (nativeRequest.current && !nativeStarted.current) {
+            nativeRequest.current.subtitle = nativeSubtitle
+            return
+          }
+          void attachNativeSubtitle(nativeSubtitle).catch(() => undefined)
+        } catch (cause) {
+          if (!cancelled) {
+            setError(cause instanceof ApiError ? cause.message : '系统播放器未能打开这路流。')
+          }
+        }
+      })()
+      return () => {
+        cancelled = true
+      }
+    }
     const video = videoRef.current
     if (!video) return
-    let cancelled = false
     let hls: { destroy: () => void } | undefined
     let detachSession: () => void = () => {}
     let detachSubtitle: () => void = () => {}
@@ -348,26 +322,6 @@ export function LibraryPlayer({
         const descriptor = await createEmbyPlaybackDescriptor(itemId, navigator.userAgent)
         if (cancelled) return
         const subtitlePromise = fetchLocalSubtitle(itemId).catch(() => null)
-        if (canPlayNatively()) {
-          nativeRequest.current = {
-            url: descriptor.streamUrl,
-            title,
-            startPositionMs: descriptor.startPositionMs,
-            userAgent: descriptor.userAgent,
-            sessionId: descriptor.sessionId,
-          }
-          setCaptions('on')
-          setNativeActive(true)
-          void subtitlePromise.then((subtitle) => {
-            if (cancelled || !subtitle) return
-            const nativeSubtitle = nativeSubtitleFromBytes(subtitle.bytes, subtitle.fileName)
-            if (!nativeSubtitle) return
-            setCaptions('on')
-            setSubtitleHint(subtitleStartHint(subtitle.bytes))
-            void attachNativeSubtitle(nativeSubtitle).catch(() => undefined)
-          })
-          return
-        }
         if (isHlsStream(descriptor.streamUrl)) {
           const { default: Hls } = await import('hls.js')
           if (Hls.isSupported()) {
@@ -417,12 +371,10 @@ export function LibraryPlayer({
       video.removeAttribute('src')
       video.load()
     }
-  }, [itemId, title])
+  }, [itemId, nativeShell, title])
 
   useEffect(() => {
     if (!nativeActive || !nativeRequest.current) return
-    const hole = holeRef.current
-    if (!hole) return
     let cancelled = false
     let detachSession = () => {}
     const request = nativeRequest.current
@@ -430,15 +382,15 @@ export function LibraryPlayer({
       seconds: (request.startPositionMs ?? 0) / 1000,
       paused: false,
     }
-    nativePointer.current = null
-    setNativePointerReady(false)
+    setCurrentSeconds(nativeClock.current.seconds)
+    nativeSeenRunning.current = false
     void (async () => {
       try {
+        nativeStarted.current = true
         await playNatively(request.url, {
           title: request.title,
           startPositionMs: request.startPositionMs,
           userAgent: request.userAgent,
-          bounds: nativeSurfaceBounds() ?? boundsFromElement(hole),
           subtitle: request.subtitle,
         })
         if (cancelled) return
@@ -457,43 +409,19 @@ export function LibraryPlayer({
         }
       }
     })()
-    const relayout = () => {
-      const bounds = nativeSurfaceBounds()
-      if (bounds) void layoutNatively(bounds).catch(() => undefined)
-    }
-    const observer = new ResizeObserver(relayout)
-    observer.observe(hole)
-    window.addEventListener('resize', relayout)
     const poll = window.setInterval(() => {
       void nativeStatus().then((status) => {
         if (!status || cancelled) return
+        if (status.running) nativeSeenRunning.current = true
+        else if (handoffEnded(nativeSeenRunning.current, status.running)) {
+          onCloseRef.current()
+          return
+        }
         const wasPaused = nativeClock.current.paused
         nativeClock.current = { seconds: status.time, paused: status.paused }
         setPlaying(!status.paused)
         setCurrentSeconds(status.time)
         setDurationSeconds(status.duration)
-        setVolume(status.volume)
-        setRate(status.speed)
-        if (typeof status.subtitles === 'boolean') {
-          setCaptions(status.subtitles ? 'on' : 'off')
-        }
-        if (typeof status.zoom === 'number' && status.zoom > 0) {
-          setPictureZoom(clampPictureZoom(status.zoom))
-        }
-        if (typeof status.fullscreen === 'boolean' && status.fullscreen !== nativeFullscreenRef.current) {
-          nativeFullscreenRef.current = status.fullscreen
-          setNativeFullscreen(status.fullscreen)
-        }
-        const pointer = nativePointerFromStatus(status)
-        if (pointer) {
-          if (shouldRevealChromeFromNativePointer(nativePointer.current, pointer)) {
-            revealChromeRef.current(false, true)
-          }
-          if (shouldArmNativeChromeHide(nativePointer.current, pointer)) {
-            setNativePointerReady(true)
-          }
-          nativePointer.current = pointer
-        }
         if (wasPaused !== status.paused && request.sessionId) {
           void reportPlaybackSessionEvent(
             request.sessionId,
@@ -503,28 +431,14 @@ export function LibraryPlayer({
           )
         }
       })
-    }, 250)
+    }, 500)
     return () => {
       cancelled = true
-      observer.disconnect()
-      window.removeEventListener('resize', relayout)
       window.clearInterval(poll)
       detachSession()
       void stopNatively().catch(() => undefined)
     }
   }, [itemId, nativeActive])
-
-  useEffect(() => {
-    if (!nativeActive) return
-    const bounds = nativeSurfaceBounds()
-    if (bounds) void layoutNatively(bounds).catch(() => undefined)
-  }, [chromeVisible, itemId, nativeActive, nativeFullscreen])
-
-  useEffect(() => {
-    if (nativeFullscreen) {
-      setChromeVisible(false)
-    }
-  }, [nativeFullscreen])
 
   useEffect(() => {
     if (error || silentAudio || nativeActive) return
@@ -556,10 +470,56 @@ export function LibraryPlayer({
   const seekProgress = durationSeconds > 0 ? Math.min(1, currentSeconds / durationSeconds) : 0
   const shellClass = [
     'library-player',
-    nativeActive ? 'is-native' : '',
     chromeVisible || !playing || Boolean(error) ? 'chrome-visible' : 'chrome-hidden',
     playing ? 'is-playing' : 'is-paused',
   ].filter(Boolean).join(' ')
+
+  if (nativeShell) {
+    return (
+      <div
+        aria-labelledby="library-player-title"
+        aria-modal="true"
+        className="library-player is-handoff"
+        role="dialog"
+      >
+        <div className="library-player-handoff">
+          <h2 id="library-player-title">{title}</h2>
+          {error ? (
+            <p className="library-player-handoff-state" role="alert">{error}</p>
+          ) : (
+            <p className="library-player-handoff-state" role="status">
+              {nativeActive ? handoffStatusText(playing, currentSeconds, durationSeconds) : '正在准备播放…'}
+            </p>
+          )}
+          <p className="library-player-handoff-hint">
+            画面在 mpv 窗口里，全屏、进度、音轨和字幕都用 mpv 自己的控制。
+          </p>
+          {subtitleHint && !error ? (
+            <p className="library-player-handoff-hint" role="status">{subtitleHint}</p>
+          ) : null}
+          <div className="library-player-handoff-actions">
+            {nativeActive && !error ? (
+              <button className="primary-action" onClick={togglePlayback} type="button">
+                {playing ? <Pause size={17} /> : <Play size={17} />}
+                {playing ? '暂停' : '继续'}
+              </button>
+            ) : null}
+            <button className="secondary-action" onClick={onClose} type="button">
+              <X size={17} />
+              停止播放
+            </button>
+            {onNextEpisode && nextEpisodeLabel ? (
+              <button className="secondary-action" onClick={onNextEpisode} type="button">
+                <SkipForward size={16} />
+                下一集 {nextEpisodeLabel}
+              </button>
+            ) : null}
+            <a className="secondary-action" href={externalUrl} rel="noreferrer" target="_blank">在 Emby 打开</a>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -629,16 +589,6 @@ export function LibraryPlayer({
           </div>
         </header>
 
-        {nativeActive ? (
-          <div
-            aria-hidden="true"
-            className="library-player-native-hole"
-            onClick={onSurfaceClick}
-            onDoubleClick={onSurfaceDoubleClick}
-            ref={holeRef}
-          />
-        ) : null}
-
         <div
           className={`library-player-picture ${playerAspectClassName(aspect)}`}
           style={{ '--picture-zoom': String(pictureZoom) } as CSSProperties}
@@ -662,7 +612,7 @@ export function LibraryPlayer({
           />
         </div>
 
-        {!playing && !error && !nativeActive ? (
+        {!playing && !error ? (
           <button aria-label="继续播放" className="library-player-center-play" onClick={togglePlayback} type="button">
             <Play size={28} />
           </button>
@@ -679,14 +629,14 @@ export function LibraryPlayer({
           <p className="library-player-note" role="status">{subtitleHint}</p>
         ) : null}
 
-        {captions === 'ass' && !nativeActive ? (
+        {captions === 'ass' ? (
           <p className="library-player-note" role="status">
             当前是 ASS 字幕，浏览器无法渲染。
             <a href={externalUrl} rel="noreferrer" target="_blank">在 Emby 打开</a>
           </p>
         ) : null}
 
-        {silentAudio && !error && !nativeActive ? (
+        {silentAudio && !error ? (
           <p className="library-player-note" role="status">
             检测到有画面但浏览器未解码出声音。自己的库是直出原片，DTS / TrueHD / 部分 EAC3 音轨在 Chrome 等浏览器里常会静音。
             <a href={externalUrl} rel="noreferrer" target="_blank">在 Emby 打开</a>
@@ -717,8 +667,7 @@ export function LibraryPlayer({
               min={0}
               onChange={(event) => {
                 const next = Number(event.target.value)
-                if (nativeActive) void controlNatively('seek', next).catch(() => undefined)
-                else if (videoRef.current) videoRef.current.currentTime = next
+                if (videoRef.current) videoRef.current.currentTime = next
                 revealChrome(true)
               }}
               step={1}
@@ -763,11 +712,6 @@ export function LibraryPlayer({
               aria-label={muted || volume === 0 ? '取消静音' : '静音'}
               className="library-player-icon-action"
               onClick={() => {
-                if (nativeActive) {
-                  void controlNatively('mute').catch(() => undefined)
-                  setMuted((current) => !current)
-                  return
-                }
                 const video = videoRef.current
                 if (!video) return
                 video.muted = !video.muted
@@ -785,12 +729,6 @@ export function LibraryPlayer({
                 min={0}
                 onChange={(event) => {
                   const next = Number(event.target.value)
-                  if (nativeActive) {
-                    void controlNatively('volume', next).catch(() => undefined)
-                    setVolume(next)
-                    setMuted(next === 0)
-                    return
-                  }
                   const video = videoRef.current
                   if (!video) return
                   video.volume = next
@@ -810,8 +748,7 @@ export function LibraryPlayer({
                 aria-label="播放速度"
                 onChange={(event) => {
                   const next = Number(event.target.value)
-                  if (nativeActive) void controlNatively('speed', next).catch(() => undefined)
-                  else if (videoRef.current) videoRef.current.playbackRate = next
+                  if (videoRef.current) videoRef.current.playbackRate = next
                   setRate(next)
                 }}
                 value={String(rate)}
@@ -822,7 +759,7 @@ export function LibraryPlayer({
               </select>
             </label>
 
-            {(captions === 'on' || captions === 'off' || nativeActive) ? (
+            {captions === 'on' || captions === 'off' ? (
               <button
                 aria-label={captions === 'off' ? '字幕关' : '字幕开'}
                 aria-pressed={captions !== 'off'}
@@ -833,7 +770,7 @@ export function LibraryPlayer({
                 <Captions size={18} />
                 <span aria-hidden="true">{captions === 'off' ? '字幕关' : '字幕开'}</span>
               </button>
-            ) : !nativeActive ? (
+            ) : (
               <button
                 aria-label="无字幕"
                 aria-pressed={false}
@@ -844,21 +781,9 @@ export function LibraryPlayer({
                 <Captions size={18} />
                 <span aria-hidden="true">无字幕</span>
               </button>
-            ) : null}
+            )}
 
-            {nativeActive ? (
-              <button
-                aria-label="切换音轨"
-                className="library-player-icon-action"
-                onClick={() => void controlNatively('cycle-audio').catch(() => undefined)}
-                type="button"
-              >
-                <AudioLines size={18} />
-                <span aria-hidden="true">音轨</span>
-              </button>
-            ) : null}
-
-            {pipAvailable && !nativeActive ? (
+            {pipAvailable ? (
               <button
                 aria-label="画中画"
                 className="library-player-icon-action"
@@ -877,7 +802,7 @@ export function LibraryPlayer({
 
             <button
               aria-label="全屏"
-              aria-pressed={nativeFullscreen || webFullscreen}
+              aria-pressed={webFullscreen}
               className="library-player-icon-action"
               onClick={togglePresentation}
               type="button"

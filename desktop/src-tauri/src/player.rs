@@ -7,38 +7,43 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::webview::WebviewWindowBuilder;
-use tauri::{
-    AppHandle, Manager, PhysicalPosition, PhysicalSize, Url, WebviewUrl, WebviewWindow, Window,
-    WindowEvent,
-};
+use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindow, WindowEvent};
 
 use crate::{
     command_path_with_extras, decode_subtitle_base64, is_supported_playback_url, mpv_args,
     resolve_mpv, sanitized_user_agent, write_subtitle_temp,
 };
 
-pub const SURFACE_LABEL: &str = "mpv-surface";
 pub const PLAYER_LABEL: &str = "player";
-
-#[derive(Clone)]
-struct SavedHostFrame {
-    x: i32,
-    y: i32,
-    width: u32,
-    height: u32,
-    decorated: bool,
-}
 
 #[derive(Default)]
 pub struct PlayerState {
     child: Mutex<Option<Child>>,
-    windowed_fullscreen: AtomicBool,
-    last_geometry: Mutex<Option<String>>,
-    saved_frame: Mutex<Option<SavedHostFrame>>,
 }
 
+impl PlayerState {
+    fn is_running(&self) -> bool {
+        let Ok(mut guard) = self.child.lock() else {
+            return false;
+        };
+        let Some(child) = guard.as_mut() else {
+            return false;
+        };
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                *guard = None;
+                false
+            }
+            Ok(None) => true,
+            Err(_) => false,
+        }
+    }
+}
+
+/// 旧版 Web 还会带上内嵌画面的位置；mpv 现在自己开窗，收下即丢。
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct EmbedBounds {
     pub x: f64,
     pub y: f64,
@@ -59,68 +64,13 @@ pub struct NativeStatus {
     pub mouse_x: f64,
     pub mouse_y: f64,
     pub fullscreen: bool,
+    pub running: bool,
     pub subtitles: Option<bool>,
-}
-
-fn parked_origin() -> PhysicalPosition<i32> {
-    PhysicalPosition::new(-20_000, -20_000)
-}
-
-fn park_surface(surface: &Window) -> Result<(), String> {
-    let _ = surface.hide();
-    surface
-        .set_position(parked_origin())
-        .map_err(|_| "无法收起播放画面。".to_string())?;
-    surface
-        .set_size(PhysicalSize::new(8, 8))
-        .map_err(|_| "无法收起播放画面。".to_string())?;
-    Ok(())
-}
-
-fn close_surface(app: &AppHandle) {
-    if let Some(surface) = app.get_window(SURFACE_LABEL) {
-        let _ = surface.close();
-    }
-}
-
-fn ensure_surface(app: &AppHandle) -> Result<Window, String> {
-    if let Some(existing) = app.get_window(SURFACE_LABEL) {
-        return Ok(existing);
-    }
-    let host = host_native_window(app)?;
-    tauri::window::WindowBuilder::new(app, SURFACE_LABEL)
-        .title(" ")
-        .decorations(false)
-        .resizable(false)
-        .skip_taskbar(true)
-        .visible(false)
-        .inner_size(8.0, 8.0)
-        .position(-20_000.0, -20_000.0)
-        .parent(&host)
-        .map_err(|_| "无法准备播放画面。".to_string())?
-        .build()
-        .map_err(|_| "无法准备播放画面。".to_string())?;
-    let surface = app
-        .get_window(SURFACE_LABEL)
-        .ok_or_else(|| "找不到内嵌播放窗口。".to_string())?;
-    park_surface(&surface)?;
-    Ok(surface)
 }
 
 fn host_window(app: &AppHandle) -> Result<WebviewWindow, String> {
     app.get_webview_window(PLAYER_LABEL)
         .or_else(|| app.get_webview_window("main"))
-        .ok_or_else(|| "找不到应用窗口。".into())
-}
-
-fn host_native_window(app: &AppHandle) -> Result<Window, String> {
-    app.get_window(PLAYER_LABEL)
-        .or_else(|| app.get_window("main"))
-        .ok_or_else(|| "找不到应用窗口。".into())
-}
-
-fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {
-    app.get_webview_window("main")
         .ok_or_else(|| "找不到应用窗口。".into())
 }
 
@@ -158,170 +108,28 @@ pub(crate) fn player_page_url(play_id: &str, series_id: Option<&str>) -> Result<
     Url::parse(&href).map_err(|_| "无法打开播放窗口。".to_string())
 }
 
-fn restore_host_chrome(app: &AppHandle, state: &PlayerState) {
-    let Ok(host) = host_window(app) else {
-        return;
-    };
-    let _ = host.set_cursor_visible(true);
-    restore_host_frame(&host, state);
-    keep_mpv_windowed(state.last_geometry.lock().ok().and_then(|guard| guard.clone()));
+fn restore_host_chrome(app: &AppHandle) {
+    if let Ok(host) = host_window(app) {
+        let _ = host.set_cursor_visible(true);
+    }
 }
 
 fn teardown_player_window(app: &AppHandle, state: &PlayerState) {
     stop_child(state);
-    close_surface(app);
-    restore_host_chrome(app, state);
+    restore_host_chrome(app);
 }
 
-fn surface_window(app: &AppHandle) -> Result<Window, String> {
-    app.get_window(SURFACE_LABEL)
-        .ok_or_else(|| "找不到内嵌播放窗口。".into())
-}
-
-fn host_embed_supported() -> bool {
-    cfg!(windows)
-}
-
-pub(crate) fn should_apply_windowed_layout(_fullscreen: bool) -> bool {
-    true
-}
-
-pub(crate) fn restore_mpv_windowed_commands(geometry: Option<&str>) -> Vec<Vec<serde_json::Value>> {
-    let mut commands = vec![
-        vec![
+pub(crate) fn fullscreen_command(fullscreen: Option<bool>) -> Vec<serde_json::Value> {
+    match fullscreen {
+        Some(value) => vec![
             serde_json::json!("set_property"),
             serde_json::json!("fullscreen"),
-            serde_json::json!(false),
+            serde_json::json!(value),
         ],
-        vec![
-            serde_json::json!("set_property"),
-            serde_json::json!("window-maximized"),
-            serde_json::json!(false),
+        None => vec![
+            serde_json::json!("cycle"),
+            serde_json::json!("fullscreen"),
         ],
-    ];
-    if let Some(geometry) = geometry.filter(|value| !value.is_empty()) {
-        commands.push(vec![
-            serde_json::json!("set_property"),
-            serde_json::json!("geometry"),
-            serde_json::json!(geometry),
-        ]);
-    }
-    commands
-}
-
-fn save_host_frame(host: &WebviewWindow) -> Option<SavedHostFrame> {
-    let position = host.outer_position().ok()?;
-    let size = host.outer_size().ok()?;
-    Some(SavedHostFrame {
-        x: position.x,
-        y: position.y,
-        width: size.width,
-        height: size.height,
-        decorated: host.is_decorated().unwrap_or(true),
-    })
-}
-
-fn apply_host_fullscreen(host: &WebviewWindow, state: &PlayerState, enable: bool) -> Result<(), String> {
-    if enable {
-        if state.saved_frame.lock().ok().map(|guard| guard.is_none()).unwrap_or(true) {
-            if let Some(frame) = save_host_frame(host) {
-                if let Ok(mut saved) = state.saved_frame.lock() {
-                    *saved = Some(frame);
-                }
-            }
-        }
-        host.set_simple_fullscreen(true)
-            .or_else(|_| host.set_fullscreen(true))
-            .map_err(|_| "无法进入全屏。".to_string())?;
-        state.windowed_fullscreen.store(true, Ordering::SeqCst);
-    } else {
-        restore_host_frame(host, state);
-    }
-    keep_mpv_windowed(state.last_geometry.lock().ok().and_then(|guard| guard.clone()));
-    Ok(())
-}
-
-fn keep_mpv_windowed(geometry: Option<String>) {
-    std::thread::spawn(move || {
-        for command in restore_mpv_windowed_commands(geometry.as_deref()) {
-            let _ = ipc_command(&command);
-        }
-    });
-}
-
-fn restore_host_frame(host: &WebviewWindow, state: &PlayerState) {
-    state.windowed_fullscreen.store(false, Ordering::SeqCst);
-    let frame = state.saved_frame.lock().ok().and_then(|mut guard| guard.take());
-    let _ = host.set_simple_fullscreen(false);
-    let _ = host.set_fullscreen(false);
-    if let Some(frame) = frame {
-        let _ = host.set_decorations(frame.decorated);
-        let _ = host.set_size(PhysicalSize::new(frame.width, frame.height));
-        let _ = host.set_position(PhysicalPosition::new(frame.x, frame.y));
-        return;
-    }
-    let _ = host.set_decorations(true);
-    let _ = host.unmaximize();
-}
-
-pub(crate) fn window_geometry(scale: f64, origin_x: i32, origin_y: i32, bounds: &EmbedBounds) -> String {
-    let scale = if scale > 0.0 { scale } else { 1.0 };
-    let x = (origin_x as f64) / scale + bounds.x;
-    let y = (origin_y as f64) / scale + bounds.y;
-    format!(
-        "{}x{}{:+}{:+}",
-        bounds.width.max(8.0).round() as u32,
-        bounds.height.max(8.0).round() as u32,
-        x.round() as i32,
-        y.round() as i32,
-    )
-}
-
-fn windowed_geometry(host: &WebviewWindow, bounds: &EmbedBounds) -> Result<String, String> {
-    if bounds.width < 8.0 || bounds.height < 8.0 {
-        return Err("播放区域太小。".into());
-    }
-    let scale = host.scale_factor().unwrap_or(1.0);
-    let origin = host
-        .inner_position()
-        .map_err(|_| "无法定位播放窗口。".to_string())?;
-    Ok(window_geometry(scale, origin.x, origin.y, bounds))
-}
-
-fn apply_bounds(main: &WebviewWindow, surface: &Window, bounds: &EmbedBounds) -> Result<(), String> {
-    if bounds.width < 8.0 || bounds.height < 8.0 {
-        return Err("播放区域太小。".into());
-    }
-    let scale = main.scale_factor().map_err(|_| "无法读取窗口。".to_string())?;
-    let inner = main
-        .inner_position()
-        .map_err(|_| "无法读取窗口。".to_string())?;
-    let x = inner.x as f64 + bounds.x * scale;
-    let y = inner.y as f64 + bounds.y * scale;
-    let width = (bounds.width * scale).max(8.0);
-    let height = (bounds.height * scale).max(8.0);
-    surface
-        .set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32))
-        .map_err(|_| "无法放置播放画面。".to_string())?;
-    surface
-        .set_size(PhysicalSize::new(width.round() as u32, height.round() as u32))
-        .map_err(|_| "无法放置播放画面。".to_string())?;
-    Ok(())
-}
-
-fn surface_wid(surface: &Window) -> Result<i64, String> {
-    #[cfg(target_os = "macos")]
-    {
-        Ok(surface.ns_view().map_err(|_| "无法嵌入播放器。".to_string())? as i64)
-    }
-    #[cfg(windows)]
-    {
-        Ok(surface.hwnd().map_err(|_| "无法嵌入播放器。".to_string())?.0 as i64)
-    }
-    #[cfg(not(any(target_os = "macos", windows)))]
-    {
-        let _ = surface;
-        Err("此系统暂不支持应用内播放。".into())
     }
 }
 
@@ -338,16 +146,8 @@ fn input_conf_path() -> PathBuf {
 }
 
 pub(crate) fn input_conf_contents() -> &'static str {
-    concat!(
-        "MBTN_LEFT cycle pause\n",
-        "MBTN_LEFT_DBL ignore\n",
-        "ESC ignore\n",
-        "f ignore\n",
-        "WHEEL_UP add video-zoom 0.1\n",
-        "WHEEL_DOWN add video-zoom -0.1\n",
-        "WHEEL_LEFT seek -10\n",
-        "WHEEL_RIGHT seek 10\n",
-    )
+    // 只改左键切暂停，其余保持 mpv 自带：双击和 f 全屏、ESC 退出全屏、滚轮音量。
+    "MBTN_LEFT cycle pause\n"
 }
 
 fn write_input_conf() -> Result<PathBuf, String> {
@@ -477,8 +277,6 @@ fn spawn_mpv(
     title: &str,
     start_position_ms: u64,
     user_agent: Option<&str>,
-    wid: Option<i64>,
-    geometry: Option<&str>,
     sub_file: Option<&Path>,
     state: &PlayerState,
 ) -> Result<(), String> {
@@ -493,11 +291,9 @@ fn spawn_mpv(
         title,
         start_position_ms,
         user_agent,
-        wid,
         Some(&ipc),
         Some(&input),
         sub_file,
-        geometry,
     ))
     .arg(url)
     .stdin(Stdio::null())
@@ -680,16 +476,16 @@ fn ipc_mouse_pos() -> MousePos {
 
 #[tauri::command]
 pub fn play_native(
-    app: AppHandle,
     state: tauri::State<PlayerState>,
     url: String,
     title: String,
     start_position_ms: u64,
     user_agent: Option<String>,
-    bounds: EmbedBounds,
+    bounds: Option<EmbedBounds>,
     subtitle_base64: Option<String>,
     subtitle_file_name: Option<String>,
 ) -> Result<(), String> {
+    let _ = bounds;
     if !is_supported_playback_url(&url) {
         return Err("unsupported playback url".into());
     }
@@ -707,41 +503,16 @@ pub fn play_native(
         }
         None => None,
     };
-    let host = host_window(&app)?;
     let agent = user_agent.as_deref().and_then(sanitized_user_agent);
-    if host_embed_supported() {
-        let surface = ensure_surface(&app)?;
-        apply_bounds(&host, &surface, &bounds)?;
-        surface.show().map_err(|_| "无法打开播放画面。".to_string())?;
-        let _ = surface.set_ignore_cursor_events(true);
-        let wid = surface_wid(&surface)?;
-        spawn_mpv(
-            &mpv,
-            &url,
-            &title,
-            start_position_ms,
-            agent,
-            Some(wid),
-            None,
-            sub_path.as_deref(),
-            &state,
-        )?;
-    } else {
-        let geometry = windowed_geometry(&host, &bounds)?;
-        spawn_mpv(
-            &mpv,
-            &url,
-            &title,
-            start_position_ms,
-            agent,
-            None,
-            Some(&geometry),
-            sub_path.as_deref(),
-            &state,
-        )?;
-    }
-    let _ = host.set_focus();
-    Ok(())
+    spawn_mpv(
+        &mpv,
+        &url,
+        &title,
+        start_position_ms,
+        agent,
+        sub_path.as_deref(),
+        &state,
+    )
 }
 
 #[tauri::command]
@@ -769,42 +540,17 @@ pub fn attach_native_subtitle(
     Ok(())
 }
 
+/// 旧版 Web 还会按内嵌位置摆画面；mpv 自己开窗后这里不再动它。
 #[tauri::command]
-pub fn layout_native(
-    app: AppHandle,
-    state: tauri::State<PlayerState>,
-    bounds: EmbedBounds,
-) -> Result<(), String> {
-    if host_embed_supported() {
-        let Ok(surface) = surface_window(&app) else {
-            return Ok(());
-        };
-        apply_bounds(&host_window(&app)?, &surface, &bounds)?;
-        let _ = surface.set_ignore_cursor_events(true);
-        return Ok(());
-    }
-    let host = host_window(&app)?;
-    let geometry = windowed_geometry(&host, &bounds)?;
-    if let Ok(mut last) = state.last_geometry.lock() {
-        *last = Some(geometry.clone());
-    }
-    std::thread::spawn(move || {
-        let _ = ipc_command(&[
-            serde_json::json!("set_property"),
-            serde_json::json!("geometry"),
-            serde_json::json!(geometry),
-        ]);
-    });
+pub fn layout_native(bounds: Option<EmbedBounds>) -> Result<(), String> {
+    let _ = bounds;
     Ok(())
 }
 
 #[tauri::command]
 pub fn stop_native(app: AppHandle, state: tauri::State<PlayerState>) -> Result<(), String> {
     stop_child(&state);
-    if let Ok(surface) = surface_window(&app) {
-        let _ = park_surface(&surface);
-    }
-    restore_host_chrome(&app, &state);
+    restore_host_chrome(&app);
     Ok(())
 }
 
@@ -828,15 +574,14 @@ pub async fn native_control(action: String, value: Option<f64>, mode: Option<Str
     .map_err(|_| "无法控制播放器。".to_string())?
 }
 
+/// 全屏归 mpv 自己的窗口管，Hub 窗口不再跟着进出全屏。
 #[tauri::command]
-pub fn toggle_native_window(
-    app: AppHandle,
-    state: tauri::State<PlayerState>,
-    fullscreen: Option<bool>,
-) -> Result<(), String> {
-    let host = host_window(&app)?;
-    let next = fullscreen.unwrap_or_else(|| !state.windowed_fullscreen.load(Ordering::SeqCst));
-    apply_host_fullscreen(&host, &state, next)
+pub fn toggle_native_window(fullscreen: Option<bool>) -> Result<(), String> {
+    let command = fullscreen_command(fullscreen);
+    std::thread::spawn(move || {
+        let _ = ipc_command(&command);
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -891,19 +636,11 @@ pub fn close_player_window(app: AppHandle, state: tauri::State<PlayerState>) -> 
 
 #[tauri::command]
 pub async fn native_status(state: tauri::State<'_, PlayerState>) -> Result<NativeStatus, String> {
-    let fullscreen = state.windowed_fullscreen.load(Ordering::SeqCst);
-    let geometry = state
-        .last_geometry
-        .lock()
-        .ok()
-        .and_then(|guard| guard.clone());
+    let running = state.is_running();
     let mut status = tauri::async_runtime::spawn_blocking(read_native_status)
         .await
         .unwrap_or_else(|_| idle_native_status());
-    if status.fullscreen {
-        keep_mpv_windowed(geometry);
-    }
-    status.fullscreen = fullscreen;
+    status.running = running;
     Ok(status)
 }
 
@@ -919,6 +656,7 @@ fn idle_native_status() -> NativeStatus {
         mouse_x: 0.0,
         mouse_y: 0.0,
         fullscreen: false,
+        running: false,
         subtitles: None,
     }
 }
@@ -936,6 +674,7 @@ fn read_native_status() -> NativeStatus {
         mouse_x: pos.x,
         mouse_y: pos.y,
         fullscreen: ipc_bool("fullscreen"),
+        running: false,
         subtitles: ipc_command(&[
             serde_json::json!("get_property"),
             serde_json::json!("sub-visibility"),
@@ -950,63 +689,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parked_surface_stays_offscreen() {
-        let origin = parked_origin();
-        assert!(origin.x <= -10_000);
-        assert!(origin.y <= -10_000);
-    }
-
-    #[test]
-    fn window_geometry_uses_logical_points() {
-        let bounds = EmbedBounds {
-            x: 10.0,
-            y: 20.0,
-            width: 800.0,
-            height: 450.0,
-        };
-        assert_eq!(window_geometry(2.0, 200, 80, &bounds), "800x450+110+60");
-        assert_eq!(window_geometry(1.0, 24, 48, &bounds), "800x450+34+68");
-    }
-
-    #[test]
-    fn windowed_layout_always_follows_the_hole() {
-        assert!(should_apply_windowed_layout(false));
-        assert!(should_apply_windowed_layout(true));
-        let commands = restore_mpv_windowed_commands(Some("800x450+10+20"));
+    fn fullscreen_goes_to_mpv_not_the_hub_window() {
         assert_eq!(
-            commands[0],
+            fullscreen_command(Some(true)),
             vec![
                 serde_json::json!("set_property"),
                 serde_json::json!("fullscreen"),
-                serde_json::json!(false),
+                serde_json::json!(true),
             ]
         );
         assert_eq!(
-            commands[1],
-            vec![
-                serde_json::json!("set_property"),
-                serde_json::json!("window-maximized"),
-                serde_json::json!(false),
-            ]
-        );
-        assert_eq!(
-            commands[2],
-            vec![
-                serde_json::json!("set_property"),
-                serde_json::json!("geometry"),
-                serde_json::json!("800x450+10+20"),
-            ]
+            fullscreen_command(None),
+            vec![serde_json::json!("cycle"), serde_json::json!("fullscreen")]
         );
     }
 
     #[test]
-    fn input_conf_zooms_with_the_mouse_wheel() {
+    fn input_conf_leaves_mpv_defaults_alone() {
         let conf = input_conf_contents();
         assert!(conf.contains("MBTN_LEFT cycle pause"));
-        assert!(conf.contains("MBTN_LEFT_DBL ignore"));
-        assert!(conf.contains("ESC ignore"));
-        assert!(conf.contains("WHEEL_UP add video-zoom 0.1"));
-        assert!(conf.contains("WHEEL_DOWN add video-zoom -0.1"));
+        assert!(!conf.contains("ignore"));
+        assert!(!conf.contains("video-zoom"));
     }
 
     #[test]

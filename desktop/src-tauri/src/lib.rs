@@ -145,19 +145,16 @@ pub(crate) fn mpv_args(
     title: &str,
     start_position_ms: u64,
     user_agent: Option<&str>,
-    wid: Option<i64>,
     ipc: Option<&Path>,
     input_conf: Option<&Path>,
     sub_file: Option<&Path>,
-    geometry: Option<&str>,
 ) -> Vec<String> {
+    // mpv 自己开一个普通窗口：有边框、有进度条、自己管全屏，Hub 不再把画面嵌进网页。
     let mut args = vec![
         "--force-window=yes".to_string(),
         "--keep-open=no".to_string(),
         "--ytdl=no".to_string(),
-        "--osc=no".to_string(),
-        "--no-border".to_string(),
-        "--focus-on=never".to_string(),
+        "--osc=yes".to_string(),
         "--cache=yes".to_string(),
         "--network-timeout=20".to_string(),
         format!("--title={}", title.replace(['\n', '\r'], " ")),
@@ -168,14 +165,6 @@ pub(crate) fn mpv_args(
         // Only --user-agent. --http-header-fields is a comma list and would
         // split a normal Mozilla UA into bogus headers, so 115 rejects the URL.
         args.push(format!("--user-agent={agent}"));
-    }
-    if let Some(wid) = wid {
-        args.push(format!("--wid={wid}"));
-    }
-    if let Some(geometry) = geometry.filter(|value| !value.is_empty()) {
-        args.push(format!("--geometry={geometry}"));
-        args.push("--ontop=yes".to_string());
-        args.push("--macos-fs-animation=no".to_string());
     }
     if let Some(ipc) = ipc {
         args.push(format!("--input-ipc-server={}", ipc.display()));
@@ -315,20 +304,18 @@ mod tests {
     #[test]
     fn mpv_args_keep_comma_user_agent_out_of_header_lists() {
         let agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
-        let args = mpv_args("范海辛", 0, Some(agent), Some(42), None, None, None, None);
-        assert!(args.iter().any(|arg| arg == "--osc=no"));
+        let args = mpv_args("范海辛", 0, Some(agent), None, None, None);
         assert!(args.iter().any(|arg| arg == "--cache=yes"));
         assert!(args.iter().any(|arg| arg == "--network-timeout=20"));
         assert!(args.iter().any(|arg| arg == "--slang=zh,chi,zh-Hans,zh-CN,zh-TW,zh-HK"));
         assert!(args.iter().any(|arg| arg == &format!("--user-agent={agent}")));
-        assert!(args.iter().any(|arg| arg == "--wid=42"));
         assert!(args.iter().all(|arg| !arg.starts_with("--http-header-fields")));
     }
 
     #[test]
     fn mpv_args_attach_external_subtitle() {
         let path = PathBuf::from(r"C:\Temp\media-hub-sub.ass");
-        let args = mpv_args("片", 0, None, None, None, None, Some(&path), None);
+        let args = mpv_args("片", 0, None, None, None, Some(&path));
         assert!(args.iter().any(|arg| arg == &format!("--sub-file={}", path.display())));
         assert!(args.iter().any(|arg| arg == "--sid=auto"));
         assert!(args.iter().any(|arg| arg == "--sub-visibility=yes"));
@@ -336,12 +323,13 @@ mod tests {
     }
 
     #[test]
-    fn mpv_args_windowed_geometry_skips_wid() {
-        let args = mpv_args("片", 0, None, None, None, None, None, Some("800x450+110+60"));
-        assert!(args.iter().any(|arg| arg == "--geometry=800x450+110+60"));
-        assert!(args.iter().any(|arg| arg == "--ontop=yes"));
-        assert!(args.iter().any(|arg| arg == "--macos-fs-animation=no"));
-        assert!(args.iter().all(|arg| !arg.starts_with("--wid=")));
+    fn mpv_args_open_a_normal_player_window() {
+        let args = mpv_args("片", 0, None, None, None, None);
+        assert!(args.iter().any(|arg| arg == "--osc=yes"));
+        assert!(args.iter().any(|arg| arg == "--force-window=yes"));
+        for embedded in ["--wid=", "--geometry=", "--no-border", "--ontop=", "--focus-on="] {
+            assert!(args.iter().all(|arg| !arg.starts_with(embedded)), "{embedded} 不该再出现");
+        }
     }
 
     #[test]

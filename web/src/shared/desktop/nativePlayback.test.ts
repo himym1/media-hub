@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { attachNativeSubtitle, boundsFromElement, bytesToBase64, canPlayNatively, closePlayerWindow, controlNatively, nativeSubtitleFromBytes, openPlayerWindow, playNatively, setNativeCursorVisible, toggleNativeWindow } from './nativePlayback'
+import { attachNativeSubtitle, bytesToBase64, canPlayNatively, closePlayerWindow, controlNatively, nativeSubtitleFromBytes, openPlayerWindow, playNatively } from './nativePlayback'
 
 afterEach(() => {
   delete (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
@@ -17,7 +17,7 @@ describe('nativePlayback', () => {
     expect(canPlayNatively()).toBe(true)
   })
 
-  it('invokes play_native with the embed bounds and subtitle', async () => {
+  it('invokes play_native with the subtitle and a viewport rect old shells still expect', async () => {
     const invoke = vi.fn(async () => undefined)
     ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
     const subtitle = nativeSubtitleFromBytes(new TextEncoder().encode('hello').buffer, 'chi.ass')
@@ -25,7 +25,6 @@ describe('nativePlayback', () => {
       title: '验收影片',
       startPositionMs: 1500,
       userAgent: 'Mozilla/5.0 MediaHub',
-      bounds: { x: 10, y: 64, width: 1200, height: 640 },
       subtitle,
     })
     expect(invoke).toHaveBeenCalledWith('play_native', {
@@ -33,7 +32,7 @@ describe('nativePlayback', () => {
       title: '验收影片',
       startPositionMs: 1500,
       userAgent: 'Mozilla/5.0 MediaHub',
-      bounds: { x: 10, y: 64, width: 1200, height: 640 },
+      bounds: { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight },
       subtitleBase64: bytesToBase64(new TextEncoder().encode('hello').buffer),
       subtitleFileName: 'chi.ass',
     })
@@ -50,13 +49,6 @@ describe('nativePlayback', () => {
     })
   })
 
-  it('reads bounds from an element box', () => {
-    const element = {
-      getBoundingClientRect: () => ({ left: 12, top: 48, width: 800, height: 450 }),
-    } as unknown as Element
-    expect(boundsFromElement(element)).toEqual({ x: 12, y: 48, width: 800, height: 450 })
-  })
-
   it('surfaces a generic message when the native error contains a url', async () => {
     const invoke = vi.fn(async () => {
       throw 'failed https://cdn.example/movie.mkv'
@@ -64,7 +56,6 @@ describe('nativePlayback', () => {
     ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
     await expect(playNatively('https://cdn.example/movie.mkv', {
       title: '验收影片',
-      bounds: { x: 0, y: 0, width: 100, height: 100 },
     })).rejects.toThrow('系统播放器未能打开这路流。')
   })
 
@@ -75,7 +66,6 @@ describe('nativePlayback', () => {
     ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
     await expect(playNatively('https://cdn.example/movie.mkv', {
       title: '验收影片',
-      bounds: { x: 0, y: 0, width: 100, height: 100 },
     })).rejects.toThrow('未找到 mpv。请先安装 mpv 并确保在 PATH 中。')
   })
 
@@ -90,24 +80,6 @@ describe('nativePlayback', () => {
     expect(invoke).toHaveBeenCalledWith('native_control', { action: 'zoom', value: 1.2, mode: undefined })
     expect(invoke).toHaveBeenCalledWith('native_control', { action: 'cycle-audio', value: undefined, mode: undefined })
     expect(invoke).toHaveBeenCalledWith('native_control', { action: 'subtitles', value: 0, mode: undefined })
-  })
-
-  it('toggles the desktop window maximize state', async () => {
-    const invoke = vi.fn(async () => undefined)
-    ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
-    await toggleNativeWindow()
-    expect(invoke).toHaveBeenCalledWith('toggle_native_window', {})
-    await toggleNativeWindow(false)
-    expect(invoke).toHaveBeenCalledWith('toggle_native_window', { fullscreen: false })
-  })
-
-  it('hides the desktop pointer without failing on older shells', async () => {
-    const invoke = vi.fn(async () => undefined)
-    ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: typeof invoke } }).__TAURI_INTERNALS__ = { invoke }
-    await setNativeCursorVisible(false)
-    expect(invoke).toHaveBeenCalledWith('set_native_cursor_visible', { visible: false })
-    invoke.mockRejectedValueOnce('missing')
-    await expect(setNativeCursorVisible(true)).resolves.toBeUndefined()
   })
 
   it('opens a dedicated player window', async () => {

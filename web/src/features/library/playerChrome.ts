@@ -56,65 +56,8 @@ export function shouldAutoHidePlayerChrome(
   playing: boolean,
   pinned: boolean,
   hasError: boolean,
-  nativePointerReady = true,
 ) {
-  return playing && !pinned && !hasError && nativePointerReady
-}
-
-export type NativePointer = {
-  x: number
-  y: number
-  hover: boolean
-}
-
-export function nativePointerFromStatus(status: {
-  mouseX?: number
-  mouseY?: number
-  cursorHover?: boolean
-}): NativePointer | null {
-  if (typeof status.mouseX !== 'number' || typeof status.mouseY !== 'number') return null
-  return {
-    x: status.mouseX,
-    y: status.mouseY,
-    hover: Boolean(status.cursorHover),
-  }
-}
-
-export function shouldRevealChromeFromNativePointer(previous: NativePointer | null, next: NativePointer) {
-  if (!next.hover) return false
-  if (!previous) return true
-  return !previous.hover || previous.x !== next.x || previous.y !== next.y
-}
-
-export function shouldArmNativeChromeHide(previous: NativePointer | null, next: NativePointer) {
-  return Boolean(previous && next.hover && (previous.x !== next.x || previous.y !== next.y))
-}
-
-export function playerChromeInsets(
-  visible: boolean,
-  toolbar?: { getBoundingClientRect: () => { height: number } } | null,
-  chrome?: { getBoundingClientRect: () => { height: number } } | null,
-) {
-  if (!visible) return { top: 0, bottom: 0 }
-  return {
-    top: Math.max(56, Math.round(toolbar?.getBoundingClientRect().height ?? 72)),
-    bottom: Math.max(96, Math.round(chrome?.getBoundingClientRect().height ?? 148)),
-  }
-}
-
-export function nativeEmbedRect(
-  hole: { getBoundingClientRect: () => { left: number; top: number; width: number; height: number } },
-  insets: { top: number; bottom: number },
-) {
-  const rect = hole.getBoundingClientRect()
-  const top = Math.max(0, insets.top)
-  const bottom = Math.max(0, insets.bottom)
-  return {
-    x: rect.left,
-    y: rect.top + top,
-    width: Math.max(8, rect.width),
-    height: Math.max(8, rect.height - top - bottom),
-  }
+  return playing && !pinned && !hasError
 }
 
 export const playerClickDelayMs = 280

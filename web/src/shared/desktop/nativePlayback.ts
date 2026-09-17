@@ -14,7 +14,6 @@ export type NativePlayRequest = {
   title: string
   startPositionMs?: number
   userAgent?: string
-  bounds: NativeBounds
   subtitle?: NativeSubtitle | null
 }
 
@@ -29,6 +28,7 @@ export type NativeStatus = {
   mouseX?: number
   mouseY?: number
   fullscreen?: boolean
+  running?: boolean
   subtitles?: boolean
 }
 
@@ -55,9 +55,9 @@ export function nativePlayErrorMessage(cause: unknown) {
   return raw
 }
 
-export function boundsFromElement(element: Element): NativeBounds {
-  const rect = element.getBoundingClientRect()
-  return { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
+/// 0.21.29 之前的桌面壳按这块矩形把 mpv 嵌进网页，新壳忽略它。
+function legacyEmbedBounds(): NativeBounds {
+  return { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }
 }
 
 export function bytesToBase64(buffer: ArrayBuffer) {
@@ -94,7 +94,7 @@ export async function playNatively(streamUrl: string, request: NativePlayRequest
     title: request.title,
     startPositionMs: request.startPositionMs ?? 0,
     userAgent: request.userAgent ?? '',
-    bounds: request.bounds,
+    bounds: legacyEmbedBounds(),
     subtitleBase64: request.subtitle?.base64 ?? '',
     subtitleFileName: request.subtitle?.fileName ?? '',
   })
@@ -105,10 +105,6 @@ export async function attachNativeSubtitle(subtitle: NativeSubtitle) {
     subtitleBase64: subtitle.base64,
     subtitleFileName: subtitle.fileName,
   })
-}
-
-export async function layoutNatively(bounds: NativeBounds) {
-  await invokeNative('layout_native', { bounds })
 }
 
 export async function stopNatively() {
@@ -124,21 +120,6 @@ export async function nativeStatus(): Promise<NativeStatus | null> {
     return await invokeNative('native_status') as NativeStatus
   } catch {
     return null
-  }
-}
-
-export async function toggleNativeWindow(fullscreen?: boolean) {
-  await invokeNative(
-    'toggle_native_window',
-    fullscreen === undefined ? {} : { fullscreen },
-  )
-}
-
-export async function setNativeCursorVisible(visible: boolean) {
-  try {
-    await invokeNative('set_native_cursor_visible', { visible })
-  } catch {
-    // Older shells hide the pointer with CSS only.
   }
 }
 
