@@ -177,6 +177,15 @@ class ServicesViewModel(
         )
     }
 
+    fun discardSettingsChanges() {
+        val settings = _uiState.value.providerSettings
+        _uiState.value = _uiState.value.copy(
+            settingsDraft = settings?.toUpdate(),
+            settingsDirty = false,
+            settingsSaved = false,
+        )
+    }
+
     fun saveSettings() {
         val draft = _uiState.value.settingsDraft ?: return
         if (_uiState.value.savingSettings) return

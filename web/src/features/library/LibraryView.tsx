@@ -837,7 +837,16 @@ export function LibraryView() {
             </div>
           ) : null}
           <div className="library-poster-grid">
-            {items.map((item) => <LibraryPosterCard item={item} key={item.id} onSelect={selectItem} selected={item.id === itemId} />)}
+            {items.map((item) => (
+              <LibraryPosterCard
+                inPagePlayback={inPagePlayback}
+                item={item}
+                key={item.id}
+                onPlay={startPlay}
+                onSelect={selectItem}
+                selected={item.id === itemId}
+              />
+            ))}
           </div>
           {!submittedQuery && total > pageSize ? (
             <div aria-label="底部页面导航" className="library-pagination library-pagination-bottom">
@@ -875,49 +884,72 @@ export function LibraryView() {
   )
 }
 
-function LibraryPosterCard({ item, selected, onSelect }: { item: EmbyItem; selected: boolean; onSelect: (id: string) => void }) {
+function LibraryPosterCard({
+  item,
+  selected,
+  inPagePlayback,
+  onSelect,
+  onPlay,
+}: {
+  item: EmbyItem
+  selected: boolean
+  inPagePlayback: boolean
+  onSelect: (id: string) => void
+  onPlay: (target: Pick<EmbyItem, 'id' | 'name' | 'externalUrl'>) => void
+}) {
   const [failed, setFailed] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
   const isPlayed = Boolean(item.played)
   const isProgress = (item.playbackPositionMs ?? 0) >= 30_000 && !isPlayed
   const status = isPlayed || isProgress ? playbackStatus(item) : ''
+  const playable = inPagePlayback && (item.type === 'Movie' || item.type === 'Video')
 
   return (
-    <button aria-pressed={selected} className={selected ? 'library-poster-card selected' : 'library-poster-card'} onClick={() => onSelect(item.id)} type="button">
-      <span className="library-poster-frame">
-        {!failed ? (
-          <img
-            alt=""
-            className={imgLoaded ? 'fade-in-image loaded' : 'fade-in-image'}
-            decoding="async"
-            height={240}
-            loading="lazy"
-            onError={() => setFailed(true)}
-            onLoad={() => setImgLoaded(true)}
-            src={embyPrimaryImageURL(item.id)}
-            width={160}
-          />
-        ) : (
-          <span aria-hidden="true" className="library-poster-fallback"><Film size={28} /></span>
-        )}
-        <div aria-hidden="true" className="poster-vignette" />
-        <div aria-hidden="true" className="poster-hover-overlay">
-          <span className="poster-play-icon"><Play fill="currentColor" size={18} /></span>
-        </div>
-        {status ? (
-          <span className={isPlayed ? 'library-poster-badge played' : 'library-poster-badge in-progress'}>
-            {status}
-          </span>
+    <article className={selected ? 'library-poster-card selected' : 'library-poster-card'}>
+      <div className="library-poster-hit">
+        <button aria-pressed={selected} className="library-poster-frame" onClick={() => onSelect(item.id)} type="button">
+          {!failed ? (
+            <img
+              alt=""
+              className={imgLoaded ? 'fade-in-image loaded' : 'fade-in-image'}
+              decoding="async"
+              height={240}
+              loading="lazy"
+              onError={() => setFailed(true)}
+              onLoad={() => setImgLoaded(true)}
+              src={embyPrimaryImageURL(item.id)}
+              width={160}
+            />
+          ) : (
+            <span aria-hidden="true" className="library-poster-fallback"><Film size={28} /></span>
+          )}
+          <div aria-hidden="true" className="poster-vignette" />
+          {playable ? <div aria-hidden="true" className="poster-hover-overlay" /> : null}
+          {status ? (
+            <span className={isPlayed ? 'library-poster-badge played' : 'library-poster-badge in-progress'}>
+              {status}
+            </span>
+          ) : null}
+        </button>
+        {playable ? (
+          <button
+            aria-label={`播放 ${item.name}`}
+            className="poster-play-icon"
+            onClick={() => onPlay(item)}
+            type="button"
+          >
+            <Play fill="currentColor" size={18} />
+          </button>
         ) : null}
-      </span>
-      <span className="library-poster-meta">
+      </div>
+      <button className="library-poster-meta" onClick={() => onSelect(item.id)} type="button">
         <strong className="poster-title">{item.name}</strong>
         <span className="poster-subtitle">
           <span className="poster-type">{mediaTypeLabel(item.type)}</span>
           {item.year ? <span className="poster-year">· {item.year}</span> : null}
         </span>
-      </span>
-    </button>
+      </button>
+    </article>
   )
 }
 

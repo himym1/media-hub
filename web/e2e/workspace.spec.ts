@@ -55,6 +55,7 @@ test('discovery preserves search state through browser history', async ({ page }
   await installApiFixtures(page)
   await page.goto('/?view=discover')
   await expect(page.getByRole('heading', { name: '发现', level: 1 })).toBeVisible()
+  await page.getByText('导入链接').click()
   await expect(page.getByRole('heading', { name: '导入视频' })).toBeVisible()
   await expect(page.getByRole('heading', { name: '网页抓取' })).toHaveCount(0)
   if (testInfo.project.name === 'desktop') {
@@ -75,7 +76,8 @@ test('discovery preserves search state through browser history', async ({ page }
   expect(page.url()).not.toContain('fixture-token')
 
   await page.getByRole('link', { name: '任务', exact: true }).first().click()
-  await expect(page).toHaveURL(/view=transfers.*task=task-1/)
+  await expect(page).toHaveURL(/view=transfers/)
+  await expect(page.getByRole('button', { name: /验收影片/ }).first()).toBeVisible()
   await page.goBack()
   await expect(page.getByLabel('搜索电影或电视剧')).toHaveValue('验收影片')
   await expect(page.getByRole('button', { name: /验收影片.*2160p/ })).toBeVisible()
@@ -298,7 +300,7 @@ test('settings tabs support arrow keys and protect unsaved provider changes', as
 
   await page.getByRole('tab', { name: '账户' }).click()
   await expect(page).toHaveURL(/settings=account/)
-  await expect(page.getByRole('heading', { name: '服务与设置' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '系统设置' })).toBeVisible()
 
   await expectNoSeriousAccessibilityViolations(page)
   await attachScreenshot(page, testInfo, 'settings-account')
@@ -340,7 +342,7 @@ test('all workspace destinations meet the accessibility gate', async ({ page }, 
     ['subscriptions', '订阅'],
     ['library', '媒体库'],
     ['operations', '运营工具'],
-    ['settings&settings=overview', '服务与设置'],
+    ['settings&settings=overview', '系统设置'],
   ] as const
 
   for (const [route, heading] of destinations) {

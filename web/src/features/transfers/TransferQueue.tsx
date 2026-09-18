@@ -105,9 +105,9 @@ export function TransferQueue({ query }: TransferQueueProps) {
   useEffect(() => {
     if (!currentQuery.data) return
     if (selectedID && jobs.some((job) => job.id === selectedID)) return
-    const fallback = jobs[0]?.id ?? null
-    setSelectedID(fallback)
-    commitUrl({ task: fallback }, 'replace')
+    if (!selectedID) return
+    setSelectedID(null)
+    commitUrl({ task: null }, 'replace')
   }, [currentQuery.data, jobs, selectedID])
 
   const selectTask = (id: string) => {
@@ -249,6 +249,7 @@ export function TransferQueue({ query }: TransferQueueProps) {
 
           <aside className="task-detail" aria-label="任务详情">
             {detail.isLoading && !detail.data ? <div className="status-loading">正在读取…</div> : null}
+            {!selectedID ? <div className="empty-inline">选择左侧任务查看进度</div> : null}
             {detail.data ? <>
               <div className="task-detail-heading"><div><h2>{detail.data.title}</h2></div><span className={`state-chip ${detail.data.state}`}>{jobStateLabel(detail.data.state, detail.data.source)}</span></div>
               <div aria-label="工作流阶段" className="task-pipeline">

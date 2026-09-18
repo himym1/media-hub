@@ -127,21 +127,6 @@ export function DiscoveryView({
   })
 
   useEffect(() => {
-    const focusSearch = (event: KeyboardEvent) => {
-      const isInput = document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA' || document.activeElement?.tagName === 'SELECT'
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        inputRef.current?.focus()
-      } else if (event.key === '/' && !isInput) {
-        event.preventDefault()
-        inputRef.current?.focus()
-      }
-    }
-    window.addEventListener('keydown', focusSearch)
-    return () => window.removeEventListener('keydown', focusSearch)
-  }, [])
-
-  useEffect(() => {
     const restoreSearch = () => {
       const restored = searchStateFromLocation()
       setQuery(restored.query)
@@ -337,13 +322,21 @@ export function DiscoveryView({
               <X aria-hidden="true" size={16} />
             </button>
           ) : (
-            <kbd aria-hidden="true" className="search-shortcut">⌘K</kbd>
+            <kbd aria-hidden="true" className="search-shortcut">/</kbd>
           )}
           <button disabled={!query.trim() || search.isFetching} type="submit">{search.isFetching ? '查找中…' : '搜索'}</button>
         </form>
         <div className="search-meta"><span>{sourceIntegration?.detail ?? '资源源尚未配置'}</span>{submittedQuery ? <><span>·</span><span>{search.data?.partial ? '部分结果' : '已列出可获取版本'}</span></> : null}</div>
-        <ShareImportForm onImported={onTransferCreated} />
-        <PageCaptureForm onImported={onTransferCreated} />
+        <details className="discovery-import-details">
+          <summary className="discovery-import-summary">
+            <FolderInput aria-hidden="true" size={14} />
+            <span>导入链接</span>
+          </summary>
+          <div className="discovery-import-body">
+            <ShareImportForm onImported={onTransferCreated} />
+            <PageCaptureForm onImported={onTransferCreated} />
+          </div>
+        </details>
       </section>
 
       {!submittedQuery ? (

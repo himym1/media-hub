@@ -246,7 +246,7 @@ private fun ServicesTwoPane(
                     .padding(horizontal = 12.dp, vertical = 8.dp)
                     .testTag("services-section-list"),
             ) {
-                MediaHubCard {
+                MediaHubCard(elevated = false) {
                     serviceSectionOptions.forEachIndexed { index, (key, label) ->
                         if (index > 0) MediaHubListDivider()
                         MediaHubPreferenceRow(
@@ -330,7 +330,7 @@ private fun LazyListScope.servicesSectionItems(
                 "overview" -> {
                     item(key = "summary") {
                         MediaHubSmallTitle(text = "服务状态")
-                        MediaHubCard {
+                        MediaHubCard(elevated = false) {
                             MediaHubPreferenceRow(
                                 title = serviceSummary(uiState.loading, uiState.integrations),
                                 summary = "点按刷新各外部服务健康状态",
@@ -353,7 +353,7 @@ private fun LazyListScope.servicesSectionItems(
                     uiState.strmStatus?.let { status ->
                         item(key = "strm") {
                             MediaHubSmallTitle(text = "内置 STRM")
-                            MediaHubCard {
+                            MediaHubCard(elevated = false) {
                                 MediaHubPreferenceRow(
                                     title = "内置写入",
                                     summary = when {
@@ -370,7 +370,7 @@ private fun LazyListScope.servicesSectionItems(
                                             onClick = onSyncSTRM,
                                         )
                                     },
-                                )
+                                    )
                             }
                         }
                     }
@@ -380,7 +380,7 @@ private fun LazyListScope.servicesSectionItems(
                     if (uiState.sourceCheckIns.isNotEmpty()) {
                         item(key = "source-checkins") {
                             MediaHubSmallTitle(text = "资源签到")
-                            MediaHubCard {
+                            MediaHubCard(elevated = false) {
                                 uiState.sourceCheckIns.forEachIndexed { index, item ->
                                     if (index > 0) MediaHubListDivider()
                                     MediaHubPreferenceRow(
@@ -401,7 +401,7 @@ private fun LazyListScope.servicesSectionItems(
                     }
                     item(key = "drive-authorization") {
                         MediaHubSmallTitle(text = "115 扫码授权")
-                        MediaHubCard(insideMargin = PaddingValues(16.dp)) {
+                        MediaHubCard(insideMargin = PaddingValues(16.dp), elevated = false) {
                             val qrDataURL = uiState.driveAuthorization?.qrImage
                             val qrBitmap = remember(qrDataURL) { qrDataURL?.let(::decodeQRImage) }
                             if (qrBitmap != null) {
@@ -455,7 +455,7 @@ private fun LazyListScope.servicesSectionItems(
                 else -> {
                     item(key = "password") {
                         MediaHubSmallTitle(text = "管理员密码")
-                        MediaHubCard(insideMargin = PaddingValues(16.dp)) {
+                        MediaHubCard(insideMargin = PaddingValues(16.dp), elevated = false) {
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 MediaHubText(
                                     text = "修改密码后会撤销其他设备会话",
@@ -509,7 +509,7 @@ private fun LazyListScope.servicesSectionItems(
                     item(key = "android-update") {
                         val release = uiState.androidRelease
                         MediaHubSmallTitle(text = "应用更新")
-                        MediaHubCard(insideMargin = PaddingValues(16.dp)) {
+                        MediaHubCard(insideMargin = PaddingValues(16.dp), elevated = false) {
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 MediaHubText(
                                     text = release?.let { androidUpdateCardSummary(it) } ?: "当前已是最新版本",
@@ -555,7 +555,7 @@ private fun LazyListScope.servicesSectionItems(
                     }
                     item(key = "server") {
                         MediaHubSmallTitle(text = "连接与会话")
-                        MediaHubCard {
+                        MediaHubCard(elevated = false) {
                             MediaHubPreferenceRow(
                                 title = "更换服务器",
                                 summary = "切换到另一套 Media Hub 部署",
@@ -582,7 +582,7 @@ private fun LazyListScope.servicesSectionItems(
 @Composable
 private fun OperationalSummary(statistics: OperationalStatistics) {
     MediaHubSmallTitle(text = "概况")
-    MediaHubCard {
+    MediaHubCard(elevated = false) {
         MediaHubPreferenceRow(title = "进行中", summary = "${statistics.transfersActive}")
         MediaHubListDivider()
         MediaHubPreferenceRow(
@@ -657,7 +657,7 @@ private fun statusLabel(status: String): String = when (status) {
 }
 
 private fun statusColor(status: String) = when (status) {
-    "healthy" -> MediaHubColors.Source
+    "healthy" -> MediaHubColors.Success
     "degraded" -> MediaHubColors.Warning
     "unavailable" -> MediaHubColors.Error
     else -> MediaHubColors.TextMuted

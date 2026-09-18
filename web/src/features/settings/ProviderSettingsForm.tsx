@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CalendarCheck, Film, KeyRound, MessageSquare, Save, Search, ServerCog, Waypoints } from 'lucide-react'
+import { CalendarCheck, Film, KeyRound, MessageSquare, Save, Search, Waypoints } from 'lucide-react'
 import type { ProviderSettings, ProviderSettingsUpdate, SecretUpdate } from '../../shared/api/mediaHub'
 
 type Props = {
@@ -89,7 +89,7 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
 
   return (
     <form className="provider-settings" onChange={onDirty} onSubmit={(event) => { event.preventDefault(); onSave(draft) }}>
-      <div className="section-heading"><div><h2>服务接入设置</h2></div><ServerCog size={20} /></div>
+      <h2 className="sr-only">服务接入设置</h2>
 
       <section className="settings-group" aria-labelledby="core-services-heading">
         <div className="settings-group-header">
@@ -241,7 +241,7 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
           <h3 id="checkin-settings-heading"><CalendarCheck size={17} />每日签到</h3>
           <p>按北京时间每天签一次。关闭自动签到后仍可在概览手动签到。</p>
         </div>
-        <fieldset>
+        <fieldset className="checkin-card">
           <legend>签到计划</legend>
           <label className="inline-check">
             <input checked={draft.checkIn.enabled} name="checkin-enabled" onChange={(event) => setDraft((current) => ({ ...current, checkIn: { ...current.checkIn, enabled: event.target.checked } }))} type="checkbox" />

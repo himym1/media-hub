@@ -495,7 +495,10 @@ class SearchViewModel(
             )
             try {
                 repository.createTransfer(token)
-                _uiState.value = _uiState.value.copy(transferringCandidateId = null)
+                _uiState.value = _uiState.value.copy(
+                    transferringCandidateId = null,
+                    transferMessage = "已加入任务",
+                )
                 _events.emit(SearchEvent.TransferCreated)
             } catch (error: ApiException) {
                 _uiState.value = _uiState.value.copy(

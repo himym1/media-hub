@@ -44,7 +44,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.BellPlus
+import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.Film
 import com.composables.icons.lucide.Flame
 import com.composables.icons.lucide.LayoutGrid
@@ -227,7 +229,7 @@ internal fun SearchScreen(
                     StatusMessage(message, MediaHubColors.Warning)
                 }
                 uiState.transferMessage?.let { message ->
-                    StatusMessage(message, MediaHubColors.Error)
+                    StatusMessage(message, transferMessageColor(message))
                 }
                 LazyColumn(
                     modifier = Modifier.weight(1f),
@@ -334,14 +336,6 @@ internal fun SearchScreen(
                         onRefresh = onRefreshOverview,
                         onOpenDetail = { showHealthDialog = true },
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
-                    )
-                }
-                item(key = "share-import") {
-                    ShareImportCard(
-                        importing = uiState.shareImporting,
-                        message = uiState.shareImportMessage,
-                        onImport = onImportShare,
-                        modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
 
@@ -503,6 +497,15 @@ internal fun SearchScreen(
                             )
                         }
                     }
+
+                    item(key = "share-import") {
+                        ShareImportCard(
+                            importing = uiState.shareImporting,
+                            message = uiState.shareImportMessage,
+                            onImport = onImportShare,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
                 }
             }
         }
@@ -662,8 +665,8 @@ private fun HeroGalleryCarousel(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color(0xCC080A0D),
-                                Color(0xF5080A0D),
+                                MediaHubColors.Canvas.copy(alpha = 0.85f),
+                                MediaHubColors.Canvas.copy(alpha = 0.96f),
                             ),
                             startY = 40f,
                         ),
@@ -1036,7 +1039,7 @@ private fun SearchTwoPane(
                     }
                     uiState.errorMessage?.let { StatusMessage(it, MediaHubColors.Error) }
                     uiState.sourceMessage?.let { StatusMessage(it, MediaHubColors.Warning) }
-                    uiState.transferMessage?.let { StatusMessage(it, MediaHubColors.Error) }
+                    uiState.transferMessage?.let { StatusMessage(it, transferMessageColor(it)) }
                     LazyColumn(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(vertical = 8.dp),
@@ -1140,13 +1143,6 @@ private fun SearchIdleOverview(
                 onOpenDetail = onOpenDetail,
             )
         }
-        item {
-            ShareImportCard(
-                importing = uiState.shareImporting,
-                message = uiState.shareImportMessage,
-                onImport = onImportShare,
-            )
-        }
         if (uiState.heroItems.isNotEmpty()) {
             item {
                 HeroGalleryCarousel(
@@ -1240,6 +1236,13 @@ private fun SearchIdleOverview(
                 )
             }
         }
+        item {
+            ShareImportCard(
+                importing = uiState.shareImporting,
+                message = uiState.shareImportMessage,
+                onImport = onImportShare,
+            )
+        }
     }
 }
 
@@ -1316,7 +1319,7 @@ private fun SearchCandidateDetail(
                 }
             }
             uiState.transferMessage?.let { message ->
-                item { StatusMessage(message, MediaHubColors.Error) }
+                item { StatusMessage(message, transferMessageColor(message)) }
             }
             if (uiState.recommendations.isNotEmpty()) {
                 item { MediaHubSmallTitle(text = "相似内容") }
@@ -1539,30 +1542,71 @@ private fun ShareImportCard(
     onImport: (String, String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var expanded by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("") }
     var receiveCode by remember { mutableStateOf("") }
     var title by remember { mutableStateOf("") }
-    MediaHubCard(modifier = modifier, insideMargin = PaddingValues(16.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            MediaHubSmallTitle(text = "导入视频")
-            MediaHubText(
-                text = "贴 115 分享、磁力或视频直链。115 离线拉到成人库，文件不经过 Media Hub。",
-                color = MediaHubColors.TextMuted,
-                fontSize = 12.sp,
-            )
-            MediaHubTextField(value = url, onValueChange = { url = it }, placeholder = "115 分享、磁力或视频直链")
-            MediaHubTextField(value = receiveCode, onValueChange = { receiveCode = it.take(8) }, placeholder = "提取码，可选")
-            MediaHubTextField(value = title, onValueChange = { title = it }, placeholder = "番号或标题，可选")
-            MediaHubButton(
-                label = if (importing) "正在导入" else "导入成人库",
-                enabled = !importing && canSubmitShareImport(url, receiveCode),
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { onImport(url, receiveCode, title) },
-            )
-            if (!message.isNullOrBlank()) {
-                MediaHubText(text = message, color = MediaHubColors.TextMuted, fontSize = 12.sp)
+
+    val isExpanded = expanded || importing || !message.isNullOrBlank()
+
+    MediaHubCard(modifier = modifier, insideMargin = PaddingValues(0.dp), elevated = false) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    MediaHubSmallTitle(text = "导入视频")
+                    MediaHubText(
+                        text = "贴 115 分享、磁力或视频直链",
+                        color = MediaHubColors.TextMuted,
+                        fontSize = 12.sp,
+                    )
+                }
+                MediaHubIcon(
+                    imageVector = if (isExpanded) Lucide.ChevronUp else Lucide.ChevronDown,
+                    contentDescription = if (isExpanded) "收起" else "展开",
+                    tint = MediaHubColors.TextMuted,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            if (isExpanded) {
+                MediaHubListDivider()
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    MediaHubText(
+                        text = "115 离线拉到成人库，文件不经过 Media Hub。",
+                        color = MediaHubColors.TextMuted,
+                        fontSize = 12.sp,
+                    )
+                    MediaHubTextField(value = url, onValueChange = { url = it }, placeholder = "115 分享、磁力或视频直链")
+                    MediaHubTextField(value = receiveCode, onValueChange = { receiveCode = it.take(8) }, placeholder = "提取码，可选")
+                    MediaHubTextField(value = title, onValueChange = { title = it }, placeholder = "番号或标题，可选")
+                    MediaHubButton(
+                        label = if (importing) "正在导入" else "导入成人库",
+                        enabled = !importing && canSubmitShareImport(url, receiveCode),
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onImport(url, receiveCode, title) },
+                    )
+                    if (!message.isNullOrBlank()) {
+                        MediaHubText(text = message, color = MediaHubColors.TextMuted, fontSize = 12.sp)
+                    }
+                }
             }
         }
     }
 }
+
+private fun transferMessageColor(message: String) =
+    if (message.contains("失败") || message.contains("不能") || message.contains("无法")) {
+        MediaHubColors.Error
+    } else {
+        MediaHubColors.Success
+    }
 

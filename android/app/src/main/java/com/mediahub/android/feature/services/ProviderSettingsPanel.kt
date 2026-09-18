@@ -227,7 +227,7 @@ private fun SettingsSection(
     content: @Composable () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(defaultExpanded) }
-    MediaHubCard {
+    MediaHubCard(elevated = false) {
         MediaHubPreferenceRow(
             title = title,
             summary = subtitle,

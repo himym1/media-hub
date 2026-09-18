@@ -19,4 +19,11 @@ describe('updateUrl', () => {
     expect(next.searchParams.has('q')).toBe(false)
     expect(next.hash).toBe('#results')
   })
+
+  it('keeps subscription selection in the URL', () => {
+    const next = updateUrl(new URL('https://media.example/?view=subscriptions'), {
+      subscription: 'subscription-1',
+    })
+    expect(next.searchParams.get('subscription')).toBe('subscription-1')
+  })
 })

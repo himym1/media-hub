@@ -96,7 +96,7 @@ internal fun SubscriptionEditorScreen(
         state.errorMessage?.let { item { ErrorLine(it) } }
         item { MediaHubSmallTitle(text = "媒体身份") }
         item {
-            MediaHubCard(insideMargin = PaddingValues(16.dp)) {
+            MediaHubCard(insideMargin = PaddingValues(16.dp), elevated = false) {
                 LabeledField("标题", editor.title, { onEditorChanged(editor.copy(title = it.take(300))) }, "媒体标题")
                 Spacer(Modifier.size(12.dp))
                 LabeledField("TMDB ID", editor.tmdbId, { onEditorChanged(editor.copy(tmdbId = it.take(20))) }, "数字 ID", KeyboardType.Number, enabled = !existing)
@@ -110,9 +110,18 @@ internal fun SubscriptionEditorScreen(
                 }
             }
         }
-        item { MediaHubSmallTitle(text = "更新与质量") }
+        item { MediaHubSmallTitle(text = "更新与调度") }
         item {
-            MediaHubCard(insideMargin = PaddingValues(16.dp)) {
+            MediaHubCard(insideMargin = PaddingValues(16.dp), elevated = false) {
+                MediaHubSwitchRow(
+                    title = "启用自动运行",
+                    summary = "按设定的检查频率周期性检索资源",
+                    checked = editor.enabled,
+                    onCheckedChange = { onEditorChanged(editor.copy(enabled = it)) },
+                )
+                Spacer(Modifier.size(8.dp))
+                MediaHubListDivider()
+                Spacer(Modifier.size(12.dp))
                 OptionGroup("更新策略", listOf("once" to "首次入库", "upgrade" to "持续升级"), editor.policy) {
                     onEditorChanged(editor.copy(policy = it))
                 }
@@ -136,7 +145,7 @@ internal fun SubscriptionEditorScreen(
             }
         }
         item {
-            MediaHubCard {
+            MediaHubCard(elevated = false) {
                 MediaHubPreferenceRow(
                     title = "资源来源",
                     summary = if (editor.sourceIds.isEmpty()) "全部可用来源" else "已选择 ${editor.sourceIds.size} 个",
@@ -168,16 +177,7 @@ internal fun SubscriptionEditorScreen(
             }
         }
         item {
-            MediaHubCard {
-                MediaHubSwitchRow(
-                    title = "启用自动运行",
-                    checked = editor.enabled,
-                    onCheckedChange = { onEditorChanged(editor.copy(enabled = it)) },
-                )
-            }
-        }
-        item {
-            MediaHubCard {
+            MediaHubCard(elevated = false) {
                 MediaHubPreferenceRow(
                     title = "高级规则与媒体身份",
                     summary = "原始标题、年份与自定义筛选",

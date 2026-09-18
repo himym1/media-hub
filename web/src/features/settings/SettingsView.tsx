@@ -180,7 +180,7 @@ export function SettingsView({ desktopUpdate, integrations, onDirtyChange, onLog
   return (
     <section className="workspace-view settings-view">
       <header className="view-header compact-view-header">
-        <div><h1>服务与设置</h1><p>运行状态、服务接入和账户安全分开管理。</p></div>
+        <div><h1>系统设置</h1><p>运行状态、服务接入和账户安全分开管理。</p></div>
         <IconButton label="刷新所有服务" onClick={refreshAll} subtle><RefreshCw size={17} /></IconButton>
       </header>
       <div className="settings-tabs" role="tablist" aria-label="设置分类">

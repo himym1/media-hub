@@ -20,6 +20,7 @@ import {
   type SubscriptionRunState,
 } from '../../shared/api/mediaHub'
 import { IconButton } from '../../shared/ui/IconButton'
+import { commitUrl } from '../../shared/navigation/urlState'
 
 const emptyPreferences: SubscriptionPreferences = {
   resolutions: [],
@@ -55,6 +56,10 @@ const runLabels: Record<SubscriptionRunState, string> = {
   needs_attention: '需要确认',
 }
 
+function subscriptionIdFromLocation() {
+  return new URLSearchParams(window.location.search).get('subscription')
+}
+
 type EditorState = {
   tmdbId: string
   title: string
@@ -85,7 +90,7 @@ type SubscriptionViewProps = {
 
 export function SubscriptionView({ draftCandidate, onDraftConsumed }: SubscriptionViewProps) {
   const queryClient = useQueryClient()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(subscriptionIdFromLocation)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [editor, setEditor] = useState<EditorState>(() => emptyEditor())
   const importInput = useRef<HTMLInputElement>(null)
@@ -108,19 +113,38 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
   })
 
   useEffect(() => {
+    const restore = () => setSelectedId(subscriptionIdFromLocation())
+    window.addEventListener('popstate', restore)
+    return () => window.removeEventListener('popstate', restore)
+  }, [])
+
+  useEffect(() => {
     if (!draftCandidate?.tmdbId) return
     setSelectedId(null)
+    commitUrl({ subscription: null }, 'replace')
     setConfirmingDelete(false)
     setEditor(editorFromCandidate(draftCandidate))
     onDraftConsumed()
   }, [draftCandidate, onDraftConsumed])
 
+  const hydratedId = useRef<string | null>(null)
   useEffect(() => {
-    if (!selectedId || !subscriptions.data) return
-    if (subscriptions.data.subscriptions.some((item) => item.id === selectedId)) return
-    setSelectedId(null)
-    setConfirmingDelete(false)
-    setEditor(emptyEditor())
+    if (!selectedId) {
+      hydratedId.current = null
+      return
+    }
+    if (!subscriptions.data) return
+    const item = subscriptions.data.subscriptions.find((entry) => entry.id === selectedId)
+    if (!item) {
+      setSelectedId(null)
+      setConfirmingDelete(false)
+      setEditor(emptyEditor())
+      commitUrl({ subscription: null }, 'replace')
+      return
+    }
+    if (hydratedId.current === selectedId) return
+    hydratedId.current = selectedId
+    setEditor(editorFromSubscription(item))
   }, [selectedId, subscriptions.data])
 
   useEffect(() => {
@@ -150,6 +174,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
     onSuccess: async (item) => {
       setSelectedId(item.id)
       setEditor(editorFromSubscription(item))
+      commitUrl({ subscription: item.id }, 'replace')
       await refresh()
     },
   })
@@ -167,6 +192,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
       setConfirmingDelete(false)
       setSelectedId(null)
       setEditor(emptyEditor())
+      commitUrl({ subscription: null }, 'replace')
       await refresh()
     },
   })
@@ -205,6 +231,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
   const createNew = () => {
     setSelectedId(null)
     setEditor(emptyEditor())
+    commitUrl({ subscription: null })
   }
   const mutationError = save.error ?? toggle.error ?? runNow.error ?? remove.error ?? batch.error ?? importBackup.error
 
@@ -229,7 +256,7 @@ export function SubscriptionView({ draftCandidate, onDraftConsumed }: Subscripti
           {subscriptions.isLoading && !subscriptions.data ? <div className="status-loading">正在读取订阅…</div> : null}
           {subscriptions.isError ? <div className="inline-error"><CircleAlert size={18} /><div><strong>订阅读取失败</strong><span>{subscriptions.error.message}</span></div><button onClick={() => void subscriptions.refetch()} type="button">重试</button></div> : null}
           {subscriptions.data?.subscriptions.map((item) => (
-            <button className={item.id === selectedId ? 'subscription-row selected' : 'subscription-row'} key={item.id} onClick={() => { setSelectedId(item.id); setEditor(editorFromSubscription(item)) }} type="button">
+            <button className={item.id === selectedId ? 'subscription-row selected' : 'subscription-row'} key={item.id} onClick={() => { setSelectedId(item.id); setEditor(editorFromSubscription(item)); commitUrl({ subscription: item.id }) }} type="button">
               <span className={item.enabled ? 'subscription-state enabled' : 'subscription-state'} />
               <span><strong>{item.title}{item.season ? ` · S${item.season}` : ''}</strong><small>{item.mediaType === 'movie' ? '电影' : '剧集'} · TMDB {item.tmdbId}{item.lastEpisode ? ` · 已入库至 E${item.lastEpisode}` : ''}</small></span>
               <span className="subscription-next">{item.enabled ? formatNextRun(item.nextRunAt) : '已暂停'}</span>

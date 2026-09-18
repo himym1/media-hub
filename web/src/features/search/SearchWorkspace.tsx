@@ -83,6 +83,7 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
       q: searchQuery,
       task: null,
       archive: null,
+      subscription: null,
       library: null,
       media: null,
       settings: null,
@@ -90,34 +91,6 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
     setActiveView('发现')
     window.dispatchEvent(new PopStateEvent('popstate'))
   }, [])
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setCommandOpen((prev) => !prev)
-        return
-      }
-      if (e.key === '/' && !commandOpen && !shortcutsOpen) {
-        const target = e.target as HTMLElement | null
-        if (target && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) && !target.isContentEditable) {
-          e.preventDefault()
-          setCommandOpen(true)
-          return
-        }
-      }
-      if ((e.key === '?' || (e.shiftKey && e.key === '/')) && !commandOpen && !shortcutsOpen) {
-        const target = e.target as HTMLElement | null
-        if (target && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) && !target.isContentEditable) {
-          e.preventDefault()
-          setShortcutsOpen(true)
-          return
-        }
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [commandOpen, shortcutsOpen])
 
   useEffect(() => {
     const onPopState = () => {
@@ -157,7 +130,7 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
   const activeTransferCount = transfers.data?.transfers.filter((job) => activeTransferStates.has(job.state)).length ?? 0
   const systemActive = activeView === '运维' || activeView === '服务'
 
-  const navigate = (next: WorkspaceView) => {
+  const navigate = useCallback((next: WorkspaceView) => {
     if (next === activeView) return true
     if (activeView === '服务' && providerSettingsDirty) {
       if (!window.confirm('Provider 设置尚未保存。确定离开并放弃修改吗？')) return false
@@ -169,13 +142,46 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
       q: next === '发现' ? current.get('q') : null,
       task: next === '任务' ? current.get('task') : null,
       archive: next === '任务' ? current.get('archive') : null,
+      subscription: next === '订阅' ? current.get('subscription') : null,
       library: next === '媒体库' ? current.get('library') : null,
       media: next === '媒体库' ? current.get('media') : null,
       settings: next === '服务' ? current.get('settings') : null,
     })
     setActiveView(next)
     return true
-  }
+  }, [activeView, providerSettingsDirty, updateProviderDirty])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCommandOpen((prev) => !prev)
+        return
+      }
+      if (e.key === '/' && !commandOpen && !shortcutsOpen) {
+        const target = e.target as HTMLElement | null
+        if (target && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) && !target.isContentEditable) {
+          e.preventDefault()
+          if (activeView !== '发现') navigate('发现')
+          window.requestAnimationFrame(() => {
+            document.getElementById('media-search')?.focus()
+          })
+          return
+        }
+      }
+      if ((e.key === '?' || (e.shiftKey && e.key === '/')) && !commandOpen && !shortcutsOpen) {
+        const target = e.target as HTMLElement | null
+        if (target && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) && !target.isContentEditable) {
+          e.preventDefault()
+          setShortcutsOpen(true)
+          return
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activeView, commandOpen, navigate, shortcutsOpen])
+
   const guardedLogout = () => {
     if (activeView === '服务' && providerSettingsDirty && !window.confirm('Provider 设置尚未保存。确定退出并放弃修改吗？')) return
     updateProviderDirty(false)
@@ -268,8 +274,7 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
                 showToast('已重新探测服务连通性', 'info')
               }}
               onTransferCreated={() => {
-                showToast('已成功创建转存任务并加入流水线', 'success')
-                navigate('任务')
+                showToast('已加入任务，可在「任务」查看进度', 'success')
               }}
               onSubscribe={(candidate) => {
                 showToast(`已将《${candidate.title}》载入追番配置`, 'info')

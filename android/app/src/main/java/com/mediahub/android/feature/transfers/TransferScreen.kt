@@ -330,13 +330,13 @@ private fun TransferDetail(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        MediaHubCard(insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
+        MediaHubCard(insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp), elevated = false) {
             MediaHubPipelineStepper(steps = transferPipelineSteps(job))
         }
 
         MediaHubSmallTitle(text = "状态记录")
         job.errorMessage?.let { MediaHubText(text = it, color = MediaHubColors.Error, fontSize = 12.sp) }
-        MediaHubCard {
+        MediaHubCard(elevated = false) {
             job.events.forEachIndexed { index, event ->
                 if (index > 0) MediaHubListDivider()
                 MediaHubPreferenceRow(
@@ -354,7 +354,7 @@ private fun TransferDetail(
             }
         }
         notification?.let { item ->
-            MediaHubCard(insideMargin = PaddingValues(16.dp)) {
+            MediaHubCard(insideMargin = PaddingValues(16.dp), elevated = false) {
                 MediaHubText(
                     text = "企业微信通知结果未知",
                     color = MediaHubColors.Warning,
@@ -490,7 +490,7 @@ private fun stateLabel(state: String, source: String = ""): String {
 }
 
 private fun stateColor(state: String) = when (state) {
-    "completed" -> MediaHubColors.Source
+    "completed" -> MediaHubColors.Success
     "failed", "needs_attention" -> MediaHubColors.Error
     "retry_wait" -> MediaHubColors.Warning
     else -> MediaHubColors.Accent

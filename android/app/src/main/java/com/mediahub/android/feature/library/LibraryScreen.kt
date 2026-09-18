@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.RefreshCw
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubEmptyState
@@ -46,6 +48,7 @@ import com.mediahub.android.core.designsystem.MediaHubIcon
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubSearchField
 import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
+import com.mediahub.android.core.designsystem.MediaHubShimmerBox
 import com.mediahub.android.core.designsystem.MediaHubSmallTitle
 import com.mediahub.android.core.designsystem.MediaHubTabRow
 import com.mediahub.android.core.designsystem.MediaHubText
@@ -64,6 +67,7 @@ data class LibraryBrowseActions(
     val onSelectLibraryScope: (Boolean) -> Unit = {},
     val onSelectItem: (String) -> Unit,
     val onLoadMore: () -> Unit,
+    val onPlayItem: ((EmbyItem, PlaybackFallback) -> Unit)? = null,
 )
 
 data class LibraryDetailActions(
@@ -122,6 +126,7 @@ internal fun LibraryRoute(
         onSelectLibraryScope = browseViewModel::selectLibraryScope,
         onSelectItem = { onSelectedItemChanged(it) },
         onLoadMore = browseViewModel::loadMore,
+        onPlayItem = onPlayItem,
     )
     val detailActions = LibraryDetailActions(
         onClose = closeDetail,
@@ -262,7 +267,24 @@ internal fun LibraryScreen(
             contentPadding = PaddingValues(bottom = 20.dp),
         ) {
             items(uiState.items, key = { it.id }) { item ->
-                EmbyPosterCard(item = item, posterLoader = posterLoader, onClick = { actions.onSelectItem(item.id) })
+                EmbyPosterCard(
+                    item = item,
+                    posterLoader = posterLoader,
+                    onClick = { actions.onSelectItem(item.id) },
+                    onPlay = actions.onPlayItem?.let { play ->
+                        { play(item, PlaybackFallback(null, null)) }
+                    },
+                )
+            }
+            if (uiState.loadingItems && uiState.items.isEmpty()) {
+                items(9) {
+                    MediaHubShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(2f / 3f),
+                        shape = RoundedCornerShape(14.dp),
+                    )
+                }
             }
             if (!uiState.loadingItems && uiState.items.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -293,6 +315,7 @@ private fun EmbyPosterCard(
     item: EmbyItem,
     posterLoader: PosterLoader,
     onClick: () -> Unit,
+    onPlay: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -312,20 +335,42 @@ private fun EmbyPosterCard(
                 contentDescription = "${item.name} 海报",
                 modifier = Modifier.fillMaxSize(),
             )
+            val isDirectPlayable = item.type == "Movie" || item.type == "Video"
+            if (isDirectPlayable && onPlay != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(MediaHubColors.GlassDark)
+                        .clickable(role = Role.Button, onClickLabel = "播放") {
+                            onPlay()
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    MediaHubIcon(
+                        imageVector = Lucide.Play,
+                        contentDescription = "播放 ${item.name}",
+                        tint = MediaHubColors.Accent,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
             libraryPlaybackStatus(item)?.let { status ->
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(6.dp)
                         .background(
-                            if (item.played) MediaHubColors.Success else Color(0xD90F172A),
+                            if (item.played) MediaHubColors.Success else MediaHubColors.SurfaceHigh,
                             RoundedCornerShape(6.dp),
                         )
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
                     MediaHubText(
                         text = status,
-                        color = Color.White,
+                        color = if (item.played) Color(0xFF00382A) else MediaHubColors.TextStrong,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                     )

@@ -16,7 +16,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -60,6 +62,7 @@ import com.mediahub.android.app.installAndroidUpdate
 import com.mediahub.android.core.designsystem.MediaHubButton
 import com.mediahub.android.core.designsystem.MediaHubCenteredPane
 import com.mediahub.android.core.designsystem.MediaHubColors
+import com.mediahub.android.core.designsystem.MediaHubConfirmDialog
 import com.mediahub.android.core.designsystem.MediaHubSecondaryButton
 import com.mediahub.android.core.designsystem.MediaHubIconButton
 import com.mediahub.android.core.designsystem.MediaHubNavItem
@@ -220,19 +223,25 @@ private fun AuthenticatedWorkspace(
     val libraryDetailViewModel = viewModel<LibraryDetailViewModel>(key = "library-detail-$serverGeneration", factory = factory)
     val remoteSubtitleViewModel = viewModel<RemoteSubtitleViewModel>(key = "remote-subtitles-$serverGeneration", factory = factory)
     val servicesViewModel = viewModel<ServicesViewModel>(key = "services-$serverGeneration", factory = factory)
+    val servicesUi by servicesViewModel.uiState.collectAsState()
+    var pendingLeave by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val requestLeave: (() -> Unit) -> Unit = { action ->
+        if (inSystem && servicesUi.settingsDirty) pendingLeave = action
+        else action()
+    }
 
     WorkspaceShell(
         destination = destination,
         detailOpen = detailOpen,
-        onSystemBack = appViewModel::closeSystem,
+        onSystemBack = { requestLeave(appViewModel::closeSystem) },
         onOpenSystem = appViewModel::openSystem,
-        onPrimarySelected = appViewModel::showDestination,
+        onPrimarySelected = { dest -> requestLeave { appViewModel.showDestination(dest) } },
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             RetentionPane(active = !inSystem && destination == MainDestination.Search) {
                 SearchRoute(
                     viewModel = searchViewModel,
-                    onTransferCreated = { appViewModel.showDestination(MainDestination.Transfers) },
+                    onTransferCreated = {},
                     onSubscriptionRequested = appViewModel::prepareSubscription,
                     onOpenServices = appViewModel::openSystem,
                 )
@@ -291,12 +300,29 @@ private fun AuthenticatedWorkspace(
                 ServicesRoute(
                     viewModel = servicesViewModel,
                     onLogout = {
-                        context.startService(MediaHubPlaybackService.invalidateIntent(context))
-                        appViewModel.logout()
+                        requestLeave {
+                            context.startService(MediaHubPlaybackService.invalidateIntent(context))
+                            appViewModel.logout()
+                        }
                     },
                     onChangeServer = onChangeServer,
                 )
             }
+            MediaHubConfirmDialog(
+                visible = pendingLeave != null,
+                title = "放弃未保存的设置？",
+                message = "服务接入里的修改还没保存。离开将丢弃这些更改。",
+                confirmLabel = "放弃并离开",
+                cancelLabel = "继续编辑",
+                isDestructive = true,
+                onConfirm = {
+                    val leave = pendingLeave
+                    pendingLeave = null
+                    servicesViewModel.discardSettingsChanges()
+                    leave?.invoke()
+                },
+                onDismiss = { pendingLeave = null },
+            )
             updatePrompt?.takeUnless { it.hidden }?.let { prompt ->
                 AppUpdateDialog(
                     prompt = prompt,
