@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Film, LayoutGrid, LibraryBig, ListPlus, ListTodo, LogOut, Search, Settings2, TerminalSquare } from 'lucide-react'
+import { Film, LayoutGrid, LibraryBig, ListPlus, ListTodo, LogOut, Search, Settings2 } from 'lucide-react'
 import { getSystemOverview, listTransfers, type Candidate } from '../../shared/api/mediaHub'
 import {
   DESKTOP_LOGOUT_EVENT,
@@ -35,7 +35,6 @@ const mediaNavItems = [
 ] satisfies { label: WorkspaceView; icon: typeof LayoutGrid }[]
 
 const systemNavItems = [
-  { label: '运维', icon: TerminalSquare },
   { label: '服务', icon: Settings2 },
 ] satisfies { label: WorkspaceView; icon: typeof LayoutGrid }[]
 
@@ -134,7 +133,7 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
       : configuredCount > 0 ? '服务当前不可用' : '尚未配置服务'
   const connectionState = connectedCount > 0 ? 'healthy' : configuredCount > 0 ? 'degraded' : 'unconfigured'
   const activeTransferCount = transfers.data?.transfers.filter((job) => activeTransferStates.has(job.state)).length ?? 0
-  const systemActive = activeView === '运维' || activeView === '服务'
+  const systemActive = activeView === '服务'
 
   const navigate = useCallback((next: WorkspaceView) => {
     if (next === activeView) return true
@@ -272,7 +271,7 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
             type="button"
           >
             <Search size={14} />
-            <span className="command-trigger-label">搜索影视或快捷跳转...</span>
+            <span className="command-trigger-label">跳转或搜索…</span>
             <kbd className="command-trigger-kbd">⌘K</kbd>
           </button>
           <div className="topbar-right">
@@ -288,22 +287,10 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
           </div>
         </header>
 
-        {systemActive ? (
-          <nav className="system-subnav" aria-label="系统导航">
-            {systemNavItems.map(({ label, icon: Icon }) => <a aria-current={activeView === label ? 'page' : undefined} href={`?view=${viewSlugs[label]}`} key={label} onClick={(event) => handleNav(event, label)}><Icon size={16} />{label === '服务' ? '系统设置' : label}</a>)}
-          </nav>
-        ) : null}
-
         <DesktopUpdateBanner update={desktopUpdate} />
         <div className="page-wrap">
           <div aria-hidden={activeView !== '发现'} className="page-pane" hidden={activeView !== '发现'}>
             <DiscoveryView
-              integrations={integrations}
-              integrationsLoading={overview.isLoading && integrations.length === 0}
-              onRefreshIntegrations={() => {
-                void overview.refetch()
-                showToast('已重新探测服务连通性', 'info')
-              }}
               onTransferCreated={() => {
                 showToast('已加入任务，可在「任务」查看进度', 'success')
               }}
@@ -341,7 +328,7 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
           onOpenShortcuts={() => setShortcutsOpen(true)}
           onRefreshIntegrations={() => {
             void overview.refetch()
-            showToast('已重新探测服务集成连通性', 'success')
+            showToast('已刷新服务状态', 'success')
           }}
           onSearch={handleGlobalSearch}
         />

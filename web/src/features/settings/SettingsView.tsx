@@ -5,7 +5,6 @@ import {
   changePassword,
   getDrive115Status,
   getEmbyLibraries,
-  getOperationalStatistics,
   getProviderSettings,
   getSTRMStatus,
   getSourceCheckIns,
@@ -99,7 +98,6 @@ export function SettingsView({ desktopUpdate, integrations, onDirtyChange, onLog
       onRefresh()
     },
   })
-  const statistics = useQuery({ queryKey: ['operational-statistics'], queryFn: getOperationalStatistics, enabled: section === 'overview' })
   const authorization = useMutation({ mutationFn: startDrive115Authorization })
   const authorizationStatus = useQuery({
     queryKey: ['drive-115-authorization', authorization.data?.id],
@@ -165,7 +163,6 @@ export function SettingsView({ desktopUpdate, integrations, onDirtyChange, onLog
     void strm.refetch()
     void drive.refetch()
     void emby.refetch()
-    void statistics.refetch()
     void providerSettings.refetch()
     void checkins.refetch()
     void desktopUpdate.check()
@@ -190,7 +187,6 @@ export function SettingsView({ desktopUpdate, integrations, onDirtyChange, onLog
       </div>
 
       {section === 'overview' ? <div aria-labelledby="settings-tab-overview" className="settings-section" id="settings-panel-overview" role="tabpanel">
-        {statistics.data ? <section className="statistics-strip" aria-label="运营摘要"><div><Activity size={18} /><span>运营摘要</span></div><dl><div><dt>进行中任务</dt><dd>{statistics.data.transfersActive}</dd></div><div><dt>需要处理</dt><dd>{statistics.data.transfersNeedsAttention + statistics.data.commandsNeedsAttention + statistics.data.notificationsNeedsAttention}</dd></div><div><dt>启用订阅</dt><dd>{statistics.data.subscriptionsEnabled}</dd></div><div><dt>失败运行</dt><dd>{statistics.data.runsFailed}</dd></div></dl></section> : null}
         <div className="service-grid">{integrations.filter((integration) => integration.id !== 'qmediasync').map((integration) => { const Icon = integration.id === '115' ? HardDrive : integration.id === 'strm' ? FileVideo : integration.id === 'emby' ? Film : integration.id === 'source-checkin' ? CalendarCheck : Server; return <article className={`service-card ${integration.status}`} key={integration.id}><Icon size={20} /><div><strong>{integration.label}</strong><span>{integration.detail}</span></div><span className={`state-chip ${integration.status}`}>{statusLabel[integration.status]}</span></article> })}</div>
         <div className="diagnostic-grid">
           <section className="diagnostic-block"><div className="diagnostic-title"><FileVideo size={18} /><strong>内置 STRM</strong></div>

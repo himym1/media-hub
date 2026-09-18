@@ -9,7 +9,7 @@ afterEach(() => {
 })
 
 function withDesktopUserAgent(userAgent: string) {
-  ;(globalThis as { __TAURI_INTERNALS__: { invoke: () => void } }).__TAURI_INTERNALS__ = {
+  ;(globalThis as unknown as { __TAURI_INTERNALS__: { invoke: () => void } }).__TAURI_INTERNALS__ = {
     invoke: () => undefined,
   }
   Object.defineProperty(globalThis, 'navigator', {

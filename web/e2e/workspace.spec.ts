@@ -42,7 +42,8 @@ test('login is keyboard-ready and accessible', async ({ page }, testInfo) => {
   await installApiFixtures(page, { authenticated: false })
   await page.goto('/')
 
-  await expect(page.getByRole('heading', { name: '管理员登录' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Media Hub' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '登录' })).toBeVisible()
   const password = page.locator('#admin-password')
   await expect(password).not.toBeFocused()
   await page.keyboard.press('Tab')
@@ -341,7 +342,6 @@ test('all workspace destinations meet the accessibility gate', async ({ page }, 
     ['transfers', '任务'],
     ['subscriptions', '订阅'],
     ['library', '媒体库'],
-    ['operations', '运营工具'],
     ['settings&settings=overview', '系统设置'],
   ] as const
 
@@ -373,13 +373,13 @@ test('command palette is accessible, keyboard-operable and navigates destination
 
   const dialog = page.getByRole('dialog', { name: '全局命令面板' })
   await expect(dialog).toBeVisible()
-  const searchInput = dialog.getByLabel('搜索影视或键入操作指令')
+  const searchInput = dialog.getByLabel('跳转或搜索')
   await expect(searchInput).toBeFocused()
 
   await expectNoSeriousAccessibilityViolations(page)
 
   await searchInput.fill('任务')
-  const taskOption = dialog.getByRole('option', { name: /传输与转存任务/ })
+  const taskOption = dialog.getByRole('option', { name: /^任务/ })
   await expect(taskOption).toBeVisible()
   await page.keyboard.press('Enter')
 

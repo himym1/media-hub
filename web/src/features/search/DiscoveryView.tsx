@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, CircleAlert, Download, Film, HardDrive, RefreshCw, Search, Star, Tv, Volume2, X } from 'lucide-react'
+import { BellPlus, CircleAlert, Download, Film, FolderInput, HardDrive, Search, Star, Tv, Volume2, X } from 'lucide-react'
 import {
   createTransfer,
   getDiscoveryCatalog,
@@ -11,7 +11,6 @@ import {
   type Candidate,
   type DiscoveryGenre,
   type DiscoveryItem,
-  type Integration,
 } from '../../shared/api/mediaHub'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
@@ -44,17 +43,11 @@ function searchStateFromLocation() {
 }
 
 type DiscoveryViewProps = {
-  integrations: Integration[]
-  integrationsLoading: boolean
-  onRefreshIntegrations: () => void
   onTransferCreated: () => void
   onSubscribe: (candidate: Candidate) => void
 }
 
 export function DiscoveryView({
-  integrations,
-  integrationsLoading,
-  onRefreshIntegrations,
   onTransferCreated,
   onSubscribe,
 }: DiscoveryViewProps) {
@@ -67,8 +60,6 @@ export function DiscoveryView({
   const [focusSubtitle, setFocusSubtitle] = useState(initial.focusSubtitle)
   const [focusItem, setFocusItem] = useState<Pick<DiscoveryItem, 'tmdbId' | 'year' | 'mediaType'> | null>(null)
   const [selected, setSelected] = useState<Candidate | null>(null)
-  const sourceIntegration = integrations.find((item) => item.id === 'sources')
-  const healthyCount = integrations.filter((item) => item.status === 'healthy').length
 
   const search = useQuery({
     queryKey: ['search', submittedQuery],
@@ -283,8 +274,7 @@ export function DiscoveryView({
   return (
     <section className="discovery-view">
       <header className="view-header discovery-header">
-        <div><h1>发现</h1><p>搜索资源，115 转存或交给 MoviePilot 下载。</p></div>
-        <button aria-label={integrationsLoading ? '正在检查服务状态' : `刷新服务状态，${healthyCount}/${integrations.length} 个服务在线`} className="health-summary" disabled={integrationsLoading} onClick={onRefreshIntegrations} type="button"><span className={healthyCount > 0 ? 'healthy' : ''} /><strong>{integrationsLoading ? '检查中…' : `${healthyCount}/${integrations.length} 服务在线`}</strong><RefreshCw aria-hidden="true" size={15} /></button>
+        <div><h1>发现</h1></div>
       </header>
 
       <section className="search-stage" aria-label="搜索媒体资源">
@@ -325,7 +315,7 @@ export function DiscoveryView({
           )}
           <button disabled={!query.trim() || search.isFetching} type="submit">{search.isFetching ? '查找中…' : '搜索'}</button>
         </form>
-        <div className="search-meta"><span>{sourceIntegration?.detail ?? '资源源尚未配置'}</span>{submittedQuery ? <><span>·</span><span>{search.data?.partial ? '部分结果' : '已列出可获取版本'}</span></> : null}</div>
+        {submittedQuery ? <div className="search-meta"><span>{search.data?.partial ? '部分结果' : '已列出可获取版本'}</span></div> : null}
         <PageCaptureForm onImported={onTransferCreated} />
       </section>
 

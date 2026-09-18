@@ -153,7 +153,7 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
       <section className="settings-group" aria-labelledby="workflow-settings-heading">
         <div className="settings-group-header">
           <h3 id="workflow-settings-heading"><Waypoints size={17} />工作流目录映射</h3>
-          <p>指定转存落盘的 115 目录 ID、STRM 写入路径与 Emby 库 ID。粘贴导入只进成人组。内置模式把 <code>/115/url/</code> 写到 Media Hub 同源地址，不经 Media Hub 转发视频字节。</p>
+          <p>指定转存落盘的 115 目录 ID、STRM 写入路径与 Emby 库 ID。内置模式把 <code>/115/url/</code> 写到 Media Hub 同源地址，不经 Media Hub 转发视频字节。</p>
         </div>
         <fieldset className="workflow-settings">
           <div>
@@ -202,7 +202,7 @@ export function ProviderSettingsForm({ settings, isSaving, isTesting, error, tes
       <section className="settings-group" aria-labelledby="sources-settings-heading">
         <div className="settings-group-header">
           <h3 id="sources-settings-heading"><Search size={17} />资源搜索源</h3>
-          <p>全网检索影视资源的适配器。蜜柑和 Sidhub 使用内置匿名适配器。盘搜只收 115 分享，TG 频道配在盘搜服务里。</p>
+          <p>全网检索影视资源的适配器。蜜柑和 Sidhub 使用内置匿名适配器。TG 频道配在盘搜服务里。</p>
         </div>
         <fieldset className="source-settings">
           {settings.sources.map((source, index) => {

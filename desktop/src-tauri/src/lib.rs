@@ -20,7 +20,6 @@ const WORKSPACE_VIEWS: &[(&str, &str)] = &[
     ("nav-transfers", "transfers"),
     ("nav-subscriptions", "subscriptions"),
     ("nav-library", "library"),
-    ("nav-operations", "operations"),
     ("nav-settings", "settings"),
 ];
 
@@ -75,13 +74,6 @@ fn workspace_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             Some("CmdOrCtrl+4"),
         )?)
         .separator()
-        .item(&MenuItem::with_id(
-            app,
-            "nav-operations",
-            "运维",
-            true,
-            None::<&str>,
-        )?)
         .item(&MenuItem::with_id(
             app,
             "nav-settings",

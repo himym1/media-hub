@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Eye, EyeOff, Film, KeyRound, LockKeyhole, LogIn, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, Film, KeyRound, LogIn } from 'lucide-react'
 import {
   ApiError,
   getAuthConfiguration,
@@ -41,28 +41,15 @@ export function LoginScreen({ onAuthenticated, serviceError }: LoginScreenProps)
   return (
     <main className="auth-shell">
       {isDesktopShell() ? <div aria-hidden="true" className="desktop-drag-region" data-tauri-drag-region /> : null}
-      <div aria-hidden="true" className="auth-ambient-glow auth-ambient-1" />
-      <div aria-hidden="true" className="auth-ambient-glow auth-ambient-2" />
-      <div aria-hidden="true" className="auth-ambient-grid" />
-
       <div className="auth-center-wrap">
         <header className="auth-hero-brand">
           <div className="auth-hero-mark">
             <Film size={30} strokeWidth={2.2} />
           </div>
-          <h1 className="auth-hero-title">Media Hub</h1>
-          <p className="auth-hero-subtitle">私有流媒体与自动化控制中心</p>
+          <h1 className="auth-hero-title" id="login-title">Media Hub</h1>
         </header>
 
         <section aria-labelledby="login-title" className="auth-panel">
-          <div className="auth-panel-header">
-            <span className="auth-lock-chip">
-              <LockKeyhole size={14} />
-              管理员认证
-            </span>
-            <span className="auth-status-dot" title="系统服务在线" />
-          </div>
-
           <form onSubmit={handleSubmit}>
             <label htmlFor="admin-password">访问密码</label>
             <div className="password-field">
@@ -71,7 +58,6 @@ export function LoginScreen({ onAuthenticated, serviceError }: LoginScreenProps)
               </span>
               <input
                 autoComplete="current-password"
-                autoFocus
                 disabled={unavailable}
                 id="admin-password"
                 name="admin-password"
@@ -96,7 +82,7 @@ export function LoginScreen({ onAuthenticated, serviceError }: LoginScreenProps)
               type="submit"
             >
               <LogIn size={16} />
-              {loginMutation.isPending ? '正在验证…' : '进入控制台'}
+              {loginMutation.isPending ? '正在验证…' : '登录'}
             </button>
           </form>
 
@@ -107,20 +93,7 @@ export function LoginScreen({ onAuthenticated, serviceError }: LoginScreenProps)
               {errorMessage ? errorMessage : null}
             </div>
           ) : null}
-
-          <div className="auth-features-row">
-            <span><ShieldCheck size={13} /> 115 直连播放</span>
-            <span>·</span>
-            <span>Emby 媒体同步</span>
-            <span>·</span>
-            <span>本地加密存储</span>
-          </div>
         </section>
-
-        <footer className="auth-footer">
-          <span>Media Hub Control Plane</span>
-          <span>v0.20.69 · API v1</span>
-        </footer>
       </div>
     </main>
   )

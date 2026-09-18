@@ -1,7 +1,7 @@
 {
   "name": "media-hub-desktop",
   "private": true,
-  "version": "0.21.57",
+  "version": "0.21.58",
   "type": "module",
   "scripts": {
     "tauri": "tauri"

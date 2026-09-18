@@ -10,7 +10,6 @@ import {
   RefreshCw,
   Search,
   Settings2,
-  TerminalSquare,
   X,
 } from 'lucide-react'
 
@@ -70,8 +69,7 @@ export function CommandPalette({
       {
         id: 'nav-discover',
         category: '导航',
-        title: '影视发现与检索',
-        subtitle: '搜索影视资源、热门精选与高分榜单',
+        title: '发现',
         icon: LayoutGrid,
         action: () => onNavigate('发现'),
         keywords: ['discover', 'search', 'movie', 'tv', 'tmdb', 'faxian', 'sousuo'],
@@ -79,8 +77,7 @@ export function CommandPalette({
       {
         id: 'nav-transfers',
         category: '导航',
-        title: '传输与转存任务',
-        subtitle: '查看 115 转存队列、STRM 与 Emby 刮削进度',
+        title: '任务',
         icon: ListTodo,
         action: () => onNavigate('任务'),
         keywords: ['transfers', 'tasks', 'queue', 'download', '115', 'renwu'],
@@ -88,8 +85,7 @@ export function CommandPalette({
       {
         id: 'nav-subscriptions',
         category: '导航',
-        title: '追番与更新订阅',
-        subtitle: '管理 Mikan 追番规则与自动更新流水线',
+        title: '订阅',
         icon: ListPlus,
         action: () => onNavigate('订阅'),
         keywords: ['subscriptions', 'anime', 'mikan', 'dingyue', 'zhuifan'],
@@ -97,26 +93,15 @@ export function CommandPalette({
       {
         id: 'nav-library',
         category: '导航',
-        title: 'Emby 媒体库浏览',
-        subtitle: '浏览 NAS Emby 影视库',
+        title: '媒体库',
         icon: LibraryBig,
         action: () => onNavigate('媒体库'),
         keywords: ['library', 'emby', 'meitiku', 'shipin'],
       },
       {
-        id: 'nav-operations',
-        category: '导航',
-        title: '系统运维与日志',
-        subtitle: '查看系统健康状态、服务日志与归档管理',
-        icon: TerminalSquare,
-        action: () => onNavigate('运维'),
-        keywords: ['operations', 'ops', 'logs', 'yunwei', 'rizhi'],
-      },
-      {
         id: 'nav-settings',
         category: '导航',
-        title: '系统与集成设置',
-        subtitle: '配置 115 账号、Emby 密钥、字幕源与偏好',
+        title: '系统设置',
         icon: Settings2,
         action: () => onNavigate('服务'),
         keywords: ['settings', 'config', 'token', 'shezhi', 'fuwu'],
@@ -124,8 +109,7 @@ export function CommandPalette({
       {
         id: 'action-refresh',
         category: '常用操作',
-        title: '刷新服务集成状态',
-        subtitle: '重新探测 115、Emby、OpenSubtitles 等服务连通性',
+        title: '刷新服务状态',
         icon: RefreshCw,
         action: onRefreshIntegrations,
         keywords: ['refresh', 'status', 'health', 'shuaxin', 'zhuangtai'],
@@ -133,8 +117,7 @@ export function CommandPalette({
       {
         id: 'action-logout',
         category: '常用操作',
-        title: '安全退出登录',
-        subtitle: '退出当前 Media Hub 管理员会话',
+        title: '退出登录',
         icon: LogOut,
         action: onLogout,
         keywords: ['logout', 'signout', 'exit', 'tuichu'],
@@ -142,8 +125,7 @@ export function CommandPalette({
       ...(onOpenShortcuts ? [{
         id: 'action-shortcuts',
         category: '常用操作' as const,
-        title: '键盘快捷键速查指南',
-        subtitle: '浏览完整快捷键列表（随时按 ? 键唤出）',
+        title: '快捷键',
         icon: Keyboard,
         action: onOpenShortcuts,
         keywords: ['shortcuts', 'help', 'keyboard', 'kuaijiejian', 'bangzhu', '?'],
@@ -171,8 +153,7 @@ export function CommandPalette({
       result.push({
         id: 'instant-search',
         category: '搜索',
-        title: `在发现中检索「${trimmed}」`,
-        subtitle: '按 Enter 立即搜索该片源',
+        title: `搜索「${trimmed}」`,
         icon: Search,
         action: () => onSearch(trimmed),
         keywords: [],
@@ -240,10 +221,10 @@ export function CommandPalette({
           <input
             aria-autocomplete="list"
             aria-controls="command-palette-list"
-            aria-label="搜索影视或键入操作指令"
+            aria-label="跳转或搜索"
             className="command-palette-input"
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索影视或键入操作指令..."
+            placeholder="跳转或搜索…"
             ref={inputRef}
             type="text"
             value={query}

@@ -1348,7 +1348,7 @@ h1 em { color: var(--accent); font-style: normal; }
 }
 
 .continue-sub {
-  font-size: 11.5px;
+  font-size: 12px;
   color: #6ee7b7;
   font-weight: 500;
 }
@@ -1438,7 +1438,7 @@ h1 em { color: var(--accent); font-style: normal; }
   color: var(--accent);
   background: transparent;
   border: 0;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: opacity .16s ease;
@@ -1469,7 +1469,7 @@ h1 em { color: var(--accent); font-style: normal; }
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   background: var(--surface);

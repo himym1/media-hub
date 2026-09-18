@@ -229,7 +229,7 @@ export function LibraryView() {
     setPlayId(null)
     commitUrl({ media: null, play: null })
   }
-  const startPlay = (target: Pick<EmbyEpisode, 'id' | 'name' | 'externalUrl'>) => {
+  const startPlay = (target: { id: string }) => {
     if (!inPagePlayback) return
     setPlayId(target.id)
     commitUrl({ play: target.id })
@@ -895,7 +895,7 @@ function LibraryPosterCard({
   selected: boolean
   inPagePlayback: boolean
   onSelect: (id: string) => void
-  onPlay: (target: Pick<EmbyItem, 'id' | 'name' | 'externalUrl'>) => void
+  onPlay: (target: { id: string }) => void
 }) {
   const [failed, setFailed] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
@@ -972,7 +972,7 @@ function LibraryItemDetail({ item, inPagePlayback, onDeleted, onPlay, onRefresh,
   item: EmbyItemDetail
   inPagePlayback: boolean
   onDeleted: () => void
-  onPlay: (target: Pick<EmbyEpisode, 'id' | 'name' | 'externalUrl'>) => void
+  onPlay: (target: { id: string }) => void
   onRefresh: (id: string) => void
   onSelectPerson?: (name: string) => void
   refreshing: boolean

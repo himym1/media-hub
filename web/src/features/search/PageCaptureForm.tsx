@@ -88,7 +88,7 @@ export function PageCaptureForm({ onImported }: Props) {
           {busy ? '正在抓取…' : '开始抓取'}
         </button>
       </form>
-      {busy ? <p className="page-capture-empty" role="status">后台打开页面、等待明文地址、下载或合并后再导入成人库。</p> : null}
+          {busy ? <p className="page-capture-empty" role="status">正在打开页面并等待明文地址…</p> : null}
       {error ? <div className="source-warning error" role="alert"><CircleAlert size={16} /><span>{error}</span></div> : null}
       {imported ? <p className="share-import-success" role="status">已加入转存队列</p> : null}
       {download ? (
