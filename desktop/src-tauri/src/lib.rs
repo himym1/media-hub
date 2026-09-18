@@ -374,6 +374,8 @@ mod tests {
         assert!(HUB_OSC_LUA.contains("&H99D334&"));
         assert!(HUB_OSC_LUA.contains("mbtn_left"));
         assert!(HUB_OSC_LUA.contains("table.concat(lines, \"\\n\")"));
+        assert!(HUB_OSC_LUA.contains("sub-visibility"));
+        assert!(HUB_OSC_LUA.contains("cycle\", \"mute"));
         assert!(HUB_OSC_LUA.contains("set_property_bool"));
         assert!(HUB_OSC_LUA.contains("\"border\""));
     }

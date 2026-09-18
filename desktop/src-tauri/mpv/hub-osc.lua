@@ -5,20 +5,21 @@ local dragging = false
 local last_up = 0
 local pending_pause = nil
 local painted_visible = true
+local pressed_id = nil
 
 local COLOR_BG = "&H0A0807&"
 local COLOR_TEXT = "&HEBF1F2&"
 local COLOR_MUTED = "&HBFC6C4&"
 local COLOR_ACCENT = "&H99D334&"
-local PAD = 40
-local BAR_H = 4
+local PAD = 28
+local BTN = 36
 
 local function now()
     return mp.get_time()
 end
 
 local function show_chrome()
-    chrome_until = now() + 2.0
+    chrome_until = now() + 2.4
 end
 
 local function chrome_visible(paused)
@@ -95,26 +96,91 @@ local function draw_gradient(lines, x, y, w, h, from_top, steps, base_alpha)
     end
 end
 
-local function bar_layout(w, h)
-    local bar_y = h - 36
-    local x1 = PAD + 52
-    local x2 = w - PAD - 52
-    if x2 <= x1 + 24 then
-        x1 = PAD
-        x2 = w - PAD
-    end
-    return x1, bar_y, x2
+local function hit(box, x, y)
+    return x >= box.x and x <= box.x + box.w and y >= box.y and y <= box.y + box.h
 end
 
-local function in_seekbar(x, y, x1, bar_y, x2)
-    return x >= x1 - 8 and x <= x2 + 8 and y >= bar_y - 18 and y <= bar_y + 18
+local function layout(w, h)
+    local row_y = h - 44
+    local play = { id = "play", x = PAD, y = row_y, w = BTN, h = BTN }
+    local fs = { id = "fs", x = w - PAD - BTN, y = row_y, w = BTN, h = BTN }
+    local sub = { id = "sub", x = fs.x - 8 - BTN, y = row_y, w = BTN, h = BTN }
+    local vol = { id = "vol", x = sub.x - 8 - BTN, y = row_y, w = BTN, h = BTN }
+    local seek = {
+        id = "seek",
+        x = PAD,
+        y = h - 78,
+        w = w - PAD * 2,
+        h = 22,
+    }
+    return {
+        play = play,
+        vol = vol,
+        sub = sub,
+        fs = fs,
+        seek = seek,
+        buttons = { play, vol, sub, fs },
+    }
 end
 
-local function cancel_pending_pause()
-    if pending_pause then
-        pending_pause:kill()
-        pending_pause = nil
+local function button_at(geom, x, y)
+    for i = 1, #geom.buttons do
+        local box = geom.buttons[i]
+        if hit(box, x, y) then
+            return box.id
+        end
     end
+    return nil
+end
+
+local function draw_icon_play(cx, cy, color)
+    return string.format(
+        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 0 l 16 9 l 0 18{\\p0}",
+        color, cx - 5, cy - 9
+    )
+end
+
+local function draw_icon_pause(lines, cx, cy, color)
+    push(lines, draw_rect(cx - 7, cy - 8, 5, 16, color, "00"))
+    push(lines, draw_rect(cx + 2, cy - 8, 5, 16, color, "00"))
+end
+
+local function draw_icon_vol(lines, cx, cy, muted, color)
+    push(lines, string.format(
+        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 6 l 6 6 l 12 1 l 12 17 l 6 12 l 0 12{\\p0}",
+        color, cx - 11, cy - 9
+    ))
+    if muted then
+        push(lines, string.format(
+            "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 0 l 10 10 m 10 0 l 0 10{\\p0}",
+            color, cx + 2, cy - 5
+        ))
+        return
+    end
+    push(lines, string.format(
+        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 3 l 5 0 m 0 8 l 6 8 m 0 13 l 5 16{\\p0}",
+        color, cx + 3, cy - 8
+    ))
+end
+
+local function draw_icon_cc(cx, cy, on, color)
+    local label = on and "CC" or "Cc"
+    return string.format("{\\an5\\bord0\\shad0\\fs15\\b1\\c%s\\pos(%.1f,%.1f)}%s", color, cx, cy, label)
+end
+
+local function draw_icon_fs(cx, cy, full, color)
+    if full then
+        return string.format(
+            "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}"
+                .. "m 6 0 l 6 6 l 0 6 m 14 0 l 14 6 l 20 6 m 0 14 l 6 14 l 6 20 m 14 20 l 14 14 l 20 14{\\p0}",
+            color, cx - 10, cy - 10
+        )
+    end
+    return string.format(
+        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}"
+            .. "m 0 6 l 0 0 l 6 0 m 14 0 l 20 0 l 20 6 m 0 14 l 0 20 l 6 20 m 14 20 l 20 20 l 20 14{\\p0}",
+        color, cx - 10, cy - 10
+    )
 end
 
 local function seek_to_ratio(ratio)
@@ -123,6 +189,25 @@ end
 
 local function cycle_fullscreen()
     mp.commandv("cycle", "fullscreen")
+end
+
+local function run_button(id)
+    if id == "play" then
+        mp.commandv("cycle", "pause")
+    elseif id == "vol" then
+        mp.commandv("cycle", "mute")
+    elseif id == "sub" then
+        mp.commandv("cycle", "sub-visibility")
+    elseif id == "fs" then
+        cycle_fullscreen()
+    end
+end
+
+local function cancel_pending_pause()
+    if pending_pause then
+        pending_pause:kill()
+        pending_pause = nil
+    end
 end
 
 local function render()
@@ -137,53 +222,83 @@ local function render()
     local pos = mp.get_property_number("time-pos") or 0
     local dur = mp.get_property_number("duration") or 0
     local ratio = dur > 0 and math.min(1, math.max(0, pos / dur)) or 0
+    local muted = mp.get_property_bool("mute") or (mp.get_property_number("volume") or 100) <= 0
+    local sub_on = mp.get_property_bool("sub-visibility")
+    local full = mp.get_property_bool("fullscreen")
+    local mouse = mp.get_property_native("mouse-pos") or {}
+    local mx, my = mouse.x or 0, mouse.y or 0
+    local geom = layout(w, h)
+    local hover_id = mouse.hover and button_at(geom, mx, my) or nil
     local lines = {}
 
     if visible then
         draw_gradient(lines, 0, 0, w, 72, true, 8, 180)
         push(lines, string.format("{\\an7\\bord0\\shad0\\fs22\\c%s\\pos(%d,22)}%s", COLOR_TEXT, PAD, title))
+        draw_gradient(lines, 0, h - 108, w, 108, false, 8, 210)
 
-        draw_gradient(lines, 0, h - 88, w, 88, false, 8, 210)
-
-        local x1, bar_y, x2 = bar_layout(w, h)
-        local span = math.max(1, x2 - x1)
-        local mouse = mp.get_property_native("mouse-pos") or {}
-        local hover = mouse.hover and in_seekbar(mouse.x or 0, mouse.y or 0, x1, bar_y, x2)
-        local active = hover or dragging
-        local thick = active and 6 or BAR_H
-        local bar_top = bar_y - thick / 2
-
-        push(lines, string.format("{\\an1\\bord0\\shad0\\fs16\\c%s\\pos(%d,%d)}%s", COLOR_MUTED, PAD, h - 14, clock(pos)))
-        if dur > 0 then
-            push(lines, string.format("{\\an3\\bord0\\shad0\\fs16\\c%s\\pos(%d,%d)}%s", COLOR_MUTED, w - PAD, h - 14, clock(dur)))
-        end
-        push(lines, draw_rect(x1, bar_top, span, thick, COLOR_MUTED, "B0"))
-        if span * ratio > 0 then
-            push(lines, draw_rect(x1, bar_top, span * ratio, thick, COLOR_ACCENT, "00"))
+        local seek = geom.seek
+        local hover_seek = mouse.hover and hit(seek, mx, my)
+        local active = hover_seek or dragging
+        local thick = active and 6 or 4
+        local bar_top = seek.y + (seek.h - thick) / 2
+        push(lines, draw_rect(seek.x, bar_top, seek.w, thick, COLOR_MUTED, "B0"))
+        if seek.w * ratio > 0 then
+            push(lines, draw_rect(seek.x, bar_top, seek.w * ratio, thick, COLOR_ACCENT, "00"))
         end
         if active then
-            push(lines, draw_circle(x1 + span * ratio, bar_y, 5, COLOR_TEXT, "00"))
+            push(lines, draw_circle(seek.x + seek.w * ratio, seek.y + seek.h / 2, 5, COLOR_TEXT, "00"))
         end
-        if dur > 0 and (hover or dragging) then
-            local inspect = dragging and (mouse.x or (x1 + span * ratio)) or (mouse.x or x1)
-            local hover_ratio = math.min(1, math.max(0, (inspect - x1) / span))
+        if dur > 0 and (hover_seek or dragging) then
+            local inspect = dragging and mx or mx
+            local hover_ratio = math.min(1, math.max(0, (inspect - seek.x) / math.max(1, seek.w)))
             push(lines, string.format(
                 "{\\an2\\bord0\\shad0\\fs14\\c%s\\pos(%.1f,%.1f)}%s",
                 COLOR_TEXT,
-                math.min(x2, math.max(x1, inspect)),
-                bar_y - 16,
+                math.min(seek.x + seek.w, math.max(seek.x, inspect)),
+                seek.y - 4,
                 clock(hover_ratio * dur)
             ))
+        end
+
+        local time_x = geom.play.x + geom.play.w + 10
+        push(lines, string.format(
+            "{\\an4\\bord0\\shad0\\fs16\\c%s\\pos(%d,%d)}%s%s%s",
+            COLOR_MUTED,
+            time_x,
+            geom.play.y + geom.play.h / 2,
+            clock(pos),
+            dur > 0 and " / " or "",
+            dur > 0 and clock(dur) or ""
+        ))
+
+        for i = 1, #geom.buttons do
+            local box = geom.buttons[i]
+            local hot = hover_id == box.id or pressed_id == box.id
+            if hot then
+                push(lines, draw_circle(box.x + box.w / 2, box.y + box.h / 2, 16, COLOR_TEXT, "E6"))
+            end
+            local cx, cy = box.x + box.w / 2, box.y + box.h / 2
+            local color = hot and COLOR_ACCENT or COLOR_TEXT
+            if box.id == "play" then
+                if paused then
+                    push(lines, draw_icon_play(cx, cy, color))
+                else
+                    draw_icon_pause(lines, cx, cy, color)
+                end
+            elseif box.id == "vol" then
+                draw_icon_vol(lines, cx, cy, muted, color)
+            elseif box.id == "sub" then
+                push(lines, draw_icon_cc(cx, cy, sub_on, sub_on and COLOR_ACCENT or color))
+            elseif box.id == "fs" then
+                push(lines, draw_icon_fs(cx, cy, full, color))
+            end
         end
     end
 
     if paused then
         local cx, cy = w / 2, h / 2
         push(lines, draw_circle(cx, cy, 36, COLOR_BG, "50"))
-        push(lines, string.format(
-            "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 0 l 22 13 l 0 26{\\p0}",
-            COLOR_TEXT, cx - 7, cy - 13
-        ))
+        push(lines, draw_icon_play(cx, cy, COLOR_TEXT))
     end
 
     overlay.res_x = w
@@ -197,13 +312,23 @@ local function on_mouse(event)
     if not w or not h then
         return
     end
-    local x1, bar_y, x2 = bar_layout(w, h)
+    local geom = layout(w, h)
+    local mouse = mp.get_property_native("mouse-pos") or {}
+    local mx, my = mouse.x or 0, mouse.y or 0
+
     if event.event == "down" then
-        local mouse = mp.get_property_native("mouse-pos") or {}
-        if mouse.hover and in_seekbar(mouse.x or 0, mouse.y or 0, x1, bar_y, x2) and chrome_visible(mp.get_property_bool("pause")) then
+        local id = mouse.hover and button_at(geom, mx, my) or nil
+        if id and chrome_visible(mp.get_property_bool("pause")) then
+            cancel_pending_pause()
+            pressed_id = id
+            show_chrome()
+            render()
+            return
+        end
+        if mouse.hover and hit(geom.seek, mx, my) and chrome_visible(mp.get_property_bool("pause")) then
             cancel_pending_pause()
             dragging = true
-            seek_to_ratio(((mouse.x or 0) - x1) / math.max(1, x2 - x1))
+            seek_to_ratio((mx - geom.seek.x) / math.max(1, geom.seek.w))
             show_chrome()
             render()
         end
@@ -212,6 +337,19 @@ local function on_mouse(event)
     if event.event ~= "up" then
         return
     end
+
+    if pressed_id then
+        local id = mouse.hover and button_at(geom, mx, my) or nil
+        if id == pressed_id then
+            run_button(id)
+        end
+        pressed_id = nil
+        last_up = 0
+        show_chrome()
+        render()
+        return
+    end
+
     local t = now()
     if t - last_up < 0.28 then
         cancel_pending_pause()
@@ -243,7 +381,6 @@ mp.add_forced_key_binding("f", "hub-fullscreen", cycle_fullscreen)
 
 mp.observe_property("fullscreen", "bool", function(_, fs)
     if fs ~= nil then
-        -- 全屏去掉系统边框，才是真正铺满；窗口模式保留红绿灯。
         mp.set_property_bool("border", not fs)
     end
     show_chrome()
@@ -255,9 +392,9 @@ mp.observe_property("mouse-pos", "native", function(_, value)
     if not w or not h then
         return
     end
-    local x1, bar_y, x2 = bar_layout(w, h)
+    local geom = layout(w, h)
     if dragging and value then
-        seek_to_ratio(((value.x or 0) - x1) / math.max(1, x2 - x1))
+        seek_to_ratio(((value.x or 0) - geom.seek.x) / math.max(1, geom.seek.w))
         show_chrome()
         render()
         return
@@ -265,13 +402,16 @@ mp.observe_property("mouse-pos", "native", function(_, value)
     if value and value.hover then
         local was = chrome_visible(mp.get_property_bool("pause"))
         show_chrome()
-        if not was or in_seekbar(value.x or 0, value.y or 0, x1, bar_y, x2) then
+        if not was or button_at(geom, value.x or 0, value.y or 0) or hit(geom.seek, value.x or 0, value.y or 0) then
             render()
         end
     end
 end)
 
 mp.observe_property("pause", "bool", render)
+mp.observe_property("mute", "bool", render)
+mp.observe_property("volume", "number", render)
+mp.observe_property("sub-visibility", "bool", render)
 mp.observe_property("time-pos", "number", render)
 mp.observe_property("duration", "number", render)
 mp.observe_property("osd-dimensions", "native", render)
