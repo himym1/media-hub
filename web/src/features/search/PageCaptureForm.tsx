@@ -68,7 +68,7 @@ export function PageCaptureForm({ onImported }: Props) {
     <section className="share-import page-capture" aria-labelledby="page-capture-heading">
       <div className="share-import-copy">
         <h2 id="page-capture-heading">网页抓取</h2>
-        <p>贴播放页地址后，桌面壳在后台打开页面、嗅探明文 m3u8 / mp4。直链走 115 离线；HLS 分片在本机合并后直传 115，再进成人库。加密分片、登录墙或同意页会失败。</p>
+        <p>贴视频所在播放页的地址。桌面打开该页、嗅探明文地址后入库。加密分片或登录墙会失败。</p>
       </div>
       <form className="page-capture-form" onSubmit={handleSubmit}>
         <label>

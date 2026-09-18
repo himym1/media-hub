@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, CircleAlert, Download, Film, FolderInput, HardDrive, RefreshCw, Search, Star, Tv, Volume2, X } from 'lucide-react'
+import { BellPlus, CircleAlert, Download, Film, HardDrive, RefreshCw, Search, Star, Tv, Volume2, X } from 'lucide-react'
 import {
   createTransfer,
   getDiscoveryCatalog,
@@ -16,7 +16,6 @@ import {
 import { commitUrl } from '../../shared/navigation/urlState'
 import { IconButton } from '../../shared/ui/IconButton'
 import { PageCaptureForm } from './PageCaptureForm'
-import { ShareImportForm } from './ShareImportForm'
 import {
   discoveryFocusSubtitle,
   discoveryResultsHeading,
@@ -327,16 +326,7 @@ export function DiscoveryView({
           <button disabled={!query.trim() || search.isFetching} type="submit">{search.isFetching ? '查找中…' : '搜索'}</button>
         </form>
         <div className="search-meta"><span>{sourceIntegration?.detail ?? '资源源尚未配置'}</span>{submittedQuery ? <><span>·</span><span>{search.data?.partial ? '部分结果' : '已列出可获取版本'}</span></> : null}</div>
-        <details className="discovery-import-details">
-          <summary className="discovery-import-summary">
-            <FolderInput aria-hidden="true" size={14} />
-            <span>导入链接</span>
-          </summary>
-          <div className="discovery-import-body">
-            <ShareImportForm onImported={onTransferCreated} />
-            <PageCaptureForm onImported={onTransferCreated} />
-          </div>
-        </details>
+        <PageCaptureForm onImported={onTransferCreated} />
       </section>
 
       {!submittedQuery ? (
