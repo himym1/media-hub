@@ -11,11 +11,12 @@ local pressed_id = nil
 local COLOR_BG = "&H0A0807&"
 local COLOR_TEXT = "&HEBF1F2&"
 local COLOR_MUTED = "&HBFC6C4&"
+local COLOR_DIM = "&H8E9296&"
 local COLOR_ACCENT = "&H99D334&"
 local PAD = 28
-local BTN = 36
-local SPEED_W = 46
-local VOL_W = 88
+local BTN = 32
+local SPEED_W = 42
+local VOL_W = 76
 local SPEEDS = { 0.75, 1, 1.25, 1.5, 2 }
 
 local function now()
@@ -71,6 +72,7 @@ local function draw_rect(x, y, w, h, color, alpha)
 end
 
 local function draw_circle(cx, cy, r, color, alpha)
+    if r <= 0 then return "" end
     local k = r * 0.55228
     return string.format(
         "{\\an7\\bord0\\shad0\\p1\\c%s\\alpha&H%s&\\pos(%.1f,%.1f)}"
@@ -95,7 +97,7 @@ local function draw_gradient(lines, x, y, w, h, from_top, steps, base_alpha)
         local a = math.floor(base_alpha * (1 - t) * (1 - t))
         if a > 0 then
             local cur_y = from_top and (y + i * step_h) or (y + h - (i + 1) * step_h)
-            push(lines, draw_rect(x, cur_y, w, step_h + 0.5, COLOR_BG, string.format("%02X", 255 - a)))
+            push(lines, draw_rect(x, cur_y, w, step_h + 0.6, COLOR_BG, string.format("%02X", 255 - a)))
         end
     end
 end
@@ -105,20 +107,21 @@ local function hit(box, x, y)
 end
 
 local function layout(w, h)
-    local row_y = h - 44
+    local row_y = h - 42
     local prev = { id = "prev", x = PAD, y = row_y, w = BTN, h = BTN }
-    local play = { id = "play", x = prev.x + BTN + 8, y = row_y, w = BTN, h = BTN }
-    local nxt = { id = "next", x = play.x + BTN + 8, y = row_y, w = BTN, h = BTN }
+    local play = { id = "play", x = prev.x + BTN + 6, y = row_y, w = BTN, h = BTN }
+    local nxt = { id = "next", x = play.x + BTN + 6, y = row_y, w = BTN, h = BTN }
     local fs = { id = "fs", x = w - PAD - BTN, y = row_y, w = BTN, h = BTN }
-    local sub = { id = "sub", x = fs.x - 8 - BTN, y = row_y, w = BTN, h = BTN }
-    local audio = { id = "audio", x = sub.x - 8 - BTN, y = row_y, w = BTN, h = BTN }
-    local speed = { id = "speed", x = audio.x - 8 - SPEED_W, y = row_y, w = SPEED_W, h = BTN }
-    local vol = { id = "vol", x = speed.x - 8 - BTN, y = row_y, w = BTN, h = BTN }
-    local show_volbar = vol.x - 8 - VOL_W > nxt.x + BTN + 96
+    local sub = { id = "sub", x = fs.x - 6 - BTN, y = row_y, w = BTN, h = BTN }
+    local audio = { id = "audio", x = sub.x - 6 - BTN, y = row_y, w = BTN, h = BTN }
+    local speed = { id = "speed", x = audio.x - 6 - SPEED_W, y = row_y, w = SPEED_W, h = BTN }
+    local vol = { id = "vol", x = speed.x - 6 - BTN, y = row_y, w = BTN, h = BTN }
+    local time_x = nxt.x + BTN + 12
+    local show_volbar = (vol.x - 8 - VOL_W) > (time_x + 130)
     local volbar = {
         id = "volbar",
         x = show_volbar and (vol.x - 8 - VOL_W) or vol.x,
-        y = row_y + 10,
+        y = row_y + 8,
         w = show_volbar and VOL_W or 0,
         h = 16,
     }
@@ -132,9 +135,9 @@ local function layout(w, h)
     local seek = {
         id = "seek",
         x = PAD,
-        y = h - 78,
+        y = h - 68,
         w = w - PAD * 2,
-        h = 22,
+        h = 20,
     }
     return {
         prev = prev,
@@ -164,72 +167,93 @@ end
 
 local function draw_icon_play(cx, cy, color)
     return string.format(
-        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 0 l 16 9 l 0 18{\\p0}",
-        color, cx - 5, cy - 9
+        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 0 l 12 7 l 0 14{\\p0}",
+        color, cx - 5, cy - 7
     )
 end
 
 local function draw_icon_pause(lines, cx, cy, color)
-    push(lines, draw_rect(cx - 7, cy - 8, 5, 16, color, "00"))
-    push(lines, draw_rect(cx + 2, cy - 8, 5, 16, color, "00"))
+    push(lines, draw_rect(cx - 5.2, cy - 6.5, 3.2, 13, color, "00"))
+    push(lines, draw_rect(cx + 2.0, cy - 6.5, 3.2, 13, color, "00"))
 end
 
 local function draw_icon_prev(lines, cx, cy, color)
-    push(lines, draw_rect(cx - 10, cy - 7, 3, 14, color, "00"))
+    push(lines, draw_rect(cx - 7.5, cy - 5.5, 2.2, 11, color, "00"))
     push(lines, string.format(
-        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 12 0 l 0 8 l 12 16{\\p0}",
-        color, cx - 6, cy - 8
+        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 11 0 l 0 5.5 l 11 11{\\p0}",
+        color, cx - 4.5, cy - 5.5
     ))
 end
 
 local function draw_icon_next(lines, cx, cy, color)
     push(lines, string.format(
-        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 0 l 12 8 l 0 16{\\p0}",
-        color, cx - 8, cy - 8
+        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 0 l 11 5.5 l 0 11{\\p0}",
+        color, cx - 6.5, cy - 5.5
     ))
-    push(lines, draw_rect(cx + 6, cy - 7, 3, 14, color, "00"))
+    push(lines, draw_rect(cx + 5.3, cy - 5.5, 2.2, 11, color, "00"))
 end
 
 local function draw_icon_vol(lines, cx, cy, muted, color)
+    -- 扬声器底座与锥体
+    push(lines, draw_rect(cx - 8.5, cy - 3, 3.5, 6, color, "00"))
     push(lines, string.format(
-        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 6 l 6 6 l 12 1 l 12 17 l 6 12 l 0 12{\\p0}",
-        color, cx - 11, cy - 9
+        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 3 l 4 0 l 4 12 l 0 9{\\p0}",
+        color, cx - 5, cy - 6
     ))
     if muted then
+        -- 静音斜杠
         push(lines, string.format(
-            "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 0 l 10 10 m 10 0 l 0 10{\\p0}",
-            color, cx + 2, cy - 5
+            "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 1.5 l 1.5 0 l 6.5 5 l 5 6.5{\\p0}",
+            color, cx + 1.5, cy - 3.2
+        ))
+        push(lines, string.format(
+            "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 5 0 l 6.5 1.5 l 1.5 6.5 l 0 5{\\p0}",
+            color, cx + 1.5, cy - 3.2
         ))
         return
     end
+    -- 声波弧线（精细闭合多边形）
     push(lines, string.format(
-        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 3 l 5 0 m 0 8 l 6 8 m 0 13 l 5 16{\\p0}",
-        color, cx + 3, cy - 8
+        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 1 l 1.4 0 b 3.4 2.2 3.4 4.8 1.4 7 l 0 6 b 1.8 4.2 1.8 2.8 0 1{\\p0}",
+        color, cx + 1.2, cy - 3.5
+    ))
+    push(lines, string.format(
+        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 1.4 l 1.4 0 b 4.2 3.2 4.2 7.8 1.4 11 l 0 9.6 b 2.4 7.0 2.4 4.0 0 1.4{\\p0}",
+        color, cx + 3.8, cy - 5.5
     ))
 end
 
 local function draw_icon_cc(cx, cy, on, color)
     local label = on and "CC" or "Cc"
-    return string.format("{\\an5\\bord0\\shad0\\fs15\\b1\\c%s\\pos(%.1f,%.1f)}%s", color, cx, cy, label)
+    return string.format("{\\an5\\bord0\\shad0\\fs13\\b1\\c%s\\pos(%.1f,%.1f)}%s", color, cx, cy, label)
 end
 
 local function draw_icon_audio(cx, cy, color)
-    return string.format("{\\an5\\bord0\\shad0\\fs16\\b1\\c%s\\pos(%.1f,%.1f)}A", color, cx, cy)
+    return string.format("{\\an5\\bord0\\shad0\\fs14\\b1\\c%s\\pos(%.1f,%.1f)}A", color, cx, cy)
 end
 
-local function draw_icon_fs(cx, cy, full, color)
+local function draw_icon_fs(lines, cx, cy, full, color)
     if full then
-        return string.format(
-            "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}"
-                .. "m 6 0 l 6 6 l 0 6 m 14 0 l 14 6 l 20 6 m 0 14 l 6 14 l 6 20 m 14 20 l 14 14 l 20 14{\\p0}",
-            color, cx - 10, cy - 10
-        )
+        -- 全屏状态：向内收敛的 4 个直角
+        push(lines, draw_rect(cx - 7, cy - 1.8, 5.5, 1.8, color, "00"))
+        push(lines, draw_rect(cx - 3.3, cy - 5.5, 1.8, 3.7, color, "00"))
+        push(lines, draw_rect(cx + 1.5, cy - 1.8, 5.5, 1.8, color, "00"))
+        push(lines, draw_rect(cx + 1.5, cy - 5.5, 1.8, 3.7, color, "00"))
+        push(lines, draw_rect(cx - 7, cy, 5.5, 1.8, color, "00"))
+        push(lines, draw_rect(cx - 3.3, cy + 1.8, 1.8, 3.7, color, "00"))
+        push(lines, draw_rect(cx + 1.5, cy, 5.5, 1.8, color, "00"))
+        push(lines, draw_rect(cx + 1.5, cy + 1.8, 1.8, 3.7, color, "00"))
+        return
     end
-    return string.format(
-        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}"
-            .. "m 0 6 l 0 0 l 6 0 m 14 0 l 20 0 l 20 6 m 0 14 l 0 20 l 6 20 m 14 20 l 20 20 l 20 14{\\p0}",
-        color, cx - 10, cy - 10
-    )
+    -- 窗口状态：向外展开的 4 个直角
+    push(lines, draw_rect(cx - 7, cy - 7, 5.5, 1.8, color, "00"))
+    push(lines, draw_rect(cx - 7, cy - 5.2, 1.8, 3.7, color, "00"))
+    push(lines, draw_rect(cx + 1.5, cy - 7, 5.5, 1.8, color, "00"))
+    push(lines, draw_rect(cx + 5.2, cy - 5.2, 1.8, 3.7, color, "00"))
+    push(lines, draw_rect(cx - 7, cy + 5.2, 5.5, 1.8, color, "00"))
+    push(lines, draw_rect(cx - 7, cy + 1.5, 1.8, 3.7, color, "00"))
+    push(lines, draw_rect(cx + 1.5, cy + 5.2, 5.5, 1.8, color, "00"))
+    push(lines, draw_rect(cx + 5.2, cy + 1.5, 1.8, 3.7, color, "00"))
 end
 
 local function seek_to_ratio(ratio)
@@ -362,53 +386,67 @@ local function render()
     local lines = {}
 
     if visible then
-        draw_gradient(lines, 0, 0, w, 72, true, 8, 180)
-        push(lines, string.format("{\\an7\\bord0\\shad0\\fs22\\c%s\\pos(%d,22)}%s", COLOR_TEXT, PAD, title))
-        draw_gradient(lines, 0, h - 108, w, 108, false, 8, 210)
+        -- 顶部：薄渐变与标题
+        draw_gradient(lines, 0, 0, w, 56, true, 12, 140)
+        push(lines, string.format("{\\an7\\bord0\\shad0\\fs17\\b1\\c%s\\pos(%d,18)}%s", COLOR_TEXT, PAD, title))
 
+        -- 底部：平滑渐变背景
+        draw_gradient(lines, 0, h - 96, w, 96, false, 16, 200)
+
+        -- 底部进度条
         local seek = geom.seek
         local hover_seek = mouse.hover and hit(seek, mx, my)
         local active = hover_seek or dragging
-        local thick = active and 6 or 4
-        local bar_top = seek.y + (seek.h - thick) / 2
-        push(lines, draw_rect(seek.x, bar_top, seek.w, thick, COLOR_MUTED, "B0"))
+        local thick = active and 5 or 3
+        local bar_cy = seek.y + seek.h / 2
+        local bar_top = bar_cy - thick / 2
+
+        push(lines, draw_rect(seek.x, bar_top, seek.w, thick, COLOR_MUTED, "C8"))
         if seek.w * ratio > 0 then
             push(lines, draw_rect(seek.x, bar_top, seek.w * ratio, thick, COLOR_ACCENT, "00"))
         end
         if active then
-            push(lines, draw_circle(seek.x + seek.w * ratio, seek.y + seek.h / 2, 5, COLOR_TEXT, "00"))
+            push(lines, draw_circle(seek.x + seek.w * ratio, bar_cy, 4.5, COLOR_TEXT, "00"))
         end
-        if dur > 0 and (hover_seek or dragging) then
+        if dur > 0 and active then
             local inspect = mx
             local hover_ratio = math.min(1, math.max(0, (inspect - seek.x) / math.max(1, seek.w)))
             push(lines, string.format(
-                "{\\an2\\bord0\\shad0\\fs14\\c%s\\pos(%.1f,%.1f)}%s",
+                "{\\an2\\bord1\\3c&H0A0807&\\shad0\\fs13\\b1\\c%s\\pos(%.1f,%.1f)}%s",
                 COLOR_TEXT,
                 math.min(seek.x + seek.w, math.max(seek.x, inspect)),
-                seek.y - 4,
+                seek.y - 5,
                 clock(hover_ratio * dur)
             ))
         end
 
-        local time_x = geom.nxt.x + geom.nxt.w + 10
+        -- 播放时间（当前时间高亮 / 总时长微暗）
+        local time_x = geom.nxt.x + geom.nxt.w + 12
         local time_limit = geom.volbar.w > 0 and geom.volbar.x or geom.vol.x
-        if time_x + 88 < time_limit then
+        if time_x + 100 < time_limit then
+            local time_str
+            if dur > 0 then
+                time_str = string.format("{\\c%s}%s{\\c%s} / %s", COLOR_TEXT, clock(pos), COLOR_DIM, clock(dur))
+            else
+                time_str = string.format("{\\c%s}%s", COLOR_TEXT, clock(pos))
+            end
             push(lines, string.format(
-                "{\\an4\\bord0\\shad0\\fs16\\c%s\\pos(%d,%d)}%s%s%s",
-                COLOR_MUTED,
+                "{\\an4\\bord0\\shad0\\fs14\\pos(%d,%d)}%s",
                 time_x,
                 geom.play.y + geom.play.h / 2,
-                clock(pos),
-                dur > 0 and " / " or "",
-                dur > 0 and clock(dur) or ""
+                time_str
             ))
         end
 
+        -- 音量滑条（窄窗自适应隐藏）
         if geom.volbar.w > 0 then
             local vol_ratio = math.min(1, math.max(0, volume / 100))
-            local vol_thick = (hover_volbar or dragging_vol) and 6 or 4
-            local vol_top = geom.volbar.y + (geom.volbar.h - vol_thick) / 2
-            push(lines, draw_rect(geom.volbar.x, vol_top, geom.volbar.w, vol_thick, COLOR_MUTED, "B0"))
+            local vol_active = hover_volbar or dragging_vol
+            local vol_thick = vol_active and 5 or 3
+            local vol_cy = geom.volbar.y + geom.volbar.h / 2
+            local vol_top = vol_cy - vol_thick / 2
+
+            push(lines, draw_rect(geom.volbar.x, vol_top, geom.volbar.w, vol_thick, COLOR_MUTED, "C8"))
             if geom.volbar.w * vol_ratio > 0 then
                 push(lines, draw_rect(
                     geom.volbar.x,
@@ -419,22 +457,23 @@ local function render()
                     "00"
                 ))
             end
-            if hover_volbar or dragging_vol then
+            if vol_active then
                 push(lines, draw_circle(
                     geom.volbar.x + geom.volbar.w * vol_ratio,
-                    geom.volbar.y + geom.volbar.h / 2,
-                    5,
+                    vol_cy,
+                    4,
                     COLOR_TEXT,
                     "00"
                 ))
             end
         end
 
+        -- 底部功能按钮
         for i = 1, #geom.buttons do
             local box = geom.buttons[i]
             local hot = hover_id == box.id or pressed_id == box.id
             if hot then
-                push(lines, draw_circle(box.x + box.w / 2, box.y + box.h / 2, 16, COLOR_TEXT, "E6"))
+                push(lines, draw_circle(box.x + box.w / 2, box.y + box.h / 2, 15, COLOR_TEXT, "E0"))
             end
             local cx, cy = box.x + box.w / 2, box.y + box.h / 2
             local color = hot and COLOR_ACCENT or COLOR_TEXT
@@ -452,7 +491,7 @@ local function render()
                 draw_icon_vol(lines, cx, cy, muted, color)
             elseif box.id == "speed" then
                 push(lines, string.format(
-                    "{\\an5\\bord0\\shad0\\fs14\\b1\\c%s\\pos(%.1f,%.1f)}%s",
+                    "{\\an5\\bord0\\shad0\\fs13\\b1\\c%s\\pos(%.1f,%.1f)}%s",
                     color, cx, cy, speed_label(speed)
                 ))
             elseif box.id == "audio" then
@@ -460,33 +499,44 @@ local function render()
             elseif box.id == "sub" then
                 push(lines, draw_icon_cc(cx, cy, sub_on, sub_on and COLOR_ACCENT or color))
             elseif box.id == "fs" then
-                push(lines, draw_icon_fs(cx, cy, full, color))
+                draw_icon_fs(lines, cx, cy, full, color)
             end
         end
 
+        -- 按钮悬浮提示（小巧清晰的底部标签）
         local tip
-        if hover_id == "audio" then
-            tip = track_label("audio")
-        elseif hover_id == "sub" then
-            tip = track_label("sub")
-        elseif hover_id == "speed" then
-            tip = "倍速 " .. speed_label(speed)
+        local tip_box
+        if hover_id == "play" then
+            tip = paused and "播放" or "暂停"
+            tip_box = geom.play
         elseif hover_id == "prev" then
             tip = "上一集"
+            tip_box = geom.prev
         elseif hover_id == "next" then
             tip = "下一集"
+            tip_box = geom.nxt
+        elseif hover_id == "vol" then
+            tip = muted and "取消静音" or string.format("音量 %d%%", math.floor(volume + 0.5))
+            tip_box = geom.vol
+        elseif hover_id == "speed" then
+            tip = "倍速 " .. speed_label(speed)
+            tip_box = geom.speed
+        elseif hover_id == "audio" then
+            tip = track_label("audio")
+            tip_box = geom.audio
+        elseif hover_id == "sub" then
+            tip = track_label("sub")
+            tip_box = geom.sub
+        elseif hover_id == "fs" then
+            tip = full and "退出全屏" or "全屏"
+            tip_box = geom.fs
         end
-        if tip then
-            local box = hover_id == "speed" and geom.speed
-                or hover_id == "audio" and geom.audio
-                or hover_id == "sub" and geom.sub
-                or hover_id == "prev" and geom.prev
-                or geom.nxt
+        if tip and tip_box then
             push(lines, string.format(
-                "{\\an2\\bord0\\shad0\\fs13\\c%s\\pos(%.1f,%.1f)}%s",
+                "{\\an2\\bord1\\3c&H0A0807&\\shad0\\fs12\\b1\\c%s\\pos(%.1f,%.1f)}%s",
                 COLOR_TEXT,
-                box.x + box.w / 2,
-                box.y - 4,
+                tip_box.x + tip_box.w / 2,
+                tip_box.y - 5,
                 ass_escape(tip)
             ))
         end
@@ -494,7 +544,7 @@ local function render()
 
     if paused then
         local cx, cy = w / 2, h / 2
-        push(lines, draw_circle(cx, cy, 36, COLOR_BG, "50"))
+        push(lines, draw_circle(cx, cy, 26, COLOR_BG, "70"))
         push(lines, draw_icon_play(cx, cy, COLOR_TEXT))
     end
 

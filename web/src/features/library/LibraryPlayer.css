@@ -194,15 +194,16 @@
 }
 
 .library-player.is-handoff {
-  inset: auto 20px 20px auto;
+  position: fixed;
+  inset: auto 24px 24px auto;
   top: auto;
   left: auto;
-  right: 20px;
-  bottom: 20px;
+  right: 24px;
+  bottom: 24px;
   display: flex;
   flex-direction: column-reverse;
   align-items: flex-end;
-  gap: 10px;
+  gap: 8px;
   padding: 0;
   background: transparent;
   pointer-events: none;
@@ -212,124 +213,87 @@
 .library-player-handoff {
   display: flex;
   align-items: center;
-  gap: 14px;
-  max-width: min(480px, calc(100vw - 40px));
-  padding: 6px 8px 6px 16px;
+  gap: 12px;
+  max-width: min(500px, calc(100vw - 32px));
+  padding: 4px 6px 4px 14px;
   pointer-events: auto;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9999px;
-  background: rgba(7, 8, 10, 0.86);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  box-shadow: 
-    0 16px 40px -8px rgba(0, 0, 0, 0.75),
-    0 4px 14px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+  background: #111315;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65), 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .library-player-handoff:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 
-    0 20px 48px -6px rgba(0, 0, 0, 0.85),
-    0 4px 16px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.75), 0 3px 8px rgba(0, 0, 0, 0.45);
 }
 
 .library-player-handoff-status-wrap {
   display: grid;
   place-items: center;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   flex-shrink: 0;
 }
 
 .library-player-handoff-dot {
   display: block;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: #c4c6bf;
-  transition: background-color 0.25s ease, box-shadow 0.25s ease;
+  background: #6b7280;
+  transition: background-color 0.2s ease;
 }
 
 .library-player-handoff-dot.is-idle {
-  background: #c4c6bf;
-  opacity: 0.6;
+  background: #6b7280;
 }
 
 .library-player-handoff-dot.is-playing {
   background: #34d399;
-  box-shadow: 0 0 10px rgba(52, 211, 153, 0.75);
-  animation: handoff-dot-pulse 2.4s ease-in-out infinite;
 }
 
 .library-player-handoff-dot.is-error {
-  background: #f87171;
-  box-shadow: 0 0 10px rgba(248, 113, 113, 0.75);
-}
-
-@keyframes handoff-dot-pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.18);
-    opacity: 0.82;
-    box-shadow: 0 0 14px rgba(52, 211, 153, 0.95);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .library-player-handoff-dot.is-playing {
-    animation: none;
-  }
-
-  .library-player-handoff-actions .icon-action:hover,
-  .library-player-handoff-actions .icon-action:active {
-    transform: none;
-  }
+  background: #ef4444;
 }
 
 .library-player-handoff-info {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .library-player-handoff h2 {
   margin: 0;
-  color: #f2f1eb;
+  color: #f3f4f6;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 550;
   line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 240px;
+  max-width: 220px;
   letter-spacing: -0.01em;
 }
 
 .library-player-handoff-state {
   margin: 0;
-  color: #c4c6bf;
+  color: #9ca3af;
   font-size: 12px;
   line-height: 1.25;
-  opacity: 0.85;
 }
 
 .library-player-handoff-state.error {
-  color: #fca5a5;
-  opacity: 1;
+  color: #f87171;
 }
 
 .library-player-handoff-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
@@ -342,50 +306,77 @@
   min-height: 44px;
   margin: 0;
   padding: 0;
-  color: #f2f1eb;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: #d1d5db;
+  background: transparent;
+  border: 0;
   border-radius: 50%;
   cursor: pointer;
   text-decoration: none;
-  transition: background-color 0.15s ease, transform 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .library-player-handoff-actions .icon-action:hover {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.12);
-  transform: scale(1.04);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .library-player-handoff-actions .icon-action:active {
-  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .library-player-handoff-actions .icon-action.active {
-  color: #022c22;
-  background: #34d399;
-  border-color: #34d399;
-  box-shadow: 0 0 14px rgba(52, 211, 153, 0.4);
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.14);
 }
 
 .library-player-handoff-queue {
-  width: min(340px, calc(100vw - 40px));
+  width: min(340px, calc(100vw - 32px));
   pointer-events: auto;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 20px;
-  background: rgba(7, 8, 10, 0.88);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  box-shadow: 
-    0 20px 48px -12px rgba(0, 0, 0, 0.8),
-    0 4px 16px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: #111315;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 3px 8px rgba(0, 0, 0, 0.4);
   overflow: hidden;
-  padding: 8px;
+  padding: 6px;
 }
 
 .library-player-handoff-queue .library-player-queue-list {
-  max-height: min(32vh, 280px);
+  max-height: min(34vh, 280px);
+  margin: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+}
+
+.library-player-handoff-queue .library-player-queue-list button {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 6px 10px;
+  color: #e5e7eb;
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.library-player-handoff-queue .library-player-queue-list button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.library-player-handoff-queue .library-player-queue-list button.is-current {
+  color: #022c22;
+  background: #34d399;
+  font-weight: 600;
 }
 
 .library-player.chrome-hidden,
@@ -785,8 +776,8 @@
   .library-player-handoff {
     width: 100%;
     margin-left: 0;
-    border-radius: 20px;
-    flex-wrap: wrap;
+    border-radius: 18px;
+    padding: 6px 10px;
   }
 
   .library-player-handoff h2 {
