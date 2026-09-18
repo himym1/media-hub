@@ -1,11 +1,18 @@
 /* 仅桌面壳生效。浏览器里的网页保持原样。 */
 
 /* ==========================================================================
-   1. 基础系统与排版 (Codex / VS Code 桌面工具风格)
+   1. 基础系统与排版 (Codex / VS Code / macOS 桌面原生质感)
    ========================================================================== */
 html[data-app-shell="desktop"] {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   color-scheme: dark;
+}
+
+html[data-app-shell="desktop"] body,
+html[data-app-shell="desktop"] #root {
+  height: 100%;
+  overflow: hidden;
+  background: #0d1013;
 }
 
 /* 原生等宽/控制台字体 */
@@ -15,10 +22,10 @@ html[data-app-shell="desktop"] pre {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
-/* 紧凑矩形系统滚动条 */
+/* 紧凑系统滚动条 */
 html[data-app-shell="desktop"] *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 html[data-app-shell="desktop"] *::-webkit-scrollbar-track {
@@ -26,20 +33,20 @@ html[data-app-shell="desktop"] *::-webkit-scrollbar-track {
 }
 
 html[data-app-shell="desktop"] *::-webkit-scrollbar-thumb {
-  background: #2d333b;
+  background: #282e37;
   border: 2px solid transparent;
   background-clip: padding-box;
   border-radius: 4px;
 }
 
 html[data-app-shell="desktop"] *::-webkit-scrollbar-thumb:hover {
-  background: #444c56;
+  background: #3e4652;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 /* ==========================================================================
-   2. 窗口栅格与 macOS 红绿灯拖拽区 (严格保留)
+   2. 窗口栅格与 macOS 红绿灯拖拽区 (严格保留 38px / 188px 栅格)
    ========================================================================== */
 html[data-app-shell="desktop"] .desktop-drag-region {
   display: none;
@@ -48,7 +55,9 @@ html[data-app-shell="desktop"] .desktop-drag-region {
 html[data-app-shell="desktop"] .app-shell {
   grid-template-columns: 188px minmax(0, 1fr);
   background: #0d1013;
-  min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
 }
 
 html[data-app-shell="desktop"][data-platform="macos"] .app-shell {
@@ -63,6 +72,8 @@ html[data-app-shell="desktop"][data-platform="macos"] .desktop-drag-region {
   height: 38px;
   -webkit-app-region: drag;
   user-select: none;
+  background: #111417;
+  border-bottom: 1px solid #1c2024;
 }
 
 html[data-app-shell="desktop"][data-platform="macos"] .sidebar {
@@ -87,11 +98,13 @@ html[data-app-shell="desktop"][data-platform="macos"] .auth-shell .desktop-drag-
 }
 
 /* ==========================================================================
-   3. 侧边栏与系统导航 (像 VS Code 侧栏，密、平、无品牌词与大搜索条)
+   3. 侧边栏与系统导航 (像 Apple Music / Infuse，安静、低对比、整行微亮实底)
    ========================================================================== */
 html[data-app-shell="desktop"] .sidebar {
   min-height: 0;
-  padding: 8px 6px 12px;
+  height: 100%;
+  overflow-y: auto;
+  padding: 8px 8px 14px;
   background: #111417;
   border-right: 1px solid #1c2024;
 }
@@ -117,77 +130,106 @@ html[data-app-shell="desktop"] .nav-group.system-group {
   border-top: 1px solid #1c2024;
 }
 
+/* 导航项：保持 ≥ 44px 点击高度，安静低对比图标，无方块底 */
 html[data-app-shell="desktop"] .nav-item {
-  gap: 8px;
+  gap: 10px;
   min-height: 44px;
-  padding: 6px 10px;
-  border-radius: 4px;
-  border: 1px solid transparent;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: none !important;
   color: #8b949e;
   font-size: 13px;
-  font-weight: 500;
-  transition: background-color .12s ease, color .12s ease;
+  font-weight: 450;
+  box-shadow: none !important;
+  transition: background-color .1s ease, color .1s ease;
+}
+
+html[data-app-shell="desktop"] .nav-item svg {
+  color: #76808b;
+  opacity: 0.85;
+  flex-shrink: 0;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  transition: color .1s ease, opacity .1s ease;
 }
 
 html[data-app-shell="desktop"] .nav-item:hover {
-  color: #f0f6fc;
-  background: #161b22;
+  color: #e6edf3;
+  background: rgba(255, 255, 255, 0.05);
 }
 
+html[data-app-shell="desktop"] .nav-item:hover svg {
+  color: #c9d1d9;
+  opacity: 1;
+}
+
+/* 选中项：整行微亮实底，彻底去掉 Linear 式发光绿色描边 inset 2px 0 var(--accent) */
 html[data-app-shell="desktop"] .nav-item.active {
-  color: #ffffff;
-  background: rgba(52, 211, 153, 0.08);
-  border-color: transparent;
-  box-shadow: inset 2px 0 var(--accent);
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.09) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  font-weight: 550;
 }
 
+html[data-app-shell="desktop"] .nav-item.active svg {
+  color: #ffffff !important;
+  opacity: 1;
+}
+
+/* 计数徽标：微调点缀，字号 ≥ 12px */
 html[data-app-shell="desktop"] .nav-count {
-  width: 18px;
-  height: 18px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #c9d1d9;
+  margin-left: auto;
+}
+
+html[data-app-shell="desktop"] .nav-item.active .nav-count {
+  background: rgba(52, 211, 153, 0.2);
+  color: #34d399;
 }
 
 /* ==========================================================================
-   4. 主工作区与窗口顶栏
+   4. 主工作区与顶栏消除 (三层标题 -> 单一贴顶内容区)
    ========================================================================== */
 html[data-app-shell="desktop"] .main-content {
   background: #0d1013;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
+/* 1. 彻底隐藏网页 .topbar 整条（干掉三层标题中的第二层） */
 html[data-app-shell="desktop"] .topbar {
-  height: 38px;
-  min-height: 38px;
-  padding: 0 16px;
-  background: #111417;
-  border-bottom: 1px solid #1c2024;
+  display: none !important;
 }
 
-html[data-app-shell="desktop"] .topbar-title {
-  display: flex;
-  align-items: center;
-}
-
-html[data-app-shell="desktop"] .topbar-title span {
-  display: none;
-}
-
-html[data-app-shell="desktop"] .topbar-title strong {
-  font-size: 13px;
-  font-weight: 600;
-  color: #c9d1d9;
-}
-
+/* 2. 网页边距收拢为贴边内容区，内容占满视线，不留居中文档留白 */
 html[data-app-shell="desktop"] .page-wrap {
-  max-width: none;
-  margin: 0;
-  padding: 14px 20px 24px;
+  max-width: none !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 16px 20px !important;
   flex: 1;
+  min-height: 0;
 }
 
-/* 隐藏所有页面 H1/H2 副标题里的功能介绍句 (产品规则：不要 feature-tour copy) */
+html[data-app-shell="desktop"] .page-pane {
+  max-width: none !important;
+  width: 100% !important;
+}
+
+/* 隐藏所有 feature-tour 解释段落 */
 html[data-app-shell="desktop"] .view-header p,
 html[data-app-shell="desktop"] .compact-view-header p,
 html[data-app-shell="desktop"] .view-heading p,
@@ -197,58 +239,139 @@ html[data-app-shell="desktop"] .auth-hero-subtitle {
   display: none !important;
 }
 
-/* 紧凑标题栏 */
+/* 3. 网站 H1 横条：转为 sr-only，保留读屏语义，视觉上干掉大字秀 */
+html[data-app-shell="desktop"] .discovery-header,
+html[data-app-shell="desktop"] .view-header > div:first-child:not(.view-header-actions),
+html[data-app-shell="desktop"] .compact-view-header > div:first-child:not(.view-header-actions),
+html[data-app-shell="desktop"] .view-heading > div:first-child {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* 4. 健康徽章：干掉发现页头条的「3/5 服务在线」运维网站味 */
+html[data-app-shell="desktop"] .health-summary {
+  display: none !important;
+}
+
+/* 统领各页面的顶栏为贴顶工具条 (Toolbar) */
 html[data-app-shell="desktop"] .view-header,
 html[data-app-shell="desktop"] .compact-view-header,
 html[data-app-shell="desktop"] .view-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #1c2024;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  min-height: 44px !important;
+  margin: 0 -16px 12px !important;
+  padding: 6px 16px !important;
+  border: none !important;
+  border-bottom: 1px solid #1c2024 !important;
+  background: #111417 !important;
 }
 
-html[data-app-shell="desktop"] .view-header h1,
-html[data-app-shell="desktop"] .compact-view-header h1,
-html[data-app-shell="desktop"] .view-heading h1,
-html[data-app-shell="desktop"] .workspace-heading h1 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #f0f6fc;
-  letter-spacing: 0;
-}
-
-html[data-app-shell="desktop"] .health-summary {
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 4px;
-  font-size: 12px;
+html[data-app-shell="desktop"] .view-header-actions {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
 }
 
 html[data-app-shell="desktop"] .desktop-update-banner {
-  margin: 8px 20px 0;
-  padding: 10px 14px;
+  margin: 8px 16px 0;
+  padding: 8px 12px;
   border-radius: 4px;
-  border-color: #21262d;
+  border: 1px solid #21262d;
   background: #111417;
 }
 
 /* ==========================================================================
-   5. 发现页 (Discovery View) - 密、平、扁平结果行
+   5. 系统按钮标准 (系统深色细边框按钮，禁止实心亮绿大药丸营销 CTA)
    ========================================================================== */
-html[data-app-shell="desktop"] .search-stage {
-  margin-top: 0;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #1c2024;
+html[data-app-shell="desktop"] .search-form button[type="submit"],
+html[data-app-shell="desktop"] .result-action button,
+html[data-app-shell="desktop"] .primary-action,
+html[data-app-shell="desktop"] .login-button {
+  min-height: 44px !important;
+  height: 44px;
+  padding: 0 14px !important;
+  border-radius: 5px !important;
+  border: 1px solid #30363d !important;
+  background: #21262d !important;
+  color: #f0f6fc !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
 }
 
-/* 紧凑平整工具搜索栏 (保持高度 ≥ 44px) */
+html[data-app-shell="desktop"] .search-form button[type="submit"]:hover:not(:disabled),
+html[data-app-shell="desktop"] .result-action button:hover:not(:disabled),
+html[data-app-shell="desktop"] .primary-action:hover:not(:disabled),
+html[data-app-shell="desktop"] .login-button:hover:not(:disabled) {
+  background: #282e37 !important;
+  border-color: #484f58 !important;
+  color: #ffffff !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+html[data-app-shell="desktop"] .search-form button[type="submit"]:disabled,
+html[data-app-shell="desktop"] .result-action button:disabled,
+html[data-app-shell="desktop"] .primary-action:disabled,
+html[data-app-shell="desktop"] .login-button:disabled {
+  opacity: 0.38 !important;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+html[data-app-shell="desktop"] .secondary-command {
+  min-height: 34px;
+  border-radius: 5px;
+  border: 1px solid #30363d;
+  background: #161b22;
+  color: #c9d1d9;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 0 12px;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+html[data-app-shell="desktop"] .secondary-command:hover:not(:disabled) {
+  background: #21262d;
+  border-color: #484f58;
+  color: #ffffff;
+}
+
+html[data-app-shell="desktop"] .secondary-command:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   6. 发现页 (Discovery View) - 贴顶搜索工具条，紧凑扁平列表与海报
+   ========================================================================== */
+html[data-app-shell="desktop"] .search-stage {
+  margin: 0 -16px 12px !important;
+  padding: 8px 16px 10px !important;
+  border-bottom: 1px solid #1c2024 !important;
+  background: #111417 !important;
+}
+
 html[data-app-shell="desktop"] .search-form {
   min-height: 44px;
   height: 44px;
   padding: 0 6px 0 12px;
-  border: 1px solid #30363d;
+  border: 1px solid #2d333b;
   border-radius: 6px;
   background: #161b22;
   box-shadow: none;
@@ -256,36 +379,18 @@ html[data-app-shell="desktop"] .search-form {
 }
 
 html[data-app-shell="desktop"] .search-form:focus-within {
-  border-color: var(--accent);
+  border-color: #484f58;
   box-shadow: none;
-  outline: 1px solid var(--accent);
+  outline: none;
 }
 
 html[data-app-shell="desktop"] .search-form input {
-  font-size: 13.5px;
+  font-size: 13px;
   color: #f0f6fc;
 }
 
 html[data-app-shell="desktop"] .search-form input::placeholder {
   color: #6e7681;
-}
-
-html[data-app-shell="desktop"] .search-form button[type="submit"] {
-  min-width: 64px;
-  min-height: 44px;
-  height: 44px;
-  padding: 0 14px;
-  border-radius: 4px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #022c22;
-  background: var(--accent);
-  box-shadow: none;
-  transform: none;
-}
-
-html[data-app-shell="desktop"] .search-form button[type="submit"]:hover:not(:disabled) {
-  background: var(--accent-strong);
 }
 
 html[data-app-shell="desktop"] .search-shortcut {
@@ -298,23 +403,23 @@ html[data-app-shell="desktop"] .search-shortcut {
 }
 
 html[data-app-shell="desktop"] .search-meta {
-  margin-top: 6px;
+  margin-top: 5px;
   font-size: 12px;
   color: #6e7681;
 }
 
-/* 导入折叠块收薄 */
 html[data-app-shell="desktop"] .discovery-import-details {
-  margin-top: 8px;
+  margin-top: 6px;
   border: 1px solid #21262d;
   border-radius: 4px;
-  background: #111417;
+  background: #0d1013;
 }
 
 html[data-app-shell="desktop"] .discovery-import-summary {
-  min-height: 44px;
-  padding: 5px 10px;
+  min-height: 32px;
+  padding: 4px 8px;
   font-size: 12px;
+  color: #8b949e;
 }
 
 html[data-app-shell="desktop"] .share-import,
@@ -323,7 +428,7 @@ html[data-app-shell="desktop"] .discovery-import-body .share-import {
   border: 1px solid #21262d;
   background: #0d1013;
   border-radius: 4px;
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 html[data-app-shell="desktop"] .share-import-form input,
@@ -335,50 +440,66 @@ html[data-app-shell="desktop"] .page-capture-form input {
   font-size: 13px;
 }
 
-/* 发现空闲分类药丸与海报横带 */
+/* 分类芯片与筛选栏：系统细边框，无霓虹 */
 html[data-app-shell="desktop"] .genre-chip-band {
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 html[data-app-shell="desktop"] .genre-chip-row {
   gap: 6px;
 }
 
-html[data-app-shell="desktop"] .genre-chip {
+html[data-app-shell="desktop"] .genre-chip,
+html[data-app-shell="desktop"] .filter-chip {
   min-width: auto;
-  min-height: 30px;
+  min-height: 28px;
   padding: 0 10px;
   border-radius: 4px;
-  border: 1px solid #30363d;
+  border: 1px solid #2d333b;
   background: #161b22;
   color: #8b949e;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 450;
   box-shadow: none;
   transform: none;
-  transition: all .12s ease;
+  transition: all .1s ease;
 }
 
-html[data-app-shell="desktop"] .genre-chip:hover {
+html[data-app-shell="desktop"] .genre-chip:hover,
+html[data-app-shell="desktop"] .filter-chip:hover {
   color: #f0f6fc;
   background: #21262d;
   border-color: #484f58;
   transform: none;
 }
 
-html[data-app-shell="desktop"] .genre-chip.selected {
-  background: rgba(52, 211, 153, 0.12);
-  border-color: rgba(52, 211, 153, 0.4);
+html[data-app-shell="desktop"] .genre-chip.selected,
+html[data-app-shell="desktop"] .filter-chip.active {
+  background: #2d333b;
+  border-color: #444c56;
   color: #ffffff;
   box-shadow: none;
 }
 
-/* 海报横条 (保留片库海报，但卡片去上浮) */
-html[data-app-shell="desktop"] .discovery-poster-card {
+/* 发现页海报墙（保留片库海报，但去除网页悬浮动效） */
+html[data-app-shell="desktop"] .trending-list button:hover .trending-poster,
+html[data-app-shell="desktop"] .trending-list button:focus-visible .trending-poster,
+html[data-app-shell="desktop"] .trending-poster {
   transform: none !important;
   box-shadow: none !important;
+  border-radius: 4px;
+  border: 1px solid #21262d;
 }
 
+html[data-app-shell="desktop"] .trending-list button:hover .trending-poster {
+  border-color: #38414e;
+}
+
+html[data-app-shell="desktop"] .trending-list button:hover strong {
+  color: #f0f6fc;
+}
+
+html[data-app-shell="desktop"] .discovery-poster-card,
 html[data-app-shell="desktop"] .discovery-poster-card:hover {
   transform: none !important;
   box-shadow: none !important;
@@ -387,10 +508,11 @@ html[data-app-shell="desktop"] .discovery-poster-card:hover {
 html[data-app-shell="desktop"] .discovery-poster-frame {
   border-radius: 4px;
   border: 1px solid #21262d;
+  box-shadow: none;
 }
 
 html[data-app-shell="desktop"] .discovery-poster-card:hover .discovery-poster-frame {
-  border-color: rgba(52, 211, 153, 0.4);
+  border-color: #38414e;
 }
 
 /* 结果筛选栏 */
@@ -400,28 +522,12 @@ html[data-app-shell="desktop"] .discovery-filter-bar {
   border-bottom: 1px solid #1c2024;
 }
 
-html[data-app-shell="desktop"] .filter-chip {
-  border-radius: 4px;
-  font-size: 12px;
-  min-height: 28px;
-  padding: 0 8px;
-  border: 1px solid #30363d;
-  background: #161b22;
-  color: #8b949e;
-}
-
-html[data-app-shell="desktop"] .filter-chip.active {
-  background: rgba(52, 211, 153, 0.12);
-  border-color: rgba(52, 211, 153, 0.4);
-  color: #ffffff;
-}
-
-/* 重点：发现结果行由圆角卡片改为扁平列表行 */
+/* 发现结果行：扁平列表行，选中整行微亮实底，禁止发光绿条 */
 html[data-app-shell="desktop"] .result-row {
-  grid-template-columns: 50px minmax(0, 1fr) auto !important;
-  min-height: 72px !important;
+  grid-template-columns: 48px minmax(0, 1fr) auto !important;
+  min-height: 64px !important;
   gap: 12px !important;
-  padding: 8px 10px !important;
+  padding: 6px 10px !important;
   margin-bottom: 0 !important;
   border: none !important;
   border-bottom: 1px solid #1c2024 !important;
@@ -440,9 +546,9 @@ html[data-app-shell="desktop"] .result-row:hover {
 }
 
 html[data-app-shell="desktop"] .result-row.selected {
-  background: rgba(52, 211, 153, 0.06) !important;
+  background: #1c2128 !important;
   border-color: #1c2024 !important;
-  box-shadow: inset 2px 0 var(--accent) !important;
+  box-shadow: none !important;
   transform: none !important;
 }
 
@@ -456,7 +562,7 @@ html[data-app-shell="desktop"] .result-row .poster-wrap {
 
 html[data-app-shell="desktop"] .result-title {
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 550;
   color: #f0f6fc;
 }
 
@@ -467,19 +573,10 @@ html[data-app-shell="desktop"] .spec-badge {
   border: 1px solid #30363d;
   background: #161b22;
   font-weight: 500;
+  color: #8b949e;
 }
 
-html[data-app-shell="desktop"] .result-action button {
-  min-height: 44px;
-  height: 44px;
-  padding: 0 12px;
-  border-radius: 4px;
-  font-size: 12.5px;
-  box-shadow: none;
-  transform: none;
-}
-
-/* 结果详情检查器面板 (Inspector) */
+/* 检查面板 (Inspector) */
 html[data-app-shell="desktop"] .detail-panel {
   background: #111417;
   border-left: 1px solid #1c2024;
@@ -502,17 +599,46 @@ html[data-app-shell="desktop"] .detail-fact-card {
 }
 
 /* ==========================================================================
-   6. 任务页 (Transfer Queue) - VS Code 面板风格
+   7. 任务页 (Transfer Queue) - 桌面工具面板，分段控制与平铺行
    ========================================================================== */
 html[data-app-shell="desktop"] .task-layout {
-  gap: 16px;
+  gap: 14px;
 }
 
 html[data-app-shell="desktop"] .task-list {
   background: #111417;
   border: 1px solid #1c2024;
   border-radius: 6px;
-  padding: 6px 0;
+  padding: 4px 0;
+}
+
+/* 分段控制器替代网页 Tab */
+html[data-app-shell="desktop"] .task-scope-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 5px;
+  background: #161b22;
+  border: 1px solid #262c34;
+  gap: 2px;
+}
+
+html[data-app-shell="desktop"] .task-scope-toggle button {
+  min-height: 28px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #8b949e;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all .1s ease;
+}
+
+html[data-app-shell="desktop"] .task-scope-toggle button[aria-pressed="true"] {
+  background: #2d333b;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 html[data-app-shell="desktop"] .task-filter-bar {
@@ -527,9 +653,9 @@ html[data-app-shell="desktop"] .task-group-heading {
   color: #6e7681;
 }
 
-/* 任务列表行去圆角卡片 */
+/* 任务列表行：平铺无描边，选中无绿色发光 */
 html[data-app-shell="desktop"] .task-row {
-  min-height: 52px !important;
+  min-height: 50px !important;
   padding: 8px 12px !important;
   margin-bottom: 0 !important;
   border: none !important;
@@ -549,9 +675,9 @@ html[data-app-shell="desktop"] .task-row:hover {
 }
 
 html[data-app-shell="desktop"] .task-row.selected {
-  background: rgba(52, 211, 153, 0.06) !important;
+  background: #1c2128 !important;
   border-color: #1c2024 !important;
-  box-shadow: inset 2px 0 var(--accent) !important;
+  box-shadow: none !important;
   transform: none !important;
 }
 
@@ -566,17 +692,28 @@ html[data-app-shell="desktop"] .task-copy small {
   color: #8b949e;
 }
 
-/* 任务详情检查面板 */
+/* 进度条：强调色 #34d399 做进度点缀 */
+html[data-app-shell="desktop"] .task-progress-bar {
+  background: #21262d;
+  height: 4px;
+  border-radius: 2px;
+}
+
+html[data-app-shell="desktop"] .task-progress-fill {
+  background: #34d399;
+}
+
+/* 任务详情面板 */
 html[data-app-shell="desktop"] .task-detail {
   background: #111417;
   border: 1px solid #1c2024;
   border-radius: 6px;
-  padding: 16px;
+  padding: 14px;
   box-shadow: none;
 }
 
 html[data-app-shell="desktop"] .task-pipeline {
-  margin: 12px 0;
+  margin: 10px 0;
   padding: 8px 10px;
   border: 1px solid #21262d;
   border-radius: 4px;
@@ -597,7 +734,7 @@ html[data-app-shell="desktop"] .event-list {
 }
 
 /* ==========================================================================
-   7. 订阅页 (Subscription View) - 密、平、表单精简
+   8. 订阅页 (Subscription View) - 密、平、表单精简
    ========================================================================== */
 html[data-app-shell="desktop"] .subscription-list {
   background: #111417;
@@ -607,7 +744,7 @@ html[data-app-shell="desktop"] .subscription-list {
 }
 
 html[data-app-shell="desktop"] .subscription-row {
-  min-height: 52px !important;
+  min-height: 50px !important;
   padding: 8px 12px !important;
   margin-bottom: 0 !important;
   border: none !important;
@@ -625,16 +762,16 @@ html[data-app-shell="desktop"] .subscription-row:hover {
 }
 
 html[data-app-shell="desktop"] .subscription-row.selected {
-  background: rgba(52, 211, 153, 0.06) !important;
+  background: #1c2128 !important;
   border-color: #1c2024 !important;
-  box-shadow: inset 2px 0 var(--accent) !important;
+  box-shadow: none !important;
 }
 
 html[data-app-shell="desktop"] .subscription-editor {
   background: #111417;
   border: 1px solid #1c2024;
   border-radius: 6px;
-  padding: 16px;
+  padding: 14px;
   box-shadow: none;
 }
 
@@ -662,25 +799,27 @@ html[data-app-shell="desktop"] .subscription-advanced {
 }
 
 /* ==========================================================================
-   8. 媒体库 (Library View) - Infuse 片库感，收薄控制条与卡片
+   9. 媒体库 (Library View) - Infuse 片库感，贴顶控制条与海报墙
    ========================================================================== */
-/* 重点：控制条收薄，去毛玻璃，去大阴影 */
 html[data-app-shell="desktop"] .library-header-bar {
-  margin-bottom: 12px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: #111417;
-  border: 1px solid #1c2024;
+  margin: 0 -16px 12px !important;
+  padding: 8px 16px !important;
+  border-radius: 0 !important;
+  background: #111417 !important;
+  border: none !important;
+  border-bottom: 1px solid #1c2024 !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   box-shadow: none !important;
 }
 
 html[data-app-shell="desktop"] .library-scope-switch {
+  display: inline-flex;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: 5px;
   background: #161b22;
-  border: 1px solid #30363d;
+  border: 1px solid #262c34;
+  gap: 2px;
 }
 
 html[data-app-shell="desktop"] .scope-switch-btn {
@@ -690,11 +829,15 @@ html[data-app-shell="desktop"] .scope-switch-btn {
   border-radius: 3px;
   font-size: 12px;
   font-weight: 500;
+  background: transparent;
+  color: #8b949e;
+  border: none;
 }
 
 html[data-app-shell="desktop"] .scope-switch-btn.active {
-  background: rgba(52, 211, 153, 0.18);
+  background: #2d333b;
   color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 html[data-app-shell="desktop"] .library-tab-pill {
@@ -735,7 +878,7 @@ html[data-app-shell="desktop"] .library-inline-search input {
   font-size: 12px;
 }
 
-/* 保留海报墙，但去除 hover 上浮与浮华阴影 */
+/* 保留海报墙，但去除 hover 浮空晃动与炫光 */
 html[data-app-shell="desktop"] .library-poster-card {
   transform: none !important;
   box-shadow: none !important;
@@ -748,7 +891,7 @@ html[data-app-shell="desktop"] .library-poster-frame {
 }
 
 html[data-app-shell="desktop"] .library-poster-card:hover .library-poster-frame {
-  border-color: rgba(52, 211, 153, 0.4);
+  border-color: #38414e;
 }
 
 html[data-app-shell="desktop"] .poster-title {
@@ -757,7 +900,7 @@ html[data-app-shell="desktop"] .poster-title {
   color: #f0f6fc;
 }
 
-/* 详情抽屉收薄，去大毛玻璃与过厚卡片 */
+/* 详情抽屉 */
 html[data-app-shell="desktop"] .library-detail {
   background: #111417;
   border-left: 1px solid #1c2024;
@@ -773,7 +916,7 @@ html[data-app-shell="desktop"] .detail-ambient-backdrop {
 }
 
 html[data-app-shell="desktop"] .library-detail-heading h2 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: 0;
 }
@@ -785,13 +928,26 @@ html[data-app-shell="desktop"] .library-detail-poster {
 }
 
 /* ==========================================================================
-   9. 系统设置与服务 (Settings & Ops) - 紧凑网格与系统表单
+   10. 系统设置与运维 (Settings & Ops) - 系统首选项风格
    ========================================================================== */
+html[data-app-shell="desktop"] .settings-view .view-header {
+  position: absolute !important;
+  top: 8px !important;
+  right: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  z-index: 5 !important;
+  min-height: auto !important;
+}
+
 html[data-app-shell="desktop"] .settings-tabs {
-  margin-bottom: 14px;
-  gap: 4px;
-  border-bottom: 1px solid #1c2024;
-  padding-bottom: 8px;
+  margin: 0 -16px 14px !important;
+  padding: 6px 16px 8px !important;
+  background: #111417 !important;
+  border-bottom: 1px solid #1c2024 !important;
+  gap: 4px !important;
 }
 
 html[data-app-shell="desktop"] .settings-tabs button {
@@ -860,22 +1016,35 @@ html[data-app-shell="desktop"] .password-form {
   padding: 16px;
 }
 
+html[data-app-shell="desktop"] .operations-view .view-heading {
+  margin: 0 -16px 12px !important;
+  padding: 8px 16px !important;
+  background: #111417 !important;
+  border-bottom: 1px solid #1c2024 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+}
+
 /* ==========================================================================
-   10. 全局命令面板 (Command Palette) - 桌面工具面板，去网站营销风
+   11. 全局命令面板 (Spotlight 风格)
    ========================================================================== */
 html[data-app-shell="desktop"] .command-palette-backdrop {
-  background: rgba(0, 0, 0, 0.5) !important;
+  background: rgba(0, 0, 0, 0.35) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  padding-top: clamp(32px, 8vh, 80px);
+  padding-top: clamp(48px, 12vh, 100px) !important;
+  align-items: flex-start !important;
 }
 
 html[data-app-shell="desktop"] .command-palette-modal {
-  max-width: 580px;
-  border-radius: 6px;
-  border: 1px solid #30363d;
-  background: #161b22;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+  max-width: 520px !important;
+  width: min(92vw, 520px) !important;
+  border-radius: 8px !important;
+  border: 1px solid #30363d !important;
+  background: #161b22 !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+  overflow: hidden !important;
 }
 
 html[data-app-shell="desktop"] .command-palette-search-bar {
@@ -891,85 +1060,147 @@ html[data-app-shell="desktop"] .command-palette-input {
   color: #f0f6fc;
 }
 
-html[data-app-shell="desktop"] .command-palette-item {
-  min-height: 38px;
-  padding: 6px 10px;
-  border-radius: 4px;
-  border: 1px solid transparent;
-}
-
-html[data-app-shell="desktop"] .command-palette-item:hover,
-html[data-app-shell="desktop"] .command-palette-item.selected {
-  background: rgba(52, 211, 153, 0.1);
-  border-color: transparent;
-}
-
-html[data-app-shell="desktop"] .command-palette-footer {
-  min-height: 34px;
-  height: 34px;
-  padding: 0 12px;
-  background: #111417;
-  border-top: 1px solid #21262d;
-  font-size: 12px;
-}
-
-/* 隐藏命令面板底部营销宣传语 */
+/* 隐藏网页式右上角 Esc 按钮与底部宣传语 */
+html[data-app-shell="desktop"] .command-palette-close-btn,
 html[data-app-shell="desktop"] .command-palette-brand {
   display: none !important;
 }
 
-/* 快捷键帮助面板 - 桌面工具面板 */
+html[data-app-shell="desktop"] .command-palette-item {
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  border: none !important;
+  color: #c9d1d9;
+  font-size: 13px;
+}
+
+html[data-app-shell="desktop"] .command-palette-item:hover,
+html[data-app-shell="desktop"] .command-palette-item.selected {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+html[data-app-shell="desktop"] .command-palette-item.selected .command-item-icon {
+  color: #ffffff !important;
+}
+
+html[data-app-shell="desktop"] .command-palette-footer {
+  min-height: 28px;
+  height: 28px;
+  padding: 0 10px;
+  background: #111417;
+  border-top: 1px solid #21262d;
+}
+
+html[data-app-shell="desktop"] .command-palette-hints {
+  font-size: 12px;
+  color: #6e7681;
+}
+
+html[data-app-shell="desktop"] .command-palette-hints kbd {
+  font-size: 10px;
+  padding: 1px 4px;
+  background: #1c2128;
+  border-color: #30363d;
+}
+
+/* 快捷键帮助面板 */
 html[data-app-shell="desktop"] .shortcuts-backdrop {
-  background: rgba(0, 0, 0, 0.5) !important;
+  background: rgba(0, 0, 0, 0.35) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  padding-top: clamp(48px, 12vh, 100px) !important;
+  align-items: flex-start !important;
 }
 
 html[data-app-shell="desktop"] .shortcuts-modal {
-  border-radius: 6px;
-  border: 1px solid #30363d;
-  background: #161b22;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+  max-width: 480px !important;
+  width: min(92vw, 480px) !important;
+  border-radius: 8px !important;
+  border: 1px solid #30363d !important;
+  background: #161b22 !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
 }
 
 html[data-app-shell="desktop"] .shortcuts-header {
-  height: 44px;
+  height: 40px;
   background: #111417;
   border-bottom: 1px solid #21262d;
-  padding: 0 14px;
+  padding: 0 12px;
 }
 
 /* ==========================================================================
-   11. 登录面板 (Login Screen) - 桌面级收紧密度
+   12. 登录面板 (系统级锁屏面板，无 slogan，无芯片，无脚注)
    ========================================================================== */
 html[data-app-shell="desktop"] .auth-shell {
-  background: #0d1013;
+  background: #0a0c0e;
+  display: grid;
+  place-content: center;
+  min-height: 100dvh;
+}
+
+/* 隐藏背景光晕/网格、芯片、状态点、特性列表、页脚版本号 */
+html[data-app-shell="desktop"] .auth-ambient-glow,
+html[data-app-shell="desktop"] .auth-ambient-grid,
+html[data-app-shell="desktop"] .auth-lock-chip,
+html[data-app-shell="desktop"] .auth-status-dot,
+html[data-app-shell="desktop"] .auth-panel-header,
+html[data-app-shell="desktop"] .auth-features-row,
+html[data-app-shell="desktop"] .auth-footer {
+  display: none !important;
 }
 
 html[data-app-shell="desktop"] .auth-center-wrap {
-  width: min(100%, 330px);
-  gap: 14px;
+  width: min(100%, 280px);
+  gap: 12px;
+  margin: 0 auto;
+}
+
+html[data-app-shell="desktop"] .auth-hero-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 
 html[data-app-shell="desktop"] .auth-hero-mark {
-  width: 34px;
-  height: 34px;
-  margin-bottom: 8px;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 2px;
   border-radius: 6px;
+  background: #161b22;
+  border: 1px solid #262c34;
+  display: grid;
+  place-items: center;
+  color: #8b949e;
 }
 
 html[data-app-shell="desktop"] .auth-hero-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
   color: #f0f6fc;
+  letter-spacing: -0.01em;
 }
 
 html[data-app-shell="desktop"] .auth-panel {
-  padding: 18px 20px 16px;
+  padding: 14px 16px;
   border-radius: 6px;
   border: 1px solid #21262d;
   background: #111417;
-  box-shadow: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+html[data-app-shell="desktop"] .auth-panel form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+html[data-app-shell="desktop"] .auth-panel form label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #8b949e;
 }
 
 html[data-app-shell="desktop"] .password-field {
@@ -980,20 +1211,7 @@ html[data-app-shell="desktop"] .password-field {
   box-shadow: none;
 }
 
-html[data-app-shell="desktop"] .login-button {
-  min-height: 44px;
-  height: 44px;
-  border-radius: 4px;
-  background: var(--accent);
-  color: #022c22;
-  box-shadow: none;
-  transform: none;
-  font-size: 13.5px;
-  font-weight: 600;
-}
-
-html[data-app-shell="desktop"] .login-button:hover:not(:disabled) {
-  background: var(--accent-strong);
-  transform: none;
-  box-shadow: none;
+html[data-app-shell="desktop"] .password-field input {
+  font-size: 13px;
+  color: #f0f6fc;
 }
