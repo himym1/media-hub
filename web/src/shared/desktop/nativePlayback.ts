@@ -1,3 +1,5 @@
+import { isDesktopShell } from './desktopShell'
+
 export type NativeBounds = {
   x: number
   y: number
@@ -41,7 +43,7 @@ function tauriInvoke(): TauriInvoke | null {
 }
 
 export function canPlayNatively() {
-  return tauriInvoke() !== null
+  return isDesktopShell()
 }
 
 export function nativePlayErrorMessage(cause: unknown) {

@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::time::Duration;
 
+use tauri::menu::{Menu, MenuItem, SubmenuBuilder};
 use tauri::webview::{DownloadEvent, WebviewWindowBuilder};
 use tauri::{Manager, WebviewUrl};
 
@@ -13,6 +14,94 @@ mod player;
 mod updater;
 
 pub(crate) const DESKTOP_ORIGIN: &str = "https://media.himym.us.ci";
+
+const WORKSPACE_VIEWS: &[(&str, &str)] = &[
+    ("nav-discover", "discover"),
+    ("nav-transfers", "transfers"),
+    ("nav-subscriptions", "subscriptions"),
+    ("nav-library", "library"),
+    ("nav-operations", "operations"),
+    ("nav-settings", "settings"),
+];
+
+/// 把菜单选中的工作区视图交给网页壳，沿用现有 URL 与未保存拦截。
+fn dispatch_workspace_view(app: &tauri::AppHandle, view: &str) {
+    let allowed = WORKSPACE_VIEWS.iter().any(|(_, slug)| *slug == view);
+    if !allowed {
+        return;
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        let script = format!(
+            "window.dispatchEvent(new CustomEvent('media-hub-navigate',{{detail:{{view:'{view}'}}}}))"
+        );
+        let _ = window.eval(&script);
+    }
+}
+
+fn dispatch_logout(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.eval("window.dispatchEvent(new Event('media-hub-logout'))");
+    }
+}
+
+fn workspace_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    let go = SubmenuBuilder::new(app, "转到")
+        .item(&MenuItem::with_id(
+            app,
+            "nav-discover",
+            "发现",
+            true,
+            Some("CmdOrCtrl+1"),
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "nav-transfers",
+            "任务",
+            true,
+            Some("CmdOrCtrl+2"),
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "nav-subscriptions",
+            "订阅",
+            true,
+            Some("CmdOrCtrl+3"),
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "nav-library",
+            "媒体库",
+            true,
+            Some("CmdOrCtrl+4"),
+        )?)
+        .separator()
+        .item(&MenuItem::with_id(
+            app,
+            "nav-operations",
+            "运维",
+            true,
+            None::<&str>,
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "nav-settings",
+            "系统设置",
+            true,
+            Some("CmdOrCtrl+,"),
+        )?)
+        .separator()
+        .item(&MenuItem::with_id(
+            app,
+            "nav-logout",
+            "退出登录",
+            true,
+            None::<&str>,
+        )?)
+        .build()?;
+    let menu = Menu::default(app)?;
+    menu.insert(&go, 1)?;
+    Ok(menu)
+}
 
 pub(crate) fn is_supported_playback_url(url: &str) -> bool {
     if url.contains('\n') || url.contains('\r') || url.contains('\0') {
@@ -232,11 +321,32 @@ pub fn run() {
             player::close_player_window,
         ])
         .setup(|app| {
+            app.set_menu(workspace_menu(app.handle())?)?;
+            app.on_menu_event(|app, event| {
+                if event.id().as_ref() == "nav-logout" {
+                    dispatch_logout(app);
+                    return;
+                }
+                if let Some((_, view)) = WORKSPACE_VIEWS
+                    .iter()
+                    .find(|(id, _)| *id == event.id().as_ref())
+                {
+                    dispatch_workspace_view(app, view);
+                }
+            });
             if app.get_webview_window("main").is_none() {
                 let url = tauri::Url::parse(DESKTOP_ORIGIN)?;
-                WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+                let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                     .title("Media Hub")
-                    .inner_size(1280.0, 800.0)
+                    .inner_size(1280.0, 800.0);
+                #[cfg(target_os = "macos")]
+                {
+                    builder = builder
+                        .hidden_title(true)
+                        .title_bar_style(tauri::TitleBarStyle::Overlay)
+                        .traffic_light_position(tauri::LogicalPosition::new(14.0, 12.0));
+                }
+                builder
                     .on_download(|_webview, event| {
                         match event {
                             DownloadEvent::Requested { url, destination } => {
@@ -307,6 +417,16 @@ mod tests {
         let capabilities: serde_json::Value =
             serde_json::from_str(include_str!("../capabilities/default.json")).expect("capabilities");
         assert_eq!(capabilities["windows"], serde_json::json!(["main", "browser", "player", "capture"]));
+    }
+
+    #[test]
+    fn desktop_shell_uses_overlay_titlebar_and_go_menu() {
+        let source = include_str!("lib.rs");
+        assert!(source.contains("TitleBarStyle::Overlay"));
+        assert!(source.contains("hidden_title(true)"));
+        assert!(source.contains("nav-discover"));
+        assert!(source.contains("media-hub-navigate"));
+        assert!(source.contains("media-hub-logout"));
     }
 
     #[test]

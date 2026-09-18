@@ -7,6 +7,7 @@ import {
   login,
   type LoginResponse,
 } from '../../shared/api/mediaHub'
+import { isDesktopShell } from '../../shared/desktop/desktopShell'
 
 type LoginScreenProps = {
   onAuthenticated: (response: LoginResponse) => void
@@ -39,6 +40,7 @@ export function LoginScreen({ onAuthenticated, serviceError }: LoginScreenProps)
 
   return (
     <main className="auth-shell">
+      {isDesktopShell() ? <div aria-hidden="true" className="desktop-drag-region" data-tauri-drag-region /> : null}
       <div aria-hidden="true" className="auth-ambient-glow auth-ambient-1" />
       <div aria-hidden="true" className="auth-ambient-glow auth-ambient-2" />
       <div aria-hidden="true" className="auth-ambient-grid" />

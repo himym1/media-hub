@@ -2,6 +2,12 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react
 import { useQuery } from '@tanstack/react-query'
 import { Film, LayoutGrid, LibraryBig, ListPlus, ListTodo, LogOut, Search, Settings2, TerminalSquare } from 'lucide-react'
 import { getSystemOverview, listTransfers, type Candidate } from '../../shared/api/mediaHub'
+import {
+  DESKTOP_LOGOUT_EVENT,
+  DESKTOP_NAVIGATE_EVENT,
+  isDesktopShell,
+  workspaceViewFromDesktopEvent,
+} from '../../shared/desktop/desktopShell'
 import { useDesktopUpdate } from '../../shared/desktop/useDesktopUpdate'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { useToast } from '../../shared/ui/ToastContext'
@@ -151,6 +157,35 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
     return true
   }, [activeView, providerSettingsDirty, updateProviderDirty])
 
+  const guardedLogout = useCallback(() => {
+    if (activeView === '服务' && providerSettingsDirty && !window.confirm('Provider 设置尚未保存。确定退出并放弃修改吗？')) return
+    updateProviderDirty(false)
+    onLogout()
+  }, [activeView, onLogout, providerSettingsDirty, updateProviderDirty])
+
+  useEffect(() => {
+    if (!isDesktopShell()) return
+    const label = activeView === '服务' ? '系统设置' : activeView
+    document.title = `${label} — Media Hub`
+  }, [activeView])
+
+  useEffect(() => {
+    if (!isDesktopShell()) return
+    const onNavigate = (event: Event) => {
+      const slug = workspaceViewFromDesktopEvent(event)
+      const next = slug ? slugViews[slug] : undefined
+      if (!next) return
+      navigate(next)
+    }
+    const onLogout = () => guardedLogout()
+    window.addEventListener(DESKTOP_NAVIGATE_EVENT, onNavigate)
+    window.addEventListener(DESKTOP_LOGOUT_EVENT, onLogout)
+    return () => {
+      window.removeEventListener(DESKTOP_NAVIGATE_EVENT, onNavigate)
+      window.removeEventListener(DESKTOP_LOGOUT_EVENT, onLogout)
+    }
+  }, [guardedLogout, navigate])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -182,11 +217,6 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [activeView, commandOpen, navigate, shortcutsOpen])
 
-  const guardedLogout = () => {
-    if (activeView === '服务' && providerSettingsDirty && !window.confirm('Provider 设置尚未保存。确定退出并放弃修改吗？')) return
-    updateProviderDirty(false)
-    onLogout()
-  }
   const handleNav = (event: MouseEvent<HTMLAnchorElement>, next: WorkspaceView) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     event.preventDefault()
@@ -209,6 +239,7 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
 
   return (
     <div className="app-shell">
+      {isDesktopShell() ? <div aria-hidden="true" className="desktop-drag-region" data-tauri-drag-region /> : null}
       <a className="skip-link" href="#main-content">跳到主要内容</a>
       <aside className="sidebar">
         <div className="brand-lockup">

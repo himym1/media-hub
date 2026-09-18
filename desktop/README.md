@@ -21,7 +21,7 @@ pnpm --dir desktop install
 pnpm --dir desktop tauri dev
 ```
 
-`devUrl`, `frontendDist`, and the window `url` all point at `https://media.himym.us.ci` so `tauri dev` and the packaged app load the live Web UI, not a local `index.html`. Native play requires the Web hook shipped in **v0.20.25+**.
+`devUrl`, `frontendDist`, and the window `url` all point at `https://media.himym.us.ci` so `tauri dev` and the packaged app load the live Web UI, not a local `index.html`. Native play requires the Web hook shipped in **v0.20.25+**. On macOS the main window uses an overlay titlebar; the Web UI adds `data-app-shell="desktop"` so the in-page brand bar is hidden and the native **转到** menu drives Discover / Tasks / Library.
 
 ## Windows installer
 
