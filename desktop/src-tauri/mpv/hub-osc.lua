@@ -2,6 +2,7 @@
 local overlay = mp.create_osd_overlay("ass-events")
 local chrome_until = 0
 local dragging = false
+local dragging_vol = false
 local last_up = 0
 local pending_pause = nil
 local painted_visible = true
@@ -13,6 +14,9 @@ local COLOR_MUTED = "&HBFC6C4&"
 local COLOR_ACCENT = "&H99D334&"
 local PAD = 28
 local BTN = 36
+local SPEED_W = 46
+local VOL_W = 88
+local SPEEDS = { 0.75, 1, 1.25, 1.5, 2 }
 
 local function now()
     return mp.get_time()
@@ -23,7 +27,7 @@ local function show_chrome()
 end
 
 local function chrome_visible(paused)
-    return paused or now() < chrome_until or dragging
+    return paused or now() < chrome_until or dragging or dragging_vol
 end
 
 local function ass_escape(text)
@@ -102,10 +106,29 @@ end
 
 local function layout(w, h)
     local row_y = h - 44
-    local play = { id = "play", x = PAD, y = row_y, w = BTN, h = BTN }
+    local prev = { id = "prev", x = PAD, y = row_y, w = BTN, h = BTN }
+    local play = { id = "play", x = prev.x + BTN + 8, y = row_y, w = BTN, h = BTN }
+    local nxt = { id = "next", x = play.x + BTN + 8, y = row_y, w = BTN, h = BTN }
     local fs = { id = "fs", x = w - PAD - BTN, y = row_y, w = BTN, h = BTN }
     local sub = { id = "sub", x = fs.x - 8 - BTN, y = row_y, w = BTN, h = BTN }
-    local vol = { id = "vol", x = sub.x - 8 - BTN, y = row_y, w = BTN, h = BTN }
+    local audio = { id = "audio", x = sub.x - 8 - BTN, y = row_y, w = BTN, h = BTN }
+    local speed = { id = "speed", x = audio.x - 8 - SPEED_W, y = row_y, w = SPEED_W, h = BTN }
+    local vol = { id = "vol", x = speed.x - 8 - BTN, y = row_y, w = BTN, h = BTN }
+    local show_volbar = vol.x - 8 - VOL_W > nxt.x + BTN + 96
+    local volbar = {
+        id = "volbar",
+        x = show_volbar and (vol.x - 8 - VOL_W) or vol.x,
+        y = row_y + 10,
+        w = show_volbar and VOL_W or 0,
+        h = 16,
+    }
+    local volbar_hit = {
+        id = "volbar",
+        x = volbar.x,
+        y = row_y,
+        w = volbar.w,
+        h = BTN,
+    }
     local seek = {
         id = "seek",
         x = PAD,
@@ -114,12 +137,18 @@ local function layout(w, h)
         h = 22,
     }
     return {
+        prev = prev,
         play = play,
+        nxt = nxt,
         vol = vol,
+        volbar = volbar,
+        volbar_hit = volbar_hit,
+        speed = speed,
+        audio = audio,
         sub = sub,
         fs = fs,
         seek = seek,
-        buttons = { play, vol, sub, fs },
+        buttons = { prev, play, nxt, vol, speed, audio, sub, fs },
     }
 end
 
@@ -145,6 +174,22 @@ local function draw_icon_pause(lines, cx, cy, color)
     push(lines, draw_rect(cx + 2, cy - 8, 5, 16, color, "00"))
 end
 
+local function draw_icon_prev(lines, cx, cy, color)
+    push(lines, draw_rect(cx - 10, cy - 7, 3, 14, color, "00"))
+    push(lines, string.format(
+        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 12 0 l 0 8 l 12 16{\\p0}",
+        color, cx - 6, cy - 8
+    ))
+end
+
+local function draw_icon_next(lines, cx, cy, color)
+    push(lines, string.format(
+        "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 0 l 12 8 l 0 16{\\p0}",
+        color, cx - 8, cy - 8
+    ))
+    push(lines, draw_rect(cx + 6, cy - 7, 3, 14, color, "00"))
+end
+
 local function draw_icon_vol(lines, cx, cy, muted, color)
     push(lines, string.format(
         "{\\an7\\bord0\\shad0\\p1\\c%s\\pos(%.1f,%.1f)}m 0 6 l 6 6 l 12 1 l 12 17 l 6 12 l 0 12{\\p0}",
@@ -168,6 +213,10 @@ local function draw_icon_cc(cx, cy, on, color)
     return string.format("{\\an5\\bord0\\shad0\\fs15\\b1\\c%s\\pos(%.1f,%.1f)}%s", color, cx, cy, label)
 end
 
+local function draw_icon_audio(cx, cy, color)
+    return string.format("{\\an5\\bord0\\shad0\\fs16\\b1\\c%s\\pos(%.1f,%.1f)}A", color, cx, cy)
+end
+
 local function draw_icon_fs(cx, cy, full, color)
     if full then
         return string.format(
@@ -187,17 +236,95 @@ local function seek_to_ratio(ratio)
     mp.commandv("seek", math.min(1, math.max(0, ratio)) * 100, "absolute-percent")
 end
 
+local function volume_from_x(geom, x)
+    local bar = geom.volbar
+    if bar.w <= 0 then
+        return
+    end
+    local ratio = math.min(1, math.max(0, (x - bar.x) / bar.w))
+    mp.set_property_bool("mute", false)
+    mp.set_property_number("volume", ratio * 100)
+end
+
 local function cycle_fullscreen()
     mp.commandv("cycle", "fullscreen")
+end
+
+local function cycle_speed()
+    local cur = mp.get_property_number("speed") or 1
+    local idx = 1
+    for i = 1, #SPEEDS do
+        if math.abs(cur - SPEEDS[i]) < 0.06 then
+            idx = i
+            break
+        end
+    end
+    mp.set_property_number("speed", SPEEDS[(idx % #SPEEDS) + 1])
+end
+
+local function speed_label(speed)
+    if math.abs((speed or 1) - 1) < 0.04 then
+        return "1×"
+    end
+    local text = string.format("%.2f", speed)
+    text = text:gsub("0+$", ""):gsub("%.$", "")
+    return text .. "×"
+end
+
+local function track_off(value)
+    return value == nil or value == false or value == "no" or value == "false"
+end
+
+local function track_label(kind)
+    local prop = kind == "audio" and "aid" or "sid"
+    local prefix = kind == "audio" and "current-tracks/audio/" or "current-tracks/subtitle/"
+    if track_off(mp.get_property(prop)) then
+        return kind == "audio" and "无音轨" or "字幕关"
+    end
+    local title = mp.get_property(prefix .. "title")
+    local lang = mp.get_property(prefix .. "lang")
+    if title and title ~= "" then
+        return title
+    end
+    if lang and lang ~= "" then
+        return lang
+    end
+    local id = mp.get_property(prop)
+    if kind == "audio" then
+        return "音轨 " .. tostring(id)
+    end
+    return "字幕 " .. tostring(id)
+end
+
+-- 写到临时文件，Hub 轮询 native_status 时读走。mpv 自己没有 Hub 播放队列。
+local function request_skip(which)
+    local dir = os.getenv("TMPDIR") or os.getenv("TEMP") or os.getenv("TMP") or "/tmp"
+    dir = dir:gsub("\\", "/")
+    if dir:sub(-1) == "/" then
+        dir = dir:sub(1, -2)
+    end
+    local file = io.open(dir .. "/media-hub-mpv-skip", "w")
+    if file then
+        file:write(which)
+        file:close()
+    end
 end
 
 local function run_button(id)
     if id == "play" then
         mp.commandv("cycle", "pause")
+    elseif id == "prev" then
+        request_skip("prev")
+    elseif id == "next" then
+        request_skip("next")
     elseif id == "vol" then
         mp.commandv("cycle", "mute")
+    elseif id == "speed" then
+        cycle_speed()
+    elseif id == "audio" then
+        mp.commandv("cycle", "audio")
     elseif id == "sub" then
-        mp.commandv("cycle", "sub-visibility")
+        mp.commandv("cycle", "sub")
     elseif id == "fs" then
         cycle_fullscreen()
     end
@@ -222,13 +349,16 @@ local function render()
     local pos = mp.get_property_number("time-pos") or 0
     local dur = mp.get_property_number("duration") or 0
     local ratio = dur > 0 and math.min(1, math.max(0, pos / dur)) or 0
-    local muted = mp.get_property_bool("mute") or (mp.get_property_number("volume") or 100) <= 0
-    local sub_on = mp.get_property_bool("sub-visibility")
+    local volume = mp.get_property_number("volume") or 100
+    local muted = mp.get_property_bool("mute") or volume <= 0
+    local speed = mp.get_property_number("speed") or 1
+    local sub_on = not track_off(mp.get_property("sid"))
     local full = mp.get_property_bool("fullscreen")
     local mouse = mp.get_property_native("mouse-pos") or {}
     local mx, my = mouse.x or 0, mouse.y or 0
     local geom = layout(w, h)
     local hover_id = mouse.hover and button_at(geom, mx, my) or nil
+    local hover_volbar = mouse.hover and geom.volbar.w > 0 and hit(geom.volbar_hit, mx, my)
     local lines = {}
 
     if visible then
@@ -249,7 +379,7 @@ local function render()
             push(lines, draw_circle(seek.x + seek.w * ratio, seek.y + seek.h / 2, 5, COLOR_TEXT, "00"))
         end
         if dur > 0 and (hover_seek or dragging) then
-            local inspect = dragging and mx or mx
+            local inspect = mx
             local hover_ratio = math.min(1, math.max(0, (inspect - seek.x) / math.max(1, seek.w)))
             push(lines, string.format(
                 "{\\an2\\bord0\\shad0\\fs14\\c%s\\pos(%.1f,%.1f)}%s",
@@ -260,16 +390,45 @@ local function render()
             ))
         end
 
-        local time_x = geom.play.x + geom.play.w + 10
-        push(lines, string.format(
-            "{\\an4\\bord0\\shad0\\fs16\\c%s\\pos(%d,%d)}%s%s%s",
-            COLOR_MUTED,
-            time_x,
-            geom.play.y + geom.play.h / 2,
-            clock(pos),
-            dur > 0 and " / " or "",
-            dur > 0 and clock(dur) or ""
-        ))
+        local time_x = geom.nxt.x + geom.nxt.w + 10
+        local time_limit = geom.volbar.w > 0 and geom.volbar.x or geom.vol.x
+        if time_x + 88 < time_limit then
+            push(lines, string.format(
+                "{\\an4\\bord0\\shad0\\fs16\\c%s\\pos(%d,%d)}%s%s%s",
+                COLOR_MUTED,
+                time_x,
+                geom.play.y + geom.play.h / 2,
+                clock(pos),
+                dur > 0 and " / " or "",
+                dur > 0 and clock(dur) or ""
+            ))
+        end
+
+        if geom.volbar.w > 0 then
+            local vol_ratio = math.min(1, math.max(0, volume / 100))
+            local vol_thick = (hover_volbar or dragging_vol) and 6 or 4
+            local vol_top = geom.volbar.y + (geom.volbar.h - vol_thick) / 2
+            push(lines, draw_rect(geom.volbar.x, vol_top, geom.volbar.w, vol_thick, COLOR_MUTED, "B0"))
+            if geom.volbar.w * vol_ratio > 0 then
+                push(lines, draw_rect(
+                    geom.volbar.x,
+                    vol_top,
+                    geom.volbar.w * vol_ratio,
+                    vol_thick,
+                    muted and COLOR_MUTED or COLOR_ACCENT,
+                    "00"
+                ))
+            end
+            if hover_volbar or dragging_vol then
+                push(lines, draw_circle(
+                    geom.volbar.x + geom.volbar.w * vol_ratio,
+                    geom.volbar.y + geom.volbar.h / 2,
+                    5,
+                    COLOR_TEXT,
+                    "00"
+                ))
+            end
+        end
 
         for i = 1, #geom.buttons do
             local box = geom.buttons[i]
@@ -279,19 +438,57 @@ local function render()
             end
             local cx, cy = box.x + box.w / 2, box.y + box.h / 2
             local color = hot and COLOR_ACCENT or COLOR_TEXT
-            if box.id == "play" then
+            if box.id == "prev" then
+                draw_icon_prev(lines, cx, cy, color)
+            elseif box.id == "play" then
                 if paused then
                     push(lines, draw_icon_play(cx, cy, color))
                 else
                     draw_icon_pause(lines, cx, cy, color)
                 end
+            elseif box.id == "next" then
+                draw_icon_next(lines, cx, cy, color)
             elseif box.id == "vol" then
                 draw_icon_vol(lines, cx, cy, muted, color)
+            elseif box.id == "speed" then
+                push(lines, string.format(
+                    "{\\an5\\bord0\\shad0\\fs14\\b1\\c%s\\pos(%.1f,%.1f)}%s",
+                    color, cx, cy, speed_label(speed)
+                ))
+            elseif box.id == "audio" then
+                push(lines, draw_icon_audio(cx, cy, color))
             elseif box.id == "sub" then
                 push(lines, draw_icon_cc(cx, cy, sub_on, sub_on and COLOR_ACCENT or color))
             elseif box.id == "fs" then
                 push(lines, draw_icon_fs(cx, cy, full, color))
             end
+        end
+
+        local tip
+        if hover_id == "audio" then
+            tip = track_label("audio")
+        elseif hover_id == "sub" then
+            tip = track_label("sub")
+        elseif hover_id == "speed" then
+            tip = "倍速 " .. speed_label(speed)
+        elseif hover_id == "prev" then
+            tip = "上一集"
+        elseif hover_id == "next" then
+            tip = "下一集"
+        end
+        if tip then
+            local box = hover_id == "speed" and geom.speed
+                or hover_id == "audio" and geom.audio
+                or hover_id == "sub" and geom.sub
+                or hover_id == "prev" and geom.prev
+                or geom.nxt
+            push(lines, string.format(
+                "{\\an2\\bord0\\shad0\\fs13\\c%s\\pos(%.1f,%.1f)}%s",
+                COLOR_TEXT,
+                box.x + box.w / 2,
+                box.y - 4,
+                ass_escape(tip)
+            ))
         end
     end
 
@@ -315,17 +512,26 @@ local function on_mouse(event)
     local geom = layout(w, h)
     local mouse = mp.get_property_native("mouse-pos") or {}
     local mx, my = mouse.x or 0, mouse.y or 0
+    local visible = chrome_visible(mp.get_property_bool("pause"))
 
     if event.event == "down" then
         local id = mouse.hover and button_at(geom, mx, my) or nil
-        if id and chrome_visible(mp.get_property_bool("pause")) then
+        if id and visible then
             cancel_pending_pause()
             pressed_id = id
             show_chrome()
             render()
             return
         end
-        if mouse.hover and hit(geom.seek, mx, my) and chrome_visible(mp.get_property_bool("pause")) then
+        if mouse.hover and visible and geom.volbar.w > 0 and hit(geom.volbar_hit, mx, my) then
+            cancel_pending_pause()
+            dragging_vol = true
+            volume_from_x(geom, mx)
+            show_chrome()
+            render()
+            return
+        end
+        if mouse.hover and hit(geom.seek, mx, my) and visible then
             cancel_pending_pause()
             dragging = true
             seek_to_ratio((mx - geom.seek.x) / math.max(1, geom.seek.w))
@@ -354,6 +560,7 @@ local function on_mouse(event)
     if t - last_up < 0.28 then
         cancel_pending_pause()
         dragging = false
+        dragging_vol = false
         last_up = 0
         cycle_fullscreen()
         show_chrome()
@@ -361,8 +568,9 @@ local function on_mouse(event)
         return
     end
     last_up = t
-    if dragging then
+    if dragging or dragging_vol then
         dragging = false
+        dragging_vol = false
         show_chrome()
         render()
         return
@@ -378,6 +586,8 @@ end
 
 mp.add_forced_key_binding("mbtn_left", "hub-click", on_mouse, { complex = true })
 mp.add_forced_key_binding("f", "hub-fullscreen", cycle_fullscreen)
+mp.add_forced_key_binding("<", "hub-prev", function() request_skip("prev") end)
+mp.add_forced_key_binding(">", "hub-next", function() request_skip("next") end)
 
 mp.observe_property("fullscreen", "bool", function(_, fs)
     if fs ~= nil then
@@ -399,10 +609,17 @@ mp.observe_property("mouse-pos", "native", function(_, value)
         render()
         return
     end
+    if dragging_vol and value then
+        volume_from_x(geom, value.x or 0)
+        show_chrome()
+        render()
+        return
+    end
     if value and value.hover then
         local was = chrome_visible(mp.get_property_bool("pause"))
         show_chrome()
-        if not was or button_at(geom, value.x or 0, value.y or 0) or hit(geom.seek, value.x or 0, value.y or 0) then
+        local x, y = value.x or 0, value.y or 0
+        if not was or button_at(geom, x, y) or hit(geom.seek, x, y) or (geom.volbar.w > 0 and hit(geom.volbar_hit, x, y)) then
             render()
         end
     end
@@ -411,7 +628,9 @@ end)
 mp.observe_property("pause", "bool", render)
 mp.observe_property("mute", "bool", render)
 mp.observe_property("volume", "number", render)
-mp.observe_property("sub-visibility", "bool", render)
+mp.observe_property("speed", "number", render)
+mp.observe_property("aid", "native", render)
+mp.observe_property("sid", "native", render)
 mp.observe_property("time-pos", "number", render)
 mp.observe_property("duration", "number", render)
 mp.observe_property("osd-dimensions", "native", render)
@@ -421,7 +640,7 @@ mp.register_event("file-loaded", function()
     render()
 end)
 mp.add_periodic_timer(0.15, function()
-    if dragging or mp.get_property_bool("pause") then
+    if dragging or dragging_vol or mp.get_property_bool("pause") then
         return
     end
     if painted_visible and now() >= chrome_until then

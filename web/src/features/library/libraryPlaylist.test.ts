@@ -6,6 +6,8 @@ import {
   nextQueueButtonLabel,
   nextQueueItem,
   playableLibraryQueue,
+  previousQueueButtonLabel,
+  previousQueueItem,
 } from './libraryPlaylist'
 
 const item = (input: Partial<EmbyItem>): EmbyItem => ({
@@ -35,8 +37,12 @@ describe('libraryPlaylist', () => {
     expect(queue[0]?.title).toBe('第 1 集 · 连接')
     expect(nextQueueItem(queue, 'e1')?.id).toBe('e2')
     expect(nextQueueItem(queue, 'e2')).toBeUndefined()
+    expect(previousQueueItem(queue, 'e2')?.id).toBe('e1')
+    expect(previousQueueItem(queue, 'e1')).toBeUndefined()
     expect(nextQueueButtonLabel(queue[1]!, true)).toBe('下一集 第 2 集')
+    expect(previousQueueButtonLabel(queue[0]!, true)).toBe('上一集 第 1 集 · 连接')
     expect(nextQueueButtonLabel({ id: 'a', title: 'Clip A' }, false)).toBe('下一个 Clip A')
+    expect(previousQueueButtonLabel({ id: 'a', title: 'Clip A' }, false)).toBe('上一个 Clip A')
   })
 
   it('inserts the playing item when it is outside the loaded page', () => {

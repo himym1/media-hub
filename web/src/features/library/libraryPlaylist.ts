@@ -31,6 +31,16 @@ export function nextQueueItem(queue: PlayerQueueItem[], currentId: string) {
   return queue[index + 1]
 }
 
+export function previousQueueItem(queue: PlayerQueueItem[], currentId: string) {
+  const index = queue.findIndex((item) => item.id === currentId)
+  if (index <= 0) return undefined
+  return queue[index - 1]
+}
+
 export function nextQueueButtonLabel(next: PlayerQueueItem, episodes: boolean) {
   return episodes ? `下一集 ${next.title}` : `下一个 ${next.title}`
+}
+
+export function previousQueueButtonLabel(previous: PlayerQueueItem, episodes: boolean) {
+  return episodes ? `上一集 ${previous.title}` : `上一个 ${previous.title}`
 }

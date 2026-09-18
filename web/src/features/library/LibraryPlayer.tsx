@@ -1,4 +1,4 @@
-import { Captions, ExternalLink, ListVideo, Maximize2, Minimize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Captions, ExternalLink, ListVideo, Maximize2, Minimize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipBack, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ApiError, createEmbyPlaybackDescriptor, fetchLocalSubtitle, reportPlaybackSessionEvent } from '../../shared/api/mediaHub'
 import {
@@ -39,7 +39,7 @@ import {
   toggleDocumentFullscreen,
 } from './playerFullscreen'
 import { handoffEnded, playbackNearEnd } from './playerHandoff'
-import { nextQueueButtonLabel, nextQueueItem, type PlayerQueueItem } from './libraryPlaylist'
+import { nextQueueButtonLabel, nextQueueItem, previousQueueButtonLabel, previousQueueItem, type PlayerQueueItem } from './libraryPlaylist'
 import { looksLikeSilentDirectPlay } from './silentAudio'
 import './LibraryPlayer.css'
 
@@ -175,8 +175,11 @@ export function LibraryPlayer({
   const [hoverRatio, setHoverRatio] = useState<number | null>(null)
   const [queueOpen, setQueueOpen] = useState(false)
   const nextItem = nextQueueItem(queue, itemId)
+  const previousItem = previousQueueItem(queue, itemId)
   const onNextRef = useRef<(() => void) | undefined>(undefined)
   onNextRef.current = nextItem && onSelectQueueItem ? () => onSelectQueueItem(nextItem.id) : undefined
+  const onPrevRef = useRef<(() => void) | undefined>(undefined)
+  onPrevRef.current = previousItem && onSelectQueueItem ? () => onSelectQueueItem(previousItem.id) : undefined
 
   useEffect(() => {
     if (nativeShell) return
@@ -300,6 +303,11 @@ export function LibraryPlayer({
         }
         event.preventDefault()
         onClose()
+        return
+      }
+      if ((event.key === 'n' || event.key === 'N') && event.shiftKey) {
+        event.preventDefault()
+        onPrevRef.current?.()
         return
       }
       if (event.key === 'n' || event.key === 'N') {
@@ -527,6 +535,14 @@ export function LibraryPlayer({
     const poll = window.setInterval(() => {
       void nativeStatus().then((status) => {
         if (!status || cancelled) return
+        if (status.skip === 'next' && onNextRef.current) {
+          onNextRef.current()
+          return
+        }
+        if (status.skip === 'prev' && onPrevRef.current) {
+          onPrevRef.current()
+          return
+        }
         if (status.running) nativeSeenRunning.current = true
         else if (handoffEnded(nativeSeenRunning.current, status.running) && !nativeEndedRef.current) {
           nativeEndedRef.current = true
@@ -626,6 +642,11 @@ export function LibraryPlayer({
             {nativeActive && !error ? (
               <button aria-label={playing ? '暂停' : '继续'} className="icon-action" onClick={togglePlayback} type="button" title={playing ? '暂停' : '继续'}>
                 {playing ? <Pause size={16} /> : <Play size={16} />}
+              </button>
+            ) : null}
+            {previousItem && onSelectQueueItem ? (
+              <button aria-label={previousQueueButtonLabel(previousItem, queueIsEpisodes)} className="icon-action" onClick={() => onSelectQueueItem(previousItem.id)} type="button" title={previousQueueButtonLabel(previousItem, queueIsEpisodes)}>
+                <SkipBack size={16} />
               </button>
             ) : null}
             {nextItem && onSelectQueueItem ? (

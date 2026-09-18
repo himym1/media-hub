@@ -66,6 +66,8 @@ pub struct NativeStatus {
     pub fullscreen: bool,
     pub running: bool,
     pub subtitles: Option<bool>,
+    /// OSC 上一集/下一集：lua 写入临时文件，Hub 读走后切队列。
+    pub skip: Option<String>,
 }
 
 fn host_window(app: &AppHandle) -> Result<WebviewWindow, String> {
@@ -158,6 +160,20 @@ fn write_input_conf() -> Result<PathBuf, String> {
 
 fn osc_script_path() -> PathBuf {
     std::env::temp_dir().join("media-hub-osc.lua")
+}
+
+fn skip_command_path() -> PathBuf {
+    std::env::temp_dir().join("media-hub-mpv-skip")
+}
+
+pub(crate) fn take_skip_command() -> Option<String> {
+    let path = skip_command_path();
+    let raw = std::fs::read_to_string(&path).ok()?;
+    let _ = std::fs::remove_file(&path);
+    match raw.trim() {
+        "next" | "prev" => Some(raw.trim().to_string()),
+        _ => None,
+    }
 }
 
 fn write_osc_script() -> Result<PathBuf, String> {
@@ -267,7 +283,12 @@ fn stop_child(state: &PlayerState) {
     if !cfg!(windows) {
         let _ = std::fs::remove_file(ipc_path());
     }
-    for name in ["media-hub-sub.srt", "media-hub-sub.ass", "media-hub-sub.vtt"] {
+    for name in [
+        "media-hub-sub.srt",
+        "media-hub-sub.ass",
+        "media-hub-sub.vtt",
+        "media-hub-mpv-skip",
+    ] {
         let _ = std::fs::remove_file(std::env::temp_dir().join(name));
     }
 }
@@ -670,6 +691,7 @@ fn idle_native_status() -> NativeStatus {
         fullscreen: false,
         running: false,
         subtitles: None,
+        skip: None,
     }
 }
 
@@ -693,6 +715,7 @@ fn read_native_status() -> NativeStatus {
         ])
         .ok()
         .and_then(|value| value.as_bool()),
+        skip: take_skip_command(),
     }
 }
 
@@ -794,6 +817,18 @@ mod tests {
             sid_from_track_list(&serde_json::json!([{"id": 1, "type": "sub", "external": false}])),
             Some(1)
         );
+    }
+
+    #[test]
+    fn skip_command_file_is_consumed_once() {
+        let path = skip_command_path();
+        std::fs::write(&path, "next\n").expect("write skip");
+        assert_eq!(take_skip_command().as_deref(), Some("next"));
+        assert_eq!(take_skip_command(), None);
+        std::fs::write(&path, "prev").expect("write skip");
+        assert_eq!(take_skip_command().as_deref(), Some("prev"));
+        std::fs::write(&path, "pause").expect("write skip");
+        assert_eq!(take_skip_command(), None);
     }
 
     #[test]

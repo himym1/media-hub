@@ -1,6 +1,6 @@
 # Media Hub Desktop
 
-Tauri 2 shell around the existing Web UI. Playback hands the stream to **mpv**, which opens its own window. Hub draws a cinematic overlay: title, seek bar, and original play / volume / subtitle / fullscreen controls. Double-click or `f` enters true fullscreen and hides the window chrome. The Web dock still records watch progress and the playlist.
+Tauri 2 shell around the existing Web UI. Playback hands the stream to **mpv**, which opens its own window. Hub draws a cinematic overlay: title, seek, play, previous/next, volume bar, speed, audio track, subtitle track, and fullscreen. Double-click or `f` enters true fullscreen and hides the window chrome. Previous/next tell Hub to switch the current queue item. The Web dock still records watch progress and the playlist.
 
 The window, installer, and taskbar use `src-tauri/icons/` (dark tile + green film/play mark). Regenerate with `pnpm --dir desktop exec tauri icon src-tauri/icons/app-icon-source.png`.
 

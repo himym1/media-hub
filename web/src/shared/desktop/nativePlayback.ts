@@ -30,6 +30,7 @@ export type NativeStatus = {
   fullscreen?: boolean
   running?: boolean
   subtitles?: boolean
+  skip?: 'next' | 'prev' | null
 }
 
 type TauriInvoke = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>
