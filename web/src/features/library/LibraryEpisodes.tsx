@@ -5,7 +5,7 @@ import { embyPrimaryImageURL, getEmbyEpisodes, type EmbyEpisode } from '../../sh
 import { LibraryEpisodesSkeleton } from './LibrarySkeletons'
 import { LibraryWatchAction } from './LibraryWatchAction'
 import { episodeLabel, playbackStatus } from './libraryPlayback'
-import { calculateEpisodeProgress, seasonDisplayName } from './librarySeason'
+import { calculateEpisodeProgress, seasonDisplayName, sortSeasonEpisodes } from './librarySeason'
 
 type LibraryEpisodesProps = {
   seriesId: string
@@ -54,7 +54,7 @@ export function LibraryEpisodes({ seriesId, seriesTitle, inPagePlayback, onPlay 
   // 当前季的分集列表
   const seasonItems = useMemo(() => {
     const list = items.filter((ep) => (ep.season ?? 1) === activeSeason)
-    return descending ? [...list].reverse() : list
+    return sortSeasonEpisodes(list, descending)
   }, [items, activeSeason, descending])
 
   if (episodes.isLoading) return <LibraryEpisodesSkeleton />

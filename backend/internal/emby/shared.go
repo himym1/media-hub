@@ -220,7 +220,7 @@ func (c *Client) sharedLibraries(ctx context.Context) ([]Library, error) {
 	return libraries, err
 }
 
-func (c *Client) sharedBrowseItems(ctx context.Context, libraryID string, offset, limit int) (SearchResult, error) {
+func (c *Client) sharedBrowseItems(ctx context.Context, libraryID string, offset, limit int, sortValue string) (SearchResult, error) {
 	nativeID, ok := sharedNativeID(libraryID)
 	if !ok {
 		return SearchResult{}, ErrItemNotFound
@@ -234,21 +234,24 @@ func (c *Client) sharedBrowseItems(ctx context.Context, libraryID string, offset
 	var result SearchResult
 	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
 		query := url.Values{
-			"Fields":           {"ProviderIds,UserData,MediaSources,Path"},
+			"Fields":           {"ProviderIds,UserData,MediaSources,Path,ProductionYear,DateCreated"},
 			"IncludeItemTypes": {"Movie,Series"},
-			"Limit":            {strconv.Itoa(limit)},
+			"Limit":            {"10000"},
 			"ParentId":         {nativeID},
 			"Recursive":        {"true"},
 			"SortBy":           {"SortName"},
 			"SortOrder":        {"Ascending"},
-			"StartIndex":       {strconv.Itoa(offset)},
+			"StartIndex":       {"0"},
 			"UserId":           {configuration.userID},
 		}
 		var response itemResponse
 		if err := c.getJSON(ctx, configuration, "Items", query, true, &response); err != nil {
 			return err
 		}
-		result = prefixSharedSearch(publicItems(response))
+		items := response.Items
+		sortBaseItems(items, sortValue, false)
+		page := paginateBaseItems(items, offset, limit)
+		result = prefixSharedSearch(publicItems(itemResponse{Items: page, TotalRecordCount: len(items)}))
 		return nil
 	})
 	return result, err
@@ -328,11 +331,12 @@ func (c *Client) sharedEpisodes(ctx context.Context, seriesID string) ([]Episode
 	var episodes []Episode
 	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
 		query := url.Values{
-			"Fields":           {"ProviderIds,UserData,MediaSources,Path,Overview,RunTimeTicks,CommunityRating,PrimaryImageTag"},
+			"Fields":           {"ProviderIds,UserData,MediaSources,Path,Overview,RunTimeTicks,CommunityRating,PrimaryImageTag,SeriesName"},
 			"IncludeItemTypes": {"Episode"},
+			"Limit":            {"10000"},
 			"ParentId":         {nativeID},
 			"Recursive":        {"true"},
-			"SortBy":           {"SortName"},
+			"SortBy":           {"ParentIndexNumber,IndexNumber"},
 			"SortOrder":        {"Ascending"},
 			"UserId":           {configuration.userID},
 		}
@@ -345,6 +349,7 @@ func (c *Client) sharedEpisodes(ctx context.Context, seriesID string) ([]Episode
 			if item.Type != "Episode" || item.ID == "" || item.Name == "" {
 				continue
 			}
+			item = presentEpisodeItem(item)
 			var runtimeMinutes int
 			if item.RunTimeTicks > 0 {
 				runtimeMinutes = int(item.RunTimeTicks / 600_000_000)
@@ -367,6 +372,7 @@ func (c *Client) sharedEpisodes(ctx context.Context, seriesID string) ([]Episode
 				PrimaryImageTag: item.PrimaryImageTag,
 			})
 		}
+		sortEpisodes(next)
 		episodes = next
 		return nil
 	})

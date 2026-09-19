@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -78,12 +77,7 @@ func (c *Client) Episodes(ctx context.Context, seriesID string) ([]Episode, erro
 			PrimaryImageTag: item.PrimaryImageTag,
 		})
 	}
-	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].Season != items[j].Season {
-			return items[i].Season < items[j].Season
-		}
-		return items[i].Episode < items[j].Episode
-	})
+	sortEpisodes(items)
 	return items, nil
 }
 

@@ -27,3 +27,8 @@ export function episodeDisplayNumber(_season?: number, episode?: number): string
   }
   return '分集'
 }
+
+export function sortSeasonEpisodes<T extends { episode?: number }>(items: T[], descending = false): T[] {
+  const list = [...items].sort((left, right) => (left.episode ?? 0) - (right.episode ?? 0))
+  return descending ? list.reverse() : list
+}

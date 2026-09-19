@@ -3,6 +3,7 @@ import {
   seasonDisplayName,
   calculateEpisodeProgress,
   episodeDisplayNumber,
+  sortSeasonEpisodes,
 } from './librarySeason'
 
 describe('librarySeason utils', () => {
@@ -35,5 +36,15 @@ describe('librarySeason utils', () => {
     expect(episodeDisplayNumber(1, 5)).toBe('第 5 集')
     expect(episodeDisplayNumber(2, 1)).toBe('第 1 集')
     expect(episodeDisplayNumber(1, 0)).toBe('分集')
+  })
+
+  it('sorts a season by episode number before reversing', () => {
+    const items = [
+      { id: 'e3', episode: 3 },
+      { id: 'e1', episode: 1 },
+      { id: 'e2', episode: 2 },
+    ]
+    expect(sortSeasonEpisodes(items).map((item) => item.id)).toEqual(['e1', 'e2', 'e3'])
+    expect(sortSeasonEpisodes(items, true).map((item) => item.id)).toEqual(['e3', 'e2', 'e1'])
   })
 })

@@ -92,7 +92,7 @@ func TestSharedLibrariesBrowseAndPlayback(t *testing.T) {
 		t.Fatalf("auth calls = %d", authCalls)
 	}
 
-	browse, err := client.sharedBrowseItems(context.Background(), "r_lib-movies", 0, 24)
+	browse, err := client.sharedBrowseItems(context.Background(), "r_lib-movies", 0, 24, "")
 	if err != nil {
 		t.Fatalf("browse: %v", err)
 	}
@@ -176,5 +176,81 @@ func TestHubRoutesSharedIDs(t *testing.T) {
 	}
 	if !sawLocal || !sawShared {
 		t.Fatalf("libraries = %#v", libraries)
+	}
+}
+
+func TestSharedBrowseItemsHonorsYearSort(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/Users/AuthenticateByName":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"AccessToken": "tok", "User": map[string]any{"Id": "u1", "Name": "x"},
+			})
+		case "/Items":
+			if r.URL.Query().Get("ParentId") != "lib-movies" {
+				http.NotFound(w, r)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"Items": []map[string]any{
+					{"Id": "old", "Name": "老片", "Type": "Movie", "ProductionYear": 1999, "DateCreated": "2020-01-01T00:00:00.0000000Z"},
+					{"Id": "new", "Name": "新片", "Type": "Movie", "ProductionYear": 2026, "DateCreated": "2026-01-01T00:00:00.0000000Z"},
+				},
+				"TotalRecordCount": 2,
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := NewConfiguredClient(RuntimeConfig{BaseURL: server.URL, Username: "u", Password: "p", Shared: true}, 0)
+	browse, err := client.sharedBrowseItems(context.Background(), "r_lib-movies", 0, 24, "year-desc")
+	if err != nil {
+		t.Fatalf("browse: %v", err)
+	}
+	if len(browse.Items) != 2 || browse.Items[0].ID != "r_new" || browse.Items[1].ID != "r_old" {
+		t.Fatalf("year-desc = %#v", browse.Items)
+	}
+}
+
+func TestSharedEpisodesSortBySeasonAndIndex(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/Users/AuthenticateByName":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"AccessToken": "tok", "User": map[string]any{"Id": "u1", "Name": "x"},
+			})
+		case "/Items":
+			if r.URL.Query().Get("ParentId") != "series-1" {
+				http.NotFound(w, r)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"Items": []map[string]any{
+					{"Id": "e2", "Name": "Zebra", "Type": "Episode", "ParentIndexNumber": 1, "IndexNumber": 2, "Path": "/lib/S01E02.mkv"},
+					{"Id": "e1", "Name": "Alpha", "Type": "Episode", "ParentIndexNumber": 1, "IndexNumber": 1, "Path": "/lib/S01E01.mkv"},
+					{"Id": "e3", "Name": "Yearly", "Type": "Episode", "ParentIndexNumber": 2016, "IndexNumber": 3, "Path": "/lib/Show 2016 E03.mkv"},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := NewConfiguredClient(RuntimeConfig{BaseURL: server.URL, Username: "u", Password: "p", Shared: true}, 0)
+	episodes, err := client.sharedEpisodes(context.Background(), "r_series-1")
+	if err != nil {
+		t.Fatalf("episodes: %v", err)
+	}
+	if len(episodes) != 3 {
+		t.Fatalf("episodes = %#v", episodes)
+	}
+	if episodes[0].ID != "r_e1" || episodes[0].Episode != 1 || episodes[1].ID != "r_e2" || episodes[2].ID != "r_e3" {
+		t.Fatalf("order = %#v", episodes)
+	}
+	if episodes[2].Season != 1 || episodes[2].Episode != 3 {
+		t.Fatalf("normalized year-season = %#v", episodes[2])
 	}
 }

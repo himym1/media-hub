@@ -1,4 +1,4 @@
-import { Captions, ExternalLink, ListVideo, Maximize2, Minimize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipBack, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Captions, ExternalLink, Maximize2, Minimize2, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipBack, SkipForward, Volume2, VolumeX, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ApiError, createEmbyPlaybackDescriptor, fetchLocalSubtitle, reportPlaybackSessionEvent } from '../../shared/api/mediaHub'
 import {
@@ -64,69 +64,6 @@ type NativeRequest = {
   subtitle?: NativeSubtitle | null
 }
 
-function PlayerQueuePanel({
-  currentId,
-  hideToggle = false,
-  open,
-  queue,
-  onSelect,
-  onToggle,
-}: {
-  currentId: string
-  hideToggle?: boolean
-  open: boolean
-  queue: PlayerQueueItem[]
-  onSelect: (id: string) => void
-  onToggle: () => void
-}) {
-  const currentRef = useRef<HTMLButtonElement>(null)
-  useEffect(() => {
-    if (!open) return
-    currentRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [currentId, open])
-  if (queue.length < 2) return null
-  return (
-    <div className="library-player-queue">
-      {hideToggle ? null : (
-      <button
-        aria-controls="library-player-queue-list"
-        aria-expanded={open}
-        className="library-player-queue-toggle"
-        onClick={onToggle}
-        title="播放列表 (P)"
-        type="button"
-      >
-        <ListVideo size={16} />
-        播放列表 {queue.length}
-      </button>
-      )}
-      {open ? (
-        <ol className="library-player-queue-list" id="library-player-queue-list">
-          {queue.map((item, index) => {
-            const current = item.id === currentId
-            return (
-              <li key={item.id}>
-                <button
-                  aria-current={current ? 'true' : undefined}
-                  className={current ? 'is-current' : undefined}
-                  onClick={() => {
-                    if (!current) onSelect(item.id)
-                  }}
-                  ref={current ? currentRef : undefined}
-                  type="button"
-                >
-                  <span className="library-player-queue-index">{index + 1}</span>
-                  <span className="library-player-queue-title">{item.title}</span>
-                </button>
-              </li>
-            )
-          })}
-        </ol>
-      ) : null}
-    </div>
-  )
-}
-
 export function LibraryPlayer({
   itemId,
   title,
@@ -173,18 +110,12 @@ export function LibraryPlayer({
   const [isMini, setIsMini] = useState(false)
   const [hoverTime, setHoverTime] = useState<number | null>(null)
   const [hoverRatio, setHoverRatio] = useState<number | null>(null)
-  const [queueOpen, setQueueOpen] = useState(false)
   const nextItem = nextQueueItem(queue, itemId)
   const previousItem = previousQueueItem(queue, itemId)
   const onNextRef = useRef<(() => void) | undefined>(undefined)
   onNextRef.current = nextItem && onSelectQueueItem ? () => onSelectQueueItem(nextItem.id) : undefined
   const onPrevRef = useRef<(() => void) | undefined>(undefined)
   onPrevRef.current = previousItem && onSelectQueueItem ? () => onSelectQueueItem(previousItem.id) : undefined
-
-  useEffect(() => {
-    if (nativeShell) return
-    setQueueOpen(queue.length > 1)
-  }, [nativeShell, queue.length])
 
   const clearIdleTimer = () => {
     if (idleTimer.current != null) {
@@ -313,11 +244,6 @@ export function LibraryPlayer({
       if (event.key === 'n' || event.key === 'N') {
         event.preventDefault()
         onNextRef.current?.()
-        return
-      }
-      if (event.key === 'p' || event.key === 'P') {
-        event.preventDefault()
-        setQueueOpen((open) => !open)
         return
       }
       if (nativeShell && (event.key === 'f' || event.key === 'F')) {
@@ -654,11 +580,6 @@ export function LibraryPlayer({
                 <SkipForward size={16} />
               </button>
             ) : null}
-            {onSelectQueueItem && queue.length > 1 ? (
-              <button aria-controls="library-player-queue-list" aria-expanded={queueOpen} aria-label="播放列表" className={`icon-action ${queueOpen ? 'active' : ''}`} onClick={() => setQueueOpen((open) => !open)} type="button" title="播放列表 (P)">
-                <ListVideo size={16} />
-              </button>
-            ) : null}
             {nativeActive && !error ? (
               <button aria-label={nativeFullscreen ? '退出全屏' : '全屏'} className="icon-action" onClick={() => void toggleNativeWindow()} type="button" title={nativeFullscreen ? '退出全屏 (F)' : '全屏 (F / 双击画面)'}>
                 {nativeFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
@@ -674,18 +595,6 @@ export function LibraryPlayer({
             </button>
           </div>
         </div>
-        {onSelectQueueItem && queue.length > 1 && queueOpen ? (
-          <div className="library-player-handoff-queue">
-            <PlayerQueuePanel
-              currentId={itemId}
-              hideToggle
-              onSelect={onSelectQueueItem}
-              onToggle={() => setQueueOpen((open) => !open)}
-              open={queueOpen}
-              queue={queue}
-            />
-          </div>
-        ) : null}
       </div>
     )
   }
@@ -1117,29 +1026,6 @@ export function LibraryPlayer({
             ) : null}
           </div>
         </div>
-
-        {!isMini && onSelectQueueItem ? (
-          <div
-            className="library-player-queue-host"
-            onFocusCapture={() => revealChrome(true)}
-            onMouseEnter={() => revealChrome(true)}
-            onMouseLeave={() => {
-              setChromePinned(false)
-              revealChrome()
-            }}
-          >
-            <PlayerQueuePanel
-              currentId={itemId}
-              onSelect={onSelectQueueItem}
-              onToggle={() => {
-                revealChrome(true)
-                setQueueOpen((open) => !open)
-              }}
-              open={queueOpen}
-              queue={queue}
-            />
-          </div>
-        ) : null}
       </div>
     </div>
   )

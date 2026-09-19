@@ -40,3 +40,16 @@ func TestPresentEpisodeItemNormalizesYearSeason(t *testing.T) {
 		t.Fatalf("present = season %d episode %d name %q", item.ParentIndexNumber, item.IndexNumber, item.Name)
 	}
 }
+
+func TestSortEpisodesBySeasonThenIndex(t *testing.T) {
+	t.Parallel()
+	items := []Episode{
+		{Item: Item{ID: "e2", Season: 1, Episode: 2}},
+		{Item: Item{ID: "e1", Season: 1, Episode: 1}},
+		{Item: Item{ID: "s2e1", Season: 2, Episode: 1}},
+	}
+	sortEpisodes(items)
+	if items[0].ID != "e1" || items[1].ID != "e2" || items[2].ID != "s2e1" {
+		t.Fatalf("order = %#v", items)
+	}
+}

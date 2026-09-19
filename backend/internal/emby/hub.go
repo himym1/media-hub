@@ -109,7 +109,7 @@ func (h *Hub) BrowseItems(ctx context.Context, libraryID string, offset, limit i
 		if h.Shared == nil {
 			return SearchResult{}, ErrNotConfigured
 		}
-		return h.Shared.sharedBrowseItems(ctx, libraryID, offset, limit)
+		return h.Shared.sharedBrowseItems(ctx, libraryID, offset, limit, sort)
 	}
 	if h.Local == nil {
 		return SearchResult{}, ErrNotConfigured

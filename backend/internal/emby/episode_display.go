@@ -2,8 +2,18 @@ package emby
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 )
+
+func sortEpisodes(items []Episode) {
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Season != items[j].Season {
+			return items[i].Season < items[j].Season
+		}
+		return items[i].Episode < items[j].Episode
+	})
+}
 
 var (
 	releaseNameToken   = regexp.MustCompile(`(?i)(?:UHDTV|WEB-?DL|WEBRip|Blu-?Ray|HDTV|HEVC|x264|x265|\bAVC\b|10bit|8bit|2160p|1080p|720p|480p|HDR10|\bHDR\b|Dolby|TrueHD|Atmos|\bDTS\b|DD[25]\.[01]|\bAAC\b|\d{2}fps)`)
