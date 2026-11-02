@@ -57,22 +57,14 @@
 
 ## 远程 SSH 目标
 
-- `himym`：Media Hub 生产 NAS 部署主机，承载 Docker、媒体数据和 Media Hub 服务。
-- `dmit`：Media Hub 的 Mikan egress SSH 目标；`deploy/compose.mikan-egress.yaml` 通过 `MEDIA_HUB_MIKAN_EGRESS_SSH_HOST` 连接远端 `127.0.0.1:17898`，仅在启用 egress overlay 时使用。
-- 涉及部署或远程运维时必须同时确认 SSH alias、远程目录和是否启用了 egress overlay；不要记录 secret value。
+- 仅在部署或远程运维任务中读取 [远程运维目标](docs/deployment/remote-targets.md)。操作前同时确认 SSH alias、remote dir、服务归属、egress overlay 状态及授权范围；文档不授予执行权限，不读取或记录秘密值。
 
 ## 注释语言
 
-- 新增或修改代码注释默认使用简体中文，包括文档注释。
-- 保留必要的英文技术术语、标识符、命令、协议字段及工具要求的固定注释。
-- 不为统一语言批量翻译已有注释；修改相关代码时按需调整。
-- 用户明确要求英文，或文件必须遵循外部规范时，以该要求为准。
+- 新增或修改注释（含文档注释）默认简体中文，保留必要技术术语、标识符、命令、协议字段与工具固定注释；仅按需调整相关代码的注释，不批量翻译。用户或外部规范另有要求时从其要求。
+
 ## Git 提交说明
 
-- 使用 Conventional Commits：`<type>(<scope>): <中文描述>`；无明确模块时省略 `(scope)`。
-- `type` 使用 `feat`、`fix`、`refactor`、`perf`、`docs`、`test`、`build`、`ci`、`chore`、`revert`。
-- `scope` 使用实际模块的英文名称；标题使用简体中文，保留必要的英文技术术语，不使用 emoji。
-- 提交说明必须准确描述实际差异；避免使用“更新代码”“修复问题”“优化”等无法说明具体变化的标题。
-- 简单改动只写标题；复杂改动在正文说明原因、主要变化和必要的兼容性影响。
-- 破坏性变更使用 `!` 标记，并在正文用 `BREAKING CHANGE:` 说明影响及迁移方式。
-- 只约束后续提交，不为统一格式改写历史；Git 自动生成的合并或撤销说明可保留。
+- 提交使用 Conventional Commits：`<type>(<scope>): <中文描述>`；scope 用实际模块英文名，无明确模块时省略。type 限 `feat`、`fix`、`refactor`、`perf`、`docs`、`test`、`build`、`ci`、`chore`、`revert`。标题准确描述差异，保留必要技术术语，不用泛称或 emoji。
+- 简单改动只写标题；复杂改动说明原因、主要变化及兼容性。破坏性变更用 `!` 和正文 `BREAKING CHANGE:` 说明影响与迁移方式。
+- 仅约束后续提交，不改写历史；Git 自动生成的合并/撤销说明可保留。提交、推送仍需相应授权。
