@@ -295,6 +295,9 @@ html[data-app-shell="desktop"] .desktop-update-banner {
    5. 系统按钮标准 (系统深色细边框按钮，禁止实心亮绿大药丸营销 CTA)
    ========================================================================== */
 html[data-app-shell="desktop"] .search-form button[type="submit"],
+html[data-app-shell="desktop"] .page-capture-form button,
+html[data-app-shell="desktop"] .page-capture-reveal,
+html[data-app-shell="desktop"] .share-import-form button,
 html[data-app-shell="desktop"] .result-action button,
 html[data-app-shell="desktop"] .primary-action,
 html[data-app-shell="desktop"] .login-button {
@@ -314,6 +317,9 @@ html[data-app-shell="desktop"] .login-button {
 }
 
 html[data-app-shell="desktop"] .search-form button[type="submit"]:hover:not(:disabled),
+html[data-app-shell="desktop"] .page-capture-form button:hover:not(:disabled),
+html[data-app-shell="desktop"] .page-capture-reveal:hover:not(:disabled),
+html[data-app-shell="desktop"] .share-import-form button:hover:not(:disabled),
 html[data-app-shell="desktop"] .result-action button:hover:not(:disabled),
 html[data-app-shell="desktop"] .primary-action:hover:not(:disabled),
 html[data-app-shell="desktop"] .login-button:hover:not(:disabled) {
@@ -325,6 +331,8 @@ html[data-app-shell="desktop"] .login-button:hover:not(:disabled) {
 }
 
 html[data-app-shell="desktop"] .search-form button[type="submit"]:disabled,
+html[data-app-shell="desktop"] .page-capture-form button:disabled,
+html[data-app-shell="desktop"] .share-import-form button:disabled,
 html[data-app-shell="desktop"] .result-action button:disabled,
 html[data-app-shell="desktop"] .primary-action:disabled,
 html[data-app-shell="desktop"] .login-button:disabled {
@@ -930,21 +938,26 @@ html[data-app-shell="desktop"] .library-detail-poster {
    10. 系统设置与运维 (Settings & Ops) - 系统首选项风格
    ========================================================================== */
 html[data-app-shell="desktop"] .settings-view .view-header {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: flex-end !important;
-  margin: 0 -16px 0 !important;
-  padding: 4px 16px !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  overflow: hidden !important;
+}
+
+html[data-app-shell="desktop"] .settings-toolbar {
+  margin: 0 -16px 14px !important;
+  padding: 6px 16px !important;
   background: #111417 !important;
-  border-bottom: none !important;
-  min-height: 44px !important;
+  border-bottom: 1px solid #1c2024 !important;
 }
 
 html[data-app-shell="desktop"] .settings-tabs {
-  margin: 0 -16px 14px !important;
-  padding: 4px 16px 8px !important;
-  background: #111417 !important;
-  border-bottom: 1px solid #1c2024 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
   gap: 4px !important;
 }
 

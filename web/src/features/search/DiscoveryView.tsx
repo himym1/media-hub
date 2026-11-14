@@ -62,7 +62,7 @@ export function DiscoveryView({
   })
   const trending = useQuery({
     queryKey: ['tmdb-trending'],
-    queryFn: () => getTrending('all', 10),
+    queryFn: () => getTrending('all', 12),
     retry: false,
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,

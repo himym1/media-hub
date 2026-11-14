@@ -178,12 +178,14 @@ export function SettingsView({ desktopUpdate, integrations, onDirtyChange, onLog
     <section className="workspace-view settings-view">
       <header className="view-header compact-view-header">
         <div><h1>系统设置</h1><p>运行状态、服务接入和账户安全分开管理。</p></div>
-        <IconButton label="刷新所有服务" onClick={refreshAll} subtle><RefreshCw size={17} /></IconButton>
       </header>
-      <div className="settings-tabs" role="tablist" aria-label="设置分类">
-        <button aria-controls="settings-panel-overview" aria-selected={section === 'overview'} id="settings-tab-overview" onClick={() => changeSection('overview')} onKeyDown={(event) => handleTabKey(event, 'overview')} role="tab" tabIndex={section === 'overview' ? 0 : -1} type="button"><Activity size={16} />概览</button>
-        <button aria-controls="settings-panel-providers" aria-selected={section === 'providers'} id="settings-tab-providers" onClick={() => changeSection('providers')} onKeyDown={(event) => handleTabKey(event, 'providers')} role="tab" tabIndex={section === 'providers' ? 0 : -1} type="button"><SlidersHorizontal size={16} />服务接入{providerDirty ? <span className="unsaved-indicator">未保存</span> : null}</button>
-        <button aria-controls="settings-panel-account" aria-selected={section === 'account'} id="settings-tab-account" onClick={() => changeSection('account')} onKeyDown={(event) => handleTabKey(event, 'account')} role="tab" tabIndex={section === 'account' ? 0 : -1} type="button"><KeyRound size={16} />账户</button>
+      <div className="settings-toolbar">
+        <div className="settings-tabs" role="tablist" aria-label="设置分类">
+          <button aria-controls="settings-panel-overview" aria-selected={section === 'overview'} id="settings-tab-overview" onClick={() => changeSection('overview')} onKeyDown={(event) => handleTabKey(event, 'overview')} role="tab" tabIndex={section === 'overview' ? 0 : -1} type="button"><Activity size={16} />概览</button>
+          <button aria-controls="settings-panel-providers" aria-selected={section === 'providers'} id="settings-tab-providers" onClick={() => changeSection('providers')} onKeyDown={(event) => handleTabKey(event, 'providers')} role="tab" tabIndex={section === 'providers' ? 0 : -1} type="button"><SlidersHorizontal size={16} />服务接入{providerDirty ? <span className="unsaved-indicator">未保存</span> : null}</button>
+          <button aria-controls="settings-panel-account" aria-selected={section === 'account'} id="settings-tab-account" onClick={() => changeSection('account')} onKeyDown={(event) => handleTabKey(event, 'account')} role="tab" tabIndex={section === 'account' ? 0 : -1} type="button"><KeyRound size={16} />账户</button>
+        </div>
+        <IconButton label="刷新所有服务" onClick={refreshAll} subtle><RefreshCw size={17} /></IconButton>
       </div>
 
       {section === 'overview' ? <div aria-labelledby="settings-tab-overview" className="settings-section" id="settings-panel-overview" role="tabpanel">
@@ -201,7 +203,7 @@ export function SettingsView({ desktopUpdate, integrations, onDirtyChange, onLog
             {syncSTRM.isError ? <span className="form-error" role="alert">{syncSTRM.error.message}</span> : null}
           </section>
           <section className="diagnostic-block drive-authorization"><div className="diagnostic-title"><HardDrive size={18} /><strong>115</strong></div><dl><div><dt>授权</dt><dd>{drive.data?.authorized ? '有效' : '不可用'}</dd></div><div><dt>已使用</dt><dd>{formatCapacity(drive.data?.usedBytes)}</dd></div><div><dt>总容量</dt><dd>{formatCapacity(drive.data?.totalBytes)}</dd></div></dl>{authorization.data?.qrImage && authorizationStatus.data?.state !== 'confirmed' ? <div className="qr-box"><img alt="115 扫码授权二维码" height="148" src={authorization.data.qrImage} width="148" /></div> : null}<button className="secondary-command" disabled={authorization.isPending || authorizationStatus.data?.state === 'pending'} onClick={() => authorization.mutate()} type="button"><QrCode size={15} />{authorizationStatus.data?.state === 'confirmed' ? '重新授权' : authorizationStatus.data?.state === 'pending' ? '等待扫码确认' : '扫码授权'}</button>{authorization.isError ? <span className="form-error" role="alert">{authorization.error.message}</span> : null}</section>
-          <section className="diagnostic-block"><div className="diagnostic-title"><Database size={18} /><strong>Emby</strong></div><dl><div><dt>媒体库</dt><dd>{emby.data?.libraries.length ?? 0}</dd></div><div><dt>读取状态</dt><dd>{emby.isSuccess ? '正常' : '不可用'}</dd></div></dl></section>
+          <section className="diagnostic-block"><div className="diagnostic-title"><Database size={18} /><strong>Emby</strong></div><dl><div><dt>媒体库</dt><dd>{emby.data?.libraries.length ?? 0}</dd></div><div><dt>读取状态</dt><dd>{emby.isSuccess ? '正常' : '不可用'}</dd></div></dl><a className="secondary-command" href="?view=library">浏览媒体库</a></section>
           <section className="diagnostic-block source-checkins"><div className="diagnostic-title"><CalendarCheck size={18} /><strong>资源签到</strong></div>
             {checkins.data?.items.length ? <ul className="checkin-list">{checkins.data.items.map((item) => (
               <li key={item.sourceId}>
