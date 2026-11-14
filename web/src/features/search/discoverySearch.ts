@@ -51,6 +51,35 @@ export function discoveryResultsHeading(searching: boolean, focusTitle: string):
   return '搜索结果'
 }
 
+export function formatCandidateSize(bytes: number) {
+  if (bytes <= 0) return '大小未知'
+  const gib = bytes / 1024 / 1024 / 1024
+  return gib >= 1024 ? `${(gib / 1024).toFixed(1)} TB` : `${gib.toFixed(1)} GB`
+}
+
+export function episodeLabel(candidate: Candidate) {
+  if (!candidate.season) return ''
+  if (!candidate.episodeStart) return `S${candidate.season}`
+  return candidate.episodeStart === candidate.episodeEnd
+    ? `S${candidate.season}E${candidate.episodeStart}`
+    : `S${candidate.season}E${candidate.episodeStart}-${candidate.episodeEnd}`
+}
+
+export function resolutionBadgeClass(res: string) {
+  const lower = res.toLowerCase()
+  if (lower.includes('2160') || lower.includes('4k')) return 'badge-res-4k'
+  if (lower.includes('1080')) return 'badge-res-1080p'
+  return 'badge-res-default'
+}
+
+export function dynamicRangeBadgeClass(hdr?: string) {
+  if (!hdr) return ''
+  const upper = hdr.toUpperCase()
+  if (upper.includes('DV') || upper.includes('DOLBY')) return 'badge-hdr-dv'
+  if (upper.includes('HDR')) return 'badge-hdr-standard'
+  return 'badge-hdr-default'
+}
+
 function score(
   candidate: Candidate,
   item: Pick<DiscoveryItem, 'tmdbId' | 'year' | 'mediaType'>,

@@ -105,9 +105,9 @@ export function TransferQueue({ query }: TransferQueueProps) {
   useEffect(() => {
     if (!currentQuery.data) return
     if (selectedID && jobs.some((job) => job.id === selectedID)) return
-    if (!selectedID) return
-    setSelectedID(null)
-    commitUrl({ task: null }, 'replace')
+    const fallback = jobs[0]?.id ?? null
+    setSelectedID(fallback)
+    commitUrl({ task: fallback }, 'replace')
   }, [currentQuery.data, jobs, selectedID])
 
   const selectTask = (id: string) => {

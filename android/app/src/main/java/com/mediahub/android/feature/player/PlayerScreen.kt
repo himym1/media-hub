@@ -5,7 +5,6 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -41,10 +40,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -101,8 +96,10 @@ import com.composables.icons.lucide.Sun
 import com.composables.icons.lucide.Volume2
 import com.composables.icons.lucide.VolumeX
 import com.composables.icons.lucide.X
+import com.mediahub.android.core.designsystem.MediaHubCircularProgress
 import com.mediahub.android.core.designsystem.MediaHubColors
 import com.mediahub.android.core.designsystem.MediaHubIcon
+import com.mediahub.android.core.designsystem.MediaHubPlaybackSlider
 import com.mediahub.android.core.designsystem.MediaHubSegmentedControl
 import com.mediahub.android.core.designsystem.MediaHubShapes
 import com.mediahub.android.core.designsystem.MediaHubText
@@ -476,7 +473,7 @@ internal fun PlayerScreen(
                             .background(MediaHubColors.Surface.copy(alpha = 0.94f))
                             .padding(horizontal = 18.dp, vertical = 14.dp),
                     ) {
-                        CircularProgressIndicator(
+                        MediaHubCircularProgress(
                             color = MediaHubColors.Accent,
                             modifier = Modifier.size(22.dp),
                             strokeWidth = 2.5.dp,
@@ -736,7 +733,6 @@ private fun PlayerCenterControls(
  * Bottom controls bar with sleek full-width scrubber and clean right-aligned utility pills.
  */
 @androidx.annotation.OptIn(UnstableApi::class)
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlayerBottomControls(
     controller: MediaController,
@@ -880,7 +876,7 @@ private fun PlayerBottomControls(
                 modifier = Modifier.widthIn(min = 45.dp),
             )
 
-            Slider(
+            MediaHubPlaybackSlider(
                 value = playbackFraction,
                 onValueChange = { fraction ->
                     onUserInteraction()
@@ -900,58 +896,9 @@ private fun PlayerBottomControls(
                     isScrubbing = false
                 },
                 enabled = durationMs > 0L,
-                thumb = {
-                    val thumbRadius by animateDpAsState(
-                        targetValue = if (isScrubbing) 8.dp else 5.5.dp,
-                        animationSpec = tween(120),
-                        label = "thumbRadius",
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(thumbRadius * 2)
-                            .clip(CircleShape)
-                            .background(MediaHubColors.Accent),
-                    )
-                },
-                track = { sliderState ->
-                    val fraction = sliderState.value
-                    val trackHeight by animateDpAsState(
-                        targetValue = if (isScrubbing) 6.dp else 3.5.dp,
-                        animationSpec = tween(120),
-                        label = "trackHeight",
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(trackHeight)
-                            .clip(RoundedCornerShape(trackHeight / 2))
-                            .background(MediaHubColors.NeutralContainer),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        if (bufferedFraction > 0f) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(bufferedFraction.coerceIn(0f, 1f))
-                                    .fillMaxHeight()
-                                    .background(MediaHubColors.TextFaint),
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                                .fillMaxHeight()
-                                .background(MediaHubColors.Accent),
-                        )
-                    }
-                },
-                colors = SliderDefaults.colors(
-                    thumbColor = MediaHubColors.Accent,
-                    activeTrackColor = MediaHubColors.Accent,
-                    inactiveTrackColor = MediaHubColors.NeutralContainer,
-                ),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(36.dp),
+                bufferedFraction = bufferedFraction,
+                isScrubbing = isScrubbing,
+                modifier = Modifier.weight(1f),
             )
 
             MediaHubText(

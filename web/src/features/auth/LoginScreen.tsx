@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Eye, EyeOff, Film, KeyRound, LogIn } from 'lucide-react'
+import { Eye, EyeOff, KeyRound, LogIn } from 'lucide-react'
 import {
   ApiError,
   getAuthConfiguration,
@@ -8,6 +8,7 @@ import {
   type LoginResponse,
 } from '../../shared/api/mediaHub'
 import { isDesktopShell } from '../../shared/desktop/desktopShell'
+import { BrandMark } from '../../shared/ui/BrandMark'
 
 type LoginScreenProps = {
   onAuthenticated: (response: LoginResponse) => void
@@ -44,7 +45,7 @@ export function LoginScreen({ onAuthenticated, serviceError }: LoginScreenProps)
       <div className="auth-center-wrap">
         <header className="auth-hero-brand">
           <div className="auth-hero-mark">
-            <Film size={30} strokeWidth={2.2} />
+            <BrandMark size={28} />
           </div>
           <h1 className="auth-hero-title" id="login-title">Media Hub</h1>
         </header>

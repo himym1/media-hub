@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Film, LayoutGrid, LibraryBig, ListPlus, ListTodo, LogOut, Search, Settings2 } from 'lucide-react'
+import { Compass, LibraryBig, ListPlus, ListTodo, LogOut, Search, Settings2 } from 'lucide-react'
 import { getSystemOverview, listTransfers, type Candidate } from '../../shared/api/mediaHub'
 import {
   DESKTOP_LOGOUT_EVENT,
@@ -10,6 +10,7 @@ import {
 } from '../../shared/desktop/desktopShell'
 import { useDesktopUpdate } from '../../shared/desktop/useDesktopUpdate'
 import { commitUrl } from '../../shared/navigation/urlState'
+import { BrandMark } from '../../shared/ui/BrandMark'
 import { useToast } from '../../shared/ui/ToastContext'
 import { ToastProvider } from '../../shared/ui/ToastProvider'
 import { CommandPalette } from '../command/CommandPalette'
@@ -28,15 +29,15 @@ import './SearchWorkspace.css'
 type WorkspaceView = '发现' | '任务' | '订阅' | '媒体库' | '运维' | '服务'
 
 const mediaNavItems = [
-  { label: '发现', icon: LayoutGrid },
+  { label: '发现', icon: Compass },
   { label: '任务', icon: ListTodo },
   { label: '订阅', icon: ListPlus },
   { label: '媒体库', icon: LibraryBig },
-] satisfies { label: WorkspaceView; icon: typeof LayoutGrid }[]
+] satisfies { label: WorkspaceView; icon: typeof Compass }[]
 
 const systemNavItems = [
   { label: '服务', icon: Settings2 },
-] satisfies { label: WorkspaceView; icon: typeof LayoutGrid }[]
+] satisfies { label: WorkspaceView; icon: typeof Compass }[]
 
 const viewSlugs: Record<WorkspaceView, string> = {
   发现: 'discover',
@@ -71,6 +72,7 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
   const desktopUpdate = useDesktopUpdate()
   const { showToast } = useToast()
   const [activeView, setActiveView] = useState<WorkspaceView>(viewFromLocation)
+  const [mountedViews, setMountedViews] = useState<Set<WorkspaceView>>(() => new Set([viewFromLocation()]))
   const [draftSubscription, setDraftSubscription] = useState<Candidate | null>(null)
   const [commandOpen, setCommandOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -96,6 +98,15 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
     setActiveView('发现')
     window.dispatchEvent(new PopStateEvent('popstate'))
   }, [])
+
+  useEffect(() => {
+    setMountedViews((prev) => {
+      if (prev.has(activeView)) return prev
+      const next = new Set(prev)
+      next.add(activeView)
+      return next
+    })
+  }, [activeView])
 
   useEffect(() => {
     const onPopState = () => {
@@ -242,7 +253,7 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
       <a className="skip-link" href="#main-content">跳到主要内容</a>
       <aside className="sidebar">
         <div className="brand-lockup">
-          <div className="brand-mark"><Film size={19} strokeWidth={2.2} /></div>
+          <div className="brand-mark"><BrandMark size={20} /></div>
           <div><strong>MEDIA HUB</strong><span>媒体自动化控制</span></div>
         </div>
 
@@ -289,33 +300,45 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
 
         <DesktopUpdateBanner update={desktopUpdate} />
         <div className="page-wrap">
-          <div aria-hidden={activeView !== '发现'} className="page-pane" hidden={activeView !== '发现'}>
-            <DiscoveryView
-              onTransferCreated={() => {
-                showToast('已加入任务，可在「任务」查看进度', 'success')
-              }}
-              onSubscribe={(candidate) => {
-                showToast(`已将《${candidate.title}》载入追番配置`, 'info')
-                setDraftSubscription(candidate)
-                navigate('订阅')
-              }}
-            />
-          </div>
-          <div aria-hidden={activeView !== '任务'} className="page-pane" hidden={activeView !== '任务'}>
-            <TransferQueue query={transfers} />
-          </div>
-          <div aria-hidden={activeView !== '订阅'} className="page-pane" hidden={activeView !== '订阅'}>
-            <SubscriptionView draftCandidate={draftSubscription} onDraftConsumed={() => setDraftSubscription(null)} />
-          </div>
-          <div aria-hidden={activeView !== '媒体库'} className="page-pane" hidden={activeView !== '媒体库'}>
-            <LibraryView />
-          </div>
-          <div aria-hidden={activeView !== '运维'} className="page-pane" hidden={activeView !== '运维'}>
-            <OperationsView />
-          </div>
-          <div aria-hidden={activeView !== '服务'} className="page-pane" hidden={activeView !== '服务'}>
-            <SettingsView desktopUpdate={desktopUpdate} integrations={integrations} onDirtyChange={updateProviderDirty} onLogout={guardedLogout} onRefresh={() => void overview.refetch()} />
-          </div>
+          {mountedViews.has('发现') ? (
+            <div aria-hidden={activeView !== '发现'} className="page-pane" hidden={activeView !== '发现'}>
+              <DiscoveryView
+                onTransferCreated={() => {
+                  showToast('已加入任务，可在「任务」查看进度', 'success')
+                }}
+                onSubscribe={(candidate) => {
+                  showToast(`已将《${candidate.title}》载入追番配置`, 'info')
+                  setDraftSubscription(candidate)
+                  navigate('订阅')
+                }}
+              />
+            </div>
+          ) : null}
+          {mountedViews.has('任务') ? (
+            <div aria-hidden={activeView !== '任务'} className="page-pane" hidden={activeView !== '任务'}>
+              <TransferQueue query={transfers} />
+            </div>
+          ) : null}
+          {mountedViews.has('订阅') ? (
+            <div aria-hidden={activeView !== '订阅'} className="page-pane" hidden={activeView !== '订阅'}>
+              <SubscriptionView draftCandidate={draftSubscription} onDraftConsumed={() => setDraftSubscription(null)} />
+            </div>
+          ) : null}
+          {mountedViews.has('媒体库') ? (
+            <div aria-hidden={activeView !== '媒体库'} className="page-pane" hidden={activeView !== '媒体库'}>
+              <LibraryView />
+            </div>
+          ) : null}
+          {mountedViews.has('运维') ? (
+            <div aria-hidden={activeView !== '运维'} className="page-pane" hidden={activeView !== '运维'}>
+              <OperationsView />
+            </div>
+          ) : null}
+          {mountedViews.has('服务') ? (
+            <div aria-hidden={activeView !== '服务'} className="page-pane" hidden={activeView !== '服务'}>
+              <SettingsView desktopUpdate={desktopUpdate} integrations={integrations} onDirtyChange={updateProviderDirty} onLogout={guardedLogout} onRefresh={() => void overview.refetch()} />
+            </div>
+          ) : null}
         </div>
 
         <CommandPalette

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, CircleAlert, Download, Film, FolderInput, HardDrive, Search, Star, Tv, Volume2, X } from 'lucide-react'
+import { CircleAlert, Film, Search, Star, Tv, X } from 'lucide-react'
 import {
   createTransfer,
   getDiscoveryCatalog,
@@ -13,8 +13,9 @@ import {
   type DiscoveryItem,
 } from '../../shared/api/mediaHub'
 import { commitUrl } from '../../shared/navigation/urlState'
-import { IconButton } from '../../shared/ui/IconButton'
 import { PageCaptureForm } from './PageCaptureForm'
+import { DiscoveryDetailPanel } from './DiscoveryDetailPanel'
+import { DiscoveryPosterBand, ResultLane } from './DiscoveryResults'
 import {
   discoveryFocusSubtitle,
   discoveryResultsHeading,
@@ -22,16 +23,9 @@ import {
   isDownloadable,
   matchesPipeline,
   pickSearchIdentity,
-  pipelineLabel,
   prioritizeDiscoveryResults,
   type PipelineLane,
 } from './discoverySearch'
-
-function formatSize(bytes: number) {
-  if (bytes <= 0) return '大小未知'
-  const gib = bytes / 1024 / 1024 / 1024
-  return gib >= 1024 ? `${(gib / 1024).toFixed(1)} TB` : `${gib.toFixed(1)} GB`
-}
 
 function searchStateFromLocation() {
   const params = new URLSearchParams(window.location.search)
@@ -533,239 +527,20 @@ export function DiscoveryView({
             ) : null}
           </section>
 
-          {selected ? <aside className="detail-panel" aria-label="资源详情">
-            <div className="detail-header"><div><h2>{selected.title}</h2></div><IconButton label="关闭详情" onClick={() => setSelected(null)} subtle><X size={17} /></IconButton></div>
-            <div className="detail-poster">
-              {detailPoster ? (
-                <>
-                  <div
-                    aria-hidden="true"
-                    className="detail-poster-backdrop"
-                    style={{ backgroundImage: `url(${detailPoster})` }}
-                  />
-                  <div aria-hidden="true" className="detail-poster-vignette" />
-                  <div className="detail-poster-foreground">
-                    <img alt={`${selected.title} 海报`} height="180" src={detailPoster} width="120" />
-                  </div>
-                </>
-              ) : (
-                <div className="poster-placeholder"><Film size={34} /></div>
-              )}
-              <div className="poster-overlay">
-                <span className={`spec-badge ${isDownloadable(selected) ? 'spec-pipeline-pt' : 'spec-pipeline-115'}`}>{pipelineLabel(selected)}</span>
-                <span className="spec-badge spec-source">{selected.provider ?? selected.source}</span>
-                <strong className={`spec-badge spec-res ${resolutionBadgeClass(selected.release.resolution)}`}>
-                  {selected.release.resolution}
-                </strong>
-              </div>
-            </div>
-            {detailRating || detailOverview ? (
-              <div className="detail-identity">
-                {detailRating ? <p className="detail-rating">TMDB {Number(detailRating).toFixed(1)}</p> : null}
-                {detailOverview ? <p className="detail-overview">{detailOverview}</p> : null}
-              </div>
-            ) : null}
-            <div className="detail-facts">
-              <div className="detail-fact-card">
-                <span><Tv aria-hidden="true" size={13} />视频规格</span>
-                <strong>
-                  {selected.release.videoCodec}
-                  {selected.release.dynamicRange ? (
-                    <> · <span className={`spec-badge spec-hdr ${dynamicRangeBadgeClass(selected.release.dynamicRange)}`}>{selected.release.dynamicRange}</span></>
-                  ) : null}
-                </strong>
-              </div>
-              <div className="detail-fact-card">
-                <span><Volume2 aria-hidden="true" size={13} />音频规格</span>
-                <strong>{selected.release.audio ?? '音轨未知'}</strong>
-              </div>
-              <div className="detail-fact-card">
-                <span><HardDrive aria-hidden="true" size={13} />资源体积</span>
-                <strong>{formatSize(selected.release.sizeBytes)}</strong>
-              </div>
-              <div className="detail-fact-card">
-                <span>{isDownloadable(selected) ? <Download aria-hidden="true" size={13} /> : <FolderInput aria-hidden="true" size={13} />}{isDownloadable(selected) ? '下载目标' : '转存目标'}</span>
-                <strong>{isDownloadable(selected) ? 'MoviePilot / 本地' : selected.mediaType === 'movie' ? '115 / 电影' : '115 / 电视剧'}</strong>
-              </div>
-            </div>
-            {recommendations.data?.items.length ? <div className="recommendation-links"><span>相似内容</span>{recommendations.data.items.slice(0, 4).map((item) => <button key={`${item.mediaType}-${item.tmdbId}`} onClick={() => openDiscoveryItem(item)} type="button">{item.title}</button>)}</div> : null}
-            <div className="detail-actions"><button className="secondary-command" disabled={!selected.tmdbId || selected.transferState === 'identity_required'} onClick={() => onSubscribe(selected)} type="button"><BellPlus size={16} />订阅</button><button className="primary-action" disabled={!selected.transferToken || transfer.isPending} onClick={() => handleTransfer(selected)} type="button">{isDownloadable(selected) ? <Download size={17} /> : <FolderInput size={17} />}{transfer.isPending ? '正在创建任务…' : selected.transferToken ? (isDownloadable(selected) ? '加入下载队列' : '加入转存队列') : selected.transferState === 'identity_required' ? '身份待确认' : '工作流不可用'}</button></div>
-          </aside> : null}
-        </div>
-      ) : null}
-    </section>
-  )
-}
-
-function ResultLane({
-  fallbackPoster,
-  heading,
-  items,
-  queuedTransferIds,
-  selected,
-  transfer,
-  onSelect,
-  onSubscribe,
-  onTransfer,
-}: {
-  fallbackPoster?: string
-  heading: string
-  items: Candidate[]
-  queuedTransferIds: string[]
-  selected: Candidate | null
-  transfer: { isPending: boolean; variables?: Candidate }
-  onSelect: (candidate: Candidate) => void
-  onSubscribe: (candidate: Candidate) => void
-  onTransfer: (candidate: Candidate) => void
-}) {
-  if (items.length === 0) return null
-  return (
-    <section className="result-lane" aria-label={heading || undefined}>
-      {heading ? <h3 className="result-lane-heading">{heading}<span>{items.length}</span></h3> : null}
-      {items.map((candidate) => (
-        <CandidateRow
-          candidate={candidate}
-          fallbackPoster={fallbackPoster}
-          key={candidate.id}
-          queued={queuedTransferIds.includes(candidate.id)}
-          selected={selected?.id === candidate.id}
-          transferring={transfer.isPending && transfer.variables?.id === candidate.id}
-          onSelect={onSelect}
-          onSubscribe={onSubscribe}
-          onTransfer={onTransfer}
-        />
-      ))}
-    </section>
-  )
-}
-
-function CandidateRow({
-  candidate,
-  fallbackPoster,
-  queued,
-  selected,
-  transferring: submitting,
-  onSelect,
-  onSubscribe,
-  onTransfer,
-}: {
-  candidate: Candidate
-  fallbackPoster?: string
-  queued: boolean
-  selected: boolean
-  transferring: boolean
-  onSelect: (candidate: Candidate) => void
-  onSubscribe: (candidate: Candidate) => void
-  onTransfer: (candidate: Candidate) => void
-}) {
-  const transferring = submitting || queued || candidate.transferState === 'transferring'
-  const downloadable = isDownloadable(candidate)
-  const available = (candidate.transferState === 'available' || downloadable) && Boolean(candidate.transferToken) && !transferring
-  const subscribable = candidate.transferState !== 'identity_required' && Boolean(candidate.tmdbId)
-  const availabilityLabel = transferring
-    ? (downloadable ? '下载中' : '转存中')
-    : available
-      ? (downloadable ? '可下载' : '可转存')
-      : candidate.transferState === 'identity_required'
-        ? '身份待确认'
-        : '工作流不可用'
-  const poster = candidate.posterUrl || fallbackPoster
-  return (
-    <article className={selected ? 'result-row selected' : 'result-row'} data-candidate-id={candidate.id}>
-      <div className="poster-wrap">{poster ? <img alt={`${candidate.title} 海报`} height="144" loading="lazy" src={poster} width="96" /> : <Film aria-hidden="true" size={24} />}<span>{candidate.mediaType === 'movie' ? '电影' : '剧集'}</span></div>
-      <button aria-pressed={selected} className="result-main result-select" onClick={() => onSelect(candidate)} type="button">
-        <span className="result-title-row"><span className="result-title">{candidate.title}</span><span className="year">{candidate.year}</span></span>
-        <span className="source-line">
-          <span className={`spec-badge ${downloadable ? 'spec-pipeline-pt' : 'spec-pipeline-115'}`}>{pipelineLabel(candidate)}</span>
-          <span className="spec-badge spec-source">{candidate.provider ?? candidate.source}</span>
-          {episodeLabel(candidate) ? <span className="spec-badge spec-episode">{episodeLabel(candidate)}</span> : null}
-          <span className={`spec-badge spec-res ${resolutionBadgeClass(candidate.release.resolution)}`}>{candidate.release.resolution}</span>
-          <span className="spec-badge spec-codec">{candidate.release.videoCodec}</span>
-          {candidate.release.dynamicRange ? <span className={`spec-badge spec-hdr ${dynamicRangeBadgeClass(candidate.release.dynamicRange)}`}>{candidate.release.dynamicRange}</span> : null}
-        </span>
-        <span className="result-facts">
-          <span className="result-fact-item"><Volume2 aria-hidden="true" size={13} /><span>{candidate.release.audio ?? '音轨未知'}</span></span>
-          <span>·</span>
-          <span className="result-fact-item"><HardDrive aria-hidden="true" size={13} /><span>{formatSize(candidate.release.sizeBytes)}</span></span>
-        </span>
-      </button>
-      <div className="result-action"><span className={`availability ${transferring ? 'transferring' : available ? 'available' : 'unavailable'}`}><span />{availabilityLabel}</span><div className="result-commands"><IconButton disabled={!subscribable} label="创建订阅" onClick={() => onSubscribe(candidate)}><BellPlus size={15} /></IconButton><button disabled={!available || transferring} onClick={() => onTransfer(candidate)} type="button">{submitting ? '提交中…' : transferring ? (downloadable ? '下载中' : '转存中') : downloadable ? '下载' : '转存'}{downloadable ? <Download size={15} /> : <FolderInput size={15} />}</button></div></div>
-    </article>
-  )
-}
-
-function episodeLabel(candidate: Candidate) {
-  if (!candidate.season) return ''
-  if (!candidate.episodeStart) return `S${candidate.season}`
-  return candidate.episodeStart === candidate.episodeEnd
-    ? `S${candidate.season}E${candidate.episodeStart}`
-    : `S${candidate.season}E${candidate.episodeStart}-${candidate.episodeEnd}`
-}
-
-function resolutionBadgeClass(res: string) {
-  const lower = res.toLowerCase()
-  if (lower.includes('2160') || lower.includes('4k')) return 'badge-res-4k'
-  if (lower.includes('1080')) return 'badge-res-1080p'
-  return 'badge-res-default'
-}
-
-function dynamicRangeBadgeClass(hdr?: string) {
-  if (!hdr) return ''
-  const upper = hdr.toUpperCase()
-  if (upper.includes('DV') || upper.includes('DOLBY')) return 'badge-hdr-dv'
-  if (upper.includes('HDR')) return 'badge-hdr-standard'
-  return 'badge-hdr-default'
-}
-
-function DiscoveryPosterBand({
-  label,
-  subtitle,
-  items,
-  onSelect,
-  icon,
-  loading = false,
-  emptyLabel,
-}: {
-  label: string
-  subtitle: string
-  items: DiscoveryItem[]
-  onSelect: (item: DiscoveryItem) => void
-  icon?: ReactNode
-  loading?: boolean
-  emptyLabel?: string
-}) {
-  if (!loading && items.length === 0 && !emptyLabel) return null
-  return (
-    <section className="trending-band" aria-label={label}>
-      <div className="section-heading">
-        <div>
-          <h2>{icon ? <span className="section-heading-icon">{icon}</span> : null}{label}</h2>
-          <p>{subtitle}</p>
-        </div>
-      </div>
-      {loading ? <p className="discovery-band-status" role="status">{emptyLabel ?? '正在加载…'}</p> : null}
-      {!loading && items.length === 0 && emptyLabel ? (
-        <p className="discovery-band-status" role="status">{emptyLabel}</p>
-      ) : null}
-      {items.length ? (
-        <div className="trending-list">
-          {items.map((item) => (
-            <button key={`${item.mediaType}-${item.tmdbId}`} onClick={() => onSelect(item)} type="button">
-              <span className="trending-poster">
-                {item.posterUrl ? (
-                  <img alt="" height="210" loading="lazy" src={item.posterUrl} width="140" />
-                ) : (
-                  <Film aria-hidden="true" size={20} />
-                )}
-              </span>
-              <span>
-                <strong>{item.title}</strong>
-                <small>
-                  {item.year || '年份未知'} · {item.mediaType === 'movie' ? '电影' : '剧集'}
-                </small>
-              </span>
-            </button>
-          ))}
+          {selected ? (
+            <DiscoveryDetailPanel
+              detailOverview={detailOverview}
+              detailPoster={detailPoster}
+              detailRating={detailRating}
+              isTransferPending={transfer.isPending}
+              onClose={() => setSelected(null)}
+              onOpenDiscoveryItem={openDiscoveryItem}
+              onSubscribe={onSubscribe}
+              onTransfer={handleTransfer}
+              recommendations={recommendations.data?.items ?? []}
+              selected={selected}
+            />
+          ) : null}
         </div>
       ) : null}
     </section>

@@ -103,6 +103,7 @@ export function LibraryEpisodes({ seriesId, seriesTitle, inPagePlayback, onPlay 
           <div className="up-next-body">
             <strong className="up-next-title">{episodeLabel(upNextEpisode, seriesTitle)}</strong>
             <LibraryWatchAction
+              ariaLabelOverride={`接续观看 ${episodeLabel(upNextEpisode, seriesTitle)}`}
               externalUrl={upNextEpisode.externalUrl}
               inPage={inPagePlayback}
               item={upNextEpisode}

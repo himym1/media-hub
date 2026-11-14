@@ -34,12 +34,12 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.Compass
 import com.composables.icons.lucide.LibraryBig
 import com.composables.icons.lucide.ListPlus
 import com.composables.icons.lucide.ListTodo
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
-import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.Settings2
 import com.mediahub.android.app.AppState
@@ -459,7 +459,7 @@ private fun MainNavigationRail(selected: MainDestination, onSelected: (MainDesti
 }
 
 private fun destinationIcon(destination: MainDestination) = when (destination) {
-    MainDestination.Search -> Lucide.Search
+    MainDestination.Search -> Lucide.Compass
     MainDestination.Transfers -> Lucide.ListTodo
     MainDestination.Subscriptions -> Lucide.ListPlus
     MainDestination.Library -> Lucide.LibraryBig

@@ -646,21 +646,21 @@ private fun HeroGalleryCarousel(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(200.dp)
-                .clip(RoundedCornerShape(18.dp))
+                .heightIn(min = 200.dp)
+                .clip(RoundedCornerShape(14.dp))
                 .background(MediaHubColors.CardBackground)
                 .clickable { onSelect(currentItem) },
         ) {
             RemotePoster(
                 url = currentItem.posterUrl,
                 contentDescription = currentItem.title,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.matchParentSize(),
             )
 
             // Deep cinematic dark gradient overlay
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .matchParentSize()
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
@@ -676,7 +676,8 @@ private fun HeroGalleryCarousel(
             // Content Overlay
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .heightIn(min = 200.dp)
                     .padding(16.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {

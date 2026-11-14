@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import {
+  Compass,
   CornerDownLeft,
   Keyboard,
-  LayoutGrid,
   LibraryBig,
   ListPlus,
   ListTodo,
@@ -70,7 +70,7 @@ export function CommandPalette({
         id: 'nav-discover',
         category: '导航',
         title: '发现',
-        icon: LayoutGrid,
+        icon: Compass,
         action: () => onNavigate('发现'),
         keywords: ['discover', 'search', 'movie', 'tv', 'tmdb', 'faxian', 'sousuo'],
       },

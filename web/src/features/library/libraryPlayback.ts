@@ -26,6 +26,12 @@ export function libraryWatchLabel(inPage: boolean, item: Pick<EmbyItem, 'played'
   return inPage ? playbackActionLabel(item) : embyOpenLabel
 }
 
+export function mediaTypeLabel(type: string) {
+  if (type === 'Movie') return '电影'
+  if (type === 'Series') return '剧集'
+  return '媒体'
+}
+
 export function episodeLabel(item: Pick<EmbyItem, 'name' | 'episode'>, seriesTitle = '') {
   const number = (item.episode ?? 0) > 0 ? `第 ${item.episode} 集` : null
   const title = item.name.trim() && item.name.trim() !== seriesTitle.trim() ? item.name.trim() : null

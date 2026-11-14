@@ -334,7 +334,7 @@ html[data-app-shell="desktop"] .login-button:disabled {
 }
 
 html[data-app-shell="desktop"] .secondary-command {
-  min-height: 34px;
+  min-height: 44px;
   border-radius: 5px;
   border: 1px solid #30363d;
   background: #161b22;
@@ -451,9 +451,9 @@ html[data-app-shell="desktop"] .genre-chip-row {
 
 html[data-app-shell="desktop"] .genre-chip,
 html[data-app-shell="desktop"] .filter-chip {
-  min-width: auto;
-  min-height: 28px;
-  padding: 0 10px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
   border-radius: 4px;
   border: 1px solid #2d333b;
   background: #161b22;
@@ -462,7 +462,7 @@ html[data-app-shell="desktop"] .filter-chip {
   font-weight: 450;
   box-shadow: none;
   transform: none;
-  transition: all .1s ease;
+  transition: color .1s ease, background-color .1s ease, border-color .1s ease;
 }
 
 html[data-app-shell="desktop"] .genre-chip:hover,
@@ -623,16 +623,15 @@ html[data-app-shell="desktop"] .task-scope-toggle {
 }
 
 html[data-app-shell="desktop"] .task-scope-toggle button {
-  min-height: 28px;
-  height: 28px;
-  padding: 0 10px;
+  min-height: 44px;
+  padding: 0 12px;
   border-radius: 4px;
   border: none;
   background: transparent;
   color: #8b949e;
   font-size: 12px;
   font-weight: 500;
-  transition: all .1s ease;
+  transition: color .1s ease, background-color .1s ease;
 }
 
 html[data-app-shell="desktop"] .task-scope-toggle button[aria-pressed="true"] {
@@ -931,28 +930,26 @@ html[data-app-shell="desktop"] .library-detail-poster {
    10. 系统设置与运维 (Settings & Ops) - 系统首选项风格
    ========================================================================== */
 html[data-app-shell="desktop"] .settings-view .view-header {
-  position: absolute !important;
-  top: 8px !important;
-  right: 16px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  background: transparent !important;
-  border: none !important;
-  z-index: 5 !important;
-  min-height: auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  margin: 0 -16px 0 !important;
+  padding: 4px 16px !important;
+  background: #111417 !important;
+  border-bottom: none !important;
+  min-height: 44px !important;
 }
 
 html[data-app-shell="desktop"] .settings-tabs {
   margin: 0 -16px 14px !important;
-  padding: 6px 16px 8px !important;
+  padding: 4px 16px 8px !important;
   background: #111417 !important;
   border-bottom: 1px solid #1c2024 !important;
   gap: 4px !important;
 }
 
 html[data-app-shell="desktop"] .settings-tabs button {
-  min-height: 32px;
-  height: 32px;
+  min-height: 44px;
   padding: 0 12px;
   border-radius: 4px;
   border: 1px solid transparent;

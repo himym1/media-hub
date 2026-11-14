@@ -11,10 +11,14 @@
   --bg: #0e1114;
   --sidebar: #151c22;
   --surface: #1b2228;
+  --surface-panel: #14181c;
+  --surface-hover: #212931;
   --surface-raised: #252e35;
+  --surface-subtle: rgba(255, 255, 255, 0.025);
   --surface-input: #252e35;
   --surface-selected: #183b2b;
   --border: #2e3b46;
+  --border-subtle: rgba(255, 255, 255, 0.07);
   --border-strong: #475569;
   --text: #f8fafc;
   --text-secondary: #cbd5e1;

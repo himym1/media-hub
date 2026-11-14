@@ -3,6 +3,7 @@ package com.mediahub.android.core.designsystem
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -35,6 +36,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -51,12 +53,15 @@ import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,6 +79,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -977,5 +983,89 @@ fun MediaHubShimmerBox(
         modifier = modifier
             .clip(shape)
             .background(mediaHubShimmerBrush()),
+    )
+}
+
+/** 环形加载指示器包装组件 */
+@Composable
+fun MediaHubCircularProgress(
+    modifier: Modifier = Modifier,
+    color: Color = MediaHubColors.Accent,
+    strokeWidth: Dp = 2.5.dp,
+) {
+    CircularProgressIndicator(
+        modifier = modifier,
+        color = color,
+        strokeWidth = strokeWidth,
+    )
+}
+
+/** 播放器进度拖拽条包装组件，保留 48dp 最小触控高度与缓冲条展示 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MediaHubPlaybackSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    bufferedFraction: Float = 0f,
+    isScrubbing: Boolean = false,
+) {
+    Slider(
+        value = value,
+        onValueChange = onValueChange,
+        onValueChangeFinished = onValueChangeFinished,
+        enabled = enabled,
+        thumb = {
+            val thumbRadius by animateDpAsState(
+                targetValue = if (isScrubbing) 8.dp else 5.5.dp,
+                animationSpec = tween(120),
+                label = "thumbRadius",
+            )
+            Box(
+                modifier = Modifier
+                    .size(thumbRadius * 2)
+                    .clip(CircleShape)
+                    .background(MediaHubColors.Accent),
+            )
+        },
+        track = { sliderState ->
+            val fraction = sliderState.value
+            val trackHeight by animateDpAsState(
+                targetValue = if (isScrubbing) 6.dp else 3.5.dp,
+                animationSpec = tween(120),
+                label = "trackHeight",
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(trackHeight)
+                    .clip(RoundedCornerShape(trackHeight / 2))
+                    .background(MediaHubColors.NeutralContainer),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (bufferedFraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(bufferedFraction.coerceIn(0f, 1f))
+                            .fillMaxHeight()
+                            .background(MediaHubColors.TextFaint),
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                        .fillMaxHeight()
+                        .background(MediaHubColors.Accent),
+                )
+            }
+        },
+        colors = SliderDefaults.colors(
+            thumbColor = MediaHubColors.Accent,
+            activeTrackColor = MediaHubColors.Accent,
+            inactiveTrackColor = MediaHubColors.NeutralContainer,
+        ),
+        modifier = modifier.heightIn(min = 48.dp),
     )
 }
