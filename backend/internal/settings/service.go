@@ -449,7 +449,12 @@ func isBuiltinSource(id string) bool {
 
 func sourceReady(source config.SearchSource) bool {
 	switch source.ID {
-	case "mikan", "sidhub", "pansou":
+	case "mikan", "pansou":
+		return true
+	case "sidhub":
+		if source.BaseURL == "" || isOfficialSourceRoot(source.BaseURL, "sidhub.cc") || isOfficialSourceRoot(source.BaseURL, "seedog.cc") || isOfficialSourceRoot(source.BaseURL, "seeduck.cc") {
+			return false
+		}
 		return true
 	case "framehdr":
 		if source.BaseURL == "" || isOfficialSourceRoot(source.BaseURL, "framehdr.com") {

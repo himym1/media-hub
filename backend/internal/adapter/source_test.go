@@ -26,7 +26,7 @@ func TestAutomaticWriteRetryClassification(t *testing.T) {
 }
 
 func TestNewUsesBuiltinSourcesWhenURLEmpty(t *testing.T) {
-	for _, id := range []string{"mikan", "sidhub", "pansou"} {
+	for _, id := range []string{"mikan", "pansou"} {
 		source := New(config.SearchSource{ID: id}, time.Second, nil, nil)
 		if source == nil || source.ID() != id {
 			t.Fatalf("source %s = %#v", id, source)
@@ -34,10 +34,10 @@ func TestNewUsesBuiltinSourcesWhenURLEmpty(t *testing.T) {
 	}
 }
 
-func TestNewUsesNativeSidhubForOfficialHosts(t *testing.T) {
+func TestNewSkipsBuiltinSidhubForOfficialHosts(t *testing.T) {
 	for _, raw := range []string{"", "https://sidhub.cc", "https://www.sidhub.cc/", "https://seedog.cc", "https://www.seedog.cc/"} {
 		got := New(config.SearchSource{ID: "sidhub", BaseURL: raw}, time.Second, nil, nil)
-		if _, ok := got.(*Sidhub); !ok {
+		if got != nil {
 			t.Fatalf("source for %q = %#v", raw, got)
 		}
 	}
@@ -58,16 +58,6 @@ func TestNewPassesProxyOnlyToBuiltinSources(t *testing.T) {
 	}
 	transport := source.client.Transport.(*http.Transport)
 	resolved, err := transport.Proxy(request)
-	if err != nil || resolved.String() != proxyURL.String() {
-		t.Fatalf("proxy = %v, err = %v", resolved, err)
-	}
-	sidhub, ok := New(config.SearchSource{ID: "sidhub", Label: "Sidhub"}, time.Second, nil, proxyURL).(*Sidhub)
-	if !ok {
-		t.Fatalf("source = %#v", sidhub)
-	}
-	request, _ = http.NewRequest(http.MethodGet, "https://sidhub.cc/s/test/", nil)
-	transport = sidhub.client.Transport.(*http.Transport)
-	resolved, err = transport.Proxy(request)
 	if err != nil || resolved.String() != proxyURL.String() {
 		t.Fatalf("proxy = %v, err = %v", resolved, err)
 	}

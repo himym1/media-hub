@@ -558,22 +558,22 @@ func TestMergePreservesOmittedPansouSource(t *testing.T) {
 func TestReadinessCountsBuiltinSourcesWithoutURLs(t *testing.T) {
 	service := NewService(nil, nil, Values{Sources: configSources()}, nil)
 	_, nativeSources := service.ReadinessConfiguration()
-	if nativeSources != 3 {
-		t.Fatalf("native sources = %d, want 3", nativeSources)
+	if nativeSources != 2 {
+		t.Fatalf("native sources = %d, want 2", nativeSources)
 	}
 	configured := configSources()
 	configured[1].Account = "user"
 	configured[1].Token = "pass"
 	service = NewService(nil, nil, Values{Sources: configured}, nil)
 	_, nativeSources = service.ReadinessConfiguration()
-	if nativeSources != 4 {
-		t.Fatalf("native sources = %d, want 4", nativeSources)
+	if nativeSources != 3 {
+		t.Fatalf("native sources = %d, want 3", nativeSources)
 	}
 	configured[5].Account = "app-id"
 	configured[5].Token = "app-key"
 	service = NewService(nil, nil, Values{Sources: configured}, nil)
 	_, nativeSources = service.ReadinessConfiguration()
-	if nativeSources != 5 {
-		t.Fatalf("native sources = %d, want 5", nativeSources)
+	if nativeSources != 4 {
+		t.Fatalf("native sources = %d, want 4", nativeSources)
 	}
 }

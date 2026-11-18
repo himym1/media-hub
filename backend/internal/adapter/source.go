@@ -101,7 +101,8 @@ func New(source config.SearchSource, timeout time.Duration, offline Offline, pro
 		return NewMikan(source.BaseURL, source.Token, timeout, offline, proxyURL)
 	}
 	if source.ID == "sidhub" && (source.BaseURL == "" || isSidhubHost(source.BaseURL)) {
-		return NewSidhub(source.BaseURL, timeout, offline, proxyURL)
+		// 官方站当前由 Cloudflare 人机验证拦截匿名抓取，先不注册内置适配器。
+		return nil
 	}
 	if source.ID == "pansou" {
 		receiver, _ := offline.(ShareReceiver)
