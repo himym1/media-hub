@@ -3,6 +3,8 @@ package moviepilot
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,14 +22,16 @@ import (
 )
 
 const (
-	SourceID       = "moviepilot"
-	SourceLabel    = "PT"
-	defaultBaseURL = "http://172.17.0.1:13001"
-	searchBudget   = 45 * time.Second
-	healthBudget   = 5 * time.Second
-	downloadBudget = 2 * time.Minute
-	maxCandidates  = 20
-	maxBodyBytes   = 4 << 20
+	SourceID        = "moviepilot"
+	SourceLabel     = "PT"
+	defaultBaseURL  = "http://172.17.0.1:13001"
+	searchBudget    = 45 * time.Second
+	healthBudget    = 5 * time.Second
+	downloadBudget  = 2 * time.Minute
+	maxCandidates   = 20
+	maxBodyBytes    = 4 << 20
+	v3RefPrefix     = "mpv3:"
+	v3CacheCapacity = 500
 )
 
 var (
@@ -36,6 +40,20 @@ var (
 	ErrUpstreamResponse = errors.New("MoviePilot returned an invalid response")
 )
 
+type protocolMode string
+
+const (
+	modeUnknown protocolMode = ""
+	modeV2      protocolMode = "v2"
+	modeV3      protocolMode = "v3"
+)
+
+type v3TorrentEntry struct {
+	torrentIn   map[string]any
+	mediaID     string
+	mediaSource string
+}
+
 type Client struct {
 	mutex     sync.RWMutex
 	config    clientConfig
@@ -43,6 +61,9 @@ type Client struct {
 	nextID    int64
 	lastCheck integration.Health
 	checkedAt time.Time
+	mode      protocolMode
+	v3Order   []string
+	v3Cache   map[string]v3TorrentEntry
 }
 
 type clientConfig struct {
@@ -51,10 +72,12 @@ type clientConfig struct {
 }
 
 type Media struct {
-	TMDBID    string
-	Title     string
-	Year      int
-	MediaType string
+	TMDBID      string
+	MediaID     string
+	MediaSource string
+	Title       string
+	Year        int
+	MediaType   string
 }
 
 type Torrent struct {
@@ -87,6 +110,9 @@ func (c *Client) Configure(baseURL, apiKey string) {
 	c.config = clientConfig{baseURL: baseURL, apiKey: apiKey}
 	c.lastCheck = integration.Health{}
 	c.checkedAt = time.Time{}
+	c.mode = modeUnknown
+	c.v3Order = nil
+	c.v3Cache = nil
 	c.mutex.Unlock()
 }
 
@@ -117,7 +143,8 @@ func (c *Client) Check(ctx context.Context) integration.Health {
 	c.mutex.RUnlock()
 	checkCtx, cancel := context.WithTimeout(ctx, healthBudget)
 	defer cancel()
-	_, err := c.call(checkCtx, "tools/list", nil)
+	raw, err := c.call(checkCtx, "tools/list", nil)
+	detected := modeUnknown
 	if err != nil {
 		if errors.Is(err, ErrUnauthorized) {
 			health.Status = integration.StatusDegraded
@@ -127,12 +154,16 @@ func (c *Client) Check(ctx context.Context) integration.Health {
 			health.Detail = "无法读取 MoviePilot 状态"
 		}
 	} else {
+		detected = detectProtocolMode(raw)
 		health.Status = integration.StatusHealthy
 		health.Detail = "PT 搜索与下载可用"
 	}
 	c.mutex.Lock()
 	c.lastCheck = health
 	c.checkedAt = time.Now()
+	if detected != modeUnknown {
+		c.mode = detected
+	}
 	c.mutex.Unlock()
 	return health
 }
@@ -147,20 +178,43 @@ func (c *Client) Search(ctx context.Context, query string) ([]search.Candidate, 
 	}
 	searchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), searchBudget)
 	defer cancel()
-	media, err := c.searchMedia(searchCtx, query)
+
+	mode, err := c.ensureMode(searchCtx)
 	if err != nil {
 		return nil, err
 	}
-	if media.TMDBID == "" {
-		return nil, nil
+
+	var media Media
+	var torrents []Torrent
+	if mode == modeV3 {
+		media, err = c.searchMediaV3(searchCtx, query)
+		if err != nil {
+			return nil, err
+		}
+		if media.TMDBID == "" && media.MediaID == "" {
+			return nil, nil
+		}
+		torrents, err = c.searchTorrentsV3(searchCtx, media)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		media, err = c.searchMedia(searchCtx, query)
+		if err != nil {
+			return nil, err
+		}
+		if media.TMDBID == "" {
+			return nil, nil
+		}
+		if err := c.searchTorrents(searchCtx, media); err != nil {
+			return nil, err
+		}
+		torrents, err = c.searchResults(searchCtx)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if err := c.searchTorrents(searchCtx, media); err != nil {
-		return nil, err
-	}
-	torrents, err := c.searchResults(searchCtx)
-	if err != nil {
-		return nil, err
-	}
+
 	results := make([]search.Candidate, 0, len(torrents))
 	for _, torrent := range torrents {
 		if torrent.Reference == "" {
@@ -207,6 +261,19 @@ func (c *Client) StartDownload(ctx context.Context, request search.DownloadReque
 	}
 	downloadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), downloadBudget)
 	defer cancel()
+
+	if strings.HasPrefix(reference, v3RefPrefix) {
+		return c.startDownloadV3(downloadCtx, reference)
+	}
+	mode, err := c.ensureMode(downloadCtx)
+	if err != nil {
+		return publicFailure(err)
+	}
+	if mode == modeV3 {
+		// 升级至 v3 后，旧版 v2 缓存引用已失效，提示重新搜索
+		return search.Failure{Code: "source_stale", Message: "MoviePilot 搜索结果已过期，请重新搜索", Retryable: false}
+	}
+
 	payload, err := c.callTool(downloadCtx, "add_download_tasks", map[string]any{
 		"torrent_url": []string{reference},
 	})
@@ -224,6 +291,92 @@ func (c *Client) StartDownload(ctx context.Context, request search.DownloadReque
 		return search.Failure{Code: "source_unavailable", Message: "MoviePilot 未能加入下载队列", Retryable: true}
 	}
 	return nil
+}
+
+func (c *Client) startDownloadV3(ctx context.Context, reference string) error {
+	entry, ok := c.lookupV3Torrent(reference)
+	if !ok {
+		// 内存缓存未命中（如服务重启后）时，回退查询最近一次搜索结果
+		payload, err := c.callAPI(ctx, "search.results", nil, nil, nil)
+		if err != nil {
+			return publicFailure(err)
+		}
+		c.parseTorrentsV3(payload, Media{})
+		entry, ok = c.lookupV3Torrent(reference)
+		if !ok {
+			return search.Failure{Code: "source_stale", Message: "MoviePilot 搜索结果已过期，请重新搜索", Retryable: false}
+		}
+	}
+
+	body := map[string]any{
+		"torrent_in": entry.torrentIn,
+	}
+	if entry.mediaID != "" {
+		body["media_id"] = entry.mediaID
+	}
+	if entry.mediaSource != "" {
+		body["media_source"] = entry.mediaSource
+	}
+	payload, err := c.callAPI(ctx, "download.add", nil, nil, body)
+	if err != nil {
+		return publicFailure(err)
+	}
+	if lookupBool(payload, "success") {
+		return nil
+	}
+	message := lookupString(jsonObject(payload), "message")
+	if strings.Contains(message, "签名") || strings.Contains(message, "过期") || strings.Contains(message, "引用无效") {
+		return search.Failure{Code: "source_stale", Message: "MoviePilot 搜索结果已过期，请重新搜索", Retryable: false}
+	}
+	return search.Failure{Code: "source_unavailable", Message: "MoviePilot 未能加入下载队列", Retryable: true}
+}
+
+func (c *Client) ensureMode(ctx context.Context) (protocolMode, error) {
+	c.mutex.RLock()
+	mode := c.mode
+	c.mutex.RUnlock()
+	if mode != modeUnknown {
+		return mode, nil
+	}
+
+	raw, err := c.call(ctx, "tools/list", nil)
+	if err != nil {
+		if errors.Is(err, ErrUnauthorized) {
+			return modeUnknown, err
+		}
+		// 兼容未实现 tools/list 的旧版或测试桩服务
+		return modeV2, nil
+	}
+	detected := detectProtocolMode(raw)
+	c.mutex.Lock()
+	c.mode = detected
+	c.mutex.Unlock()
+	return detected, nil
+}
+
+func detectProtocolMode(raw json.RawMessage) protocolMode {
+	var listed struct {
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+	}
+	if json.Unmarshal(raw, &listed) != nil {
+		return modeV2
+	}
+	hasGateway := false
+	hasLegacy := false
+	for _, tool := range listed.Tools {
+		switch tool.Name {
+		case "moviepilot_api":
+			hasGateway = true
+		case "search_torrents":
+			hasLegacy = true
+		}
+	}
+	if hasGateway && !hasLegacy {
+		return modeV3
+	}
+	return modeV2
 }
 
 func (c *Client) searchMedia(ctx context.Context, query string) (Media, error) {
@@ -250,10 +403,62 @@ func (c *Client) searchMedia(ctx context.Context, query string) (Media, error) {
 	return Media{}, nil
 }
 
+func (c *Client) searchMediaV3(ctx context.Context, query string) (Media, error) {
+	title, year := splitTitleYear(query)
+	hintType := inferMediaType(query)
+	payload, err := c.callAPI(ctx, "media.search", nil, map[string]any{
+		"title":        title,
+		"media_source": []string{"themoviedb"},
+		"page":         1,
+		"count":        8,
+	}, nil)
+	if err != nil {
+		return Media{}, err
+	}
+	if _, failed := hasExplicitFailure(payload); failed {
+		return Media{}, ErrUpstreamResponse
+	}
+	media, _ := pickMedia(payload, hintType, year)
+	return media, nil
+}
+
 func (c *Client) searchTorrents(ctx context.Context, media Media) error {
 	arguments := map[string]any{"tmdb_id": parseTMDBID(media.TMDBID), "media_type": mcpMediaType(media.MediaType)}
 	_, err := c.callTool(ctx, "search_torrents", arguments)
 	return err
+}
+
+func (c *Client) searchTorrentsV3(ctx context.Context, media Media) ([]Torrent, error) {
+	mediaID := firstNonEmpty(media.MediaID, media.TMDBID)
+	mediaSource := firstNonEmpty(media.MediaSource, "themoviedb")
+	payload, err := c.callAPI(
+		ctx,
+		"search.torrents",
+		map[string]any{"media_id": mediaID},
+		map[string]any{
+			"media_source": mediaSource,
+			"mtype":        mcpMediaType(media.MediaType),
+		},
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if _, failed := hasExplicitFailure(payload); failed {
+		return nil, ErrUpstreamResponse
+	}
+	torrents := c.parseTorrentsV3(payload, media)
+	if len(torrents) == 0 && lookupCollectionTotal(payload) > 0 {
+		resultsPayload, err := c.callAPI(ctx, "search.results", nil, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+		if _, failed := hasExplicitFailure(resultsPayload); failed {
+			return nil, ErrUpstreamResponse
+		}
+		torrents = c.parseTorrentsV3(resultsPayload, media)
+	}
+	return torrents, nil
 }
 
 func (c *Client) searchResults(ctx context.Context) ([]Torrent, error) {
@@ -265,6 +470,22 @@ func (c *Client) searchResults(ctx context.Context) ([]Torrent, error) {
 		return nil, err
 	}
 	return parseTorrents(payload), nil
+}
+
+func (c *Client) callAPI(ctx context.Context, operationID string, pathParams, query map[string]any, body any) (json.RawMessage, error) {
+	arguments := map[string]any{
+		"operation_id": operationID,
+	}
+	if len(pathParams) > 0 {
+		arguments["path_params"] = pathParams
+	}
+	if len(query) > 0 {
+		arguments["query"] = query
+	}
+	if body != nil {
+		arguments["body"] = body
+	}
+	return c.callTool(ctx, "moviepilot_api", arguments)
 }
 
 func (c *Client) callTool(ctx context.Context, name string, arguments map[string]any) (json.RawMessage, error) {
@@ -372,6 +593,11 @@ func decodeToolResult(raw json.RawMessage) (json.RawMessage, error) {
 	}
 	if result.IsError {
 		if message := firstToolText(result.Content); message != "" {
+			if obj := jsonObject([]byte(message)); obj != nil {
+				if _, ok := obj["success"]; ok {
+					return json.RawMessage(message), nil
+				}
+			}
 			return marshalToolMessage(false, message)
 		}
 		return nil, ErrUpstreamResponse
@@ -412,6 +638,34 @@ func marshalToolMessage(success bool, message string) (json.RawMessage, error) {
 	return raw, nil
 }
 
+func hasExplicitFailure(payload json.RawMessage) (string, bool) {
+	obj := jsonObject(payload)
+	if obj == nil {
+		return "", false
+	}
+	val, ok := obj["success"]
+	if !ok {
+		return "", false
+	}
+	success, isBool := val.(bool)
+	if isBool && !success {
+		return lookupString(obj, "message"), true
+	}
+	return "", false
+}
+
+func lookupCollectionTotal(payload json.RawMessage) int {
+	obj := jsonObject(payload)
+	if obj == nil {
+		return 0
+	}
+	collection := nestedObject(obj, "collection")
+	if collection == nil {
+		return 0
+	}
+	return lookupInt(collection, "total_count")
+}
+
 func firstMedia(payload json.RawMessage, fallbackType string) (Media, bool) {
 	return pickMedia(payload, fallbackType, 0)
 }
@@ -433,14 +687,17 @@ func pickMedia(payload json.RawMessage, fallbackType string, year int) (Media, b
 			continue
 		}
 		tmdbID := firstNonEmpty(lookupString(row, "tmdb_id"), lookupString(row, "tmdbid"), lookupString(row, "id"))
-		if tmdbID == "" || tmdbID == "0" {
+		mediaID := firstNonEmpty(lookupString(row, "media_id"), tmdbID)
+		if (tmdbID == "" || tmdbID == "0") && (mediaID == "" || mediaID == "0") {
 			continue
 		}
 		media := Media{
-			TMDBID:    tmdbID,
-			Title:     firstNonEmpty(lookupString(row, "title"), lookupString(row, "name")),
-			Year:      lookupInt(row, "year"),
-			MediaType: normalizeMediaType(firstNonEmpty(lookupString(row, "media_type"), lookupString(row, "type"), fallbackType)),
+			TMDBID:      tmdbID,
+			MediaID:     mediaID,
+			MediaSource: firstNonEmpty(lookupString(row, "media_source"), "themoviedb"),
+			Title:       firstNonEmpty(lookupString(row, "title"), lookupString(row, "name")),
+			Year:        lookupInt(row, "year"),
+			MediaType:   normalizeMediaType(firstNonEmpty(lookupString(row, "media_type"), lookupString(row, "type"), fallbackType)),
 		}
 		if year > 0 && media.Year == year {
 			return media, true
@@ -459,16 +716,34 @@ func pickMedia(payload json.RawMessage, fallbackType string, year int) (Media, b
 	return fallback, hasFallback
 }
 
-func parseTorrents(payload json.RawMessage) []Torrent {
-	root := jsonObject(payload)
+func extractTorrentRows(payload json.RawMessage) []json.RawMessage {
 	rows := jsonArray(payload)
-	if root != nil {
-		if nested, ok := root["results"]; ok {
-			if raw, err := json.Marshal(nested); err == nil {
-				rows = jsonArray(raw)
+	if len(rows) > 0 {
+		return rows
+	}
+	root := jsonObject(payload)
+	if root == nil {
+		return nil
+	}
+	if nested, ok := root["results"]; ok {
+		if raw, err := json.Marshal(nested); err == nil {
+			if parsed := jsonArray(raw); len(parsed) > 0 {
+				return parsed
 			}
 		}
 	}
+	if dataObj := nestedObject(root, "data"); dataObj != nil {
+		if nested, ok := dataObj["results"]; ok {
+			if raw, err := json.Marshal(nested); err == nil {
+				return jsonArray(raw)
+			}
+		}
+	}
+	return nil
+}
+
+func parseTorrents(payload json.RawMessage) []Torrent {
+	rows := extractTorrentRows(payload)
 	results := make([]Torrent, 0, len(rows))
 	for _, row := range rows {
 		var item map[string]any
@@ -496,6 +771,102 @@ func parseTorrents(payload json.RawMessage) []Torrent {
 		})
 	}
 	return results
+}
+
+func (c *Client) parseTorrentsV3(payload json.RawMessage, fallbackMedia Media) []Torrent {
+	rows := extractTorrentRows(payload)
+	results := make([]Torrent, 0, len(rows))
+	for _, row := range rows {
+		var item map[string]any
+		if json.Unmarshal(row, &item) != nil {
+			continue
+		}
+		info := nestedObject(item, "torrent_info")
+		media := nestedObject(item, "media_info")
+		if info == nil {
+			info = item
+		}
+		if firstNonEmpty(lookupString(info, "enclosure"), lookupString(info, "torrent_url")) == "" {
+			continue
+		}
+		reference := v3TorrentRef(info)
+		if reference == "" {
+			continue
+		}
+		mediaID := firstNonEmpty(
+			lookupString(media, "media_id"),
+			lookupString(media, "tmdb_id"),
+			lookupString(media, "tmdbid"),
+			lookupString(info, "media_id"),
+			fallbackMedia.MediaID,
+			fallbackMedia.TMDBID,
+		)
+		mediaSource := firstNonEmpty(
+			lookupString(media, "media_source"),
+			lookupString(info, "media_source"),
+			fallbackMedia.MediaSource,
+		)
+		c.cacheV3Torrent(reference, v3TorrentEntry{
+			torrentIn:   info,
+			mediaID:     mediaID,
+			mediaSource: mediaSource,
+		})
+		results = append(results, Torrent{
+			Title:     lookupString(info, "title"),
+			SiteName:  lookupString(info, "site_name"),
+			Size:      lookupString(info, "size"),
+			Seeders:   lookupInt(info, "seeders"),
+			MediaType: normalizeMediaType(firstNonEmpty(lookupString(media, "media_type"), lookupString(media, "type"))),
+			TMDBID:    firstNonEmpty(lookupString(media, "tmdb_id"), lookupString(media, "tmdbid")),
+			Year:      lookupInt(media, "year"),
+			Reference: reference,
+		})
+	}
+	return results
+}
+
+func v3TorrentRef(info map[string]any) string {
+	enclosure := firstNonEmpty(lookupString(info, "enclosure"), lookupString(info, "torrent_url"))
+	if enclosure == "" {
+		return ""
+	}
+	// 使用单向摘要生成不透明引用，避免在客户端或持久层暴露站点 Cookie 与带签名种子链接
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		lookupString(info, "site"),
+		lookupString(info, "site_name"),
+		lookupString(info, "title"),
+		enclosure,
+		lookupString(info, "page_url"),
+		lookupString(info, "size"),
+	}, "\x00")))
+	return v3RefPrefix + hex.EncodeToString(sum[:8])
+}
+
+func (c *Client) cacheV3Torrent(reference string, entry v3TorrentEntry) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if c.v3Cache == nil {
+		c.v3Cache = make(map[string]v3TorrentEntry)
+	}
+	if _, exists := c.v3Cache[reference]; !exists {
+		if len(c.v3Order) >= v3CacheCapacity {
+			oldest := c.v3Order[0]
+			c.v3Order = c.v3Order[1:]
+			delete(c.v3Cache, oldest)
+		}
+		c.v3Order = append(c.v3Order, reference)
+	}
+	c.v3Cache[reference] = entry
+}
+
+func (c *Client) lookupV3Torrent(reference string) (v3TorrentEntry, bool) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	if c.v3Cache == nil {
+		return v3TorrentEntry{}, false
+	}
+	entry, ok := c.v3Cache[reference]
+	return entry, ok
 }
 
 func jsonArray(raw json.RawMessage) []json.RawMessage {
@@ -621,7 +992,7 @@ func mcpMediaType(value string) string {
 
 func normalizeMediaType(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "tv", "series", "show", "season":
+	case "tv", "series", "show", "season", "电视剧", "剧集", "连续剧":
 		return "series"
 	default:
 		return "movie"
