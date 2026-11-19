@@ -7,10 +7,12 @@ import (
 )
 
 var (
-	seasonEpisode = regexp.MustCompile(`(?i)\bS([0-9]{1,2})E([0-9]{1,4})(?:\s*[-~]\s*E?([0-9]{1,4}))?\b`)
-	dotEpisode    = regexp.MustCompile(`(?i)(?:^|[^A-Z0-9])\.?E([0-9]{1,4})(?:\.|[^0-9]|$)`)
-	epPrefix      = regexp.MustCompile(`(?i)\bEP([0-9]{1,4})\b`)
+	seasonEpisode  = regexp.MustCompile(`(?i)\bS([0-9]{1,2})E([0-9]{1,4})(?:\s*[-~]\s*E?([0-9]{1,4}))?\b`)
+	dotEpisode     = regexp.MustCompile(`(?i)(?:^|[^A-Z0-9])\.?E([0-9]{1,4})(?:\.|[^0-9]|$)`)
+	epPrefix       = regexp.MustCompile(`(?i)\bEP([0-9]{1,4})\b`)
 	chineseEpisode = regexp.MustCompile(`第([0-9]{1,4})集`)
+	// 全8集、8集全表示整季，从第 1 集到第 N 集。可选的「第N季」写在前面。
+	completePack   = regexp.MustCompile(`(?:第\s*([0-9]{1,2})\s*季[^\d]{0,12})?(?:全\s*([0-9]{1,4})\s*集|([0-9]{1,4})\s*集全)`)
 	videoExtension = regexp.MustCompile(`(?i)\.(mkv|mp4|avi|ts|m2ts|wmv|mov|rmvb|flv|webm)$`)
 )
 
@@ -32,6 +34,20 @@ func EpisodeRangeFromText(text string) (season, start, end int, ok bool) {
 			return season, start, end, true
 		}
 		return 0, 0, 0, false
+	}
+	if matched := completePack.FindStringSubmatch(text); len(matched) == 4 {
+		season = 1
+		if matched[1] != "" {
+			season, _ = strconv.Atoi(matched[1])
+		}
+		countText := matched[2]
+		if countText == "" {
+			countText = matched[3]
+		}
+		count, _ := strconv.Atoi(countText)
+		if validEpisodeRange(season, 1, count) {
+			return season, 1, count, true
+		}
 	}
 	for _, pattern := range []*regexp.Regexp{dotEpisode, epPrefix, chineseEpisode} {
 		if matched := pattern.FindStringSubmatch(text); len(matched) == 2 {

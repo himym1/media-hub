@@ -4,9 +4,9 @@ import "testing"
 
 func TestEpisodeRangeFromText(t *testing.T) {
 	tests := []struct {
-		text             string
+		text               string
 		season, start, end int
-		ok               bool
+		ok                 bool
 	}{
 		{"Van.Helsing.2004.2160p", 0, 0, 0, false},
 		{"Show.S01E11-13.1080p", 1, 11, 13, true},
@@ -14,6 +14,10 @@ func TestEpisodeRangeFromText(t *testing.T) {
 		{"Signal.E12.WEB-DL", 1, 12, 12, true},
 		{"Title.EP03.720p", 1, 3, 3, true},
 		{"信号 第11集 1080p", 1, 11, 11, true},
+		{"青春共体(2026)【8集全】【4K.HDR10】", 1, 1, 8, true},
+		{"Show 全8集 4K", 1, 1, 8, true},
+		{"第2季全10集", 2, 1, 10, true},
+		{"第8集全", 1, 1, 8, true},
 	}
 	for _, test := range tests {
 		season, start, end, ok := EpisodeRangeFromText(test.text)
