@@ -120,3 +120,19 @@ func TestParsePansou115ShareURLAcceptsLooseForms(t *testing.T) {
 		t.Fatal("quark URL was accepted")
 	}
 }
+
+func TestPansouSearchDoesNotTreatQueryAsReleaseTitle(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":0,"data":{"merged_by_type":{"115":[{"url":"https://115.com/s/shareXYZ9","password":"ab12"}]}}}`))
+	}))
+	defer server.Close()
+
+	results, err := NewPansou(server.URL, "", time.Second, nil).Search(context.Background(), "忘年之约")
+	if err != nil || len(results) != 1 {
+		t.Fatalf("results = %#v err=%v", results, err)
+	}
+	if results[0].ReleaseTitle != "" {
+		t.Fatalf("releaseTitle = %q, want empty", results[0].ReleaseTitle)
+	}
+}

@@ -238,7 +238,8 @@ func pansouShareCandidate(queryText, itemTitle, content, workTitle, note, cloudT
 	if _, exists := seen[dedupe]; exists {
 		return search.Candidate{}, false
 	}
-	releaseTitle := firstNonEmptyString(strings.TrimSpace(workTitle), strings.TrimSpace(itemTitle), strings.TrimSpace(note), strings.TrimSpace(content), queryText)
+	upstreamTitle := firstNonEmptyString(strings.TrimSpace(workTitle), strings.TrimSpace(itemTitle), strings.TrimSpace(note), strings.TrimSpace(content))
+	releaseTitle := firstNonEmptyString(upstreamTitle, queryText)
 	if releaseTitle == "" || len([]rune(releaseTitle)) > 300 {
 		return search.Candidate{}, false
 	}
@@ -257,7 +258,7 @@ func pansouShareCandidate(queryText, itemTitle, content, workTitle, note, cloudT
 		ID:    "pansou-" + frameHDRReferenceID(dedupe+"|"+releaseTitle),
 		Title: title, Year: year, MediaType: mediaType,
 		Season: season, EpisodeStart: episodeStart, EpisodeEnd: episodeEnd,
-		SourceID: "pansou", SourceRef: string(reference), ReleaseTitle: releaseTitle, TransferState: "available",
+		SourceID: "pansou", SourceRef: string(reference), ReleaseTitle: upstreamTitle, TransferState: "available",
 		Release: search.ReleaseFacts{
 			Resolution:   mikanNormalizedResolution(releaseTitle),
 			VideoCodec:   mikanNormalizedCodec(releaseTitle),

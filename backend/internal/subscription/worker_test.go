@@ -74,7 +74,7 @@ func TestSearchQueriesUsesOriginalTitleAndYear(t *testing.T) {
 	series := searchQueries(store.Subscription{
 		Title: "信号", OriginalTitle: "Signal", Year: 2016, Season: 1,
 	})
-	if series[0] != "信号 S1" || series[1] != "Signal S1" || series[2] != "信号 S1 2016" || series[3] != "Signal S1 2016" {
+	if series[0] != "信号" || series[1] != "Signal" || series[2] != "信号 2016" || series[3] != "Signal 2016" {
 		t.Fatalf("series queries = %#v", series)
 	}
 }

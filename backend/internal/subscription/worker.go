@@ -284,7 +284,6 @@ func runBackoff(attempt int) time.Duration {
 }
 
 func searchQueries(item store.Subscription) []string {
-	suffix := seasonLabel(item.Season)
 	queries := make([]string, 0, 4)
 	seen := make(map[string]struct{}, 4)
 	add := func(value string) {
@@ -298,12 +297,12 @@ func searchQueries(item store.Subscription) []string {
 		seen[value] = struct{}{}
 		queries = append(queries, value)
 	}
-	add(item.Title + suffix)
-	add(item.OriginalTitle + suffix)
+	add(item.Title)
+	add(item.OriginalTitle)
 	if item.Year > 0 {
 		year := strconv.Itoa(item.Year)
-		add(strings.TrimSpace(item.Title+suffix) + " " + year)
-		add(strings.TrimSpace(item.OriginalTitle+suffix) + " " + year)
+		add(strings.TrimSpace(item.Title) + " " + year)
+		add(strings.TrimSpace(item.OriginalTitle) + " " + year)
 	}
 	return queries
 }

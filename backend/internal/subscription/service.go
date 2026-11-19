@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -479,13 +478,6 @@ func randomID() (string, error) {
 
 func deterministicIdempotencyKey(runID string) string {
 	return "subscription_" + runID
-}
-
-func seasonLabel(season int) string {
-	if season <= 0 {
-		return ""
-	}
-	return " S" + strconv.Itoa(season)
 }
 
 func (s *Service) notify() {

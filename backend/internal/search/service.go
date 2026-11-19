@@ -271,13 +271,14 @@ func matchIdentity(candidate Candidate, identities []Identity) (Identity, bool) 
 }
 
 func candidateTitleMatchesIdentity(candidate Candidate, identityTitle string) bool {
+	if candidate.SourceID == "pansou" {
+		// 盘搜把搜索词填进了 Title，必须以上游实际标题 ReleaseTitle 核对 TMDB 身份。
+		return strings.TrimSpace(candidate.ReleaseTitle) != "" && releaseTitleContainsIdentity(candidate.ReleaseTitle, identityTitle)
+	}
 	if strings.EqualFold(strings.TrimSpace(candidate.Title), strings.TrimSpace(identityTitle)) {
 		return true
 	}
-	if candidate.SourceID == "mikan" && titleContainsIdentity(candidate.Title, identityTitle) {
-		return true
-	}
-	return candidate.SourceID == "pansou" && (titleContainsIdentity(candidate.Title, identityTitle) || titleContainsIdentity(candidate.ReleaseTitle, identityTitle))
+	return candidate.SourceID == "mikan" && titleContainsIdentity(candidate.Title, identityTitle)
 }
 
 func releaseTitleContainsIdentity(releaseTitle, identityTitle string) bool {
