@@ -285,6 +285,7 @@ export type EmbyItem = {
   season?: number
   episode?: number
   playbackPositionMs?: number
+  runtimeMs?: number
   played?: boolean
 }
 

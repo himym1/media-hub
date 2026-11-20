@@ -430,32 +430,34 @@ export function DiscoveryView({
             ) : null}
             {!search.isLoading && !search.isError && rankedResults.length > 0 ? (
               <div className="discovery-filter-bar">
-                <div aria-label="按获取方式筛选" className="discovery-filter-group" role="group">
-                  <button
-                    aria-pressed={pipelineFilter === 'all'}
-                    className={pipelineFilter === 'all' ? 'filter-chip active' : 'filter-chip'}
-                    onClick={() => setPipelineFilter('all')}
-                    type="button"
-                  >
-                    全部 {rankedResults.length}
-                  </button>
-                  <button
-                    aria-pressed={pipelineFilter === 'transfer'}
-                    className={pipelineFilter === 'transfer' ? 'filter-chip active' : 'filter-chip'}
-                    onClick={() => setPipelineFilter('transfer')}
-                    type="button"
-                  >
-                    115 转存 {transferCount}
-                  </button>
-                  <button
-                    aria-pressed={pipelineFilter === 'download'}
-                    className={pipelineFilter === 'download' ? 'filter-chip active' : 'filter-chip'}
-                    onClick={() => setPipelineFilter('download')}
-                    type="button"
-                  >
-                    PT 下载 {downloadCount}
-                  </button>
-                </div>
+                {transferCount > 0 && downloadCount > 0 ? (
+                  <div aria-label="按获取方式筛选" className="discovery-filter-group" role="group">
+                    <button
+                      aria-pressed={pipelineFilter === 'all'}
+                      className={pipelineFilter === 'all' ? 'filter-chip active' : 'filter-chip'}
+                      onClick={() => setPipelineFilter('all')}
+                      type="button"
+                    >
+                      全部 {rankedResults.length}
+                    </button>
+                    <button
+                      aria-pressed={pipelineFilter === 'transfer'}
+                      className={pipelineFilter === 'transfer' ? 'filter-chip active' : 'filter-chip'}
+                      onClick={() => setPipelineFilter('transfer')}
+                      type="button"
+                    >
+                      115 转存 {transferCount}
+                    </button>
+                    <button
+                      aria-pressed={pipelineFilter === 'download'}
+                      className={pipelineFilter === 'download' ? 'filter-chip active' : 'filter-chip'}
+                      onClick={() => setPipelineFilter('download')}
+                      type="button"
+                    >
+                      PT 下载 {downloadCount}
+                    </button>
+                  </div>
+                ) : null}
                 <div aria-label="按清晰度筛选" className="discovery-filter-group" role="group">
                   <button
                     aria-pressed={resolutionFilter === 'all'}
@@ -512,7 +514,16 @@ export function DiscoveryView({
               <div className="empty-state">
                 <Film size={26} />
                 <span>当前筛选下没有匹配的版本</span>
-                <button className="secondary-command" onClick={() => setResolutionFilter('all')} type="button">查看全部清晰度</button>
+                <button
+                  className="secondary-command"
+                  onClick={() => {
+                    setResolutionFilter('all')
+                    setPipelineFilter('all')
+                  }}
+                  type="button"
+                >
+                  重置筛选
+                </button>
               </div>
             ) : null}
             {!search.isLoading && !search.isError ? (

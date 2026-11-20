@@ -36,7 +36,7 @@ import { IconButton } from '../../shared/ui/IconButton'
 import { LibraryItemDetail } from './LibraryItemDetail'
 import { LibraryDetailSkeleton, LibraryPosterGridSkeleton } from './LibrarySkeletons'
 import { LibraryPlayer } from './LibraryPlayer'
-import { episodeLabel, mediaTypeLabel, playbackStatus } from './libraryPlayback'
+import { canDirectPlayItem, episodeLabel, mediaTypeLabel, playbackProgressPercent, playbackStatus } from './libraryPlayback'
 import { adultLibraryId, childLibraries, isSharedEmbyId, libraryDisplayName, libraryRootId, mineLibraries, rootLibraries, sharedLibraries } from './libraryGroups'
 import { ensureQueueContains, episodeQueue, playableLibraryQueue } from './libraryPlaylist'
 import { libraryBrowseSort, librarySortLabel, nextLibrarySort, type LibrarySort } from './librarySort'
@@ -641,25 +641,38 @@ export function LibraryView() {
                 </div>
                 <h2 className="spotlight-title">{activeSpotlight.name}</h2>
                 <div className="spotlight-actions">
-                  <button
-                    className="spotlight-play-btn"
-                    onClick={() => selectItem(activeSpotlight.id)}
-                    type="button"
-                  >
-                    <Play fill="currentColor" size={14} />
-                    {(activeSpotlight.playbackPositionMs ?? 0) >= 30_000 && !activeSpotlight.played
-                      ? '继续播放'
-                      : activeSpotlight.played
-                        ? '重新播放'
-                        : '立即播放'}
-                  </button>
-                  <button
-                    className="spotlight-detail-btn"
-                    onClick={() => selectItem(activeSpotlight.id)}
-                    type="button"
-                  >
-                    影片详情
-                  </button>
+                  {canDirectPlayItem(inPagePlayback, activeSpotlight) ? (
+                    <>
+                      <button
+                        className="spotlight-play-btn"
+                        onClick={() => startPlay(activeSpotlight)}
+                        type="button"
+                      >
+                        <Play fill="currentColor" size={14} />
+                        {(activeSpotlight.playbackPositionMs ?? 0) >= 30_000 && !activeSpotlight.played
+                          ? '继续播放'
+                          : activeSpotlight.played
+                            ? '重新播放'
+                            : '立即播放'}
+                      </button>
+                      <button
+                        className="spotlight-detail-btn"
+                        onClick={() => selectItem(activeSpotlight.id)}
+                        type="button"
+                      >
+                        影片详情
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      className="spotlight-play-btn"
+                      onClick={() => selectItem(activeSpotlight.id)}
+                      type="button"
+                    >
+                      <Play fill="currentColor" size={14} />
+                      {activeSpotlight.type === 'Series' ? '选集播放' : '查看详情'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -694,39 +707,45 @@ export function LibraryView() {
             <div className="continue-watching-rail">
               {continueWatchingItems.map((item) => {
                 const status = playbackStatus(item)
+                const progress = playbackProgressPercent(item)
+                const directPlay = canDirectPlayItem(inPagePlayback, item)
                 return (
-                  <button
-                    className="continue-card"
-                    key={item.id}
-                    onClick={() => selectItem(item.id)}
-                    type="button"
-                  >
-                    <span className="continue-card-poster">
-                      <img
-                        alt=""
-                        decoding="async"
-                        loading="lazy"
-                        src={embyPrimaryImageURL(item.id)}
-                      />
-                      <span aria-hidden="true" className="continue-card-overlay">
-                        <span className="continue-play-circle">
-                          <Play fill="currentColor" size={15} />
+                  <article className="continue-card" key={item.id}>
+                    <button
+                      aria-label={directPlay ? `继续播放 ${item.name}` : `查看 ${item.name} 详情`}
+                      className="continue-card-poster-btn"
+                      onClick={() => (directPlay ? startPlay(item) : selectItem(item.id))}
+                      type="button"
+                    >
+                      <span className="continue-card-poster">
+                        <img
+                          alt=""
+                          decoding="async"
+                          loading="lazy"
+                          src={embyPrimaryImageURL(item.id)}
+                        />
+                        <span aria-hidden="true" className="continue-card-overlay">
+                          <span className="continue-play-circle">
+                            <Play fill="currentColor" size={15} />
+                          </span>
+                        </span>
+                        <span aria-hidden="true" className="continue-progress-bar">
+                          <span
+                            className="continue-progress-fill"
+                            style={{ width: `${progress}%` }}
+                          />
                         </span>
                       </span>
-                      <span aria-hidden="true" className="continue-progress-bar">
-                        <span
-                          className="continue-progress-fill"
-                          style={{
-                            width: `${Math.min(96, Math.max(12, ((item.playbackPositionMs ?? 0) / 7200000) * 100))}%`,
-                          }}
-                        />
-                      </span>
-                    </span>
-                    <span className="continue-card-meta">
+                    </button>
+                    <button
+                      className="continue-card-meta-btn"
+                      onClick={() => selectItem(item.id)}
+                      type="button"
+                    >
                       <strong className="continue-name" title={item.name}>{item.name}</strong>
                       <small className="continue-sub">{status}</small>
-                    </span>
-                  </button>
+                    </button>
+                  </article>
                 )
               })}
             </div>
@@ -892,7 +911,7 @@ function LibraryPosterCard({
   const isPlayed = Boolean(item.played)
   const isProgress = (item.playbackPositionMs ?? 0) >= 30_000 && !isPlayed
   const status = isPlayed || isProgress ? playbackStatus(item) : ''
-  const playable = inPagePlayback && (item.type === 'Movie' || item.type === 'Video')
+  const playable = canDirectPlayItem(inPagePlayback, item)
 
   return (
     <article className={selected ? 'library-poster-card selected' : 'library-poster-card'}>

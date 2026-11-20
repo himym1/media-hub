@@ -259,6 +259,10 @@ test('subscription polling does not overwrite an in-progress edit', async ({ pag
 
 
 test('settings tabs support arrow keys and protect unsaved provider changes', async ({ page }, testInfo) => {
+  let nativeDialog = false
+  page.on('dialog', () => {
+    nativeDialog = true
+  })
   await installApiFixtures(page)
   await page.goto('/?view=settings&settings=overview')
 
@@ -276,28 +280,36 @@ test('settings tabs support arrow keys and protect unsaved provider changes', as
   await tmdbUrl.fill('https://tmdb.example/3')
   await expect(page.locator('.unsaved-indicator')).toBeVisible()
 
-  page.once('dialog', async (dialog) => dialog.dismiss())
+  const dialog = page.getByRole('alertdialog')
   await page.getByRole('tab', { name: '账户' }).click()
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: '继续编辑' }).click()
+  await expect(dialog).toBeHidden()
   await expect(page.getByRole('tab', { name: /服务接入/ })).toHaveAttribute('aria-selected', 'true')
 
-  page.once('dialog', async (dialog) => dialog.dismiss())
   await page.goBack()
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: '继续编辑' }).click()
   await expect(page).toHaveURL(/settings=providers/)
   await expect(page.locator('.unsaved-indicator')).toBeVisible()
 
-  page.once('dialog', async (dialog) => dialog.dismiss())
   await page.locator('a.nav-item:visible').filter({ hasText: '发现' }).click()
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: '继续编辑' }).click()
   await expect(page).toHaveURL(/settings=providers/)
 
   if (testInfo.project.name === 'desktop') {
-    page.once('dialog', async (dialog) => dialog.dismiss())
     await page.locator('button.profile-row:visible').click()
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('button', { name: '继续编辑' }).click()
     await expect(page).toHaveURL(/settings=providers/)
   }
 
-  page.once('dialog', async (dialog) => dialog.accept())
   await page.goBack()
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: '放弃修改' }).click()
   await expect(page).toHaveURL(/settings=overview/)
+  expect(nativeDialog, 'Tauri/WebView2 swallows window.confirm').toBe(false)
 
   await page.getByRole('tab', { name: '账户' }).click()
   await expect(page).toHaveURL(/settings=account/)

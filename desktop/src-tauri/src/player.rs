@@ -639,6 +639,8 @@ pub fn open_player_window(
         .title(title)
         .inner_size(1280.0, 800.0)
         .min_inner_size(720.0, 480.0)
+        .theme(Some(tauri::Theme::Dark))
+        .background_color(tauri::window::Color(5, 6, 7, 255))
         .decorations(true)
         .skip_taskbar(false)
         .center()

@@ -15,6 +15,7 @@ mod updater;
 
 pub(crate) const DESKTOP_ORIGIN: &str = "https://media.himym.us.ci";
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const WORKSPACE_VIEWS: &[(&str, &str)] = &[
     ("nav-discover", "discover"),
     ("nav-transfers", "transfers"),
@@ -24,6 +25,7 @@ const WORKSPACE_VIEWS: &[(&str, &str)] = &[
 ];
 
 /// 把菜单选中的工作区视图交给网页壳，沿用现有 URL 与未保存拦截。
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn dispatch_workspace_view(app: &tauri::AppHandle, view: &str) {
     let allowed = WORKSPACE_VIEWS.iter().any(|(_, slug)| *slug == view);
     if !allowed {
@@ -37,12 +39,14 @@ fn dispatch_workspace_view(app: &tauri::AppHandle, view: &str) {
     }
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn dispatch_logout(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.eval("window.dispatchEvent(new Event('media-hub-logout'))");
     }
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn workspace_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let go = SubmenuBuilder::new(app, "转到")
         .item(&MenuItem::with_id(
@@ -313,24 +317,31 @@ pub fn run() {
             player::close_player_window,
         ])
         .setup(|app| {
-            app.set_menu(workspace_menu(app.handle())?)?;
-            app.on_menu_event(|app, event| {
-                if event.id().as_ref() == "nav-logout" {
-                    dispatch_logout(app);
-                    return;
-                }
-                if let Some((_, view)) = WORKSPACE_VIEWS
-                    .iter()
-                    .find(|(id, _)| *id == event.id().as_ref())
-                {
-                    dispatch_workspace_view(app, view);
-                }
-            });
+            // 仅在 macOS 注册系统顶部菜单栏；Windows 去掉老式窗口内嵌菜单条，由前端键盘快捷键与侧边栏承接。
+            #[cfg(target_os = "macos")]
+            {
+                app.set_menu(workspace_menu(app.handle())?)?;
+                app.on_menu_event(|app, event| {
+                    if event.id().as_ref() == "nav-logout" {
+                        dispatch_logout(app);
+                        return;
+                    }
+                    if let Some((_, view)) = WORKSPACE_VIEWS
+                        .iter()
+                        .find(|(id, _)| *id == event.id().as_ref())
+                    {
+                        dispatch_workspace_view(app, view);
+                    }
+                });
+            }
             if app.get_webview_window("main").is_none() {
                 let url = tauri::Url::parse(DESKTOP_ORIGIN)?;
                 let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                     .title("Media Hub")
-                    .inner_size(1280.0, 800.0);
+                    .inner_size(1280.0, 800.0)
+                    .min_inner_size(960.0, 620.0)
+                    .theme(Some(tauri::Theme::Dark))
+                    .background_color(tauri::window::Color(13, 16, 19, 255));
                 #[cfg(target_os = "macos")]
                 {
                     builder = builder
@@ -412,10 +423,13 @@ mod tests {
     }
 
     #[test]
-    fn desktop_shell_uses_overlay_titlebar_and_go_menu() {
+    fn desktop_shell_uses_dark_window_and_macos_only_menu() {
         let source = include_str!("lib.rs");
         assert!(source.contains("TitleBarStyle::Overlay"));
         assert!(source.contains("hidden_title(true)"));
+        assert!(source.contains("Theme::Dark"));
+        assert!(source.contains("background_color(tauri::window::Color(13, 16, 19, 255))"));
+        assert!(source.contains("min_inner_size(960.0, 620.0)"));
         assert!(source.contains("nav-discover"));
         assert!(source.contains("media-hub-navigate"));
         assert!(source.contains("media-hub-logout"));

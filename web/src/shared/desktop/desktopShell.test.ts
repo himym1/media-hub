@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { desktopPlatform, isDesktopShell, markDesktopShell, workspaceViewFromDesktopEvent } from './desktopShell'
+import {
+  desktopPlatform,
+  isApplePlatform,
+  isDesktopShell,
+  markDesktopShell,
+  primaryShortcutModifier,
+  workspaceViewFromDesktopEvent,
+} from './desktopShell'
 
 const root = { dataset: {} as Record<string, string | undefined> }
 
@@ -30,13 +37,26 @@ describe('desktopShell', () => {
     expect(root.dataset.appShell).toBeUndefined()
   })
 
-  it('marks the document when Tauri internals are present', () => {
+  it('marks the document when Tauri internals are present on macOS', () => {
     withDesktopUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
     expect(isDesktopShell()).toBe(true)
     expect(desktopPlatform()).toBe('macos')
+    expect(isApplePlatform()).toBe(true)
+    expect(primaryShortcutModifier()).toBe('⌘')
     markDesktopShell()
     expect(root.dataset.appShell).toBe('desktop')
     expect(root.dataset.platform).toBe('macos')
+  })
+
+  it('marks Windows desktop shell and exposes Ctrl shortcut modifier', () => {
+    withDesktopUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+    expect(isDesktopShell()).toBe(true)
+    expect(desktopPlatform()).toBe('windows')
+    expect(isApplePlatform()).toBe(false)
+    expect(primaryShortcutModifier()).toBe('Ctrl')
+    markDesktopShell()
+    expect(root.dataset.appShell).toBe('desktop')
+    expect(root.dataset.platform).toBe('windows')
   })
 
   it('reads the workspace view from a native menu event', () => {

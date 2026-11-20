@@ -91,6 +91,7 @@ type Item struct {
 	Season             int               `json:"season,omitempty"`
 	Episode            int               `json:"episode,omitempty"`
 	PlaybackPositionMS int64             `json:"playbackPositionMs,omitempty"`
+	RuntimeMS          int64             `json:"runtimeMs,omitempty"`
 	Played             bool              `json:"played,omitempty"`
 }
 
@@ -540,7 +541,7 @@ func (c *Client) BrowseItems(ctx context.Context, libraryID string, offset, limi
 		return c.browseAdultGroup(ctx, configuration, libraryID, offset, limit, sortValue)
 	}
 	query := url.Values{
-		"Fields":           {"OfficialRating,Genres,ProviderIds,UserData,MediaSources,Path,ProductionYear,DateCreated"},
+		"Fields":           {"OfficialRating,Genres,ProviderIds,UserData,MediaSources,Path,ProductionYear,DateCreated,RunTimeTicks"},
 		"IncludeItemTypes": {"Movie,Series"},
 		"Limit":            {"10000"},
 		"ParentId":         {libraryID},
@@ -1023,6 +1024,7 @@ func publicItem(item baseItem) Item {
 		ID: item.ID, Name: item.Name, Type: item.Type, Year: item.ProductionYear,
 		ProviderIDs: item.ProviderIDs, Season: item.ParentIndexNumber, Episode: item.IndexNumber,
 		PlaybackPositionMS: max(0, item.UserData.PlaybackPositionTicks/10_000),
+		RuntimeMS:          max(0, item.RunTimeTicks/10_000),
 		Played:             item.UserData.Played,
 	}
 }

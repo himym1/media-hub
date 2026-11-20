@@ -370,6 +370,7 @@ data class EmbyItem(
     val season: Int = 0,
     val episode: Int = 0,
     val playbackPositionMs: Long = 0,
+    val runtimeMs: Long = 0,
     val played: Boolean = false,
 )
 

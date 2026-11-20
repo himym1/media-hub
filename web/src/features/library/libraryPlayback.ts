@@ -49,3 +49,25 @@ export function formatPlaybackClock(seconds: number) {
     : `${minutes}:${String(rest).padStart(2, '0')}`
 }
 
+const fallbackMovieRuntimeMs = 110 * 60_000
+const fallbackEpisodeRuntimeMs = 45 * 60_000
+
+/** 根据 Emby 实际总时长计算观看进度百分比；缺失总时长时按媒体类型估算。 */
+export function playbackProgressPercent(
+  item: Pick<EmbyItem, 'type' | 'played' | 'playbackPositionMs' | 'runtimeMs'>,
+) {
+  if (item.played) return 100
+  const position = item.playbackPositionMs ?? 0
+  if (position <= 0) return 0
+  const runtime = (item.runtimeMs ?? 0) > 0
+    ? item.runtimeMs!
+    : item.type === 'Series' || item.type === 'Episode'
+      ? fallbackEpisodeRuntimeMs
+      : fallbackMovieRuntimeMs
+  return Math.min(98, Math.max(4, Math.round((position / runtime) * 100)))
+}
+
+export function canDirectPlayItem(inPage: boolean, item: Pick<EmbyItem, 'type'>) {
+  return inPage && (item.type === 'Movie' || item.type === 'Video')
+}
+

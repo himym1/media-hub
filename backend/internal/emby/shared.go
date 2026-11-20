@@ -234,7 +234,7 @@ func (c *Client) sharedBrowseItems(ctx context.Context, libraryID string, offset
 	var result SearchResult
 	err := c.withSharedAuth(ctx, func(configuration clientConfig) error {
 		query := url.Values{
-			"Fields":           {"ProviderIds,UserData,MediaSources,Path,ProductionYear,DateCreated"},
+			"Fields":           {"ProviderIds,UserData,MediaSources,Path,ProductionYear,DateCreated,RunTimeTicks"},
 			"IncludeItemTypes": {"Movie,Series"},
 			"Limit":            {"10000"},
 			"ParentId":         {nativeID},

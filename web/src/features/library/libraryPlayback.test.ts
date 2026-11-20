@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { EmbyItem } from '../../shared/api/mediaHub'
-import { episodeLabel, libraryWatchLabel, playbackActionLabel, playbackStatus } from './libraryPlayback'
+import {
+  canDirectPlayItem,
+  episodeLabel,
+  libraryWatchLabel,
+  playbackActionLabel,
+  playbackProgressPercent,
+  playbackStatus,
+} from './libraryPlayback'
 
 const item = (input: Partial<EmbyItem> = {}): EmbyItem => ({
   id: 'item-1',
@@ -28,5 +35,23 @@ describe('playbackStatus', () => {
   it('labels episodes with a number and title', () => {
     expect(episodeLabel(item({ name: '连接', episode: 1 }), '验收剧集')).toBe('第 1 集 · 连接')
     expect(episodeLabel(item({ name: '验收剧集', episode: 2 }), '验收剧集')).toBe('第 2 集')
+  })
+
+  it('computes playback progress from real runtime and falls back safely', () => {
+    expect(playbackProgressPercent(item())).toBe(0)
+    expect(playbackProgressPercent(item({ played: true }))).toBe(100)
+    // 24 分钟动漫看到 12 分钟应接近 50%，不再按 2 小时估算
+    expect(playbackProgressPercent(item({ type: 'Episode', playbackPositionMs: 12 * 60_000, runtimeMs: 24 * 60_000 }))).toBe(50)
+    // 无 runtimeMs 时仍给出合理区间
+    expect(playbackProgressPercent(item({ type: 'Movie', playbackPositionMs: 55 * 60_000 }))).toBe(50)
+    expect(playbackProgressPercent(item({ type: 'Series', playbackPositionMs: 15 * 60_000 }))).toBe(33)
+    expect(playbackProgressPercent(item({ playbackPositionMs: 10_000, runtimeMs: 6_000_000 }))).toBe(4)
+  })
+
+  it('allows direct play only for movies and videos inside the desktop shell', () => {
+    expect(canDirectPlayItem(true, item({ type: 'Movie' }))).toBe(true)
+    expect(canDirectPlayItem(true, item({ type: 'Video' }))).toBe(true)
+    expect(canDirectPlayItem(true, item({ type: 'Series' }))).toBe(false)
+    expect(canDirectPlayItem(false, item({ type: 'Movie' }))).toBe(false)
   })
 })

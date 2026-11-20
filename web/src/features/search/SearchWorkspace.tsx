@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Compass, LibraryBig, ListPlus, ListTodo, LogOut, Search, Settings2 } from 'lucide-react'
+import { Compass, Keyboard, LibraryBig, ListPlus, ListTodo, LogOut, Search, Settings2 } from 'lucide-react'
 import { getSystemOverview, listTransfers, type Candidate } from '../../shared/api/mediaHub'
 import {
   DESKTOP_LOGOUT_EVENT,
   DESKTOP_NAVIGATE_EVENT,
   isDesktopShell,
+  primaryShortcutModifier,
   workspaceViewFromDesktopEvent,
 } from '../../shared/desktop/desktopShell'
 import { useDesktopUpdate } from '../../shared/desktop/useDesktopUpdate'
 import { commitUrl } from '../../shared/navigation/urlState'
 import { BrandMark } from '../../shared/ui/BrandMark'
+import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
 import { useToast } from '../../shared/ui/ToastContext'
 import { ToastProvider } from '../../shared/ui/ToastProvider'
 import { CommandPalette } from '../command/CommandPalette'
@@ -27,6 +29,12 @@ import { DiscoveryView } from './DiscoveryView'
 import './SearchWorkspace.css'
 
 type WorkspaceView = '发现' | '任务' | '订阅' | '媒体库' | '运维' | '服务'
+
+type PendingLeave = {
+  message: string
+  confirmLabel: string
+  onConfirm: () => void
+}
 
 const mediaNavItems = [
   { label: '发现', icon: Compass },
@@ -48,6 +56,13 @@ const viewSlugs: Record<WorkspaceView, string> = {
   服务: 'settings',
 }
 const slugViews = Object.fromEntries(Object.entries(viewSlugs).map(([view, slug]) => [slug, view])) as Record<string, WorkspaceView>
+const shortcutViewKeys: Record<string, WorkspaceView> = {
+  '1': '发现',
+  '2': '任务',
+  '3': '订阅',
+  '4': '媒体库',
+  ',': '服务',
+}
 const activeTransferStates = new Set(['queued', 'transferring', 'downloading', 'transferred', 'submitting_sync', 'syncing', 'retry_wait', 'refreshing_emby', 'indexing_emby', 'verifying_playback'])
 
 type SearchWorkspaceProps = {
@@ -71,17 +86,25 @@ export function SearchWorkspace(props: SearchWorkspaceProps) {
 function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
   const desktopUpdate = useDesktopUpdate()
   const { showToast } = useToast()
+  const desktopShell = isDesktopShell()
+  const shortcutMod = primaryShortcutModifier()
+  const commandShortcut = shortcutMod === '⌘' ? '⌘K' : `${shortcutMod}+K`
   const [activeView, setActiveView] = useState<WorkspaceView>(viewFromLocation)
   const [mountedViews, setMountedViews] = useState<Set<WorkspaceView>>(() => new Set([viewFromLocation()]))
   const [draftSubscription, setDraftSubscription] = useState<Candidate | null>(null)
   const [commandOpen, setCommandOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
-  const [providerSettingsDirty, setProviderSettingsDirty] = useState(false)
+  const [pendingLeave, setPendingLeave] = useState<PendingLeave | null>(null)
+  const providerDirtyRef = useRef(false)
   const providerDirtyUrl = useRef<string | null>(null)
   const updateProviderDirty = useCallback((dirty: boolean) => {
+    providerDirtyRef.current = dirty
     if (dirty && providerDirtyUrl.current === null) providerDirtyUrl.current = window.location.href
     if (!dirty) providerDirtyUrl.current = null
-    setProviderSettingsDirty(dirty)
+  }, [])
+  const isProviderDirty = useCallback(() => providerDirtyRef.current, [])
+  const requestLeaveConfirm = useCallback((message: string, onConfirm: () => void, confirmLabel = '放弃修改') => {
+    setPendingLeave({ message, confirmLabel, onConfirm })
   }, [])
 
   const handleGlobalSearch = useCallback((searchQuery: string) => {
@@ -109,19 +132,24 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
   }, [activeView])
 
   useEffect(() => {
-    const onPopState = () => {
-      if (providerSettingsDirty && providerDirtyUrl.current && window.location.href !== providerDirtyUrl.current) {
-        if (!window.confirm('Provider 设置尚未保存。确定离开并放弃修改吗？')) {
-          window.history.pushState({}, '', providerDirtyUrl.current)
-          return
-        }
-        updateProviderDirty(false)
+    const onPopState = (event: PopStateEvent) => {
+      if (providerDirtyRef.current && providerDirtyUrl.current && window.location.href !== providerDirtyUrl.current) {
+        const targetUrl = window.location.href
+        window.history.pushState({}, '', providerDirtyUrl.current)
+        event.stopImmediatePropagation()
+        requestLeaveConfirm('Provider 设置尚未保存。确定离开并放弃修改吗？', () => {
+          updateProviderDirty(false)
+          window.history.replaceState({}, '', targetUrl)
+          setActiveView(viewFromLocation())
+          window.dispatchEvent(new PopStateEvent('popstate'))
+        })
+        return
       }
       setActiveView(viewFromLocation())
     }
     window.addEventListener('popstate', onPopState, { capture: true })
     return () => window.removeEventListener('popstate', onPopState, { capture: true })
-  }, [providerSettingsDirty, updateProviderDirty])
+  }, [requestLeaveConfirm, updateProviderDirty])
 
   const overview = useQuery({
     queryKey: ['system-overview'],
@@ -146,12 +174,8 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
   const activeTransferCount = transfers.data?.transfers.filter((job) => activeTransferStates.has(job.state)).length ?? 0
   const systemActive = activeView === '服务'
 
-  const navigate = useCallback((next: WorkspaceView) => {
-    if (next === activeView) return true
-    if (activeView === '服务' && providerSettingsDirty) {
-      if (!window.confirm('Provider 设置尚未保存。确定离开并放弃修改吗？')) return false
-      updateProviderDirty(false)
-    }
+  const applyNavigate = useCallback((next: WorkspaceView) => {
+    updateProviderDirty(false)
     const current = new URLSearchParams(window.location.search)
     commitUrl({
       view: viewSlugs[next],
@@ -164,44 +188,72 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
       settings: next === '服务' ? current.get('settings') : null,
     })
     setActiveView(next)
+  }, [updateProviderDirty])
+
+  const navigate = useCallback((next: WorkspaceView) => {
+    if (next === activeView) return true
+    if (activeView === '服务' && providerDirtyRef.current) {
+      requestLeaveConfirm('Provider 设置尚未保存。确定离开并放弃修改吗？', () => applyNavigate(next))
+      return false
+    }
+    applyNavigate(next)
     return true
-  }, [activeView, providerSettingsDirty, updateProviderDirty])
+  }, [activeView, applyNavigate, requestLeaveConfirm])
 
   const guardedLogout = useCallback(() => {
-    if (activeView === '服务' && providerSettingsDirty && !window.confirm('Provider 设置尚未保存。确定退出并放弃修改吗？')) return
+    if (activeView === '服务' && providerDirtyRef.current) {
+      requestLeaveConfirm(
+        'Provider 设置尚未保存。确定退出并放弃修改吗？',
+        () => {
+          updateProviderDirty(false)
+          onLogout()
+        },
+        '放弃并退出',
+      )
+      return
+    }
     updateProviderDirty(false)
     onLogout()
-  }, [activeView, onLogout, providerSettingsDirty, updateProviderDirty])
+  }, [activeView, onLogout, requestLeaveConfirm, updateProviderDirty])
 
   useEffect(() => {
-    if (!isDesktopShell()) return
+    if (!desktopShell) return
     const label = activeView === '服务' ? '系统设置' : activeView
     document.title = `${label} — Media Hub`
-  }, [activeView])
+  }, [activeView, desktopShell])
 
   useEffect(() => {
-    if (!isDesktopShell()) return
+    if (!desktopShell) return
     const onNavigate = (event: Event) => {
       const slug = workspaceViewFromDesktopEvent(event)
       const next = slug ? slugViews[slug] : undefined
       if (!next) return
       navigate(next)
     }
-    const onLogout = () => guardedLogout()
+    const onDesktopLogout = () => guardedLogout()
     window.addEventListener(DESKTOP_NAVIGATE_EVENT, onNavigate)
-    window.addEventListener(DESKTOP_LOGOUT_EVENT, onLogout)
+    window.addEventListener(DESKTOP_LOGOUT_EVENT, onDesktopLogout)
     return () => {
       window.removeEventListener(DESKTOP_NAVIGATE_EVENT, onNavigate)
-      window.removeEventListener(DESKTOP_LOGOUT_EVENT, onLogout)
+      window.removeEventListener(DESKTOP_LOGOUT_EVENT, onDesktopLogout)
     }
-  }, [guardedLogout, navigate])
+  }, [desktopShell, guardedLogout, navigate])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      if (pendingLeave) return
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setCommandOpen((prev) => !prev)
         return
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && !commandOpen && !shortcutsOpen) {
+        const mappedView = shortcutViewKeys[e.key]
+        if (mappedView) {
+          e.preventDefault()
+          navigate(mappedView)
+          return
+        }
       }
       if (e.key === '/' && !commandOpen && !shortcutsOpen) {
         const target = e.target as HTMLElement | null
@@ -225,7 +277,7 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeView, commandOpen, navigate, shortcutsOpen])
+  }, [activeView, commandOpen, navigate, pendingLeave, shortcutsOpen])
 
   const handleNav = (event: MouseEvent<HTMLAnchorElement>, next: WorkspaceView) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
@@ -249,13 +301,20 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
 
   return (
     <div className="app-shell">
-      {isDesktopShell() ? <div aria-hidden="true" className="desktop-drag-region" data-tauri-drag-region /> : null}
+      {desktopShell ? <div aria-hidden="true" className="desktop-drag-region" data-tauri-drag-region /> : null}
       <a className="skip-link" href="#main-content">跳到主要内容</a>
       <aside className="sidebar">
         <div className="brand-lockup">
           <div className="brand-mark"><BrandMark size={20} /></div>
           <div><strong>MEDIA HUB</strong><span>媒体自动化控制</span></div>
         </div>
+
+        {desktopShell ? (
+          <div className="desktop-sidebar-brand">
+            <span className="desktop-brand-mark"><BrandMark size={15} /></span>
+            <strong>Media Hub</strong>
+          </div>
+        ) : null}
 
         <nav className="primary-nav" aria-label="主导航">
           <div className="nav-group"><div className="sidebar-section-label">媒体</div>{mediaNavItems.map(navLink)}</div>
@@ -270,20 +329,50 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
             <LogOut aria-hidden="true" size={15} />
           </button>
         </div>
+
+        {desktopShell ? (
+          <div className="desktop-sidebar-footer">
+            <button
+              aria-label={`打开命令面板 (${commandShortcut})`}
+              className="desktop-command-btn"
+              onClick={() => setCommandOpen(true)}
+              type="button"
+            >
+              <Search aria-hidden="true" size={14} />
+              <span>快速跳转</span>
+              <kbd>{commandShortcut}</kbd>
+            </button>
+            <div className="desktop-sidebar-status-row">
+              <span className={`desktop-status-pill ${connectionState}`} title={connectionLabel}>
+                <span aria-hidden="true" className="desktop-status-dot" />
+                <span>{connectionLabel}</span>
+              </span>
+              <button
+                aria-label="快捷键指南"
+                className="desktop-shortcuts-btn"
+                onClick={() => setShortcutsOpen(true)}
+                title="快捷键指南 (?)"
+                type="button"
+              >
+                <Keyboard aria-hidden="true" size={15} />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </aside>
 
       <main className="main-content" id="main-content" tabIndex={-1}>
         <header className="topbar">
           <div className="topbar-title"><span>Media Hub</span><strong>{activeView === '服务' ? '系统设置' : activeView}</strong></div>
           <button
-            aria-label="打开命令面板 (快捷键 ⌘K)"
+            aria-label={`打开命令面板 (快捷键 ${commandShortcut})`}
             className="command-trigger-btn"
             onClick={() => setCommandOpen(true)}
             type="button"
           >
             <Search size={14} />
             <span className="command-trigger-label">跳转或搜索…</span>
-            <kbd className="command-trigger-kbd">⌘K</kbd>
+            <kbd className="command-trigger-kbd">{commandShortcut}</kbd>
           </button>
           <div className="topbar-right">
             <div className={`system-dot ${connectionState}`}><span />{connectionLabel}</div>
@@ -336,7 +425,15 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
           ) : null}
           {mountedViews.has('服务') ? (
             <div aria-hidden={activeView !== '服务'} className="page-pane" hidden={activeView !== '服务'}>
-              <SettingsView desktopUpdate={desktopUpdate} integrations={integrations} onDirtyChange={updateProviderDirty} onLogout={guardedLogout} onRefresh={() => void overview.refetch()} />
+              <SettingsView
+                desktopUpdate={desktopUpdate}
+                integrations={integrations}
+                isProviderDirty={isProviderDirty}
+                onConfirmLeave={(message, onConfirm) => requestLeaveConfirm(message, onConfirm)}
+                onDirtyChange={updateProviderDirty}
+                onLogout={guardedLogout}
+                onRefresh={() => void overview.refetch()}
+              />
             </div>
           ) : null}
         </div>
@@ -358,6 +455,18 @@ function WorkspaceShell({ isLoggingOut, onLogout }: SearchWorkspaceProps) {
         <ShortcutsModal
           isOpen={shortcutsOpen}
           onClose={() => setShortcutsOpen(false)}
+        />
+        <ConfirmDialog
+          confirmLabel={pendingLeave?.confirmLabel}
+          message={pendingLeave?.message ?? ''}
+          onCancel={() => setPendingLeave(null)}
+          onConfirm={() => {
+            const action = pendingLeave?.onConfirm
+            setPendingLeave(null)
+            action?.()
+          }}
+          open={Boolean(pendingLeave)}
+          title="尚未保存的更改"
         />
       </main>
 

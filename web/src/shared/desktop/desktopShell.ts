@@ -15,6 +15,15 @@ export function desktopPlatform(): 'macos' | 'windows' | 'linux' | 'web' {
   return 'linux'
 }
 
+export function isApplePlatform() {
+  if (typeof navigator === 'undefined') return false
+  return /Mac OS X|Macintosh|iPhone|iPad|iPod/.test(navigator.userAgent)
+}
+
+export function primaryShortcutModifier() {
+  return isApplePlatform() ? '⌘' : 'Ctrl'
+}
+
 export function markDesktopShell() {
   if (typeof document === 'undefined' || !isDesktopShell()) return
   const root = document.documentElement

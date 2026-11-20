@@ -50,19 +50,26 @@ function formatCapacity(bytes?: number) {
 type SettingsViewProps = {
   desktopUpdate: DesktopUpdateState
   integrations: Integration[]
+  isProviderDirty: () => boolean
+  onConfirmLeave: (message: string, onConfirm: () => void) => void
   onDirtyChange: (dirty: boolean) => void
   onLogout: () => void
   onRefresh: () => void
 }
 
-export function SettingsView({ desktopUpdate, integrations, onDirtyChange, onLogout, onRefresh }: SettingsViewProps) {
+export function SettingsView({
+  desktopUpdate,
+  integrations,
+  isProviderDirty,
+  onConfirmLeave,
+  onDirtyChange,
+  onLogout,
+  onRefresh,
+}: SettingsViewProps) {
   const [section, setSection] = useState<SettingsSection>(sectionFromLocation)
   const [providerDirty, setProviderDirty] = useState(false)
   const providerDirtyRef = useRef(false)
-  const providerDirtyUrl = useRef<string | null>(null)
   const updateProviderDirty = useCallback((dirty: boolean) => {
-    if (dirty && providerDirtyUrl.current === null) providerDirtyUrl.current = window.location.href
-    if (!dirty) providerDirtyUrl.current = null
     providerDirtyRef.current = dirty
     setProviderDirty(dirty)
     onDirtyChange(dirty)
@@ -120,25 +127,29 @@ export function SettingsView({ desktopUpdate, integrations, onDirtyChange, onLog
 
   useEffect(() => {
     const restoreSection = () => {
-      if (providerDirtyRef.current && providerDirtyUrl.current && window.location.href !== providerDirtyUrl.current) {
-        if (!window.confirm('Provider 设置尚未保存。确定离开并放弃修改吗？')) {
-          window.history.pushState({}, '', providerDirtyUrl.current)
-          return
-        }
-      }
-      updateProviderDirty(false)
+      // 未保存时的浏览器后退交由 SearchWorkspace 页内确认弹窗决定是否放弃修改
+      if (isProviderDirty()) return
+      providerDirtyRef.current = false
+      setProviderDirty(false)
       setSection(sectionFromLocation())
     }
     window.addEventListener('popstate', restoreSection)
     return () => window.removeEventListener('popstate', restoreSection)
-  }, [updateProviderDirty])
+  }, [isProviderDirty])
 
-  const changeSection = (next: SettingsSection) => {
-    if (next === section) return
-    if (section === 'providers' && providerDirty && !window.confirm('Provider 设置尚未保存。确定离开并放弃修改吗？')) return
+  const applySection = (next: SettingsSection) => {
     updateProviderDirty(false)
     setSection(next)
     commitUrl({ settings: next })
+  }
+
+  const changeSection = (next: SettingsSection) => {
+    if (next === section) return
+    if (section === 'providers' && providerDirty) {
+      onConfirmLeave('Provider 设置尚未保存。确定离开并放弃修改吗？', () => applySection(next))
+      return
+    }
+    applySection(next)
   }
 
   const handleTabKey = (event: KeyboardEvent<HTMLButtonElement>, current: SettingsSection) => {
@@ -147,8 +158,11 @@ export function SettingsView({ desktopUpdate, integrations, onDirtyChange, onLog
     const direction = event.key === 'ArrowRight' ? 1 : -1
     const index = settingsSections.indexOf(current)
     const next = settingsSections[(index + direction + settingsSections.length) % settingsSections.length]
+    const needsConfirm = current === 'providers' && providerDirty
     changeSection(next)
-    requestAnimationFrame(() => document.getElementById(`settings-tab-${next}`)?.focus())
+    if (!needsConfirm) {
+      requestAnimationFrame(() => document.getElementById(`settings-tab-${next}`)?.focus())
+    }
   }
 
   const [currentPassword, setCurrentPassword] = useState('')

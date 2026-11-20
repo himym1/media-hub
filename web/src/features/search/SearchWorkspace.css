@@ -1238,27 +1238,36 @@ h1 em { color: var(--accent); font-style: normal; }
   flex: 0 0 190px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  padding: 0;
-  text-align: left;
+  gap: 6px;
+  min-width: 0;
   transition: transform .2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.continue-card:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: 10px;
 }
 
 .continue-card:hover {
   transform: translateY(-4px);
 }
 
+.continue-card-poster-btn {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 10px;
+}
+
+.continue-card-poster-btn:focus-visible,
+.continue-card-meta-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
 .continue-card-poster {
   position: relative;
+  display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
   border-radius: 10px;
@@ -1290,7 +1299,8 @@ h1 em { color: var(--accent); font-style: normal; }
   transition: opacity .2s ease;
 }
 
-.continue-card:hover .continue-card-overlay {
+.continue-card:hover .continue-card-overlay,
+.continue-card-poster-btn:focus-visible .continue-card-overlay {
   opacity: 1;
 }
 
@@ -1307,7 +1317,8 @@ h1 em { color: var(--accent); font-style: normal; }
   transition: transform .2s ease;
 }
 
-.continue-card:hover .continue-play-circle {
+.continue-card:hover .continue-play-circle,
+.continue-card-poster-btn:focus-visible .continue-play-circle {
   transform: scale(1);
 }
 
@@ -1321,16 +1332,24 @@ h1 em { color: var(--accent); font-style: normal; }
 }
 
 .continue-progress-fill {
+  display: block;
   height: 100%;
   background: var(--accent);
   box-shadow: 0 0 6px rgba(52, 211, 153, 0.8);
 }
 
-.continue-card-meta {
+.continue-card-meta-btn {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 2px;
   min-width: 0;
+  min-height: 44px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
 }
 
 .continue-name {
@@ -4023,5 +4042,91 @@ h1, h2, h3, .detail-header h2, .result-title {
   transform: scale(0.992);
   transition: transform 0.1s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* 桌面端专用侧边栏元素（浏览器模式隐藏） */
+.desktop-sidebar-brand,
+.desktop-sidebar-footer {
+  display: none;
+}
+
+/* 页内确认弹窗（替代原生 window.confirm，兼容 Windows Tauri / WebView2） */
+.confirm-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1350;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgba(8, 10, 12, 0.78);
+  backdrop-filter: blur(8px);
+  animation: palette-fade .15s ease;
+}
+
+.confirm-dialog {
+  display: grid;
+  gap: 14px;
+  width: min(100%, 420px);
+  padding: 20px;
+  background: #14181c;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.78);
+}
+
+.confirm-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.confirm-dialog-icon {
+  color: var(--warning);
+  flex-shrink: 0;
+}
+
+.confirm-dialog-header h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.confirm-dialog-message {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.confirm-dialog-actions .danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  color: #fde2df;
+  background: #7f1d1d;
+  border: 1px solid #991b1b;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+
+.confirm-dialog-actions .danger-button:hover {
+  background: #991b1b;
+  border-color: #b91c1c;
+}
+
 
 

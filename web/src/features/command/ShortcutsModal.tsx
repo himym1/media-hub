@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Command, Compass, Navigation, X } from 'lucide-react'
+import { primaryShortcutModifier } from '../../shared/desktop/desktopShell'
 
 export type ShortcutsModalProps = {
   isOpen: boolean
@@ -17,40 +18,45 @@ interface ShortcutSection {
   items: ShortcutEntry[]
 }
 
-const shortcutSections: ShortcutSection[] = [
-  {
-    title: '全局与导航',
-    icon: Navigation,
-    items: [
-      { keys: ['⌘', 'K'], description: '唤出全局命令面板 (Windows 使用 Ctrl+K)' },
-      { keys: ['/'], description: '快速聚焦搜索输入框' },
-      { keys: ['?'], description: '随时唤出本快捷键帮助' },
-      { keys: ['Esc'], description: '关闭当前浮层、抽屉或命令面板' },
-    ],
-  },
-  {
-    title: '影视检索与选片',
-    icon: Compass,
-    items: [
-      { keys: ['J', '↓'], description: '切换至下一个候选版本（自动平滑滚动）' },
-      { keys: ['K', '↑'], description: '切换至上一个候选版本' },
-      { keys: ['Enter'], description: '在命令面板中执行高亮指令' },
-    ],
-  },
-  {
-    title: '无障碍与交互',
-    icon: Command,
-    items: [
-      { keys: ['Tab'], description: '在可交互控件间顺序移动焦点' },
-      { keys: ['Shift', 'Tab'], description: '反向移动交互焦点' },
-      { keys: ['Space'], description: '触发当前按钮或展开可折叠项' },
-    ],
-  },
-]
+function buildShortcutSections(modifier: string): ShortcutSection[] {
+  return [
+    {
+      title: '全局与导航',
+      icon: Navigation,
+      items: [
+        { keys: [modifier, 'K'], description: '唤出全局命令面板' },
+        { keys: [modifier, '1–4'], description: '快速切换发现、任务、订阅与媒体库' },
+        { keys: [modifier, ','], description: '打开系统设置' },
+        { keys: ['/'], description: '快速聚焦搜索输入框' },
+        { keys: ['?'], description: '随时唤出本快捷键帮助' },
+        { keys: ['Esc'], description: '关闭当前浮层、抽屉或命令面板' },
+      ],
+    },
+    {
+      title: '影视检索与选片',
+      icon: Compass,
+      items: [
+        { keys: ['J', '↓'], description: '切换至下一个候选版本（自动平滑滚动）' },
+        { keys: ['K', '↑'], description: '切换至上一个候选版本' },
+        { keys: ['Enter'], description: '在命令面板中执行高亮指令' },
+      ],
+    },
+    {
+      title: '无障碍与交互',
+      icon: Command,
+      items: [
+        { keys: ['Tab'], description: '在可交互控件间顺序移动焦点' },
+        { keys: ['Shift', 'Tab'], description: '反向移动交互焦点' },
+        { keys: ['Space'], description: '触发当前按钮或展开可折叠项' },
+      ],
+    },
+  ]
+}
 
 export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
+  const shortcutSections = useMemo(() => buildShortcutSections(primaryShortcutModifier()), [])
 
   useEffect(() => {
     if (isOpen) {

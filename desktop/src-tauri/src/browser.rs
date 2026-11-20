@@ -41,6 +41,8 @@ pub fn open_browser(app: &AppHandle, url: &str, title: Option<&str>) -> Result<(
     let builder = WebviewWindowBuilder::new(app, BROWSER_LABEL, WebviewUrl::External(parsed))
         .title(title)
         .inner_size(1280.0, 800.0)
+        .theme(Some(tauri::Theme::Dark))
+        .background_color(tauri::window::Color(13, 16, 19, 255))
         .parent(&main)
         .map_err(|_| "无法在应用内打开页面。".to_string())?
         .on_document_title_changed(|window, document_title| {
